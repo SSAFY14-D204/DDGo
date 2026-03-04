@@ -8,6 +8,7 @@ import com.ssafy.DDGo.users.domain.User;
 import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
 import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
+import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -72,5 +73,17 @@ public class UserService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
         return UserInfoResponse.from(user);
+    }
+
+    @Transactional
+    public void updateNickname(String username, UserNicknameUpdateRequest request) {
+        if (userRepository.existsByNickname(request.getNickname())) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "이미 존재하는 닉네임입니다.");
+        }
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
+
+        user.updateNickname(request.getNickname());
     }
 }
