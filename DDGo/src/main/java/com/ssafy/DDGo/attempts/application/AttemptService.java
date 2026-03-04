@@ -32,6 +32,11 @@ public class AttemptService {
             throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "본인이 생성한 챌린지에만 시도를 추가할 수 있습니다.");
         }
 
+        // 1-2. 챌린지가 아직 진행 중(ACTIVE)인지 확인
+        if (challenge.getChallengeStatus() == com.ssafy.DDGo.challenge.domain.ChallengeStatus.CLOSED) {
+            throw new CustomException(ErrorCode.CHALLENGE_ALREADY_CLOSED, "이미 종료된 챌린지에는 시도를 추가할 수 없습니다.");
+        }
+
         // 2. 카운터 원자적 증가 (next_attempt_no += 1)
         int updatedRows = counterRepository.incrementAttemptNo(challengeId);
         if (updatedRows == 0) {
