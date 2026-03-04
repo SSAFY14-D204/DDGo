@@ -8,6 +8,8 @@ import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
 import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserPasswordUpdateRequest;
+import com.ssafy.DDGo.users.dto.request.TokenRefreshRequest;
+import com.ssafy.DDGo.users.dto.response.TokenRefreshResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -67,5 +69,12 @@ public class UserController {
             @RequestBody @Valid UserPasswordUpdateRequest request) {
         userService.updatePassword(authentication.getName(), request);
         return ResponseEntity.ok(ApiResponse.success("비밀번호 변경 성공", null));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<TokenRefreshResponse>> reissueToken(
+            @RequestBody @Valid TokenRefreshRequest request) {
+        TokenRefreshResponse response = userService.reissueToken(request);
+        return ResponseEntity.ok(ApiResponse.success("토큰 재발급 성공", response));
     }
 }

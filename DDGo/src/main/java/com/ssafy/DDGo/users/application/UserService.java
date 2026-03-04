@@ -11,6 +11,8 @@ import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
 import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserPasswordUpdateRequest;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
+import com.ssafy.DDGo.users.dto.request.TokenRefreshRequest;
+import com.ssafy.DDGo.users.dto.response.TokenRefreshResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -118,5 +120,35 @@ public class UserService {
         }
 
         user.updatePassword(passwordEncoder.encode(request.getNewPassword()));
+    }
+
+    @Transactional
+    public TokenRefreshResponse reissueToken(TokenRefreshRequest request) {
+        String refreshToken = request.getRefreshToken();
+
+        // 1. Refresh Token 검증
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            throw new CustomException(ErrorCode.INVALID_TOKEN, "유효하지 않은 Refresh Token 입니다.");
+        }
+
+        // 2. 토큰에서 사용자 정보 꺼내기
+        String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
+
+        // 3. 실존하는 사용자인지 확인
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
+
+        // 4. 새로운 Authentication 객체 생성
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                user.getUsername(), "", Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")));
+
+        // 5. 새로운 토큰 발급
+        String newAccessToken = jwtTokenProvider.createAccessToken(authentication);
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(authentication);
+
+        return TokenRefreshResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken)
+                .build();
     }
 }
