@@ -32,8 +32,12 @@ public class UserService {
 
     @Transactional
     public void registerUser(UserRegisterRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new CustomException(ErrorCode.USER_ALREADY_EXISTS, "이미 존재하는 아이디입니다.");
+        if (userRepository.countByUsernameIncludingDeleted(request.getUsername()) > 0) {
+            if (userRepository.existsByUsername(request.getUsername())) {
+                throw new CustomException(ErrorCode.USER_ALREADY_EXISTS, "이미 존재하는 아이디입니다.");
+            } else {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "탈퇴한 회원의 아이디는 재사용이 불가능합니다.");
+            }
         }
 
         if (userRepository.existsByNickname(request.getNickname())) {
