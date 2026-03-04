@@ -3,8 +3,8 @@
 -- =========================================================
 
 -- 0) DB 생성/선택
-CREATE DATABASE IF NOT EXISTS `DDgo`;
-USE `DDgo`;
+CREATE DATABASE IF NOT EXISTS `ddgo_db`;
+USE `ddgo_db`;
 
 -- 1) Drop (자식 -> 부모)
 DROP TABLE IF EXISTS `challenge_attempt_counters`;
