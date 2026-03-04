@@ -101,6 +101,11 @@ public class JwtTokenProvider {
         return false;
     }
 
+    // 토큰에서 username 추출 (권한 검증 없이)
+    public String getUsernameFromToken(String token) {
+        return parseClaims(token).getSubject();
+    }
+
     private Claims parseClaims(String accessToken) {
         try {
             return Jwts.parser().verifyWith(key).build().parseSignedClaims(accessToken).getPayload();
