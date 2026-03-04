@@ -6,6 +6,7 @@ import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
 import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
+import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.security.core.Authentication;
 
 @RestController
@@ -41,5 +43,13 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserInfoResponse>> getMyInfo(Authentication authentication) {
         UserInfoResponse userInfo = userService.getUserInfo(authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("내 정보 조회 성공", userInfo));
+    }
+
+    @PatchMapping("/nickname")
+    public ResponseEntity<ApiResponse<Void>> updateNickname(
+            Authentication authentication,
+            @RequestBody @Valid UserNicknameUpdateRequest request) {
+        userService.updateNickname(authentication.getName(), request);
+        return ResponseEntity.ok(ApiResponse.success("닉네임 변경 성공", null));
     }
 }
