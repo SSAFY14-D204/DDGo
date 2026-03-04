@@ -2,6 +2,7 @@ package com.ssafy.DDGo.users.dao;
 
 import com.ssafy.DDGo.users.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 
@@ -12,4 +13,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
 
     boolean existsByNickname(String nickname);
+
+    @Query(value = "SELECT COUNT(*) > 0 FROM users WHERE username = ?", nativeQuery = true)
+    long countByUsernameIncludingDeleted(String username);
 }
