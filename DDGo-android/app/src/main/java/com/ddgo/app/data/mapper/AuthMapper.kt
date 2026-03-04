@@ -1,0 +1,21 @@
+package com.ddgo.app.data.mapper
+
+import com.ddgo.app.data.remote.auth.LoginResponseDto
+import com.ddgo.app.domain.model.User
+
+/**
+ * Auth 관련 DTO → Domain Model 변환 매퍼.
+ *
+ * 규칙:
+ * - DTO(서버 데이터)를 그대로 UI나 domain으로 넘기지 마세요.
+ * - 반드시 이 Mapper를 통해 순수 Kotlin 데이터 클래스(domain/model)로 변환하세요.
+ */
+object AuthMapper {
+
+    /** 로그인 응답 DTO → User 도메인 모델로 변환 */
+    fun LoginResponseDto.toUser(): User = User(
+        id = userId,
+        email = email,
+        nickname = nickname
+    )
+}
