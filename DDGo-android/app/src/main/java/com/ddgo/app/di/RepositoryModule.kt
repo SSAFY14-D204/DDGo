@@ -1,0 +1,36 @@
+package com.ddgo.app.di
+
+import com.ddgo.app.data.repository.AuthRepositoryImpl
+import com.ddgo.app.data.repository.UploadRepositoryImpl
+import com.ddgo.app.domain.repository.AuthRepository
+import com.ddgo.app.domain.repository.UploadRepository
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+
+/**
+ * Repository 인터페이스(domain)와 구현체(data)를 바인딩하는 Hilt 모듈.
+ *
+ * 새 Repository를 추가할 때:
+ *   1. domain/repository/YourRepository.kt 인터페이스 생성
+ *   2. data/repository/YourRepositoryImpl.kt 구현체 생성
+ *   3. 이 모듈에 Binds 함수 추가
+ */
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthRepository(
+        impl: AuthRepositoryImpl
+    ): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUploadRepository(
+        impl: UploadRepositoryImpl
+    ): UploadRepository
+}
