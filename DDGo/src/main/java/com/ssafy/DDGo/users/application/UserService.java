@@ -86,4 +86,12 @@ public class UserService {
 
         user.updateNickname(request.getNickname());
     }
+
+    @Transactional
+    public void deleteUser(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
+
+        userRepository.delete(user);
+    }
 }
