@@ -6,15 +6,21 @@ import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.Arrays;
+import java.util.List;
 
 @Configuration
-@OpenAPIDefinition(info = @Info(title = "DDGo API API 명세서", description = "SSAFY 특화 프로젝트 DDGo API 명세서", version = "v1.0"))
+@OpenAPIDefinition(info = @Info(
+        title = "DDGo API 명세서",
+        description = "SSAFY 특화 프로젝트 DDGo API 명세서",
+        version = "v1.0"
+))
 public class SwaggerConfig {
 
+    // ── 공통 Security Scheme (Bearer JWT) ──────────────────────────────
     @Bean
     public OpenAPI openAPI() {
         SecurityScheme securityScheme = new SecurityScheme()
@@ -28,6 +34,24 @@ public class SwaggerConfig {
 
         return new OpenAPI()
                 .components(new Components().addSecuritySchemes("bearerAuth", securityScheme))
-                .security(Arrays.asList(securityRequirement));
+                .security(List.of(securityRequirement));
+    }
+
+    // ── 탭 1: Users ────────────────────────────────────────────────────
+    @Bean
+    public GroupedOpenApi usersApi() {
+        return GroupedOpenApi.builder()
+                .group("1. Users")
+                .pathsToMatch("/v1/users/**")
+                .build();
+    }
+
+    // ── 탭 2: Challenges ───────────────────────────────────────────────
+    @Bean
+    public GroupedOpenApi challengesApi() {
+        return GroupedOpenApi.builder()
+                .group("2. Challenges")
+                .pathsToMatch("/v1/challenges/**")
+                .build();
     }
 }
