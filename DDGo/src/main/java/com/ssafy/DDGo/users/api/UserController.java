@@ -77,4 +77,13 @@ public class UserController {
         TokenRefreshResponse response = userService.reissueToken(request);
         return ResponseEntity.ok(ApiResponse.success("토큰 재발급 성공", response));
     }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(jakarta.servlet.http.HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            userService.logout(bearerToken.substring(7));
+        }
+        return ResponseEntity.ok(ApiResponse.success("로그아웃 성공", null));
+    }
 }
