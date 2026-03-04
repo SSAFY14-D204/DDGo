@@ -16,4 +16,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query(value = "SELECT COUNT(*) > 0 FROM users WHERE username = ?", nativeQuery = true)
     long countByUsernameIncludingDeleted(String username);
+
+    @Query(value = "SELECT COUNT(*) > 0 FROM users WHERE nickname = ?", nativeQuery = true)
+    long countByNicknameIncludingDeleted(String nickname);
 }
