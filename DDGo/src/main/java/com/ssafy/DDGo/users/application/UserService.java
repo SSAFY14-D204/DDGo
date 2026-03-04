@@ -40,8 +40,12 @@ public class UserService {
             }
         }
 
-        if (userRepository.existsByNickname(request.getNickname())) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "이미 존재하는 닉네임입니다.");
+        if (userRepository.countByNicknameIncludingDeleted(request.getNickname()) > 0) {
+            if (userRepository.existsByNickname(request.getNickname())) {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "이미 존재하는 닉네임입니다.");
+            } else {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "탈퇴한 회원의 닉네임은 재사용이 불가능합니다.");
+            }
         }
 
         User user = User.builder()
@@ -82,8 +86,12 @@ public class UserService {
 
     @Transactional
     public void updateNickname(String username, UserNicknameUpdateRequest request) {
-        if (userRepository.existsByNickname(request.getNickname())) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "이미 존재하는 닉네임입니다.");
+        if (userRepository.countByNicknameIncludingDeleted(request.getNickname()) > 0) {
+            if (userRepository.existsByNickname(request.getNickname())) {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "이미 존재하는 닉네임입니다.");
+            } else {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "탈퇴한 회원의 닉네임은 재사용이 불가능합니다.");
+            }
         }
 
         User user = userRepository.findByUsername(username)
