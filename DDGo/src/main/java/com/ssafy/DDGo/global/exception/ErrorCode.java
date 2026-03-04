@@ -22,7 +22,12 @@ public enum ErrorCode {
     // Auth
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "A001", "Unauthorized"),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "A002", "Invalid Token"),
-    EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "A003", "Expired Token");
+    EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "A003", "Expired Token"),
+
+    // Challenge
+    CHALLENGE_NOT_FOUND(HttpStatus.NOT_FOUND, "CH001", "Challenge Not Found"),
+    CHALLENGE_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "CH002", "Challenge Already Closed"),
+    CHALLENGE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "CH003", "Challenge Access Denied");
 
     private final HttpStatus status;
     private final String code;
