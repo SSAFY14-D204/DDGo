@@ -130,6 +130,9 @@ public class UserService {
         }
 
         user.updatePassword(passwordEncoder.encode(request.getNewPassword()));
+
+        // 기존 모든 기기에서의 세션(Refresh Token) 무효화
+        redisTemplate.delete("RT:" + username);
     }
 
     @Transactional
