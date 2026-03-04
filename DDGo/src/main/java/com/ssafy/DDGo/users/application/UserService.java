@@ -118,6 +118,9 @@ public class UserService {
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
 
         userRepository.delete(user);
+
+        // 회원 탈퇴 시 Redis에 남은 Refresh Token(쓰레기 데이터)도 함께 삭제
+        redisTemplate.delete("RT:" + username);
     }
 
     @Transactional
