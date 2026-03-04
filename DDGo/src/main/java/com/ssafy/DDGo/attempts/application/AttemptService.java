@@ -22,10 +22,15 @@ public class AttemptService {
     private final AttemptRepository attemptRepository;
 
     @Transactional
-    public AttemptStartResponse startAttempt(Long challengeId) {
+    public AttemptStartResponse startAttempt(String username, Long challengeId) {
         // 1. 챌린지 존재 여부 확인
         Challenge challenge = challengeRepository.findById(challengeId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND, "해당 챌린지를 찾을 수 없습니다."));
+
+        // 1-1. 본인의 챌린지인지 인가 검증
+        if (!challenge.getUser().getUsername().equals(username)) {
+            throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "본인이 생성한 챌린지에만 시도를 추가할 수 있습니다.");
+        }
 
         // 2. 카운터 원자적 증가 (next_attempt_no += 1)
         int updatedRows = counterRepository.incrementAttemptNo(challengeId);
