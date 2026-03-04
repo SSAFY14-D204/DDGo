@@ -106,6 +106,12 @@ public class JwtTokenProvider {
         return parseClaims(token).getSubject();
     }
 
+    public Long getExpiration(String accessToken) {
+        Date expiration = parseClaims(accessToken).getExpiration();
+        long now = new Date().getTime();
+        return (expiration.getTime() - now);
+    }
+
     private Claims parseClaims(String accessToken) {
         try {
             return Jwts.parser().verifyWith(key).build().parseSignedClaims(accessToken).getPayload();
