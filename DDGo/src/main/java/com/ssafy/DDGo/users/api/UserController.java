@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.security.core.Authentication;
 
 @RestController
@@ -51,5 +52,11 @@ public class UserController {
             @RequestBody @Valid UserNicknameUpdateRequest request) {
         userService.updateNickname(authentication.getName(), request);
         return ResponseEntity.ok(ApiResponse.success("닉네임 변경 성공", null));
+    }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<ApiResponse<Void>> closeAccount(Authentication authentication) {
+        userService.deleteUser(authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("회원 탈퇴 성공", null));
     }
 }
