@@ -7,6 +7,8 @@ COPY build.gradle settings.gradle ./
 COPY src src
 
 # gradlew 실행 권한 부여 및 빌드 (테스트 제외)
+# 윈도우 환경(CRLF)에서 복사된 gradlew를 리눅스(LF) 인식 가능하도록 변환
+RUN sed -i 's/\r$//' gradlew
 RUN chmod +x ./gradlew
 RUN ./gradlew build -x test
 
