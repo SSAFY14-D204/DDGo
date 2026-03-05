@@ -97,6 +97,26 @@ public class AttemptVideoService {
         }
     }
 
+    public String getVideoUrlForAttempt(Long attemptId) {
+        return attemptVideoRepository.findByAttemptId(attemptId)
+                .map(video -> getPresignedGetUrl(video.getObjectKey()))
+                .orElse(null);
+    }
+
+    private String getPresignedGetUrl(String objectKey) {
+        try {
+            return minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(minioProperties.getBucket())
+                            .object(objectKey)
+                            .expiry((int) Duration.ofHours(2).getSeconds()) // 조회용은 2시간 유효하게 발급
+                            .build());
+        } catch (Exception e) {
+            return null; // 영상 URL 발급 실패 시 null 반환하여 조회 전체가 터지는 것 방지
+        }
+    }
+
     private String getExtension(String originalFileName) {
         if (originalFileName == null || !originalFileName.contains(".")) {
             return "";

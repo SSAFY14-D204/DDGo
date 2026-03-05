@@ -3,6 +3,7 @@ package com.ssafy.DDGo.attempts.application;
 import com.ssafy.DDGo.attempts.dao.AttemptRepository;
 import com.ssafy.DDGo.attempts.domain.Attempt;
 import com.ssafy.DDGo.attempts.dto.response.AttemptDetailResponse;
+import com.ssafy.DDGo.attempts.dto.response.AttemptFullResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptListResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptStartResponse;
 import com.ssafy.DDGo.challenge.dao.ChallengeAttemptCounterRepository;
@@ -25,6 +26,7 @@ public class AttemptService {
     private final ChallengeRepository challengeRepository;
     private final ChallengeAttemptCounterRepository counterRepository;
     private final AttemptRepository attemptRepository;
+    private final AttemptVideoService attemptVideoService;
 
     @Transactional
     public AttemptStartResponse startAttempt(String username, Long challengeId) {
@@ -82,5 +84,27 @@ public class AttemptService {
                 .collect(Collectors.toList());
 
         return new AttemptListResponse(challengeId, attemptDetails);
+    }
+
+    public AttemptFullResponse getAttemptDetail(String username, Long challengeId, Long attemptId) {
+        // 1. 시도 조회
+        Attempt attempt = attemptRepository.findById(attemptId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ATTEMPT_NOT_FOUND, "존재하지 않는 시도입니다. ID: " + attemptId));
+
+        // 2. 경로의 챌린지 아이디와 시도의 챌린지 아이디가 일치하는지 검증
+        if (!attempt.getChallenge().getId().equals(challengeId)) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "해당 챌린지에 속한 시도가 아닙니다.");
+        }
+
+        // 3. 인가 검증
+        if (!attempt.getChallenge().getUser().getUsername().equals(username)) {
+            throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 시도 정보에 접근할 권한이 없습니다.");
+        }
+
+        // 3. 영상 URL 발급 (존재하는 경우)
+        String videoUrl = attemptVideoService.getVideoUrlForAttempt(attemptId);
+
+        // 4. 응답 DTO 변환
+        return AttemptFullResponse.from(attempt, videoUrl);
     }
 }

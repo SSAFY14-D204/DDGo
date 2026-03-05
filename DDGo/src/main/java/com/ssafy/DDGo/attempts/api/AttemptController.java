@@ -1,6 +1,7 @@
 package com.ssafy.DDGo.attempts.api;
 
 import com.ssafy.DDGo.attempts.application.AttemptService;
+import com.ssafy.DDGo.attempts.dto.response.AttemptFullResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptListResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptStartResponse;
 import com.ssafy.DDGo.global.common.ApiResponse;
@@ -20,14 +21,14 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Attempts", description = "등반 시도(Attempt) 관련 API")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
-@RequestMapping("/v1/challenges/{challengeId}/attempts")
+@RequestMapping("/v1")
 @RequiredArgsConstructor
 public class AttemptController {
 
     private final AttemptService attemptService;
 
     @Operation(summary = "시도(Attempt) 생성", description = "특정 챌린지 내에 새로운 시도를 생성하고, 시도 번호(Attempt No)를 발급받습니다.")
-    @PostMapping
+    @PostMapping("/challenges/{challengeId}/attempts")
     public ResponseEntity<ApiResponse<AttemptStartResponse>> startAttempt(
             Authentication authentication,
             @PathVariable("challengeId") Long challengeId) {
@@ -39,7 +40,7 @@ public class AttemptController {
     }
 
     @Operation(summary = "시도 목록 조회", description = "특정 챌린지의 모든 시도(Attempt) 목록을 조회합니다.")
-    @GetMapping
+    @GetMapping("/challenges/{challengeId}/attempts")
     public ResponseEntity<ApiResponse<AttemptListResponse>> getAttempts(
             Authentication authentication,
             @PathVariable("challengeId") Long challengeId) {
@@ -47,5 +48,18 @@ public class AttemptController {
         AttemptListResponse response = attemptService.getAttempts(authentication.getName(), challengeId);
 
         return ResponseEntity.ok(ApiResponse.success("시도 목록 조회가 완료되었습니다.", response));
+    }
+
+    @Operation(summary = "시도 상세 조회", description = "단일 시도(Attempt)의 상세 정보를 조회합니다. (영상 재생용 프론트엔드 URL 포함)")
+    @GetMapping("/challenges/{challengeId}/attempts/{attemptId}")
+    public ResponseEntity<ApiResponse<AttemptFullResponse>> getAttemptDetail(
+            Authentication authentication,
+            @PathVariable("challengeId") Long challengeId,
+            @PathVariable("attemptId") Long attemptId) {
+
+        AttemptFullResponse response = attemptService.getAttemptDetail(authentication.getName(), challengeId,
+                attemptId);
+
+        return ResponseEntity.ok(ApiResponse.success("시도 상세 정보 조회가 완료되었습니다.", response));
     }
 }
