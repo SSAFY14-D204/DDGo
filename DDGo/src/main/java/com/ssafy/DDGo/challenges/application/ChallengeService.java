@@ -9,6 +9,8 @@ import com.ssafy.DDGo.challenges.domain.ChallengeSummary;
 import com.ssafy.DDGo.challenges.dto.request.ChallengeCloseRequest;
 import com.ssafy.DDGo.challenges.dto.request.ChallengeCreateRequest;
 import com.ssafy.DDGo.challenges.dto.request.HoldSaveRequest;
+import com.ssafy.DDGo.attempts.dao.AttemptMetricsRepository;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeAttemptDetailResponse;
 import com.ssafy.DDGo.challenges.dto.response.ChallengeSummaryResponse;
 import com.ssafy.DDGo.challenges.dto.response.HoldSaveResponse;
 import com.ssafy.DDGo.challenges.dto.response.ChallengeCloseResponse;
@@ -37,6 +39,7 @@ public class ChallengeService {
 
     private final ChallengeRepository challengeRepository;
     private final ChallengeSummaryRepository challengeSummaryRepository;
+    private final AttemptMetricsRepository attemptMetricsRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
@@ -145,6 +148,20 @@ public class ChallengeService {
                 .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다."));
 
         return ChallengeStatusResponse.from(challenge);
+    }
+
+    // 챌린지 시도별 상세 분석 조회 (그래프용)
+    public List<ChallengeAttemptDetailResponse> getChallengeAttemptDetails(String username, Long challengeId) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        challengeRepository.findByIdAndUser(challengeId, user)
+                .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다."));
+
+        return attemptMetricsRepository.findByChallengeIdOrderByAttemptNo(challengeId)
+                .stream()
+                .map(ChallengeAttemptDetailResponse::from)
+                .collect(Collectors.toList());
     }
 
     // 챌린지 종합 분석 조회
