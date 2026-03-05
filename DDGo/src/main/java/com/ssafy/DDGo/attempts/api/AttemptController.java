@@ -1,6 +1,7 @@
 package com.ssafy.DDGo.attempts.api;
 
 import com.ssafy.DDGo.attempts.application.AttemptService;
+import com.ssafy.DDGo.attempts.dto.response.AttemptListResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptStartResponse;
 import com.ssafy.DDGo.global.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,5 +36,16 @@ public class AttemptController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("새로운 시도가 생성되었습니다.", response));
+    }
+
+    @Operation(summary = "시도 목록 조회", description = "특정 챌린지의 모든 시도(Attempt) 목록을 조회합니다.")
+    @GetMapping
+    public ResponseEntity<ApiResponse<AttemptListResponse>> getAttempts(
+            Authentication authentication,
+            @PathVariable("challengeId") Long challengeId) {
+
+        AttemptListResponse response = attemptService.getAttempts(authentication.getName(), challengeId);
+
+        return ResponseEntity.ok(ApiResponse.success("시도 목록 조회가 완료되었습니다.", response));
     }
 }
