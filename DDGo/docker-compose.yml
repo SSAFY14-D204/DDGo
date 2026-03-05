@@ -12,7 +12,7 @@ services:
       MARIADB_USER: ddgo_user
       MARIADB_PASSWORD: ddgo_password
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
     networks:
