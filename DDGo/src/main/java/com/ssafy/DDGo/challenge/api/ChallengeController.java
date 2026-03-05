@@ -1,7 +1,9 @@
 package com.ssafy.DDGo.challenge.api;
 
 import com.ssafy.DDGo.challenge.application.ChallengeService;
+import com.ssafy.DDGo.challenge.dto.request.ChallengeCloseRequest;
 import com.ssafy.DDGo.challenge.dto.request.ChallengeCreateRequest;
+import com.ssafy.DDGo.challenge.dto.response.ChallengeCloseResponse;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeCreateResponse;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeListResponse;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeStatusResponse;
@@ -15,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 
@@ -57,5 +60,19 @@ public class ChallengeController {
             Authentication authentication) {
         List<ChallengeListResponse> response = challengeService.getChallenges(authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("챌린지 목록 조회 성공", response));
+    }
+
+    @Operation(summary = "챌린지 종료", description = "챌린지(문제 세션)를 종료합니다. 결과(SUCCESS/FAIL/UNKNOWN)를 선택할 수 있으며, 미입력 시 UNKNOWN으로 처리됩니다.")
+    @PatchMapping("/{challengeId}/close")
+    public ResponseEntity<ApiResponse<ChallengeCloseResponse>> closeChallenge(
+            Authentication authentication,
+            @PathVariable Long challengeId,
+            @RequestBody(required = false) ChallengeCloseRequest request) {
+        ChallengeCloseResponse response = challengeService.closeChallenge(
+                authentication.getName(),
+                challengeId,
+                request != null ? request : new ChallengeCloseRequest()
+        );
+        return ResponseEntity.ok(ApiResponse.success("챌린지가 종료되었습니다.", response));
     }
 }

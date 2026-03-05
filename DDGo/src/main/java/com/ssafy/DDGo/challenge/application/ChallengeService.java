@@ -2,8 +2,11 @@ package com.ssafy.DDGo.challenge.application;
 
 import com.ssafy.DDGo.challenge.dao.ChallengeRepository;
 import com.ssafy.DDGo.challenge.domain.Challenge;
+import com.ssafy.DDGo.challenge.domain.ChallengeResult;
 import com.ssafy.DDGo.challenge.domain.ChallengeStatus;
+import com.ssafy.DDGo.challenge.dto.request.ChallengeCloseRequest;
 import com.ssafy.DDGo.challenge.dto.request.ChallengeCreateRequest;
+import com.ssafy.DDGo.challenge.dto.response.ChallengeCloseResponse;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeCreateResponse;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeListResponse;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeStatusResponse;
@@ -56,6 +59,29 @@ public class ChallengeService {
                 .stream()
                 .map(ChallengeListResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    // 챌린지 종료
+    @Transactional
+    public ChallengeCloseResponse closeChallenge(String username, Long challengeId, ChallengeCloseRequest request) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        Challenge challenge = challengeRepository.findByIdAndUser(challengeId, user)
+                .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다."));
+
+        if (challenge.getChallengeStatus() == ChallengeStatus.CLOSED) {
+            throw new CustomException(ErrorCode.CHALLENGE_ALREADY_CLOSED, "이미 종료된 챌린지입니다.");
+        }
+
+        // challengeResult 미입력 시 UNKNOWN으로 처리
+        ChallengeResult result = (request.getChallengeResult() != null)
+                ? request.getChallengeResult()
+                : ChallengeResult.UNKNOWN;
+
+        challenge.close(result);
+
+        return ChallengeCloseResponse.from(challenge);
     }
 
     // 챌린지 상태 조회
