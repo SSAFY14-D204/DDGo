@@ -6,6 +6,7 @@ import com.ssafy.DDGo.challenges.dto.request.ChallengeCreateRequest;
 import com.ssafy.DDGo.challenges.dto.request.HoldSaveRequest;
 import com.ssafy.DDGo.challenges.dto.response.ChallengeCloseResponse;
 import com.ssafy.DDGo.challenges.dto.response.ChallengeCreateResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeSummaryResponse;
 import com.ssafy.DDGo.challenges.dto.response.HoldSaveResponse;
 import com.ssafy.DDGo.challenges.dto.response.ChallengeListResponse;
 import com.ssafy.DDGo.challenges.dto.response.ChallengeStatusResponse;
@@ -72,6 +73,15 @@ public class ChallengeController {
             @RequestBody @Valid HoldSaveRequest request) {
         HoldSaveResponse response = challengeService.saveHolds(authentication.getName(), challengeId, request);
         return ResponseEntity.ok(ApiResponse.success("홀드 좌표가 저장되었습니다.", response));
+    }
+
+    @Operation(summary = "챌린지 종합 분석 조회", description = "챌린지 종료 후 생성된 종합 분석 결과를 조회합니다. 종료 전 호출 시 404를 반환합니다.")
+    @GetMapping("/{challengeId}/summary")
+    public ResponseEntity<ApiResponse<ChallengeSummaryResponse>> getChallengeSummary(
+            Authentication authentication,
+            @PathVariable Long challengeId) {
+        ChallengeSummaryResponse response = challengeService.getChallengeSummary(authentication.getName(), challengeId);
+        return ResponseEntity.ok(ApiResponse.success("챌린지 종합 분석 조회 성공", response));
     }
 
     @Operation(summary = "챌린지 종료", description = "챌린지(문제 세션)를 종료합니다. 결과(SUCCESS/FAIL/UNKNOWN)를 선택할 수 있으며, 미입력 시 UNKNOWN으로 처리됩니다.")

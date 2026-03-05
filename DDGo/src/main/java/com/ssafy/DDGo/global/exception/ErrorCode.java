@@ -28,6 +28,7 @@ public enum ErrorCode {
     CHALLENGE_NOT_FOUND(HttpStatus.NOT_FOUND, "CH001", "Challenge Not Found"),
     CHALLENGE_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "CH002", "Challenge Already Closed"),
     CHALLENGE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "CH003", "Challenge Access Denied"),
+    CHALLENGE_SUMMARY_NOT_FOUND(HttpStatus.NOT_FOUND, "CH004", "Challenge Summary Not Found"),
 
     // Attempt
     ATTEMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "AT001", "Attempt Not Found"),
