@@ -5,6 +5,7 @@ import com.ssafy.DDGo.challenge.domain.Challenge;
 import com.ssafy.DDGo.challenge.domain.ChallengeStatus;
 import com.ssafy.DDGo.challenge.dto.request.ChallengeCreateRequest;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeCreateResponse;
+import com.ssafy.DDGo.challenge.dto.response.ChallengeListResponse;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeStatusResponse;
 import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
@@ -14,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +45,17 @@ public class ChallengeService {
         challengeRepository.save(challenge);
 
         return ChallengeCreateResponse.from(challenge);
+    }
+
+    // 내 챌린지 목록 조회 (최신순)
+    public List<ChallengeListResponse> getChallenges(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        return challengeRepository.findAllByUserOrderByCreatedAtDesc(user)
+                .stream()
+                .map(ChallengeListResponse::from)
+                .collect(Collectors.toList());
     }
 
     // 챌린지 상태 조회

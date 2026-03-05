@@ -3,6 +3,7 @@ package com.ssafy.DDGo.challenge.api;
 import com.ssafy.DDGo.challenge.application.ChallengeService;
 import com.ssafy.DDGo.challenge.dto.request.ChallengeCreateRequest;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeCreateResponse;
+import com.ssafy.DDGo.challenge.dto.response.ChallengeListResponse;
 import com.ssafy.DDGo.challenge.dto.response.ChallengeStatusResponse;
 import com.ssafy.DDGo.global.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +17,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+
+import java.util.List;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,5 +49,13 @@ public class ChallengeController {
             @PathVariable Long challengeId) {
         ChallengeStatusResponse response = challengeService.getChallengeStatus(authentication.getName(), challengeId);
         return ResponseEntity.ok(ApiResponse.success("챌린지 상태 조회 성공", response));
+    }
+
+    @Operation(summary = "내 챌린지 목록 조회", description = "로그인한 사용자의 챌린지 목록을 최신순으로 조회합니다.")
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<ChallengeListResponse>>> getChallenges(
+            Authentication authentication) {
+        List<ChallengeListResponse> response = challengeService.getChallenges(authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("챌린지 목록 조회 성공", response));
     }
 }
