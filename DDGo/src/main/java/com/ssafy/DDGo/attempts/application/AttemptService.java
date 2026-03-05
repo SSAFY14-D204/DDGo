@@ -6,9 +6,9 @@ import com.ssafy.DDGo.attempts.dto.response.AttemptDetailResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptFullResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptListResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptStartResponse;
-import com.ssafy.DDGo.challenge.dao.ChallengeAttemptCounterRepository;
-import com.ssafy.DDGo.challenge.dao.ChallengeRepository;
-import com.ssafy.DDGo.challenge.domain.Challenge;
+import com.ssafy.DDGo.challenges.dao.ChallengeAttemptCounterRepository;
+import com.ssafy.DDGo.challenges.dao.ChallengeRepository;
+import com.ssafy.DDGo.challenges.domain.Challenge;
 import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +40,7 @@ public class AttemptService {
         }
 
         // 1-2. 챌린지가 아직 진행 중(ACTIVE)인지 확인
-        if (challenge.getChallengeStatus() == com.ssafy.DDGo.challenge.domain.ChallengeStatus.CLOSED) {
+        if (challenge.getChallengeStatus() == com.ssafy.DDGo.challenges.domain.ChallengeStatus.CLOSED) {
             throw new CustomException(ErrorCode.CHALLENGE_ALREADY_CLOSED, "이미 종료된 챌린지에는 시도를 추가할 수 없습니다.");
         }
 

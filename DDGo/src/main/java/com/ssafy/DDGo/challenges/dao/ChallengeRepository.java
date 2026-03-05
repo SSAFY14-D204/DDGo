@@ -1,6 +1,6 @@
-package com.ssafy.DDGo.challenge.dao;
+package com.ssafy.DDGo.challenges.dao;
 
-import com.ssafy.DDGo.challenge.domain.Challenge;
+import com.ssafy.DDGo.challenges.domain.Challenge;
 import com.ssafy.DDGo.users.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

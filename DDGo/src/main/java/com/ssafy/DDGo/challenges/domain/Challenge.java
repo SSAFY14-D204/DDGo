@@ -1,4 +1,4 @@
-package com.ssafy.DDGo.challenge.domain;
+package com.ssafy.DDGo.challenges.domain;
 
 import com.ssafy.DDGo.global.common.BaseTimeEntity;
 import com.ssafy.DDGo.users.domain.User;
@@ -70,5 +70,9 @@ public class Challenge extends BaseTimeEntity {
         this.challengeStatus = ChallengeStatus.CLOSED;
         this.challengeResult = result;
         this.endedAt = LocalDateTime.now();
+    }
+
+    public void updateHoldsJson(String holdsJson) {
+        this.holdsJson = holdsJson;
     }
 }

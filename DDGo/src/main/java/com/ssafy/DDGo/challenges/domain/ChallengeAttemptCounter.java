@@ -1,4 +1,4 @@
-package com.ssafy.DDGo.challenge.domain;
+package com.ssafy.DDGo.challenges.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

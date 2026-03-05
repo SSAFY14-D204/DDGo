@@ -1,12 +1,14 @@
-package com.ssafy.DDGo.challenge.api;
+package com.ssafy.DDGo.challenges.api;
 
-import com.ssafy.DDGo.challenge.application.ChallengeService;
-import com.ssafy.DDGo.challenge.dto.request.ChallengeCloseRequest;
-import com.ssafy.DDGo.challenge.dto.request.ChallengeCreateRequest;
-import com.ssafy.DDGo.challenge.dto.response.ChallengeCloseResponse;
-import com.ssafy.DDGo.challenge.dto.response.ChallengeCreateResponse;
-import com.ssafy.DDGo.challenge.dto.response.ChallengeListResponse;
-import com.ssafy.DDGo.challenge.dto.response.ChallengeStatusResponse;
+import com.ssafy.DDGo.challenges.application.ChallengeService;
+import com.ssafy.DDGo.challenges.dto.request.ChallengeCloseRequest;
+import com.ssafy.DDGo.challenges.dto.request.ChallengeCreateRequest;
+import com.ssafy.DDGo.challenges.dto.request.HoldSaveRequest;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeCloseResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeCreateResponse;
+import com.ssafy.DDGo.challenges.dto.response.HoldSaveResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeListResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeStatusResponse;
 import com.ssafy.DDGo.global.common.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -60,6 +62,16 @@ public class ChallengeController {
             Authentication authentication) {
         List<ChallengeListResponse> response = challengeService.getChallenges(authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("챌린지 목록 조회 성공", response));
+    }
+
+    @Operation(summary = "홀드 좌표 저장", description = "챌린지에 홀드 좌표 목록을 저장합니다. 기존 홀드 데이터가 있으면 덮어씁니다.")
+    @PatchMapping("/{challengeId}/holds")
+    public ResponseEntity<ApiResponse<HoldSaveResponse>> saveHolds(
+            Authentication authentication,
+            @PathVariable Long challengeId,
+            @RequestBody @Valid HoldSaveRequest request) {
+        HoldSaveResponse response = challengeService.saveHolds(authentication.getName(), challengeId, request);
+        return ResponseEntity.ok(ApiResponse.success("홀드 좌표가 저장되었습니다.", response));
     }
 
     @Operation(summary = "챌린지 종료", description = "챌린지(문제 세션)를 종료합니다. 결과(SUCCESS/FAIL/UNKNOWN)를 선택할 수 있으며, 미입력 시 UNKNOWN으로 처리됩니다.")

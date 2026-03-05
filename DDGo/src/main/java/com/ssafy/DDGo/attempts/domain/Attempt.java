@@ -1,6 +1,6 @@
 package com.ssafy.DDGo.attempts.domain;
 
-import com.ssafy.DDGo.challenge.domain.Challenge;
+import com.ssafy.DDGo.challenges.domain.Challenge;
 import com.ssafy.DDGo.global.common.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
