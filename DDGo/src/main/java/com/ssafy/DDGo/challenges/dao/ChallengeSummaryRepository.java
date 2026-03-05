@@ -8,9 +8,12 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ChallengeSummaryRepository extends JpaRepository<ChallengeSummary, Long> {
+
+    Optional<ChallengeSummary> findByChallengeId(Long challengeId);
 
     // AVG(centerStabilityRatio), MAX(cruxDurationMs) 집계
     // @SQLRestriction으로 deleted_at IS NULL 이 자동 적용됨
