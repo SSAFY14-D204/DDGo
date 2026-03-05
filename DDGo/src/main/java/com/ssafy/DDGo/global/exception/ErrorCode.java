@@ -27,7 +27,11 @@ public enum ErrorCode {
     // Challenge
     CHALLENGE_NOT_FOUND(HttpStatus.NOT_FOUND, "CH001", "Challenge Not Found"),
     CHALLENGE_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "CH002", "Challenge Already Closed"),
-    CHALLENGE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "CH003", "Challenge Access Denied");
+    CHALLENGE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "CH003", "Challenge Access Denied"),
+
+    // Attempt
+    ATTEMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "AT001", "Attempt Not Found"),
+    INVALID_ATTEMPT_STATUS(HttpStatus.BAD_REQUEST, "AT002", "Invalid Attempt Status");
 
     private final HttpStatus status;
     private final String code;
