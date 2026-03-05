@@ -2,6 +2,8 @@ package com.ssafy.DDGo.attempts.application;
 
 import com.ssafy.DDGo.attempts.dao.AttemptRepository;
 import com.ssafy.DDGo.attempts.domain.Attempt;
+import com.ssafy.DDGo.attempts.dto.response.AttemptDetailResponse;
+import com.ssafy.DDGo.attempts.dto.response.AttemptListResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptStartResponse;
 import com.ssafy.DDGo.challenge.dao.ChallengeAttemptCounterRepository;
 import com.ssafy.DDGo.challenge.dao.ChallengeRepository;
@@ -11,6 +13,9 @@ import com.ssafy.DDGo.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -56,5 +61,26 @@ public class AttemptService {
         attemptRepository.save(attempt);
 
         return AttemptStartResponse.from(attempt);
+    }
+
+    public AttemptListResponse getAttempts(String username, Long challengeId) {
+        // 1. 챌린지 존재 여부 확인
+        Challenge challenge = challengeRepository.findById(challengeId)
+                .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND, "해당 챌린지를 찾을 수 없습니다."));
+
+        // 2. 인가 검증 (본인의 챌린지에만 시도 목록 조회 가능)
+        if (!challenge.getUser().getUsername().equals(username)) {
+            throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 챌린지의 접근 권한이 없습니다.");
+        }
+
+        // 3. 챌린지 ID에 해당하는 시도 목록 조회 (시도 번호 순서 오름차순 정렬)
+        List<Attempt> attempts = attemptRepository.findByChallengeIdOrderByAttemptNoAsc(challengeId);
+
+        // 4. 응답 DTO 매핑
+        List<AttemptDetailResponse> attemptDetails = attempts.stream()
+                .map(AttemptDetailResponse::from)
+                .collect(Collectors.toList());
+
+        return new AttemptListResponse(challengeId, attemptDetails);
     }
 }
