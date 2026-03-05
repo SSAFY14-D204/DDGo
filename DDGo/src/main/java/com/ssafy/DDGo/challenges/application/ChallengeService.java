@@ -1,19 +1,23 @@
-package com.ssafy.DDGo.challenge.application;
+package com.ssafy.DDGo.challenges.application;
 
-import com.ssafy.DDGo.challenge.dao.ChallengeRepository;
-import com.ssafy.DDGo.challenge.domain.Challenge;
-import com.ssafy.DDGo.challenge.domain.ChallengeResult;
-import com.ssafy.DDGo.challenge.domain.ChallengeStatus;
-import com.ssafy.DDGo.challenge.dto.request.ChallengeCloseRequest;
-import com.ssafy.DDGo.challenge.dto.request.ChallengeCreateRequest;
-import com.ssafy.DDGo.challenge.dto.response.ChallengeCloseResponse;
-import com.ssafy.DDGo.challenge.dto.response.ChallengeCreateResponse;
-import com.ssafy.DDGo.challenge.dto.response.ChallengeListResponse;
-import com.ssafy.DDGo.challenge.dto.response.ChallengeStatusResponse;
+import com.ssafy.DDGo.challenges.dao.ChallengeRepository;
+import com.ssafy.DDGo.challenges.domain.Challenge;
+import com.ssafy.DDGo.challenges.domain.ChallengeResult;
+import com.ssafy.DDGo.challenges.domain.ChallengeStatus;
+import com.ssafy.DDGo.challenges.dto.request.ChallengeCloseRequest;
+import com.ssafy.DDGo.challenges.dto.request.ChallengeCreateRequest;
+import com.ssafy.DDGo.challenges.dto.request.HoldSaveRequest;
+import com.ssafy.DDGo.challenges.dto.response.HoldSaveResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeCloseResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeCreateResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeListResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeStatusResponse;
 import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
 import com.ssafy.DDGo.users.dao.UserRepository;
 import com.ssafy.DDGo.users.domain.User;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +32,7 @@ public class ChallengeService {
 
     private final ChallengeRepository challengeRepository;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public ChallengeCreateResponse createChallenge(String username, ChallengeCreateRequest request) {
@@ -82,6 +87,29 @@ public class ChallengeService {
         challenge.close(result);
 
         return ChallengeCloseResponse.from(challenge);
+    }
+
+    // 홀드 좌표 저장
+    @Transactional
+    public HoldSaveResponse saveHolds(String username, Long challengeId, HoldSaveRequest request) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        Challenge challenge = challengeRepository.findByIdAndUser(challengeId, user)
+                .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다."));
+
+        try {
+            String holdsJsonStr = objectMapper.writeValueAsString(request.getHolds());
+            challenge.updateHoldsJson(holdsJsonStr);
+        } catch (JsonProcessingException e) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "홀드 데이터 직렬화에 실패했습니다.");
+        }
+
+        return HoldSaveResponse.builder()
+                .challengeId(challenge.getId())
+                .holdCount(request.getHolds().size())
+                .holds(request.getHolds())
+                .build();
     }
 
     // 챌린지 상태 조회

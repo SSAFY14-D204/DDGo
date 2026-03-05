@@ -1,6 +1,6 @@
-package com.ssafy.DDGo.challenge.dao;
+package com.ssafy.DDGo.challenges.dao;
 
-import com.ssafy.DDGo.challenge.domain.ChallengeAttemptCounter;
+import com.ssafy.DDGo.challenges.domain.ChallengeAttemptCounter;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

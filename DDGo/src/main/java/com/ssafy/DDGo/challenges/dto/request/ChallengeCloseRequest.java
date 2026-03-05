@@ -1,6 +1,6 @@
-package com.ssafy.DDGo.challenge.dto.request;
+package com.ssafy.DDGo.challenges.dto.request;
 
-import com.ssafy.DDGo.challenge.domain.ChallengeResult;
+import com.ssafy.DDGo.challenges.domain.ChallengeResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
