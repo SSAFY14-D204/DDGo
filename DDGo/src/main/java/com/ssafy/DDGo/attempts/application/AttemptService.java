@@ -111,8 +111,12 @@ public class AttemptService {
         // 3. 영상 URL 발급 (존재하는 경우)
         String videoUrl = attemptVideoService.getVideoUrlForAttempt(attemptId);
 
-        // 4. 응답 DTO 변환
-        return AttemptFullResponse.from(attempt, videoUrl);
+        // 4. Metrics 및 Feedback 조회
+        AttemptMetrics metrics = attemptMetricsRepository.findByAttemptId(attemptId).orElse(null);
+        AttemptFeedback feedback = attemptFeedbackRepository.findByAttemptId(attemptId).orElse(null);
+
+        // 5. 응답 DTO 변환
+        return AttemptFullResponse.from(attempt, videoUrl, metrics, feedback);
     }
 
     @Transactional
