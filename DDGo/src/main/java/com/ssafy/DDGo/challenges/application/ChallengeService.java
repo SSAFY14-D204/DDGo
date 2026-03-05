@@ -1,9 +1,11 @@
 package com.ssafy.DDGo.challenges.application;
 
 import com.ssafy.DDGo.challenges.dao.ChallengeRepository;
+import com.ssafy.DDGo.challenges.dao.ChallengeSummaryRepository;
 import com.ssafy.DDGo.challenges.domain.Challenge;
 import com.ssafy.DDGo.challenges.domain.ChallengeResult;
 import com.ssafy.DDGo.challenges.domain.ChallengeStatus;
+import com.ssafy.DDGo.challenges.domain.ChallengeSummary;
 import com.ssafy.DDGo.challenges.dto.request.ChallengeCloseRequest;
 import com.ssafy.DDGo.challenges.dto.request.ChallengeCreateRequest;
 import com.ssafy.DDGo.challenges.dto.request.HoldSaveRequest;
@@ -19,9 +21,11 @@ import com.ssafy.DDGo.users.domain.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -31,6 +35,7 @@ import java.util.stream.Collectors;
 public class ChallengeService {
 
     private final ChallengeRepository challengeRepository;
+    private final ChallengeSummaryRepository challengeSummaryRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
 
@@ -86,7 +91,25 @@ public class ChallengeService {
 
         challenge.close(result);
 
-        return ChallengeCloseResponse.from(challenge);
+        // attempt_metrics 집계 → challenge_summaries 생성
+        List<Object[]> aggList = challengeSummaryRepository.aggregateMetrics(challengeId);
+        List<Integer> cruxHoldNos = challengeSummaryRepository.findCruxHoldNos(challengeId, PageRequest.of(0, 1));
+
+        Object[] agg = aggList.isEmpty() ? new Object[]{null, null} : aggList.get(0);
+        Double avgRatio = agg[0] != null ? ((Number) agg[0]).doubleValue() : null;
+        Integer maxDurationMs = agg[1] != null ? ((Number) agg[1]).intValue() : null;
+        Integer mostCruxHoldNo = cruxHoldNos.isEmpty() ? null : cruxHoldNos.get(0);
+
+        ChallengeSummary summary = ChallengeSummary.builder()
+                .challengeId(challengeId)
+                .averageCenterStabilityRatio(avgRatio != null ? BigDecimal.valueOf(avgRatio) : null)
+                .mostCruxHoldNo(mostCruxHoldNo)
+                .maxCruxDurationMs(maxDurationMs)
+                .build();
+
+        challengeSummaryRepository.save(summary);
+
+        return ChallengeCloseResponse.from(challenge, summary);
     }
 
     // 홀드 좌표 저장
