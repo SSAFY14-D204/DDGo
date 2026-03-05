@@ -1,7 +1,12 @@
 package com.ssafy.DDGo.attempts.application;
 
+import com.ssafy.DDGo.attempts.dao.AttemptFeedbackRepository;
+import com.ssafy.DDGo.attempts.dao.AttemptMetricsRepository;
 import com.ssafy.DDGo.attempts.dao.AttemptRepository;
 import com.ssafy.DDGo.attempts.domain.Attempt;
+import com.ssafy.DDGo.attempts.domain.AttemptFeedback;
+import com.ssafy.DDGo.attempts.domain.AttemptMetrics;
+import com.ssafy.DDGo.attempts.dto.request.AttemptEndRequest;
 import com.ssafy.DDGo.attempts.dto.response.AttemptDetailResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptFullResponse;
 import com.ssafy.DDGo.attempts.dto.response.AttemptListResponse;
@@ -26,6 +31,8 @@ public class AttemptService {
     private final ChallengeRepository challengeRepository;
     private final ChallengeAttemptCounterRepository counterRepository;
     private final AttemptRepository attemptRepository;
+    private final AttemptMetricsRepository attemptMetricsRepository;
+    private final AttemptFeedbackRepository attemptFeedbackRepository;
     private final AttemptVideoService attemptVideoService;
 
     @Transactional
@@ -106,5 +113,57 @@ public class AttemptService {
 
         // 4. 응답 DTO 변환
         return AttemptFullResponse.from(attempt, videoUrl);
+    }
+
+    @Transactional
+    public AttemptDetailResponse endAttempt(String username, Long challengeId, Long attemptId,
+            AttemptEndRequest request) {
+        // 1. 시도 조회
+        Attempt attempt = attemptRepository.findById(attemptId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ATTEMPT_NOT_FOUND, "존재하지 않는 시도입니다. ID: " + attemptId));
+
+        // 2. 경로의 챌린지 아이디와 시도의 챌린지 아이디가 일치하는지 검증
+        if (!attempt.getChallenge().getId().equals(challengeId)) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "해당 챌린지에 속한 시도가 아닙니다.");
+        }
+
+        // 3. 인가 검증
+        if (!attempt.getChallenge().getUser().getUsername().equals(username)) {
+            throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 시도를 종료할 권한이 없습니다.");
+        }
+
+        // 4. 시도 종료 처리 (기본 정보)
+        if (request.baseData() != null) {
+            attempt.endAttempt(request.baseData().attemptResult(), request.baseData().durationMs(),
+                    request.baseData().maxHoldNo());
+        } else {
+            // baseData가 필수라고 가정하더라도 기본적으로 DONE 처리는 수행
+            attempt.endAttempt(null, null, null);
+        }
+
+        // 5. 정량 분석 데이터(Metrics) 저장
+        if (request.metricsData() != null) {
+            AttemptMetrics metrics = AttemptMetrics.builder()
+                    .attempt(attempt)
+                    .centerStabilityRatio(request.metricsData().centerStabilityRatio())
+                    .cruxHoldNo(request.metricsData().cruxHoldNo())
+                    .cruxDurationMs(request.metricsData().cruxDurationMs())
+                    .dangerEventCount(request.metricsData().dangerEventCount())
+                    .build();
+            attemptMetricsRepository.save(metrics);
+        }
+
+        // 6. AI 텍스트 피드백(Feedbacks) 저장
+        if (request.feedbacksData() != null) {
+            AttemptFeedback feedback = AttemptFeedback.builder()
+                    .attempt(attempt)
+                    .failureReason(request.feedbacksData().failureReason())
+                    .riskAlert(request.feedbacksData().riskAlert())
+                    .nextMission(request.feedbacksData().nextMission())
+                    .build();
+            attemptFeedbackRepository.save(feedback);
+        }
+
+        return AttemptDetailResponse.from(attempt);
     }
 }

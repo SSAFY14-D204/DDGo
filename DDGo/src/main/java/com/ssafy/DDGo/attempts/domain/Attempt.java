@@ -63,4 +63,11 @@ public class Attempt extends BaseTimeEntity {
     public void updateStatus(AttemptStatus status) {
         this.attemptStatus = status;
     }
+
+    public void endAttempt(AttemptResult result, Integer durationMs, Integer maxHoldNo) {
+        this.attemptStatus = AttemptStatus.DONE;
+        this.attemptResult = result;
+        this.durationMs = durationMs;
+        this.maxHoldNo = maxHoldNo;
+    }
 }
