@@ -1,0 +1,109 @@
+package com.ddgo.app.feature.auth
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.theme.PretendardFamily
+
+@Composable
+fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, onBack: () -> Unit = {}) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(horizontal = 24.dp)
+            .padding(top = 40.dp, bottom = 40.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+            }
+            
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "DDgo",
+                    style = TextStyle(
+                        fontFamily = PretendardFamily,
+                        fontSize = 64.sp,
+                        fontWeight = FontWeight(900),
+                        color = Color(0xFF0D1013)
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(60.dp))
+
+            Text(
+                text = "비밀번호",
+                style = TextStyle(
+                    fontFamily = PretendardFamily,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF1E232C)
+                )
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            TextField(
+                value = viewModel.passwordInput,
+                onValueChange = { viewModel.passwordInput = it },
+                placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color(0xFF1DA1F2),
+                    unfocusedIndicatorColor = Color(0xFF1DA1F2),
+                )
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "비밀번호를 잊으셨나요?",
+                style = TextStyle(color = Color(0xFF6C7B8A), fontSize = 14.sp, fontFamily = PretendardFamily)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onLoginComplete,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64788D))
+            ) {
+                Text(
+                    "로그인",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = PretendardFamily
+                )
+            }
+        }
+    }
+}

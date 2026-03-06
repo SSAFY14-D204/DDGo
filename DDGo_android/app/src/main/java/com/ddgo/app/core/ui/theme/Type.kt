@@ -1,5 +1,6 @@
 package com.ddgo.app.core.ui.theme
 
+import com.ddgo.app.R
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -65,4 +66,16 @@ val DDGoTypography = Typography(
         fontSize = 11.sp,
         letterSpacing = 0.5.sp
     )
+)
+
+val PretendardFamily = FontFamily(
+    Font(R.font.pretendard_thin, FontWeight.Thin),              // 100
+    Font(R.font.pretendard_extra_light, FontWeight.ExtraLight), // 200
+    Font(R.font.pretendard_light, FontWeight.Light),            // 300
+    Font(R.font.pretendard_regular, FontWeight.Normal),         // 400 (기본)
+    Font(R.font.pretendard_medium, FontWeight.Medium),          // 500
+    Font(R.font.pretendard_semi_bold, FontWeight.SemiBold),     // 600
+    Font(R.font.pretendard_bold, FontWeight.Bold),              // 700
+    Font(R.font.pretendard_extra_bold, FontWeight.ExtraBold),   // 800
+    Font(R.font.pretendard_black, FontWeight.Black)             // 900
 )

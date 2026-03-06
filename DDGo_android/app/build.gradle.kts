@@ -94,6 +94,9 @@ dependencies {
 
     // 2. DI & Navigation (Hilt)
     implementation(libs.hilt.android)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.text)
+    implementation(libs.androidx.compose.foundation)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.androidx.navigation.compose)

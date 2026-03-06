@@ -1,12 +1,15 @@
 package com.ddgo.app.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.ddgo.app.feature.auth.AuthScreen
+import com.ddgo.app.feature.auth.AuthViewModel
+import com.ddgo.app.feature.auth.authGraph
 import com.ddgo.app.feature.report.ReportScreen
+import com.ddgo.app.feature.splash.SplashScreen
 import com.ddgo.app.feature.upload.UploadScreen
 
 /**
@@ -26,22 +29,25 @@ import com.ddgo.app.feature.upload.UploadScreen
  */
 @Composable
 fun NavGraph(
-    navController: NavHostController = rememberNavController()
 ) {
+    val navController: NavHostController = rememberNavController()
+    val authViewModel: AuthViewModel = viewModel()
+
     NavHost(
         navController = navController,
-        startDestination = ScreenRoutes.Auth.route
+        startDestination = ScreenRoutes.Splash.route
     ) {
-        composable(route = ScreenRoutes.Auth.route) {
-            AuthScreen(
-                onLoginSuccess = {
-                    navController.navigate(ScreenRoutes.Upload.route) {
-                        // 로그인 화면을 백스택에서 제거 (뒤로 가기로 돌아올 수 없음)
-                        popUpTo(ScreenRoutes.Auth.route) { inclusive = true }
+        composable(ScreenRoutes.Splash.route) {
+            SplashScreen(
+                onSplashFinished = {
+                    navController.navigate(ScreenRoutes.Auth.route) {
+                        popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
                     }
                 }
             )
         }
+
+        authGraph(navController, authViewModel)
 
         composable(route = ScreenRoutes.Upload.route) {
             UploadScreen(
