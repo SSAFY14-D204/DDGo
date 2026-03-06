@@ -6,6 +6,14 @@
 .gradle/
 build/
 
+# Gradle / Android Studio
+.gradle/
+**/.gradle/
+**/.gradle-user-home/
+**/build/
+**/.idea/
+**/*.iml
+
 # Local configuration file (sdk path, etc)
 local.properties
 
