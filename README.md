@@ -66,11 +66,12 @@
 
 | 브랜치 | 용도 | 네이밍 규칙 |
 |--------|------|-------------|
-| `main` | 배포 가능한 상태 유지 | - |
+| `master` | 배포 가능한 상태 유지 | - |
 | `dev` | 개발 통합 브랜치 | - |
 | `feat/*` | 기능 개발 | `feat/기능명` |
 | `fix/*` | 버그 수정 | `fix/버그명` |
 | `hotfix/*` | 긴급 수정 | `hotfix/이슈명` |
+| `docs` | 문서 작업 | `docs/문서작업명`|
 
 
 [이슈타입]/[Jira이슈번호]-[간단한-설명]
@@ -79,9 +80,14 @@
 
 ```
 feat/S14P21D204-42-social-login
-bugfix/S14P21D204-105-token-expired-error
+fix/S14P21D204-105-token-expired-error
 hotfix/S14P21D204-200-critical-login-failure
 
+```
+
+###
+```
+master과 dev에는 직접 push금지 
 ```
 
 ---
@@ -100,7 +106,8 @@ hotfix/S14P21D204-200-critical-login-failure
 
 ### 설정
 ```
-commit은 squash하여 요청하기
+squash merge 필수
+merge 후 브랜치 삭제
 ```
 
 ### 예시
@@ -272,6 +279,7 @@ S14P21D204 Sprint 2 (03/02 ~ 03/08)
 - 스프린트 시작 전: **스프린트 플래닝** 미팅 진행
 - 스프린트 종료 시: **스프린트 리뷰** + **회고(Retrospective)** 진행
 - 스프린트 중 이슈 추가는 최소화하고, 불가피한 경우 팀장 승인 후 추가
+- 스프린트 보드에 에픽 포함 금지
 
 ---
 
@@ -392,5 +400,5 @@ Database  - Schema
 - 모든 작업은 반드시 Jira 이슈로 생성 후 진행
 - 이슈 상태는 **실시간**으로 업데이트
 - 하나의 이슈에는 **한 명의 담당자**만 배정
-- 이슈가 커지면 Sub-task로 분리
 - 완료된 이슈는 당일 내 **DONE** 처리
+- WIP는 인당 3개 이하 유지
