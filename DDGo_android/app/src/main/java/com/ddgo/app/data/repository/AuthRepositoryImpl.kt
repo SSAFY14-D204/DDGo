@@ -4,6 +4,7 @@ import com.ddgo.app.core.datastore.TokenDataStore
 import com.ddgo.app.data.mapper.AuthMapper.toDomain
 import com.ddgo.app.data.remote.auth.AuthApi
 import com.ddgo.app.data.remote.auth.LoginRequestDto
+import com.ddgo.app.data.remote.auth.RegisterRequestDto
 import com.ddgo.app.domain.model.AuthToken
 import com.ddgo.app.domain.repository.AuthRepository
 import javax.inject.Inject
@@ -14,11 +15,30 @@ import javax.inject.Inject
  * domain 계층은 이 클래스를 직접 알지 못하며,
  * di/RepositoryModule에서 AuthRepository 인터페이스로 바인딩됩니다.
  */
-
 class AuthRepositoryImpl @Inject constructor(
     private val authApi: AuthApi,
     private val tokenDataStore: TokenDataStore
 ) : AuthRepository {
+
+    // 1. 회원가입 구현
+    override suspend fun register(
+        username: String,
+        password: String,
+        nickname: String
+    ): Result<Unit> {
+        return try {
+            val response = authApi.register(RegisterRequestDto(username, password, nickname))
+            if (response.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 2. 로그인 구현
     override suspend fun login(username: String, password: String): Result<AuthToken> {
         return try {
             val response = authApi.login(LoginRequestDto(username, password))

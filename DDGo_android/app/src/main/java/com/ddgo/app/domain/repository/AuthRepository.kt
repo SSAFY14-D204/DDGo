@@ -9,5 +9,6 @@ import com.ddgo.app.domain.model.AuthToken
  * 구현체는 data/repository/AuthRepositoryImpl에 있습니다.
  */
 interface AuthRepository {
+    suspend fun register(username: String ,password:String, nickname:String) : Result<Unit>
     suspend fun login(username : String, password: String) : Result<AuthToken>
 }
