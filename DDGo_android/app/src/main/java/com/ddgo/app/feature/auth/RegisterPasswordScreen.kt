@@ -59,8 +59,8 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
             Spacer(modifier = Modifier.height(16.dp))
 
             TextField(
-                value = viewModel.passwordInput,
-                onValueChange = { viewModel.passwordInput = it },
+                value = viewModel.password,
+                onValueChange = { viewModel.password = it },
                 placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(

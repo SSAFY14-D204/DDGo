@@ -1,6 +1,6 @@
 package com.ddgo.app.domain.repository
 
-import com.ddgo.app.domain.model.User
+import com.ddgo.app.domain.model.AuthToken
 
 /**
  * 인증 관련 비즈니스 규칙 계약서.
@@ -9,6 +9,5 @@ import com.ddgo.app.domain.model.User
  * 구현체는 data/repository/AuthRepositoryImpl에 있습니다.
  */
 interface AuthRepository {
-    suspend fun login(email: String, password: String): Result<User>
-    suspend fun logout(): Result<Unit>
+    suspend fun login(username : String, password: String) : Result<AuthToken>
 }

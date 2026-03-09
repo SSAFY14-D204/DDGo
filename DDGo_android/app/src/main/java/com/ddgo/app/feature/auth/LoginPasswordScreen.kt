@@ -64,8 +64,8 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
             Spacer(modifier = Modifier.height(16.dp))
 
             TextField(
-                value = viewModel.passwordInput,
-                onValueChange = { viewModel.passwordInput = it },
+                value = viewModel.password,
+                onValueChange = { viewModel.password = it },
                 placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
@@ -89,7 +89,10 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
             )
             Spacer(modifier = Modifier.height(16.dp))
             Button(
-                onClick = onLoginComplete,
+                onClick = {
+                    viewModel.login()
+                    onLoginComplete()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

@@ -10,8 +10,8 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class LoginRequestDto(
-    val email: String,
-    val password: String
+    @SerialName("username") val username: String,
+    @SerialName("password") val password: String
 )
 
 /**
@@ -21,11 +21,8 @@ data class LoginRequestDto(
  */
 @Serializable
 data class LoginResponseDto(
-    @SerialName("access_token")  val accessToken: String,
-    @SerialName("refresh_token") val refreshToken: String,
-    @SerialName("user_id")       val userId: String,
-    val email: String,
-    val nickname: String
+    @SerialName("accessToken") val accessToken: String,
+    @SerialName("refreshToken") val refreshToken: String,
 )
 
 /** 토큰 갱신 요청 DTO */

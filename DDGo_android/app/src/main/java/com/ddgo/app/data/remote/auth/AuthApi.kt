@@ -11,12 +11,6 @@ import retrofit2.http.POST
  */
 interface AuthApi {
 
-    @POST("auth/login")
+    @POST("v1/users/login")
     suspend fun login(@Body request: LoginRequestDto): ApiResponse<LoginResponseDto>
-
-    @POST("auth/refresh")
-    suspend fun refreshToken(@Body request: RefreshTokenRequestDto): ApiResponse<LoginResponseDto>
-
-    @POST("auth/logout")
-    suspend fun logout(): ApiResponse<Unit>
 }

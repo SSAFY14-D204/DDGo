@@ -1,9 +1,21 @@
 package com.ddgo.app.feature.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,8 +77,8 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
 
             TextField(
-                value = viewModel.emailInput,
-                onValueChange = { viewModel.emailInput = it },
+                value = viewModel.username,
+                onValueChange = { viewModel.username = it },
                 placeholder = { Text("이메일", color = Color(0xFF8391A1)) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(

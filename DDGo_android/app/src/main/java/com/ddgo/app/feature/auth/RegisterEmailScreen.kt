@@ -59,8 +59,8 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             Spacer(modifier = Modifier.height(16.dp))
 
             TextField(
-                value = viewModel.emailInput,
-                onValueChange = { viewModel.emailInput = it },
+                value = viewModel.username,
+                onValueChange = { viewModel.username = it },
                 placeholder = { Text("이메일", color = Color(0xFF8391A1)) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
