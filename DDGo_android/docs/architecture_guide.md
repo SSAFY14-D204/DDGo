@@ -414,4 +414,13 @@ VideoAnalyzeWorker.doWork()
 
 ---
 
-*문서 최종 업데이트: 2026-03-04*
+## 10. [실습] Clean Architecture 한 사이클 돌아보기
+
+신입 개발자를 위한 **Login API 연결 실습 가이드**가 준비되어 있습니다. 
+아래 가이드를 따라하며 DDGo 프로젝트의 구조를 직접 익혀보세요.
+
+👉 **[Login API 개발 실습 가이드 바로가기](login_api_development_practice.md)**
+
+---
+
+*문서 최종 업데이트: 2026-03-09*
