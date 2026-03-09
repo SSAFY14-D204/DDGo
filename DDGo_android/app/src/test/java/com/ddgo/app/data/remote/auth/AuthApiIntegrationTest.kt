@@ -62,4 +62,29 @@ class AuthApiIntegrationTest {
             assertTrue("서버가 실행 중이지 않거나 연결 오류가 발생했습니다: ${e.message}", false)
         }
     }
+
+    @Test
+    fun `회원가입 테스트`() = runBlocking {
+        // 계정 입력
+        val request = RegisterRequestDto(
+            username = "test1",
+            password = "testtest1",
+            nickname = "테스트"
+        )
+
+        try {
+            // When
+            val response: ApiResponse<EmptyDto> = authApi.register(request)
+
+            // Then
+            println("Response: $response")
+            assertNotNull(response)
+            // 서버 스펙에 따라 success 여부 확인
+            // assertTrue("API 요청은 성공해야 합니다", response.success)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            assertTrue("서버가 실행 중이지 않거나 연결 오류가 발생했습니다: ${e.message}", false)
+        }
+    }
 }
