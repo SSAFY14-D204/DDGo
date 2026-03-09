@@ -17,30 +17,33 @@ pipeline {
 
     stage('Build Jar') {
       steps {
-        echo "===== [2/5] Gradle 빌드 시작 ====="
-        sh 'chmod +x gradlew'
-        sh './gradlew clean build -x test'
-        echo "===== [2/5] Gradle 빌드 완료 ====="
+        dir('DDGo') {
+          echo "===== [2/5] Gradle 빌드 시작 ====="
+          sh 'chmod +x gradlew'
+          sh './gradlew clean build -x test'
+          echo "===== [2/5] Gradle 빌드 완료 ====="
+        }
       }
     }
 
     stage('Docker Build') {
       steps {
         script {
-          echo "===== [3/5] Docker 이미지 빌드 시작 ====="
-
           def shortHash = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
           env.TAG = "${env.BUILD_NUMBER}-${shortHash}"
 
           currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.TAG}"
           currentBuild.description = "이미지 태그: ${IMAGE}:${env.TAG}"
 
+          echo "===== [3/5] Docker 이미지 빌드 시작 ====="
           echo "생성할 이미지 태그: ${IMAGE}:${env.TAG}"
 
-          sh """
-            docker build -t ${IMAGE}:${env.TAG} .
-            docker tag ${IMAGE}:${env.TAG} ${IMAGE}:latest
-          """
+          dir('DDGo') {
+            sh """
+              docker build -t ${IMAGE}:${env.TAG} .
+              docker tag ${IMAGE}:${env.TAG} ${IMAGE}:latest
+            """
+          }
 
           echo "===== [3/5] Docker 이미지 빌드 완료 ====="
         }
