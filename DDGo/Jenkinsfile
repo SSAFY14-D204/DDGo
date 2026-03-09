@@ -127,7 +127,10 @@ pipeline {
             echo "===== 롤백 완료 ====="
             echo "복구 이미지: ${prev}"
 
-            currentBuild.description = "배포 실패 → 롤백 완료 (${prev})"
+            script {
+              currentBuild.description = "배포 실패 → 롤백 완료 (${prev})"
+            }
+
             throw e
           }
         }
@@ -141,7 +144,9 @@ pipeline {
       echo "# 최종 결과: 배포 성공"
       echo "# 이미지: ${IMAGE}:${env.TAG}"
       echo "########################################"
-      currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
+      script {
+        currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
+      }
     }
 
     failure {
@@ -149,6 +154,11 @@ pipeline {
       echo "# 최종 결과: 배포 실패"
       echo "# Jenkins 콘솔 로그 확인 필요"
       echo "########################################"
+      script {
+        if (!currentBuild.description) {
+          currentBuild.description = "배포 실패"
+        }
+      }
     }
 
     always {
