@@ -1,0 +1,1542 @@
+{
+  "image_path": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\static_load_extract\\video\\static.png",
+  "summary_metrics": {
+    "total_body_stress_avg": 41.44082380072029,
+    "com_stability": 0.019611118568949384
+  },
+  "body_part_loads": {
+    "right_arm": {
+      "avg_load_percentage": 54.16564368816728,
+      "max_load_percentage": 98.70460155624245,
+      "peak_joint": {
+        "joint_id": "shoulder1_right",
+        "load_percentage": 98.70460155624245,
+        "torque": 138.18644217873944,
+        "torque_limit": 140.0
+      },
+      "joint_ids": [
+        "shoulder1_right",
+        "shoulder2_right",
+        "shoulder3_right",
+        "elbow_right"
+      ]
+    },
+    "left_arm": {
+      "avg_load_percentage": 79.27605922762561,
+      "max_load_percentage": 99.9999999999999,
+      "peak_joint": {
+        "joint_id": "shoulder1_left",
+        "load_percentage": 99.9999999999999,
+        "torque": 139.99999999999986,
+        "torque_limit": 140.0
+      },
+      "joint_ids": [
+        "shoulder1_left",
+        "shoulder2_left",
+        "shoulder3_left",
+        "elbow_left"
+      ]
+    },
+    "right_leg": {
+      "avg_load_percentage": 25.346422754456665,
+      "max_load_percentage": 49.41204605235388,
+      "peak_joint": {
+        "joint_id": "hip_z_right",
+        "load_percentage": 49.41204605235388,
+        "torque": -158.11854736753241,
+        "torque_limit": 320.0
+      },
+      "joint_ids": [
+        "hip_x_right",
+        "hip_z_right",
+        "hip_y_right",
+        "knee_right",
+        "ankle_y_right",
+        "ankle_x_right"
+      ]
+    },
+    "left_leg": {
+      "avg_load_percentage": 41.708502510718404,
+      "max_load_percentage": 74.08241277881619,
+      "peak_joint": {
+        "joint_id": "ankle_x_left",
+        "load_percentage": 74.08241277881619,
+        "torque": 118.5318604461059,
+        "torque_limit": 160.0
+      },
+      "joint_ids": [
+        "hip_x_left",
+        "hip_z_left",
+        "hip_y_left",
+        "knee_left",
+        "ankle_y_left",
+        "ankle_x_left"
+      ]
+    },
+    "core": {
+      "avg_load_percentage": 5.680861387448156,
+      "max_load_percentage": 11.828252999201004,
+      "peak_joint": {
+        "joint_id": "abdomen_x",
+        "load_percentage": 11.828252999201004,
+        "torque": -26.02215659824221,
+        "torque_limit": 220.0
+      },
+      "joint_ids": [
+        "abdomen_z",
+        "abdomen_y",
+        "abdomen_x"
+      ]
+    }
+  },
+  "detailed_joint_loads": [
+    {
+      "joint_id": "shoulder1_left",
+      "torque": 139.99999999999986,
+      "torque_limit": 140.0,
+      "load_percentage": 99.9999999999999
+    },
+    {
+      "joint_id": "shoulder1_right",
+      "torque": 138.18644217873944,
+      "torque_limit": 140.0,
+      "load_percentage": 98.70460155624245
+    },
+    {
+      "joint_id": "elbow_left",
+      "torque": 114.20842085655504,
+      "torque_limit": 120.0,
+      "load_percentage": 95.17368404712919
+    },
+    {
+      "joint_id": "shoulder3_left",
+      "torque": 91.62702166302513,
+      "torque_limit": 120.0,
+      "load_percentage": 76.35585138585428
+    },
+    {
+      "joint_id": "ankle_x_left",
+      "torque": 118.5318604461059,
+      "torque_limit": 160.0,
+      "load_percentage": 74.08241277881619
+    },
+    {
+      "joint_id": "elbow_right",
+      "torque": 76.5230980142423,
+      "torque_limit": 120.0,
+      "load_percentage": 63.76924834520191
+    },
+    {
+      "joint_id": "ankle_y_left",
+      "torque": 93.30995880586092,
+      "torque_limit": 180.0,
+      "load_percentage": 51.838866003256065
+    },
+    {
+      "joint_id": "hip_z_left",
+      "torque": -158.82496193147895,
+      "torque_limit": 320.0,
+      "load_percentage": 49.63280060358717
+    },
+    {
+      "joint_id": "hip_z_right",
+      "torque": -158.11854736753241,
+      "torque_limit": 320.0,
+      "load_percentage": 49.41204605235388
+    },
+    {
+      "joint_id": "shoulder2_left",
+      "torque": -63.80458206852667,
+      "torque_limit": 140.0,
+      "load_percentage": 45.574701477519056
+    },
+    {
+      "joint_id": "hip_x_right",
+      "torque": 136.1356816555449,
+      "torque_limit": 320.0,
+      "load_percentage": 42.54240051735778
+    },
+    {
+      "joint_id": "hip_x_left",
+      "torque": 121.3666188323798,
+      "torque_limit": 320.0,
+      "load_percentage": 37.92706838511869
+    },
+    {
+      "joint_id": "ankle_x_right",
+      "torque": -53.46991012733024,
+      "torque_limit": 160.0,
+      "load_percentage": 33.4186938295814
+    },
+    {
+      "joint_id": "shoulder2_right",
+      "torque": -38.68413650117532,
+      "torque_limit": 140.0,
+      "load_percentage": 27.63152607226808
+    },
+    {
+      "joint_id": "shoulder3_right",
+      "torque": -31.86863853474804,
+      "torque_limit": 120.0,
+      "load_percentage": 26.557198778956696
+    },
+    {
+      "joint_id": "knee_left",
+      "torque": 82.1076785071408,
+      "torque_limit": 360.0,
+      "load_percentage": 22.80768847420578
+    },
+    {
+      "joint_id": "knee_right",
+      "torque": 52.54003795491941,
+      "torque_limit": 360.0,
+      "load_percentage": 14.594454987477615
+    },
+    {
+      "joint_id": "hip_y_left",
+      "torque": 58.641151041171476,
+      "torque_limit": 420.0,
+      "load_percentage": 13.962178819326542
+    },
+    {
+      "joint_id": "abdomen_x",
+      "torque": -26.02215659824221,
+      "torque_limit": 220.0,
+      "load_percentage": 11.828252999201004
+    },
+    {
+      "joint_id": "ankle_y_right",
+      "torque": 12.85222612439992,
+      "torque_limit": 180.0,
+      "load_percentage": 7.140125624666623
+    },
+    {
+      "joint_id": "hip_y_right",
+      "torque": 20.87742516427135,
+      "torque_limit": 420.0,
+      "load_percentage": 4.970815515302703
+    },
+    {
+      "joint_id": "abdomen_z",
+      "torque": -9.777200640661189,
+      "torque_limit": 220.0,
+      "load_percentage": 4.444182109391449
+    },
+    {
+      "joint_id": "abdomen_y",
+      "torque": -1.6943279182544355,
+      "torque_limit": 220.0,
+      "load_percentage": 0.7701490537520161
+    }
+  ],
+  "joint_torques": [
+    {
+      "joint_id": "abdomen_z",
+      "torque": -9.777200640661189
+    },
+    {
+      "joint_id": "abdomen_y",
+      "torque": -1.6943279182544355
+    },
+    {
+      "joint_id": "abdomen_x",
+      "torque": -26.02215659824221
+    },
+    {
+      "joint_id": "hip_x_right",
+      "torque": 136.1356816555449
+    },
+    {
+      "joint_id": "hip_z_right",
+      "torque": -158.11854736753241
+    },
+    {
+      "joint_id": "hip_y_right",
+      "torque": 20.87742516427135
+    },
+    {
+      "joint_id": "knee_right",
+      "torque": 52.54003795491941
+    },
+    {
+      "joint_id": "ankle_y_right",
+      "torque": 12.85222612439992
+    },
+    {
+      "joint_id": "ankle_x_right",
+      "torque": -53.46991012733024
+    },
+    {
+      "joint_id": "hip_x_left",
+      "torque": 121.3666188323798
+    },
+    {
+      "joint_id": "hip_z_left",
+      "torque": -158.82496193147895
+    },
+    {
+      "joint_id": "hip_y_left",
+      "torque": 58.641151041171476
+    },
+    {
+      "joint_id": "knee_left",
+      "torque": 82.1076785071408
+    },
+    {
+      "joint_id": "ankle_y_left",
+      "torque": 93.30995880586092
+    },
+    {
+      "joint_id": "ankle_x_left",
+      "torque": 118.5318604461059
+    },
+    {
+      "joint_id": "shoulder1_right",
+      "torque": 138.18644217873944
+    },
+    {
+      "joint_id": "shoulder2_right",
+      "torque": -38.68413650117532
+    },
+    {
+      "joint_id": "shoulder3_right",
+      "torque": -31.86863853474804
+    },
+    {
+      "joint_id": "elbow_right",
+      "torque": 76.5230980142423
+    },
+    {
+      "joint_id": "shoulder1_left",
+      "torque": 139.99999999999986
+    },
+    {
+      "joint_id": "shoulder2_left",
+      "torque": -63.80458206852667
+    },
+    {
+      "joint_id": "shoulder3_left",
+      "torque": 91.62702166302513
+    },
+    {
+      "joint_id": "elbow_left",
+      "torque": 114.20842085655504
+    }
+  ],
+  "load_percentage": [
+    {
+      "joint_id": "shoulder1_left",
+      "torque": 139.99999999999986,
+      "torque_limit": 140.0,
+      "load_percentage": 99.9999999999999
+    },
+    {
+      "joint_id": "shoulder1_right",
+      "torque": 138.18644217873944,
+      "torque_limit": 140.0,
+      "load_percentage": 98.70460155624245
+    },
+    {
+      "joint_id": "elbow_left",
+      "torque": 114.20842085655504,
+      "torque_limit": 120.0,
+      "load_percentage": 95.17368404712919
+    },
+    {
+      "joint_id": "shoulder3_left",
+      "torque": 91.62702166302513,
+      "torque_limit": 120.0,
+      "load_percentage": 76.35585138585428
+    },
+    {
+      "joint_id": "ankle_x_left",
+      "torque": 118.5318604461059,
+      "torque_limit": 160.0,
+      "load_percentage": 74.08241277881619
+    },
+    {
+      "joint_id": "elbow_right",
+      "torque": 76.5230980142423,
+      "torque_limit": 120.0,
+      "load_percentage": 63.76924834520191
+    },
+    {
+      "joint_id": "ankle_y_left",
+      "torque": 93.30995880586092,
+      "torque_limit": 180.0,
+      "load_percentage": 51.838866003256065
+    },
+    {
+      "joint_id": "hip_z_left",
+      "torque": -158.82496193147895,
+      "torque_limit": 320.0,
+      "load_percentage": 49.63280060358717
+    },
+    {
+      "joint_id": "hip_z_right",
+      "torque": -158.11854736753241,
+      "torque_limit": 320.0,
+      "load_percentage": 49.41204605235388
+    },
+    {
+      "joint_id": "shoulder2_left",
+      "torque": -63.80458206852667,
+      "torque_limit": 140.0,
+      "load_percentage": 45.574701477519056
+    },
+    {
+      "joint_id": "hip_x_right",
+      "torque": 136.1356816555449,
+      "torque_limit": 320.0,
+      "load_percentage": 42.54240051735778
+    },
+    {
+      "joint_id": "hip_x_left",
+      "torque": 121.3666188323798,
+      "torque_limit": 320.0,
+      "load_percentage": 37.92706838511869
+    },
+    {
+      "joint_id": "ankle_x_right",
+      "torque": -53.46991012733024,
+      "torque_limit": 160.0,
+      "load_percentage": 33.4186938295814
+    },
+    {
+      "joint_id": "shoulder2_right",
+      "torque": -38.68413650117532,
+      "torque_limit": 140.0,
+      "load_percentage": 27.63152607226808
+    },
+    {
+      "joint_id": "shoulder3_right",
+      "torque": -31.86863853474804,
+      "torque_limit": 120.0,
+      "load_percentage": 26.557198778956696
+    },
+    {
+      "joint_id": "knee_left",
+      "torque": 82.1076785071408,
+      "torque_limit": 360.0,
+      "load_percentage": 22.80768847420578
+    },
+    {
+      "joint_id": "knee_right",
+      "torque": 52.54003795491941,
+      "torque_limit": 360.0,
+      "load_percentage": 14.594454987477615
+    },
+    {
+      "joint_id": "hip_y_left",
+      "torque": 58.641151041171476,
+      "torque_limit": 420.0,
+      "load_percentage": 13.962178819326542
+    },
+    {
+      "joint_id": "abdomen_x",
+      "torque": -26.02215659824221,
+      "torque_limit": 220.0,
+      "load_percentage": 11.828252999201004
+    },
+    {
+      "joint_id": "ankle_y_right",
+      "torque": 12.85222612439992,
+      "torque_limit": 180.0,
+      "load_percentage": 7.140125624666623
+    },
+    {
+      "joint_id": "hip_y_right",
+      "torque": 20.87742516427135,
+      "torque_limit": 420.0,
+      "load_percentage": 4.970815515302703
+    },
+    {
+      "joint_id": "abdomen_z",
+      "torque": -9.777200640661189,
+      "torque_limit": 220.0,
+      "load_percentage": 4.444182109391449
+    },
+    {
+      "joint_id": "abdomen_y",
+      "torque": -1.6943279182544355,
+      "torque_limit": 220.0,
+      "load_percentage": 0.7701490537520161
+    }
+  ],
+  "reaction_forces": [
+    {
+      "limb_id": "left_wrist",
+      "anchor_id": "left_wrist",
+      "body_name": "palm_contact_left",
+      "force_vector": [
+        -306.3626927721957,
+        53.83295631807948,
+        -1396.424105042059
+      ],
+      "force_magnitude_n": 1430.6489324258032,
+      "torque_vector": [
+        409.4825045124821,
+        4830.339177431211,
+        6388.6125130049
+      ],
+      "torque_magnitude_nm": 8019.614849346036,
+      "force": [
+        -306.3626927721957,
+        53.83295631807948,
+        -1396.424105042059
+      ],
+      "torque": [
+        409.4825045124821,
+        4830.339177431211,
+        6388.6125130049
+      ],
+      "force_norm": 1430.6489324258032,
+      "torque_norm": 8019.614849346036,
+      "anchor_position": [
+        0.25698375065442775,
+        0.2643565233899057,
+        1.8664428266991362
+      ],
+      "mocap_target": [
+        0.1681821735768384,
+        0.25183413109436675,
+        1.851053967544285
+      ],
+      "reach_error_m": 0.09099091925218836
+    },
+    {
+      "limb_id": "right_wrist",
+      "anchor_id": "right_wrist",
+      "body_name": "palm_contact_right",
+      "force_vector": [
+        976.0053288320146,
+        802.3721474462685,
+        1092.6523086371317
+      ],
+      "force_magnitude_n": 1670.4120846294422,
+      "torque_vector": [
+        1335.81592807013,
+        -3695.643926860599,
+        6000.384161484582
+      ],
+      "torque_magnitude_nm": 7172.642352245268,
+      "force": [
+        976.0053288320146,
+        802.3721474462685,
+        1092.6523086371317
+      ],
+      "torque": [
+        1335.81592807013,
+        -3695.643926860599,
+        6000.384161484582
+      ],
+      "force_norm": 1670.4120846294422,
+      "torque_norm": 7172.642352245268,
+      "anchor_position": [
+        0.4255212973066175,
+        -0.19048629056353725,
+        1.7291310861848248
+      ],
+      "mocap_target": [
+        0.3213094649534051,
+        -0.24856693956576784,
+        1.6836214098852271
+      ],
+      "reach_error_m": 0.12768946091133954
+    },
+    {
+      "limb_id": "left_ankle",
+      "anchor_id": "left_ankle",
+      "body_name": "forefoot_contact_left",
+      "force_vector": [
+        767.3705858085651,
+        -532.0389946063558,
+        -568.8850696727337
+      ],
+      "force_magnitude_n": 1093.4136135253088,
+      "torque_vector": [
+        522.6919048391928,
+        3450.794669864545,
+        -4931.575971396441
+      ],
+      "torque_magnitude_nm": 6041.65807064623,
+      "force": [
+        767.3705858085651,
+        -532.0389946063558,
+        -568.8850696727337
+      ],
+      "torque": [
+        522.6919048391928,
+        3450.794669864545,
+        -4931.575971396441
+      ],
+      "force_norm": 1093.4136135253088,
+      "torque_norm": 6041.65807064623,
+      "anchor_position": [
+        0.09476081603420247,
+        0.31672815822368205,
+        0.14565243335747516
+      ],
+      "mocap_target": [
+        0.09599066739153471,
+        0.33230069972790605,
+        0.08757856313059731
+      ],
+      "reach_error_m": 0.06013809929146548
+    },
+    {
+      "limb_id": "right_ankle",
+      "anchor_id": "right_ankle",
+      "body_name": "forefoot_contact_right",
+      "force_vector": [
+        1592.4238807969189,
+        1124.3571170638306,
+        -632.6652868535198
+      ],
+      "force_magnitude_n": 2049.453124131863,
+      "torque_vector": [
+        -2069.344165747179,
+        -4715.218881364285,
+        -10506.648892407806
+      ],
+      "torque_magnitude_nm": 11700.647218159358,
+      "force": [
+        1592.4238807969189,
+        1124.3571170638306,
+        -632.6652868535198
+      ],
+      "torque": [
+        -2069.344165747179,
+        -4715.218881364285,
+        -10506.648892407806
+      ],
+      "force_norm": 2049.453124131863,
+      "torque_norm": 11700.647218159358,
+      "anchor_position": [
+        0.03202754145120074,
+        -0.49528154817963604,
+        0.10902384686729735
+      ],
+      "mocap_target": [
+        0.0374085123433463,
+        -0.573614576023457,
+        0.04497960645601262
+      ],
+      "reach_error_m": 0.10132464077795382
+    }
+  ],
+  "anchor_forces": [
+    {
+      "limb_id": "left_wrist",
+      "anchor_id": "left_wrist",
+      "body_name": "palm_contact_left",
+      "force_vector": [
+        -306.3626927721957,
+        53.83295631807948,
+        -1396.424105042059
+      ],
+      "force_magnitude_n": 1430.6489324258032,
+      "torque_vector": [
+        409.4825045124821,
+        4830.339177431211,
+        6388.6125130049
+      ],
+      "torque_magnitude_nm": 8019.614849346036,
+      "force": [
+        -306.3626927721957,
+        53.83295631807948,
+        -1396.424105042059
+      ],
+      "torque": [
+        409.4825045124821,
+        4830.339177431211,
+        6388.6125130049
+      ],
+      "force_norm": 1430.6489324258032,
+      "torque_norm": 8019.614849346036,
+      "anchor_position": [
+        0.25698375065442775,
+        0.2643565233899057,
+        1.8664428266991362
+      ],
+      "mocap_target": [
+        0.1681821735768384,
+        0.25183413109436675,
+        1.851053967544285
+      ],
+      "reach_error_m": 0.09099091925218836
+    },
+    {
+      "limb_id": "right_wrist",
+      "anchor_id": "right_wrist",
+      "body_name": "palm_contact_right",
+      "force_vector": [
+        976.0053288320146,
+        802.3721474462685,
+        1092.6523086371317
+      ],
+      "force_magnitude_n": 1670.4120846294422,
+      "torque_vector": [
+        1335.81592807013,
+        -3695.643926860599,
+        6000.384161484582
+      ],
+      "torque_magnitude_nm": 7172.642352245268,
+      "force": [
+        976.0053288320146,
+        802.3721474462685,
+        1092.6523086371317
+      ],
+      "torque": [
+        1335.81592807013,
+        -3695.643926860599,
+        6000.384161484582
+      ],
+      "force_norm": 1670.4120846294422,
+      "torque_norm": 7172.642352245268,
+      "anchor_position": [
+        0.4255212973066175,
+        -0.19048629056353725,
+        1.7291310861848248
+      ],
+      "mocap_target": [
+        0.3213094649534051,
+        -0.24856693956576784,
+        1.6836214098852271
+      ],
+      "reach_error_m": 0.12768946091133954
+    },
+    {
+      "limb_id": "left_ankle",
+      "anchor_id": "left_ankle",
+      "body_name": "forefoot_contact_left",
+      "force_vector": [
+        767.3705858085651,
+        -532.0389946063558,
+        -568.8850696727337
+      ],
+      "force_magnitude_n": 1093.4136135253088,
+      "torque_vector": [
+        522.6919048391928,
+        3450.794669864545,
+        -4931.575971396441
+      ],
+      "torque_magnitude_nm": 6041.65807064623,
+      "force": [
+        767.3705858085651,
+        -532.0389946063558,
+        -568.8850696727337
+      ],
+      "torque": [
+        522.6919048391928,
+        3450.794669864545,
+        -4931.575971396441
+      ],
+      "force_norm": 1093.4136135253088,
+      "torque_norm": 6041.65807064623,
+      "anchor_position": [
+        0.09476081603420247,
+        0.31672815822368205,
+        0.14565243335747516
+      ],
+      "mocap_target": [
+        0.09599066739153471,
+        0.33230069972790605,
+        0.08757856313059731
+      ],
+      "reach_error_m": 0.06013809929146548
+    },
+    {
+      "limb_id": "right_ankle",
+      "anchor_id": "right_ankle",
+      "body_name": "forefoot_contact_right",
+      "force_vector": [
+        1592.4238807969189,
+        1124.3571170638306,
+        -632.6652868535198
+      ],
+      "force_magnitude_n": 2049.453124131863,
+      "torque_vector": [
+        -2069.344165747179,
+        -4715.218881364285,
+        -10506.648892407806
+      ],
+      "torque_magnitude_nm": 11700.647218159358,
+      "force": [
+        1592.4238807969189,
+        1124.3571170638306,
+        -632.6652868535198
+      ],
+      "torque": [
+        -2069.344165747179,
+        -4715.218881364285,
+        -10506.648892407806
+      ],
+      "force_norm": 2049.453124131863,
+      "torque_norm": 11700.647218159358,
+      "anchor_position": [
+        0.03202754145120074,
+        -0.49528154817963604,
+        0.10902384686729735
+      ],
+      "mocap_target": [
+        0.0374085123433463,
+        -0.573614576023457,
+        0.04497960645601262
+      ],
+      "reach_error_m": 0.10132464077795382
+    }
+  ],
+  "reach_errors": [
+    {
+      "anchor_id": "left_wrist",
+      "body_name": "palm_contact_left",
+      "reach_error_m": 0.09099091925218836
+    },
+    {
+      "anchor_id": "right_wrist",
+      "body_name": "palm_contact_right",
+      "reach_error_m": 0.12768946091133954
+    },
+    {
+      "anchor_id": "left_ankle",
+      "body_name": "forefoot_contact_left",
+      "reach_error_m": 0.06013809929146548
+    },
+    {
+      "anchor_id": "right_ankle",
+      "body_name": "forefoot_contact_right",
+      "reach_error_m": 0.10132464077795382
+    }
+  ],
+  "com_position": [
+    0.011616536708211837,
+    -0.04279083909482341,
+    0.906560960466802
+  ],
+  "support_center_position": [
+    0.15572270456628112,
+    -0.059511671191738,
+    0.9168083867540305
+  ],
+  "active_contact_points": [
+    [
+      0.1681821735768384,
+      0.25183413109436675,
+      1.851053967544285
+    ],
+    [
+      0.3213094649534051,
+      -0.24856693956576784,
+      1.6836214098852271
+    ],
+    [
+      0.09599066739153471,
+      0.33230069972790605,
+      0.08757856313059731
+    ],
+    [
+      0.0374085123433463,
+      -0.573614576023457,
+      0.04497960645601262
+    ]
+  ],
+  "com_stability_margin_m": 0.019611118568949384,
+  "pose_debug": {
+    "mediapipe_world_points": {
+      "left_wrist": [
+        -0.24569597840309143,
+        -0.8413003087043762,
+        0.16686779260635376
+      ],
+      "right_wrist": [
+        0.23120751976966858,
+        -0.6940232515335083,
+        0.2875266969203949
+      ],
+      "left_knee": [
+        -0.20096293091773987,
+        0.28522568941116333,
+        0.09715171903371811
+      ],
+      "right_knee": [
+        0.29553839564323425,
+        0.3305383324623108,
+        0.05674731358885765
+      ],
+      "left_ankle": [
+        -0.2690611481666565,
+        0.6331347227096558,
+        0.1159585490822792
+      ],
+      "right_ankle": [
+        0.5085132122039795,
+        0.6599598526954651,
+        0.0636712908744812
+      ],
+      "left_toe": [
+        -0.30823835730552673,
+        0.699580192565918,
+        0.09109754860401154
+      ],
+      "right_toe": [
+        0.5156926512718201,
+        0.7424951195716858,
+        0.03778296709060669
+      ]
+    },
+    "mapped_world_points": {
+      "hip_mid": [
+        -0.01,
+        0.0,
+        0.857
+      ],
+      "left_elbow": [
+        -0.18681914071665923,
+        0.3218187530488763,
+        1.5512227039485116
+      ],
+      "right_elbow": [
+        -0.20994089202220198,
+        -0.24678513845156907,
+        1.4375382346700536
+      ],
+      "left_wrist": [
+        -0.19416094489283192,
+        0.27122216435458535,
+        1.7867054238563984
+      ],
+      "right_wrist": [
+        -0.32755676489694924,
+        -0.25602390640377687,
+        1.6238816030966159
+      ],
+      "left_hand_tip": [
+        -0.18392902745241047,
+        0.25203896382287844,
+        1.837665981388211
+      ],
+      "right_hand_tip": [
+        -0.32538267161898965,
+        -0.2463248397807976,
+        1.6627934961401754
+      ],
+      "left_palm_contact": [
+        -0.1881821735768384,
+        0.25183413109436675,
+        1.851053967544285
+      ],
+      "right_palm_contact": [
+        -0.34130946495340514,
+        -0.24856693956576784,
+        1.6836214098852271
+      ],
+      "left_knee": [
+        -0.06907388550050843,
+        0.22176703640927728,
+        0.5412618312023612
+      ],
+      "right_knee": [
+        -0.04990038223562382,
+        -0.32714563577405387,
+        0.4911659248063482
+      ],
+      "left_ankle": [
+        -0.13787765337538238,
+        0.2970537927608402,
+        0.156627053955412
+      ],
+      "right_ankle": [
+        -0.0800708820968821,
+        -0.5626023594767985,
+        0.12697022728756324
+      ],
+      "left_toe": [
+        -0.11039229235892783,
+        0.3403666006158692,
+        0.08316751122688171
+      ],
+      "right_toe": [
+        -0.05144975214949072,
+        -0.5705396697571201,
+        0.035722426996284584
+      ],
+      "left_forefoot_contact": [
+        -0.11599066739153471,
+        0.33230069972790605,
+        0.08757856313059731
+      ],
+      "right_forefoot_contact": [
+        -0.0574085123433463,
+        -0.573614576023457,
+        0.04497960645601262
+      ]
+    },
+    "ik_mapped_world_points": {
+      "hip_mid": [
+        -0.01,
+        0.0,
+        0.857
+      ],
+      "left_elbow": [
+        0.16681914071665924,
+        0.3218187530488763,
+        1.5512227039485116
+      ],
+      "right_elbow": [
+        0.189940892022202,
+        -0.24678513845156907,
+        1.4375382346700536
+      ],
+      "left_wrist": [
+        0.17416094489283193,
+        0.27122216435458535,
+        1.7867054238563984
+      ],
+      "right_wrist": [
+        0.3075567648969492,
+        -0.25602390640377687,
+        1.6238816030966159
+      ],
+      "left_hand_tip": [
+        0.16392902745241048,
+        0.25203896382287844,
+        1.837665981388211
+      ],
+      "right_hand_tip": [
+        0.30538267161898963,
+        -0.2463248397807976,
+        1.6627934961401754
+      ],
+      "left_palm_contact": [
+        0.1681821735768384,
+        0.25183413109436675,
+        1.851053967544285
+      ],
+      "right_palm_contact": [
+        0.3213094649534051,
+        -0.24856693956576784,
+        1.6836214098852271
+      ],
+      "left_knee": [
+        0.049073885500508424,
+        0.22176703640927728,
+        0.5412618312023612
+      ],
+      "right_knee": [
+        0.02990038223562382,
+        -0.32714563577405387,
+        0.4911659248063482
+      ],
+      "left_ankle": [
+        0.11787765337538238,
+        0.2970537927608402,
+        0.156627053955412
+      ],
+      "right_ankle": [
+        0.06007088209688209,
+        -0.5626023594767985,
+        0.12697022728756324
+      ],
+      "left_toe": [
+        0.09039229235892783,
+        0.3403666006158692,
+        0.08316751122688171
+      ],
+      "right_toe": [
+        0.03144975214949072,
+        -0.5705396697571201,
+        0.035722426996284584
+      ],
+      "left_forefoot_contact": [
+        0.09599066739153471,
+        0.33230069972790605,
+        0.08757856313059731
+      ],
+      "right_forefoot_contact": [
+        0.0374085123433463,
+        -0.573614576023457,
+        0.04497960645601262
+      ]
+    },
+    "effector_targets_world": {
+      "left_elbow": [
+        0.16681914071665924,
+        0.3218187530488763,
+        1.5512227039485116
+      ],
+      "right_elbow": [
+        0.189940892022202,
+        -0.24678513845156907,
+        1.4375382346700536
+      ],
+      "left_wrist": [
+        0.1681821735768384,
+        0.25183413109436675,
+        1.851053967544285
+      ],
+      "right_wrist": [
+        0.3213094649534051,
+        -0.24856693956576784,
+        1.6836214098852271
+      ],
+      "left_knee": [
+        0.049073885500508424,
+        0.22176703640927728,
+        0.5412618312023612
+      ],
+      "right_knee": [
+        0.02990038223562382,
+        -0.32714563577405387,
+        0.4911659248063482
+      ],
+      "left_ankle": [
+        0.09599066739153471,
+        0.33230069972790605,
+        0.08757856313059731
+      ],
+      "right_ankle": [
+        0.0374085123433463,
+        -0.573614576023457,
+        0.04497960645601262
+      ]
+    },
+    "analytical_body_positions": {
+      "pelvis": [
+        -0.03048662018638834,
+        -0.06102127021704533,
+        0.8625684335147838
+      ],
+      "left_elbow": [
+        0.2315898470238973,
+        0.21816080691066808,
+        1.5196115155428123
+      ],
+      "right_elbow": [
+        0.22954174666789,
+        -0.1318460671640549,
+        1.5779973451655334
+      ],
+      "left_wrist": [
+        0.5254794675767879,
+        0.005660697167865672,
+        1.6365413846549215
+      ],
+      "right_wrist": [
+        0.48966805343224246,
+        0.14366956386869456,
+        1.5376805795987873
+      ],
+      "left_knee": [
+        0.034391858554969186,
+        0.098801842258143,
+        0.4258797711298669
+      ],
+      "right_knee": [
+        -0.040624968346516216,
+        -0.3644303895681583,
+        0.4845834360334054
+      ],
+      "left_ankle": [
+        0.1622627089922165,
+        0.16751637027499652,
+        0.1568332753991945
+      ],
+      "right_ankle": [
+        0.025303516656933235,
+        -0.46042624978353675,
+        0.1513599571124712
+      ]
+    },
+    "post_ik_body_positions": {
+      "pelvis": [
+        -0.016401487175327724,
+        -0.055568488927379554,
+        0.8615897244962998
+      ],
+      "left_elbow": [
+        0.13050239423437043,
+        0.36913941577778664,
+        1.5226070927490822
+      ],
+      "right_elbow": [
+        0.1640061624457261,
+        -0.37430344798763027,
+        1.5217158339124426
+      ],
+      "left_wrist": [
+        0.25698375065442775,
+        0.2643565233899057,
+        1.8664428266991362
+      ],
+      "right_wrist": [
+        0.4255212973066175,
+        -0.19048629056353725,
+        1.7291310861848248
+      ],
+      "left_knee": [
+        0.01220617013175698,
+        0.17284918593042842,
+        0.4432655898336655
+      ],
+      "right_knee": [
+        -0.0005524785585355372,
+        -0.3443186711016311,
+        0.47097049330714613
+      ],
+      "left_ankle": [
+        0.09476081603420247,
+        0.31672815822368205,
+        0.14565243335747516
+      ],
+      "right_ankle": [
+        0.03202754145120074,
+        -0.49528154817963604,
+        0.10902384686729735
+      ]
+    },
+    "analytical_position_errors_cm": {
+      "left_wrist": 48.40231028460499,
+      "right_wrist": 45.110177885458945,
+      "left_ankle": 19.06359722155651,
+      "right_ankle": 15.580406645320199,
+      "left_elbow": 12.625165910019076,
+      "right_elbow": 18.576323510933634,
+      "left_knee": 16.92602158642968,
+      "right_knee": 8.004565633853385
+    },
+    "post_ik_position_errors_cm": {
+      "left_wrist": 9.099091925218836,
+      "right_wrist": 12.768946091133953,
+      "left_ankle": 6.013809929146547,
+      "right_ankle": 10.132464077795381,
+      "left_elbow": 6.615893288497802,
+      "right_elbow": 15.498192694424695,
+      "left_knee": 11.556577284981028,
+      "right_knee": 4.037505822100603
+    },
+    "joint_targets_analytical_rad": {
+      "abdomen_z": 0.0,
+      "abdomen_y": 0.07404504312381943,
+      "abdomen_x": 0.08658309316922333,
+      "hip_x_right": -0.541104166005762,
+      "hip_z_right": 0.6091832459619706,
+      "hip_y_right": -0.09907476887174019,
+      "knee_right": -0.04048350534131551,
+      "ankle_y_right": -0.4798418028822592,
+      "ankle_x_right": 0.4358548914766431,
+      "hip_x_left": -0.45372219740270286,
+      "hip_z_left": 0.665781158908278,
+      "hip_y_left": -0.32739309114692505,
+      "knee_left": -0.1884109291905225,
+      "ankle_y_left": -0.8271927799371118,
+      "ankle_x_left": -1.1390741193492244,
+      "shoulder1_right": -1.5707948139287922,
+      "shoulder2_right": 1.570794704191871,
+      "elbow_right": -0.8553690211286478,
+      "shoulder1_left": -1.5707931237667907,
+      "shoulder2_left": 1.570794692066057,
+      "elbow_left": -1.1148862661024586,
+      "shoulder3_right": 0.0,
+      "shoulder3_left": 0.0
+    },
+    "joint_qpos_post_ik_rad": {
+      "abdomen_z": 0.05431778133701111,
+      "abdomen_y": 0.009412932879435459,
+      "abdomen_x": 0.14456753665674413,
+      "hip_x_right": -0.5235987755982988,
+      "hip_z_right": 0.6081482591058897,
+      "hip_y_right": -0.06524195363828154,
+      "knee_right": -0.17513345984974407,
+      "ankle_y_right": -0.07140125624668722,
+      "ankle_x_right": 0.33418693829580837,
+      "hip_x_left": -0.466794687816821,
+      "hip_z_left": 0.6108652381980153,
+      "hip_y_left": -0.183253597003614,
+      "knee_left": -0.2736922616904934,
+      "ankle_y_left": -0.5183886600325766,
+      "ankle_x_left": -0.7408241277881568,
+      "shoulder1_right": -0.9870460155624251,
+      "shoulder2_right": 0.2763152607226817,
+      "shoulder3_right": 0.26557198778955887,
+      "elbow_right": -0.6376924834520041,
+      "shoulder1_left": -1.4835298641951802,
+      "shoulder2_left": 0.4557470147751956,
+      "shoulder3_left": -0.7635585138585329,
+      "elbow_left": -0.9517368404712727
+    },
+    "debug_marker_targets_world": {
+      "left_shoulder": [
+        0.01704210090459449,
+        0.21312310050971242,
+        1.4253405779895911
+      ],
+      "right_shoulder": [
+        0.04258169621230366,
+        -0.119953887418593,
+        1.3620361612074583
+      ],
+      "left_elbow": [
+        0.16681914071665924,
+        0.3218187530488763,
+        1.5512227039485116
+      ],
+      "right_elbow": [
+        0.189940892022202,
+        -0.24678513845156907,
+        1.4375382346700536
+      ],
+      "left_knee": [
+        0.049073885500508424,
+        0.22176703640927728,
+        0.5412618312023612
+      ],
+      "right_knee": [
+        0.02990038223562382,
+        -0.32714563577405387,
+        0.4911659248063482
+      ]
+    }
+  },
+  "image_debug": {
+    "overlay_path": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\static_load_extract\\static_posture_overlay.png",
+    "mediapipe_pixels": {
+      "left_shoulder": [
+        587.454004406929,
+        430.2270231246948
+      ],
+      "right_shoulder": [
+        694.6084386706352,
+        442.3018625974655
+      ],
+      "left_elbow": [
+        560.7766131162643,
+        397.3980658054352
+      ],
+      "right_elbow": [
+        750.2450594902039,
+        455.27254343032837
+      ],
+      "left_wrist": [
+        591.2327900887278,
+        324.9927748544599
+      ],
+      "right_wrist": [
+        749.3560730290725,
+        389.94444265417246
+      ],
+      "left_hip": [
+        623.7558318376541,
+        621.2140116691589
+      ],
+      "right_hip": [
+        688.0543307065964,
+        615.280980348587
+      ],
+      "left_knee": [
+        582.2610241770744,
+        715.3174033164978
+      ],
+      "right_knee": [
+        755.3863980174065,
+        710.0503778457642
+      ],
+      "left_ankle": [
+        534.6026139497757,
+        830.0159068584442
+      ],
+      "right_ankle": [
+        823.8752776265144,
+        831.1147389411926
+      ]
+    },
+    "target_projected_pixels": {
+      "left_elbow": [
+        568.4736763212111,
+        405.54835314031146
+      ],
+      "right_elbow": [
+        742.2683416191803,
+        437.18059799691633
+      ],
+      "left_wrist": [
+        592.6320672378137,
+        314.0615341022266
+      ],
+      "right_wrist": [
+        751.2898699644682,
+        368.34673826476137
+      ],
+      "left_knee": [
+        584.3050154885256,
+        706.2928698917054
+      ],
+      "right_knee": [
+        750.6458001148712,
+        716.8432505167304
+      ],
+      "left_ankle": [
+        548.6641360847054,
+        846.9627426110052
+      ],
+      "right_ankle": [
+        822.2703431997774,
+        850.9888964386256
+      ]
+    },
+    "analytical_projected_pixels": {
+      "left_elbow": [
+        602.9402205690745,
+        417.349241895124
+      ],
+      "right_elbow": [
+        710.30643991038,
+        397.1007069059887
+      ],
+      "left_wrist": [
+        682.907585160828,
+        393.60357356735125
+      ],
+      "right_wrist": [
+        638.1442210487237,
+        422.97157383493015
+      ],
+      "left_knee": [
+        620.1317404643529,
+        739.8234302340053
+      ],
+      "right_knee": [
+        758.6214440979676,
+        715.4072381956701
+      ],
+      "left_ankle": [
+        602.7899110243994,
+        827.7733942758257
+      ],
+      "right_ankle": [
+        788.0745158275109,
+        818.917892470598
+      ]
+    },
+    "post_ik_projected_pixels": {
+      "left_elbow": [
+        552.0289913961458,
+        412.93103125832255
+      ],
+      "right_elbow": [
+        780.7553570379357,
+        409.5632033530073
+      ],
+      "left_wrist": [
+        593.1713195089035,
+        313.4747609895154
+      ],
+      "right_wrist": [
+        738.9157136385088,
+        359.621448226085
+      ],
+      "left_knee": [
+        596.6098945531298,
+        734.0563703525645
+      ],
+      "right_knee": [
+        754.2607245573444,
+        721.4861691098156
+      ],
+      "left_ankle": [
+        553.8885897175129,
+        829.1615328510923
+      ],
+      "right_ankle": [
+        798.6607891061365,
+        831.8376156602098
+      ]
+    },
+    "target_projected_pixel_errors": {
+      "left_elbow": 11.210350825107561,
+      "right_elbow": 19.772367525399304,
+      "left_wrist": 11.020435604967751,
+      "right_wrist": 21.684104903816824,
+      "left_knee": 9.253113206725741,
+      "right_knee": 8.28350092638868,
+      "left_ankle": 22.020936555364756,
+      "right_ankle": 19.938855301819537
+    },
+    "analytical_projected_pixel_errors": {
+      "left_elbow": 46.64567740741304,
+      "right_elbow": 70.56242554331861,
+      "left_wrist": 114.50637428341034,
+      "right_wrist": 116.01235888874076,
+      "left_knee": 45.10805368659947,
+      "right_knee": 6.25791306680972,
+      "left_ankle": 68.22416247214909,
+      "right_ankle": 37.821390894786546
+    },
+    "post_ik_projected_pixel_errors": {
+      "left_elbow": 17.82677484905451,
+      "right_elbow": 54.95654671424801,
+      "left_wrist": 11.680005980561003,
+      "right_wrist": 32.07000304474499,
+      "left_knee": 23.601672962898935,
+      "right_knee": 11.491060115308912,
+      "left_ankle": 19.304890993170257,
+      "right_ankle": 25.22484850490023
+    }
+  },
+  "meta": {
+    "xml_path": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\static_load_extract\\humanoid_shoulder3.xml",
+    "calibration_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\static_load_extract\\calibration.json",
+    "scale_model_segments": false,
+    "analysis_joints": [
+      "abdomen_z",
+      "abdomen_y",
+      "abdomen_x",
+      "hip_x_right",
+      "hip_z_right",
+      "hip_y_right",
+      "knee_right",
+      "ankle_y_right",
+      "ankle_x_right",
+      "hip_x_left",
+      "hip_z_left",
+      "hip_y_left",
+      "knee_left",
+      "ankle_y_left",
+      "ankle_x_left",
+      "shoulder1_right",
+      "shoulder2_right",
+      "shoulder3_right",
+      "elbow_right",
+      "shoulder1_left",
+      "shoulder2_left",
+      "shoulder3_left",
+      "elbow_left"
+    ],
+    "scale_factor": 1.1055613405615352,
+    "swap_left_right": false,
+    "target_forward_axis_flipped": true,
+    "arm_rotation_targets_enabled": false,
+    "leg_rotation_targets_enabled": false,
+    "elbow_target_weight": 0.8,
+    "knee_target_weight": 0.35,
+    "leg_rotation_weight": 0.18,
+    "ik_stats": {
+      "ik_iterations": 8.0,
+      "ik_max_pos_err_cm": 15.755653489908775,
+      "ik_max_rot_err_deg": 0.0
+    },
+    "weld_active_limbs": [
+      "left_wrist",
+      "right_wrist",
+      "left_ankle",
+      "right_ankle"
+    ],
+    "constraint_generalized_force_norm": 5907.2988715551755,
+    "constraint_generalized_force_max": 3199.6474957552196,
+    "gravity": [
+      0.0,
+      0.0,
+      -9.81
+    ]
+  }
+}
