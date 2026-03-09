@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -23,7 +24,8 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             .fillMaxSize()
             .background(Color.White)
             .padding(horizontal = 24.dp)
-            .padding(top = 40.dp, bottom = 40.dp)
+            .padding(top = 40.dp)
+            .keyboardAwareBottomPadding()
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()

@@ -16,11 +16,7 @@ sealed class ScreenRoutes(val route: String) {
         const val REGISTER_PASSWORD = "register_password"
     }
 
+    object Main : ScreenRoutes("main")
     object Upload : ScreenRoutes("upload")
     object Report : ScreenRoutes("report")
-
-    // 파라미터가 있는 화면 예시:
-    // object ReportDetail : ScreenRoutes("report/{climbId}") {
-    //     fun createRoute(climbId: String) = "report/$climbId"
-    // }
 }

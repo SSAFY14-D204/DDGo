@@ -8,25 +8,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.ddgo.app.feature.auth.AuthViewModel
 import com.ddgo.app.feature.auth.authGraph
+import com.ddgo.app.feature.main.MainScreen
 import com.ddgo.app.feature.report.ReportScreen
 import com.ddgo.app.feature.splash.SplashScreen
 import com.ddgo.app.feature.upload.UploadScreen
 
-/**
- * 앱 전체 네비게이션 그래프.
- *
- * ── Compose Navigation 학습 포인트 ─────────────────────────────────
- * - rememberNavController(): NavController 생성 및 기억
- * - NavHost: 화면 컨테이너 (startDestination으로 시작 화면 지정)
- * - composable("route"): 특정 경로에 Composable 화면을 연결
- * - navController.navigate(): 화면 이동
- * - navController.popBackStack(): 이전 화면으로 돌아가기
- * ──────────────────────────────────────────────────────────────────
- *
- * 새 화면 추가 방법:
- *   1. ScreenRoutes.kt에 경로 추가
- *   2. 이 파일에 composable() 블록 추가
- */
 @Composable
 fun NavGraph(
 ) {
@@ -39,26 +25,31 @@ fun NavGraph(
     ) {
         composable(ScreenRoutes.Splash.route) {
             SplashScreen(
-                onSplashFinished = {
+                onNavigateToAuth = {
                     navController.navigate(ScreenRoutes.Auth.route) {
+                        popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
+                    }
+                },
+                onNavigateToMain = {
+                    navController.navigate(ScreenRoutes.Main.route) {
                         popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
                     }
                 }
             )
         }
 
-        authGraph(navController, authViewModel)
-
-        composable(route = ScreenRoutes.Upload.route) {
-            UploadScreen(
-                onAnalyzeDone = {
-                    navController.navigate(ScreenRoutes.Report.route)
+        authGraph(
+            navController = navController,
+            viewModel = authViewModel,
+            onLoginSuccess = {
+                navController.navigate(ScreenRoutes.Main.route) {
+                    popUpTo(ScreenRoutes.Auth.route) { inclusive = true }
                 }
-            )
-        }
+            }
+        )
 
-        composable(route = ScreenRoutes.Report.route) {
-            ReportScreen()
+        composable(route = ScreenRoutes.Main.route) {
+            MainScreen()
         }
     }
 }

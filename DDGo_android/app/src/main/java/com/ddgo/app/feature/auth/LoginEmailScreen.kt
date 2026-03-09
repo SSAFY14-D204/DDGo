@@ -4,10 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -24,16 +27,21 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit) {
+    val isImeVisible = WindowInsets.isImeVisible
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
             .padding(horizontal = 24.dp)
-            .padding(top = 80.dp, bottom = 40.dp)
+            .padding(top = 80.dp)
+            .keyboardAwareBottomPadding()
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
@@ -97,47 +105,66 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Button(
-                onClick = onNext,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFE812))
-            ) {
-                Text(
-                    "카카오로 3초만에 로그인",
-                    color = Color.Black,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = PretendardFamily
-                )
-            }
-            
-            Button(
-                onClick = onNext, 
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF121212))
-            ) {
-                Text(
-                    "Google로 로그인",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = PretendardFamily
-                )
-            }
+            if (isImeVisible) {
+                Button(
+                    onClick = onNext,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DA1F2))
+                ) {
+                    Text(
+                        "다음",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = PretendardFamily,
+                        fontSize = 16.sp
+                    )
+                }
+            } else {
+                Button(
+                    onClick = onNext,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFE812))
+                ) {
+                    Text(
+                        "카카오로 3초만에 로그인",
+                        color = Color.Black,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = PretendardFamily
+                    )
+                }
+                
+                Button(
+                    onClick = onNext, 
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF121212))
+                ) {
+                    Text(
+                        "Google로 로그인",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = PretendardFamily
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            TextButton(onClick = { /* TODO go to register */ }) {
-                Text(
-                    "회원가입",
-                    color = Color(0xFF1DA1F2),
-                    fontFamily = PretendardFamily,
-                    fontWeight = FontWeight.SemiBold
-                )
+                TextButton(onClick = { /* TODO go to register */ }) {
+                    Text(
+                        "회원가입",
+                        color = Color(0xFF1DA1F2),
+                        fontFamily = PretendardFamily,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
