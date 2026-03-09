@@ -1,9 +1,19 @@
 pipeline {
   agent any
 
+  options {
+    skipDefaultCheckout(true)
+    disableConcurrentBuilds()
+    timestamps()
+  }
+
   environment {
     IMAGE = "leetaehee0/ddgo-backend"
     DEPLOY_DIR = "/opt/ddgo"
+    REGISTRY = "https://index.docker.io/v1/"
+    GRADLE_USER_HOME = "/var/lib/jenkins/.gradle"
+    DOCKER_BUILDKIT = "1"
+    COMPOSE_DOCKER_CLI_BUILD = "1"
   }
 
   stages {
@@ -29,10 +39,37 @@ pipeline {
     stage('Build Jar') {
       steps {
         dir('DDGo') {
-          echo "===== [2/5] Gradle 빌드 시작 ====="
-          sh 'chmod +x gradlew'
-          sh './gradlew clean build -x test'
-          echo "===== [2/5] Gradle 빌드 완료 ====="
+          script {
+            echo "===== [2/5] Gradle 빌드 시작 ====="
+            sh 'chmod +x gradlew'
+
+            // clean 제거 + Gradle 캐시 사용 + 병렬 빌드
+            sh './gradlew bootJar -x test --build-cache --parallel --daemon'
+
+            env.SHORT_HASH = sh(
+              script: "git rev-parse --short HEAD",
+              returnStdout: true
+            ).trim()
+
+            env.TAG = "${env.BUILD_NUMBER}-${env.SHORT_HASH}"
+
+            // plain.jar 제외하고 실제 실행 jar 1개 선택
+            env.JAR_FILE = sh(
+              script: "find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1",
+              returnStdout: true
+            ).trim()
+
+            if (!env.JAR_FILE) {
+              error("배포할 JAR 파일을 찾지 못했습니다.")
+            }
+
+            currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.TAG}"
+            currentBuild.description = "이미지 태그: ${IMAGE}:${env.TAG}"
+
+            sh "ls -lh ${env.JAR_FILE}"
+            echo "실행 JAR: ${env.JAR_FILE}"
+            echo "===== [2/5] Gradle 빌드 완료 ====="
+          }
         }
       }
     }
@@ -40,19 +77,20 @@ pipeline {
     stage('Docker Build') {
       steps {
         script {
-          def shortHash = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-          env.TAG = "${env.BUILD_NUMBER}-${shortHash}"
-
-          currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.TAG}"
-          currentBuild.description = "이미지 태그: ${IMAGE}:${env.TAG}"
-
           echo "===== [3/5] Docker 이미지 빌드 시작 ====="
           echo "생성할 이미지 태그: ${IMAGE}:${env.TAG}"
 
+          // 이전 latest를 캐시 소스로만 사용
+          sh "docker pull ${IMAGE}:latest || true"
+
           dir('DDGo') {
             sh """
-              docker build -t ${IMAGE}:${env.TAG} .
-              docker tag ${IMAGE}:${env.TAG} ${IMAGE}:latest
+              docker build \
+                --build-arg JAR_FILE=${env.JAR_FILE} \
+                --cache-from ${IMAGE}:latest \
+                -t ${IMAGE}:${env.TAG} \
+                -t ${IMAGE}:latest \
+                .
             """
           }
 
@@ -65,10 +103,12 @@ pipeline {
       steps {
         script {
           echo "===== [4/5] DockerHub Push 시작 ====="
-          docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-cred') {
+
+          docker.withRegistry("${REGISTRY}", 'dockerhub-cred') {
             sh "docker push ${IMAGE}:${env.TAG}"
             sh "docker push ${IMAGE}:latest"
           }
+
           echo "DockerHub Push 완료: ${IMAGE}:${env.TAG}"
           echo "===== [4/5] DockerHub Push 완료 ====="
         }
@@ -91,11 +131,12 @@ pipeline {
           try {
             sh """
               set -e
+              docker image inspect ${IMAGE}:${env.TAG} >/dev/null 2>&1 || docker pull ${IMAGE}:${env.TAG}
               cd ${DEPLOY_DIR}
               sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${IMAGE}:${env.TAG}|' .env
-              docker-compose pull backend
               docker rm -f ddgo-backend || true
-              docker-compose up -d --no-deps backend
+              docker compose up -d --no-deps backend
+              docker compose ps
             """
 
             echo "백엔드 컨테이너 교체 완료, 헬스체크 시작"
@@ -118,6 +159,7 @@ pipeline {
             }
 
             if (!ok) {
+              sh 'docker logs --tail 100 ddgo-backend || true'
               error("헬스체크 실패: 새 버전 배포 실패")
             }
 
@@ -130,12 +172,15 @@ pipeline {
 
             sh """
               set -e
+              docker image inspect ${prev} >/dev/null 2>&1 || docker pull ${prev}
               cd ${DEPLOY_DIR}
               sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${prev}|' .env
-              docker-compose pull backend
               docker rm -f ddgo-backend || true
-              docker-compose up -d --no-deps backend
+              docker compose up -d --no-deps backend
+              docker compose ps
             """
+
+            sh 'docker logs --tail 100 ddgo-backend || true'
 
             echo "===== 롤백 완료 ====="
             echo "복구 이미지: ${prev}"
@@ -150,10 +195,7 @@ pipeline {
 - URL: ${env.BUILD_URL}"""
             )
 
-            script {
-              currentBuild.description = "배포 실패 → 롤백 완료 (${prev})"
-            }
-
+            currentBuild.description = "배포 실패 → 롤백 완료 (${prev})"
             throw e
           }
         }
@@ -168,9 +210,7 @@ pipeline {
       echo "# 이미지: ${IMAGE}:${env.TAG}"
       echo "########################################"
 
-      script {
-        currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
-      }
+      currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
 
       mattermostSend(
         color: 'good',
@@ -188,10 +228,8 @@ pipeline {
       echo "# Jenkins 콘솔 로그 확인 필요"
       echo "########################################"
 
-      script {
-        if (!currentBuild.description) {
-          currentBuild.description = "배포 실패"
-        }
+      if (!currentBuild.description) {
+        currentBuild.description = "배포 실패"
       }
 
       mattermostSend(
@@ -204,7 +242,7 @@ pipeline {
     }
 
     always {
-      echo "불필요한 Docker 이미지 정리 시작"
+      echo "불필요한 Docker dangling 이미지 정리 시작"
       sh 'docker image prune -f || true'
       echo "워크스페이스 정리 시작"
       cleanWs()
