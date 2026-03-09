@@ -9,6 +9,17 @@ pipeline {
   stages {
     stage('Checkout') {
       steps {
+        script {
+          mattermostSend(
+            color: '#2F86EB',
+            message: """🚀 **DDGo 배포 시작**
+- Job: ${env.JOB_NAME}
+- Build: #${env.BUILD_NUMBER}
+- Branch: ${env.BRANCH_NAME ?: "dev"}
+- URL: ${env.BUILD_URL}"""
+          )
+        }
+
         echo "===== [1/5] 소스 체크아웃 시작 ====="
         checkout scm
         echo "===== [1/5] 소스 체크아웃 완료 ====="
@@ -129,6 +140,16 @@ pipeline {
             echo "===== 롤백 완료 ====="
             echo "복구 이미지: ${prev}"
 
+            mattermostSend(
+              color: 'warning',
+              message: """⚠️ **DDGo 배포 실패 → 롤백 완료**
+- Job: ${env.JOB_NAME}
+- Build: #${env.BUILD_NUMBER}
+- 실패 이미지: ${IMAGE}:${env.TAG}
+- 복구 이미지: ${prev}
+- URL: ${env.BUILD_URL}"""
+            )
+
             script {
               currentBuild.description = "배포 실패 → 롤백 완료 (${prev})"
             }
@@ -146,9 +167,19 @@ pipeline {
       echo "# 최종 결과: 배포 성공"
       echo "# 이미지: ${IMAGE}:${env.TAG}"
       echo "########################################"
+
       script {
         currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
       }
+
+      mattermostSend(
+        color: 'good',
+        message: """✅ **DDGo 배포 성공**
+- Job: ${env.JOB_NAME}
+- Build: #${env.BUILD_NUMBER}
+- Image: ${IMAGE}:${env.TAG}
+- URL: ${env.BUILD_URL}"""
+      )
     }
 
     failure {
@@ -156,11 +187,20 @@ pipeline {
       echo "# 최종 결과: 배포 실패"
       echo "# Jenkins 콘솔 로그 확인 필요"
       echo "########################################"
+
       script {
         if (!currentBuild.description) {
           currentBuild.description = "배포 실패"
         }
       }
+
+      mattermostSend(
+        color: 'danger',
+        message: """❌ **DDGo 배포 실패**
+- Job: ${env.JOB_NAME}
+- Build: #${env.BUILD_NUMBER}
+- URL: ${env.BUILD_URL}"""
+      )
     }
 
     always {
