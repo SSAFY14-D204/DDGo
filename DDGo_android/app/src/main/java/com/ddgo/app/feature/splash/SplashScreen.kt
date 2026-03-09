@@ -21,18 +21,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.core.ui.theme.PretendardFamily
-import kotlinx.coroutines.delay
 
 // 🚨 주의: 프로젝트 패키지명에 맞게 R 클래스를 꼭 import 해주세요!
 // import com.ddgo.app.R
 
 @Composable
-fun SplashScreen(onSplashFinished: () -> Unit) {
-    // 💡 기존 로직 유지: 1초(1000ms) 대기 후 onSplashFinished() 실행
-    LaunchedEffect(key1 = true) {
-        delay(1500)
-        onSplashFinished()
+fun SplashScreen(
+    onNavigateToAuth: () -> Unit,
+    onNavigateToMain: () -> Unit,
+    viewModel: SplashViewModel = hiltViewModel()
+) {
+    LaunchedEffect(Unit) {
+        viewModel.navigationEvent.collect { event ->
+            when (event) {
+                is SplashNavigationEvent.NavigateToAuth -> onNavigateToAuth()
+                is SplashNavigationEvent.NavigateToMain -> onNavigateToMain()
+            }
+        }
     }
 
     // 🎨 디자인 적용: 전체 화면을 하얗게 채우고, 내용물을 중앙에 배치

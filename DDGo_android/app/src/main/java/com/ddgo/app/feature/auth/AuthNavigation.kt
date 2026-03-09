@@ -6,7 +6,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import com.ddgo.app.navigation.ScreenRoutes
 
-fun NavGraphBuilder.authGraph(navController: NavController, viewModel: AuthViewModel) {
+fun NavGraphBuilder.authGraph(
+    navController: NavController,
+    viewModel: AuthViewModel,
+    onLoginSuccess: () -> Unit
+) {
     navigation(startDestination = ScreenRoutes.Auth.WELCOME, route = ScreenRoutes.Auth.route) {
 
         composable(ScreenRoutes.Auth.WELCOME) {
@@ -23,19 +27,27 @@ fun NavGraphBuilder.authGraph(navController: NavController, viewModel: AuthViewM
         }
 
         composable(ScreenRoutes.Auth.LOGIN_PASSWORD) {
-            LoginPasswordScreen(viewModel, onLoginComplete = {
-                navController.popBackStack(ScreenRoutes.Auth.LOGIN_EMAIL, false)
-            }, onBack = { navController.popBackStack() })
+            LoginPasswordScreen(
+                viewModel,
+                onLoginComplete = onLoginSuccess,
+                onBack = { navController.popBackStack() }
+            )
         }
 
         composable(ScreenRoutes.Auth.REGISTER_EMAIL) {
-            RegisterEmailScreen(viewModel, onNext = { navController.navigate(ScreenRoutes.Auth.REGISTER_PASSWORD) }, onBack = { navController.popBackStack() })
+            RegisterEmailScreen(
+                viewModel,
+                onNext = { navController.navigate(ScreenRoutes.Auth.REGISTER_PASSWORD) },
+                onBack = { navController.popBackStack() }
+            )
         }
 
         composable(ScreenRoutes.Auth.REGISTER_PASSWORD) {
-            RegisterPasswordScreen(viewModel, onRegComplete = {
-                navController.popBackStack(ScreenRoutes.Auth.LOGIN_EMAIL, false)
-            }, onBack = { navController.popBackStack() })
+            RegisterPasswordScreen(
+                viewModel,
+                onRegComplete = onLoginSuccess,
+                onBack = { navController.popBackStack() }
+            )
         }
 
     }
