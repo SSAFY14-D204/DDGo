@@ -1,0 +1,159 @@
+pipeline {
+  agent any
+
+  environment {
+    IMAGE = "leetaehee0/ddgo-backend"
+    DEPLOY_DIR = "/home/ubuntu/ddgo"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        echo "===== [1/5] 소스 체크아웃 시작 ====="
+        checkout scm
+        echo "===== [1/5] 소스 체크아웃 완료 ====="
+      }
+    }
+
+    stage('Build Jar') {
+      steps {
+        echo "===== [2/5] Gradle 빌드 시작 ====="
+        sh 'chmod +x gradlew'
+        sh './gradlew clean build -x test'
+        echo "===== [2/5] Gradle 빌드 완료 ====="
+      }
+    }
+
+    stage('Docker Build') {
+      steps {
+        script {
+          echo "===== [3/5] Docker 이미지 빌드 시작 ====="
+
+          def shortHash = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+          env.TAG = "${env.BUILD_NUMBER}-${shortHash}"
+
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.TAG}"
+          currentBuild.description = "이미지 태그: ${IMAGE}:${env.TAG}"
+
+          echo "생성할 이미지 태그: ${IMAGE}:${env.TAG}"
+
+          sh """
+            docker build -t ${IMAGE}:${env.TAG} .
+            docker tag ${IMAGE}:${env.TAG} ${IMAGE}:latest
+          """
+
+          echo "===== [3/5] Docker 이미지 빌드 완료 ====="
+        }
+      }
+    }
+
+    stage('Docker Push') {
+      steps {
+        script {
+          echo "===== [4/5] DockerHub Push 시작 ====="
+          docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-cred') {
+            sh "docker push ${IMAGE}:${env.TAG}"
+            sh "docker push ${IMAGE}:latest"
+          }
+          echo "DockerHub Push 완료: ${IMAGE}:${env.TAG}"
+          echo "===== [4/5] DockerHub Push 완료 ====="
+        }
+      }
+    }
+
+    stage('Deploy + HealthCheck + Rollback') {
+      steps {
+        script {
+          echo "===== [5/5] 배포 시작 ====="
+
+          def prev = sh(
+            script: "cd ${DEPLOY_DIR} && grep '^DOCKER_IMAGE=' .env | cut -d'=' -f2",
+            returnStdout: true
+          ).trim()
+
+          echo "이전 배포 이미지: ${prev}"
+          echo "새 배포 이미지: ${IMAGE}:${env.TAG}"
+
+          try {
+            sh """
+              set -e
+              cd ${DEPLOY_DIR}
+              sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${IMAGE}:${env.TAG}|' .env
+              docker-compose pull backend
+              docker-compose up -d backend
+            """
+
+            echo "백엔드 컨테이너 교체 완료, 헬스체크 시작"
+
+            def ok = false
+            for (int i = 1; i <= 12; i++) {
+              sleep 5
+              def code = sh(
+                script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/actuator/health || true",
+                returnStdout: true
+              ).trim()
+
+              echo "Health Check ${i}/12 -> HTTP ${code}"
+
+              if (code == "200") {
+                ok = true
+                echo "헬스체크 성공"
+                break
+              }
+            }
+
+            if (!ok) {
+              error("헬스체크 실패: 새 버전 배포 실패")
+            }
+
+            echo "===== 배포 성공 ====="
+            echo "최종 배포 이미지: ${IMAGE}:${env.TAG}"
+
+          } catch (e) {
+            echo "===== 배포 실패 감지 ====="
+            echo "롤백 시작: ${prev}"
+
+            sh """
+              set -e
+              cd ${DEPLOY_DIR}
+              sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${prev}|' .env
+              docker-compose pull backend
+              docker-compose up -d backend
+            """
+
+            echo "===== 롤백 완료 ====="
+            echo "복구 이미지: ${prev}"
+
+            currentBuild.description = "배포 실패 → 롤백 완료 (${prev})"
+            throw e
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "########################################"
+      echo "# 최종 결과: 배포 성공"
+      echo "# 이미지: ${IMAGE}:${env.TAG}"
+      echo "########################################"
+      currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
+    }
+
+    failure {
+      echo "########################################"
+      echo "# 최종 결과: 배포 실패"
+      echo "# Jenkins 콘솔 로그 확인 필요"
+      echo "########################################"
+    }
+
+    always {
+      echo "불필요한 Docker 이미지 정리 시작"
+      sh 'docker image prune -f || true'
+      echo "워크스페이스 정리 시작"
+      cleanWs()
+      echo "파이프라인 종료"
+    }
+  }
+}
