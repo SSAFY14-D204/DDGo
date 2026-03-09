@@ -1,0 +1,94 @@
+{
+  "stability_score": 0.0,
+  "joint_stress_log": [
+    {
+      "joint_id": "shoulder1_left",
+      "timestamp_ms": 0,
+      "torque": 653.8873784606575,
+      "torque_limit": 20.0,
+      "ratio": 32.694368923032876
+    },
+    {
+      "joint_id": "shoulder2_left",
+      "timestamp_ms": 0,
+      "torque": 746.9202192594264,
+      "torque_limit": 20.0,
+      "ratio": 37.34601096297132
+    },
+    {
+      "joint_id": "elbow_left",
+      "timestamp_ms": 0,
+      "torque": 198.32583211292655,
+      "torque_limit": 40.0,
+      "ratio": 4.9581458028231635
+    },
+    {
+      "joint_id": "shoulder1_right",
+      "timestamp_ms": 0,
+      "torque": 172.14682756206622,
+      "torque_limit": 20.0,
+      "ratio": 8.60734137810331
+    },
+    {
+      "joint_id": "shoulder2_right",
+      "timestamp_ms": 0,
+      "torque": 580.496397862637,
+      "torque_limit": 20.0,
+      "ratio": 29.02481989313185
+    },
+    {
+      "joint_id": "elbow_right",
+      "timestamp_ms": 0,
+      "torque": 1221.6259119595327,
+      "torque_limit": 40.0,
+      "ratio": 30.540647798988317
+    },
+    {
+      "joint_id": "shoulder1_left",
+      "timestamp_ms": 33,
+      "torque": 52.38890077751884,
+      "torque_limit": 20.0,
+      "ratio": 2.6194450388759423
+    },
+    {
+      "joint_id": "shoulder2_left",
+      "timestamp_ms": 33,
+      "torque": 210.2177406948166,
+      "torque_limit": 20.0,
+      "ratio": 10.51088703474083
+    },
+    {
+      "joint_id": "shoulder1_right",
+      "timestamp_ms": 33,
+      "torque": 103.8188720801841,
+      "torque_limit": 20.0,
+      "ratio": 5.190943604009204
+    },
+    {
+      "joint_id": "shoulder2_right",
+      "timestamp_ms": 33,
+      "torque": 41.106556952875714,
+      "torque_limit": 20.0,
+      "ratio": 2.0553278476437855
+    },
+    {
+      "joint_id": "elbow_right",
+      "timestamp_ms": 33,
+      "torque": 114.14944260166868,
+      "torque_limit": 40.0,
+      "ratio": 2.853736065041717
+    }
+  ],
+  "t_fail_timestamp": null,
+  "contact_efficiency": 0.0,
+  "meta": {
+    "frames": 2,
+    "scale_factor": 0.9444444444444445,
+    "mocap_weld_enabled": true,
+    "failure_rule": {
+      "pelvis_vz_threshold": -1.2,
+      "requires_no_active_contacts": true
+    },
+    "axis_note": "MuJoCo uses z-up. Downward fail check is pelvis vz < threshold."
+  }
+}

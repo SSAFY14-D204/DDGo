@@ -1,0 +1,737 @@
+{
+  "stability_score": 0.0,
+  "contact_efficiency": 0.0,
+  "reach_error_summary": {
+    "mean_reach_error_m": 0.8224004530456046,
+    "max_reach_error_m": 1.052118827713136
+  },
+  "joint_stress_log": [
+    {
+      "joint_id": "hip_z_left",
+      "timestamp_ms": 0,
+      "torque": 272.27136331111535,
+      "torque_limit": 320.0,
+      "ratio": 0.8508480103472355,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "shoulder1_right",
+      "timestamp_ms": 0,
+      "torque": 129.82492757064588,
+      "torque_limit": 140.0,
+      "ratio": 0.9273209112188991,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "elbow_right",
+      "timestamp_ms": 0,
+      "torque": 119.99999999999997,
+      "torque_limit": 120.0,
+      "ratio": 0.9999999999999998,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "shoulder1_left",
+      "timestamp_ms": 0,
+      "torque": 129.82492757064588,
+      "torque_limit": 140.0,
+      "ratio": 0.9273209112188991,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "elbow_left",
+      "timestamp_ms": 0,
+      "torque": 119.99999999999997,
+      "torque_limit": 120.0,
+      "ratio": 0.9999999999999998,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "hip_z_left",
+      "timestamp_ms": 33,
+      "torque": 272.2713633111156,
+      "torque_limit": 320.0,
+      "ratio": 0.8508480103472362,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "shoulder1_right",
+      "timestamp_ms": 33,
+      "torque": 118.81478968186914,
+      "torque_limit": 140.0,
+      "ratio": 0.8486770691562082,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "elbow_right",
+      "timestamp_ms": 33,
+      "torque": 119.99999999999994,
+      "torque_limit": 120.0,
+      "ratio": 0.9999999999999996,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "shoulder1_left",
+      "timestamp_ms": 33,
+      "torque": 118.8147896818691,
+      "torque_limit": 140.0,
+      "ratio": 0.8486770691562079,
+      "stress_level": "yellow"
+    },
+    {
+      "joint_id": "elbow_left",
+      "timestamp_ms": 33,
+      "torque": 119.99999999999999,
+      "torque_limit": 120.0,
+      "ratio": 0.9999999999999999,
+      "stress_level": "yellow"
+    }
+  ],
+  "peak_torque_joints": [
+    {
+      "joint_id": "elbow_left",
+      "ratio": 0.9999999999999999,
+      "torque": 119.99999999999999,
+      "torque_limit": 120.0,
+      "timestamp_ms": 33
+    },
+    {
+      "joint_id": "elbow_right",
+      "ratio": 0.9999999999999998,
+      "torque": 119.99999999999997,
+      "torque_limit": 120.0,
+      "timestamp_ms": 0
+    },
+    {
+      "joint_id": "shoulder1_right",
+      "ratio": 0.9273209112188991,
+      "torque": 129.82492757064588,
+      "torque_limit": 140.0,
+      "timestamp_ms": 0
+    },
+    {
+      "joint_id": "shoulder1_left",
+      "ratio": 0.9273209112188991,
+      "torque": 129.82492757064588,
+      "torque_limit": 140.0,
+      "timestamp_ms": 0
+    },
+    {
+      "joint_id": "hip_z_left",
+      "ratio": 0.8508480103472362,
+      "torque": 272.2713633111156,
+      "torque_limit": 320.0,
+      "timestamp_ms": 33
+    },
+    {
+      "joint_id": "hip_z_right",
+      "ratio": 0.49632800603588756,
+      "torque": 158.824961931484,
+      "torque_limit": 320.0,
+      "timestamp_ms": 33
+    },
+    {
+      "joint_id": "knee_left",
+      "ratio": 0.3747605798878326,
+      "torque": 134.91380875961974,
+      "torque_limit": 360.0,
+      "timestamp_ms": 0
+    },
+    {
+      "joint_id": "knee_right",
+      "ratio": 0.37476057988783223,
+      "torque": 134.9138087596196,
+      "torque_limit": 360.0,
+      "timestamp_ms": 0
+    }
+  ],
+  "frame_metrics": [
+    {
+      "timestamp_ms": 0,
+      "active_hold_contacts": [],
+      "effective_contact": false,
+      "contact_count": 0,
+      "com_position": [
+        -0.037113050507913636,
+        -0.03874357779169878,
+        0.8638994324203787
+      ],
+      "com_wall_distance_m": 0.03874357779169878,
+      "com_stability": 0.0,
+      "joint_loads": [
+        {
+          "joint_id": "elbow_right",
+          "timestamp_ms": 0,
+          "torque": 119.99999999999997,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999998,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "elbow_left",
+          "timestamp_ms": 0,
+          "torque": 119.99999999999997,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999998,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_right",
+          "timestamp_ms": 0,
+          "torque": 129.82492757064588,
+          "torque_limit": 140.0,
+          "ratio": 0.9273209112188991,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_left",
+          "timestamp_ms": 0,
+          "torque": 129.82492757064588,
+          "torque_limit": 140.0,
+          "ratio": 0.9273209112188991,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "hip_z_left",
+          "timestamp_ms": 0,
+          "torque": 272.27136331111535,
+          "torque_limit": 320.0,
+          "ratio": 0.8508480103472355,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "hip_z_right",
+          "timestamp_ms": 0,
+          "torque": 158.82496193148387,
+          "torque_limit": 320.0,
+          "ratio": 0.4963280060358871,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "knee_left",
+          "timestamp_ms": 0,
+          "torque": 134.91380875961974,
+          "torque_limit": 360.0,
+          "ratio": 0.3747605798878326,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "knee_right",
+          "timestamp_ms": 0,
+          "torque": 134.9138087596196,
+          "torque_limit": 360.0,
+          "ratio": 0.37476057988783223,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "hip_y_left",
+          "timestamp_ms": 0,
+          "torque": 93.680490841501,
+          "torque_limit": 420.0,
+          "ratio": 0.22304878771785952,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "hip_y_right",
+          "timestamp_ms": 0,
+          "torque": 93.68049084150068,
+          "torque_limit": 420.0,
+          "ratio": 0.22304878771785877,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "shoulder2_right",
+          "timestamp_ms": 0,
+          "torque": 7.811454891961146,
+          "torque_limit": 140.0,
+          "ratio": 0.055796106371151045,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "shoulder2_left",
+          "timestamp_ms": 0,
+          "torque": 7.811454891961146,
+          "torque_limit": 140.0,
+          "ratio": 0.055796106371151045,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "hip_x_right",
+          "timestamp_ms": 0,
+          "torque": 17.30772258171446,
+          "torque_limit": 320.0,
+          "ratio": 0.054086633067857694,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "hip_x_left",
+          "timestamp_ms": 0,
+          "torque": 17.307722581712063,
+          "torque_limit": 320.0,
+          "ratio": 0.0540866330678502,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "abdomen_y",
+          "timestamp_ms": 0,
+          "torque": 1.6999734953060397e-12,
+          "torque_limit": 220.0,
+          "ratio": 7.727152251391089e-15,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "abdomen_x",
+          "timestamp_ms": 0,
+          "torque": 1.021405182655144e-12,
+          "torque_limit": 220.0,
+          "ratio": 4.642750830250655e-15,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "abdomen_z",
+          "timestamp_ms": 0,
+          "torque": 6.055156376305604e-13,
+          "torque_limit": 220.0,
+          "ratio": 2.752343807411638e-15,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "ankle_y_left",
+          "timestamp_ms": 0,
+          "torque": 4.693467836602849e-14,
+          "torque_limit": 180.0,
+          "ratio": 2.607482131446027e-16,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "ankle_y_right",
+          "timestamp_ms": 0,
+          "torque": 1.4876988529977098e-14,
+          "torque_limit": 180.0,
+          "ratio": 8.264993627765054e-17,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "ankle_x_left",
+          "timestamp_ms": 0,
+          "torque": 1.0380585280245214e-14,
+          "torque_limit": 160.0,
+          "ratio": 6.487865800153258e-17,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "ankle_x_right",
+          "timestamp_ms": 0,
+          "torque": 8.43769498715119e-15,
+          "torque_limit": 160.0,
+          "ratio": 5.2735593669694933e-17,
+          "stress_level": "green"
+        }
+      ],
+      "joint_ratio_map": {
+        "abdomen_z": 2.752343807411638e-15,
+        "abdomen_y": 7.727152251391089e-15,
+        "abdomen_x": 4.642750830250655e-15,
+        "hip_x_right": 0.054086633067857694,
+        "hip_z_right": 0.4963280060358871,
+        "hip_y_right": 0.22304878771785877,
+        "knee_right": 0.37476057988783223,
+        "ankle_y_right": 8.264993627765054e-17,
+        "ankle_x_right": 5.2735593669694933e-17,
+        "hip_x_left": 0.0540866330678502,
+        "hip_z_left": 0.8508480103472355,
+        "hip_y_left": 0.22304878771785952,
+        "knee_left": 0.3747605798878326,
+        "ankle_y_left": 2.607482131446027e-16,
+        "ankle_x_left": 6.487865800153258e-17,
+        "shoulder1_right": 0.9273209112188991,
+        "shoulder2_right": 0.055796106371151045,
+        "elbow_right": 0.9999999999999998,
+        "shoulder1_left": 0.9273209112188991,
+        "shoulder2_left": 0.055796106371151045,
+        "elbow_left": 0.9999999999999998
+      },
+      "joints_over_threshold": [
+        {
+          "joint_id": "elbow_right",
+          "timestamp_ms": 0,
+          "torque": 119.99999999999997,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999998,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "elbow_left",
+          "timestamp_ms": 0,
+          "torque": 119.99999999999997,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999998,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_right",
+          "timestamp_ms": 0,
+          "torque": 129.82492757064588,
+          "torque_limit": 140.0,
+          "ratio": 0.9273209112188991,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_left",
+          "timestamp_ms": 0,
+          "torque": 129.82492757064588,
+          "torque_limit": 140.0,
+          "ratio": 0.9273209112188991,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "hip_z_left",
+          "timestamp_ms": 0,
+          "torque": 272.27136331111535,
+          "torque_limit": 320.0,
+          "ratio": 0.8508480103472355,
+          "stress_level": "yellow"
+        }
+      ],
+      "top_stressed_joints": [
+        {
+          "joint_id": "elbow_right",
+          "timestamp_ms": 0,
+          "torque": 119.99999999999997,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999998,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "elbow_left",
+          "timestamp_ms": 0,
+          "torque": 119.99999999999997,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999998,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_right",
+          "timestamp_ms": 0,
+          "torque": 129.82492757064588,
+          "torque_limit": 140.0,
+          "ratio": 0.9273209112188991,
+          "stress_level": "yellow"
+        }
+      ],
+      "limb_reach_error_m": {
+        "left_wrist": 1.052118827713136,
+        "right_wrist": 1.052118827713136,
+        "left_ankle": 0.5586905422226284,
+        "right_ankle": 0.6641040820641599
+      },
+      "strength_failure_active": false,
+      "strength_failure_joint": null,
+      "failure_type": null,
+      "frame_index": 0
+    },
+    {
+      "timestamp_ms": 33,
+      "active_hold_contacts": [],
+      "effective_contact": false,
+      "contact_count": 0,
+      "com_position": [
+        -0.029784041693864113,
+        -0.03038391245585581,
+        0.877162901345932
+      ],
+      "com_wall_distance_m": 0.03038391245585581,
+      "com_stability": 0.0,
+      "joint_loads": [
+        {
+          "joint_id": "elbow_left",
+          "timestamp_ms": 33,
+          "torque": 119.99999999999999,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999999,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "elbow_right",
+          "timestamp_ms": 33,
+          "torque": 119.99999999999994,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999996,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "hip_z_left",
+          "timestamp_ms": 33,
+          "torque": 272.2713633111156,
+          "torque_limit": 320.0,
+          "ratio": 0.8508480103472362,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_right",
+          "timestamp_ms": 33,
+          "torque": 118.81478968186914,
+          "torque_limit": 140.0,
+          "ratio": 0.8486770691562082,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_left",
+          "timestamp_ms": 33,
+          "torque": 118.8147896818691,
+          "torque_limit": 140.0,
+          "ratio": 0.8486770691562079,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "hip_z_right",
+          "timestamp_ms": 33,
+          "torque": 158.824961931484,
+          "torque_limit": 320.0,
+          "ratio": 0.49632800603588756,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "knee_left",
+          "timestamp_ms": 33,
+          "torque": 101.83664045392064,
+          "torque_limit": 360.0,
+          "ratio": 0.2828795568164462,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "knee_right",
+          "timestamp_ms": 33,
+          "torque": 101.83664045392054,
+          "torque_limit": 360.0,
+          "ratio": 0.28287955681644594,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "hip_y_right",
+          "timestamp_ms": 33,
+          "torque": 73.5704346949066,
+          "torque_limit": 420.0,
+          "ratio": 0.17516770165453951,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "hip_y_left",
+          "timestamp_ms": 33,
+          "torque": 73.57043469490625,
+          "torque_limit": 420.0,
+          "ratio": 0.1751677016545387,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "shoulder2_left",
+          "timestamp_ms": 33,
+          "torque": 21.608369342979824,
+          "torque_limit": 140.0,
+          "ratio": 0.15434549530699873,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "shoulder2_right",
+          "timestamp_ms": 33,
+          "torque": 21.608369342979707,
+          "torque_limit": 140.0,
+          "ratio": 0.1543454953069979,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "hip_x_left",
+          "timestamp_ms": 33,
+          "torque": 16.228890598949608,
+          "torque_limit": 320.0,
+          "ratio": 0.050715283121717525,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "hip_x_right",
+          "timestamp_ms": 33,
+          "torque": 16.228890598948198,
+          "torque_limit": 320.0,
+          "ratio": 0.05071528312171312,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "abdomen_x",
+          "timestamp_ms": 33,
+          "torque": 3.8902214782865485e-13,
+          "torque_limit": 220.0,
+          "ratio": 1.7682824901302494e-15,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "abdomen_y",
+          "timestamp_ms": 33,
+          "torque": 1.6342482922482304e-13,
+          "torque_limit": 220.0,
+          "ratio": 7.428401328401047e-16,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "abdomen_z",
+          "timestamp_ms": 33,
+          "torque": 1.2301271112846734e-13,
+          "torque_limit": 220.0,
+          "ratio": 5.591486869475788e-16,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "ankle_y_right",
+          "timestamp_ms": 33,
+          "torque": 1.8318679906315083e-14,
+          "torque_limit": 180.0,
+          "ratio": 1.0177044392397268e-16,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "ankle_x_left",
+          "timestamp_ms": 33,
+          "torque": 1.5182299861749016e-14,
+          "torque_limit": 160.0,
+          "ratio": 9.488937413593135e-17,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "ankle_x_right",
+          "timestamp_ms": 33,
+          "torque": 1.2836953722228372e-14,
+          "torque_limit": 160.0,
+          "ratio": 8.023096076392733e-17,
+          "stress_level": "green"
+        },
+        {
+          "joint_id": "ankle_y_left",
+          "timestamp_ms": 33,
+          "torque": 1.3655743202889425e-14,
+          "torque_limit": 180.0,
+          "ratio": 7.586524001605237e-17,
+          "stress_level": "green"
+        }
+      ],
+      "joint_ratio_map": {
+        "abdomen_z": 5.591486869475788e-16,
+        "abdomen_y": 7.428401328401047e-16,
+        "abdomen_x": 1.7682824901302494e-15,
+        "hip_x_right": 0.05071528312171312,
+        "hip_z_right": 0.49632800603588756,
+        "hip_y_right": 0.17516770165453951,
+        "knee_right": 0.28287955681644594,
+        "ankle_y_right": 1.0177044392397268e-16,
+        "ankle_x_right": 8.023096076392733e-17,
+        "hip_x_left": 0.050715283121717525,
+        "hip_z_left": 0.8508480103472362,
+        "hip_y_left": 0.1751677016545387,
+        "knee_left": 0.2828795568164462,
+        "ankle_y_left": 7.586524001605237e-17,
+        "ankle_x_left": 9.488937413593135e-17,
+        "shoulder1_right": 0.8486770691562082,
+        "shoulder2_right": 0.1543454953069979,
+        "elbow_right": 0.9999999999999996,
+        "shoulder1_left": 0.8486770691562079,
+        "shoulder2_left": 0.15434549530699873,
+        "elbow_left": 0.9999999999999999
+      },
+      "joints_over_threshold": [
+        {
+          "joint_id": "elbow_left",
+          "timestamp_ms": 33,
+          "torque": 119.99999999999999,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999999,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "elbow_right",
+          "timestamp_ms": 33,
+          "torque": 119.99999999999994,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999996,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "hip_z_left",
+          "timestamp_ms": 33,
+          "torque": 272.2713633111156,
+          "torque_limit": 320.0,
+          "ratio": 0.8508480103472362,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_right",
+          "timestamp_ms": 33,
+          "torque": 118.81478968186914,
+          "torque_limit": 140.0,
+          "ratio": 0.8486770691562082,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "shoulder1_left",
+          "timestamp_ms": 33,
+          "torque": 118.8147896818691,
+          "torque_limit": 140.0,
+          "ratio": 0.8486770691562079,
+          "stress_level": "yellow"
+        }
+      ],
+      "top_stressed_joints": [
+        {
+          "joint_id": "elbow_left",
+          "timestamp_ms": 33,
+          "torque": 119.99999999999999,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999999,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "elbow_right",
+          "timestamp_ms": 33,
+          "torque": 119.99999999999994,
+          "torque_limit": 120.0,
+          "ratio": 0.9999999999999996,
+          "stress_level": "yellow"
+        },
+        {
+          "joint_id": "hip_z_left",
+          "timestamp_ms": 33,
+          "torque": 272.2713633111156,
+          "torque_limit": 320.0,
+          "ratio": 0.8508480103472362,
+          "stress_level": "yellow"
+        }
+      ],
+      "limb_reach_error_m": {
+        "left_wrist": 1.0373569730284864,
+        "right_wrist": 1.0373569730284864,
+        "left_ankle": 0.5449157943269609,
+        "right_ankle": 0.6325416042678433
+      },
+      "strength_failure_active": false,
+      "strength_failure_joint": null,
+      "failure_type": null,
+      "frame_index": 1
+    }
+  ],
+  "t_fail_timestamp": null,
+  "failure_type": null,
+  "meta": {
+    "frames": 2,
+    "scale_factor": 1.0735611111111112,
+    "mocap_weld_enabled": true,
+    "stress_ratio_threshold": 0.8,
+    "strength_ratio_threshold": 1.0,
+    "strength_consecutive_frames": 5,
+    "hold_radius_m": 0.12,
+    "wall_axis": "y",
+    "wall_plane_value": 0.0,
+    "support_axes": [
+      0,
+      2
+    ],
+    "hold_lock_tolerance_m": 0.06,
+    "calibration_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\pysical_verify\\calibration.json"
+  }
+}
