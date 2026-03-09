@@ -83,7 +83,8 @@ pipeline {
               cd ${DEPLOY_DIR}
               sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${IMAGE}:${env.TAG}|' .env
               docker-compose pull backend
-              docker-compose up -d backend
+              docker rm -f ddgo-backend || true
+              docker-compose up -d --no-deps backend
             """
 
             echo "백엔드 컨테이너 교체 완료, 헬스체크 시작"
@@ -121,7 +122,8 @@ pipeline {
               cd ${DEPLOY_DIR}
               sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${prev}|' .env
               docker-compose pull backend
-              docker-compose up -d backend
+              docker rm -f ddgo-backend || true
+              docker-compose up -d --no-deps backend
             """
 
             echo "===== 롤백 완료 ====="
