@@ -1,6 +1,7 @@
 package com.ddgo.app.data.mapper
 
 import com.ddgo.app.data.remote.auth.LoginResponseDto
+import com.ddgo.app.data.remote.auth.RefreshTokenResponseDto
 import com.ddgo.app.domain.model.AuthToken
 
 /**
@@ -13,6 +14,12 @@ import com.ddgo.app.domain.model.AuthToken
 object AuthMapper {
     /** 로그인 응답 DTO → AuthToken 도메인 모델로 변환 */
     fun LoginResponseDto.toDomain(): AuthToken = AuthToken(
+        accessToken = this.accessToken,
+        refreshToken = this.refreshToken
+    )
+
+    /** 토큰 재발급 응답 DTO → AuthToken 도메인 모델로 변환 */
+    fun RefreshTokenResponseDto.toDomain(): AuthToken = AuthToken(
         accessToken = this.accessToken,
         refreshToken = this.refreshToken
     )

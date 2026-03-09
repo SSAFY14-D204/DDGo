@@ -11,4 +11,6 @@ import com.ddgo.app.domain.model.AuthToken
 interface AuthRepository {
     suspend fun register(username: String ,password:String, nickname:String) : Result<Unit>
     suspend fun login(username : String, password: String) : Result<AuthToken>
+    suspend fun refreshToken(refreshToken: String): Result<AuthToken>
+    suspend fun logout(): Result<Unit>
 }

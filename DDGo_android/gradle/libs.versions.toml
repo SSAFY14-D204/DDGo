@@ -42,6 +42,7 @@ desugarJdkLibs          = "2.0.4"
 junit                   = "4.13.2"
 junitVersion            = "1.2.1"
 espressoCore            = "3.6.1"
+mockk                   = "1.13.12"
 ui = "1.10.4"
 uiText = "1.10.4"
 foundation = "1.10.4"
@@ -102,6 +103,8 @@ desugar-jdk-libs                    = { group = "com.android.tools",            
 junit                               = { group = "junit",                        name = "junit",                         version.ref = "junit" }
 androidx-junit                      = { group = "androidx.test.ext",            name = "junit",                         version.ref = "junitVersion" }
 androidx-espresso-core              = { group = "androidx.test.espresso",       name = "espresso-core",                 version.ref = "espressoCore" }
+mockk                               = { group = "io.mockk",                     name = "mockk",                         version.ref = "mockk" }
+mockk-android                       = { group = "io.mockk",                     name = "mockk-android",                 version.ref = "mockk" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }

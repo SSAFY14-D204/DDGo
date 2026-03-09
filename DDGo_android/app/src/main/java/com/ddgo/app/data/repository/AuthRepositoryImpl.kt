@@ -4,6 +4,7 @@ import com.ddgo.app.core.datastore.TokenDataStore
 import com.ddgo.app.data.mapper.AuthMapper.toDomain
 import com.ddgo.app.data.remote.auth.AuthApi
 import com.ddgo.app.data.remote.auth.LoginRequestDto
+import com.ddgo.app.data.remote.auth.RefreshTokenRequestDto
 import com.ddgo.app.data.remote.auth.RegisterRequestDto
 import com.ddgo.app.domain.model.AuthToken
 import com.ddgo.app.domain.repository.AuthRepository
@@ -48,6 +49,39 @@ class AuthRepositoryImpl @Inject constructor(
                     response.data.refreshToken
                 )
                 Result.success(response.data.toDomain())
+            } else {
+                Result.failure(Exception(response.message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 3. 토큰 재발급 구현
+    override suspend fun refreshToken(refreshToken: String): Result<AuthToken> {
+        return try {
+            val response = authApi.refresh(RefreshTokenRequestDto(refreshToken))
+            if (response.success && response.data != null) {
+                tokenDataStore.saveTokens(
+                    response.data.accessToken,
+                    response.data.refreshToken
+                )
+                Result.success(response.data.toDomain())
+            } else {
+                Result.failure(Exception(response.message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 4. 로그아웃 구현
+    override suspend fun logout(): Result<Unit> {
+        return try {
+            val response = authApi.logout()
+            if (response.success) {
+                tokenDataStore.clearTokens()
+                Result.success(Unit)
             } else {
                 Result.failure(Exception(response.message))
             }
