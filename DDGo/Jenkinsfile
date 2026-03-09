@@ -3,7 +3,7 @@ pipeline {
 
   environment {
     IMAGE = "leetaehee0/ddgo-backend"
-    DEPLOY_DIR = "/home/ubuntu/ddgo"
+    DEPLOY_DIR = "/opt/ddgo"
   }
 
   stages {
