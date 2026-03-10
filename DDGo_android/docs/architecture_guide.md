@@ -60,7 +60,11 @@ app/src/main/java/com/ddgo/app/
 │   │   └── report/          # ReportApi.kt, ReportDto.kt
 │   ├── ml/                  # 온디바이스 AI
 │   │   ├── mediapipe/PoseEstimatorImpl.kt
-│   │   └── yolo/HoldDetectorImpl.kt
+│   │   ├── yolo/HoldDetectorImpl.kt
+│   │   └── mujoco/          # MuJoCo 물리 시뮬레이션
+│   │       ├── MuJoCoEngine.kt    # PhysicsEngine 구현체 (JNI 래퍼)
+│   │       ├── MuJocoBenchmark.kt # 벤치마크 러너
+│   │       └── MuJocoModels.kt    # MJCF XML 모델 상수
 │   ├── mapper/              # DTO/AI결과 → Domain 변환
 │   │   ├── AuthMapper.kt
 │   │   ├── UploadMapper.kt
@@ -76,12 +80,16 @@ app/src/main/java/com/ddgo/app/
 │   │   ├── User.kt
 │   │   ├── Hold.kt
 │   │   ├── Pose.kt
-│   │   └── AttemptReport.kt
+│   │   ├── AttemptReport.kt
+│   │   ├── SimState.kt        # MuJoCo 시뮬레이션 상태
+│   │   ├── ModelInfo.kt       # MuJoCo 모델 구조 정보
+│   │   └── BenchmarkResult.kt # MuJoCo 벤치마크 결과
 │   ├── repository/          # Repository & AI 인터페이스 (계약서)
 │   │   ├── AuthRepository.kt
 │   │   ├── UploadRepository.kt
 │   │   ├── PoseEstimator.kt
-│   │   └── HoldDetector.kt
+│   │   ├── HoldDetector.kt
+│   │   └── PhysicsEngine.kt   # MuJoCo 물리 엔진 인터페이스
 │   └── usecase/             # 복잡한 비즈니스 로직
 │       └── ExtractFailClipUseCase.kt
 │
