@@ -307,15 +307,6 @@ pipeline {
           echo "########################################"
 
           currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
-
-          mattermostSend(
-            color: 'good',
-            message: """✅ **DDGo 배포 성공**
-- Job: ${env.JOB_NAME}
-- Build: #${env.BUILD_NUMBER}
-- Image: ${IMAGE}:${env.TAG}
-- URL: ${env.BUILD_URL}"""
-          )
         } else {
           echo "########################################"
           echo "# 최종 결과: 백엔드 변경 없음"
@@ -324,6 +315,16 @@ pipeline {
 
           currentBuild.description = "백엔드 변경 없음 - 스킵"
         }
+
+        mattermostSend(
+          color: 'good',
+          message: """✅ **DDGo 파이프라인 성공**
+  - Job: ${env.JOB_NAME}
+  - Build: #${env.BUILD_NUMBER}
+  - 결과: ${env.BACKEND_CHANGED == "true" ? "백엔드 배포 완료" : "백엔드 변경 없음 (스킵)"}
+  - ${env.BACKEND_CHANGED == "true" ? "Image: ${IMAGE}:${env.TAG}" : "Image: 없음"}
+  - URL: ${env.BUILD_URL}"""
+        )
       }
     }
 
@@ -342,9 +343,9 @@ pipeline {
       mattermostSend(
         color: 'danger',
         message: """❌ **DDGo 배포 실패**
-- Job: ${env.JOB_NAME}
-- Build: #${env.BUILD_NUMBER}
-- URL: ${env.BUILD_URL}"""
+  - Job: ${env.JOB_NAME}
+  - Build: #${env.BUILD_NUMBER}
+  - URL: ${env.BUILD_URL}"""
       )
     }
 
