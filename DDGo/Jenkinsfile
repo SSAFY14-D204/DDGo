@@ -140,7 +140,7 @@ pipeline {
               cd ${DEPLOY_DIR}
               sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${IMAGE}:${env.TAG}|' .env
               docker rm -f ddgo-backend || true
-              docker compose up -d --no-deps spring-boot
+              docker compose up -d --no-deps backend
               docker compose ps
             """
 
@@ -183,7 +183,7 @@ pipeline {
                 cd ${DEPLOY_DIR}
                 sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${prev}|' .env
                 docker rm -f ddgo-backend || true
-                docker compose up -d --no-deps spring-boot
+                docker compose up -d --no-deps backend
                 docker compose ps
               """
 
