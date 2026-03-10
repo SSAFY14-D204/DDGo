@@ -17,6 +17,15 @@ sealed class ScreenRoutes(val route: String) {
     }
 
     object Main : ScreenRoutes("main")
+
+    // 메인 하단 탭 라우트
+    object Calendar : ScreenRoutes("calendar")
+    object Community : ScreenRoutes("community")
+    object Climbing : ScreenRoutes("climbing")
+    object Analysis : ScreenRoutes("analysis")
+    object Profile : ScreenRoutes("profile")
+
+    // (레거시 - 추후 정리 예정)
     object Upload : ScreenRoutes("upload")
     object Report : ScreenRoutes("report")
 }
