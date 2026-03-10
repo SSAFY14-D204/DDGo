@@ -14,6 +14,7 @@ pipeline {
     GRADLE_USER_HOME = "/var/lib/jenkins/.gradle"
     DOCKER_BUILDKIT = "1"
     COMPOSE_DOCKER_CLI_BUILD = "1"
+    BACKEND_CHANGED = "false"
   }
 
   stages {
@@ -30,20 +31,83 @@ pipeline {
           )
         }
 
-        echo "===== [1/5] 소스 체크아웃 시작 ====="
+        echo "===== [1/6] 소스 체크아웃 시작 ====="
         checkout scm
-        echo "===== [1/5] 소스 체크아웃 완료 ====="
+        echo "===== [1/6] 소스 체크아웃 완료 ====="
+      }
+    }
+
+    stage('Check Changed Paths') {
+      steps {
+        script {
+          echo "===== [2/6] 변경 경로 검사 시작 ====="
+
+          def beforeSha = env.gitlabBefore
+          def afterSha = env.gitlabAfter
+          def changedFilesRaw = ""
+
+          echo "gitlabBefore: ${beforeSha}"
+          echo "gitlabAfter : ${afterSha}"
+
+          if (beforeSha?.trim() && afterSha?.trim() &&
+              beforeSha != "0000000000000000000000000000000000000000" &&
+              afterSha != "0000000000000000000000000000000000000000") {
+
+            changedFilesRaw = sh(
+              script: "git diff --name-only ${beforeSha} ${afterSha} || true",
+              returnStdout: true
+            ).trim()
+
+          } else {
+            echo "GitLab webhook SHA 환경변수가 없어서 HEAD 기준 fallback 비교를 수행합니다."
+
+            changedFilesRaw = sh(
+              script: """
+                if git rev-parse HEAD~1 >/dev/null 2>&1; then
+                  git diff --name-only HEAD~1 HEAD || true
+                else
+                  git ls-tree -r --name-only HEAD || true
+                fi
+              """,
+              returnStdout: true
+            ).trim()
+          }
+
+          def changedFiles = changedFilesRaw ? changedFilesRaw.split('\n') : []
+
+          echo "변경 파일 목록:"
+          changedFiles.each { echo "- ${it}" }
+
+          def backendChanged = changedFiles.any { file ->
+            file.startsWith('DDGo/') ||
+            file == 'docker-compose.yml' ||
+            file == '.env'
+          }
+
+          if (backendChanged) {
+            env.BACKEND_CHANGED = "true"
+            echo "백엔드 관련 변경 감지됨"
+          } else {
+            env.BACKEND_CHANGED = "false"
+            currentBuild.description = "백엔드 변경 없음 - 배포 스킵"
+            echo "백엔드 관련 변경 없음 -> 백엔드 빌드/배포를 스킵합니다."
+          }
+
+          echo "===== [2/6] 변경 경로 검사 완료 ====="
+        }
       }
     }
 
     stage('Build Jar') {
+      when {
+        expression { env.BACKEND_CHANGED == "true" }
+      }
       steps {
         dir('DDGo') {
           script {
-            echo "===== [2/5] Gradle 빌드 시작 ====="
+            echo "===== [3/6] Gradle 빌드 시작 ====="
             sh 'chmod +x gradlew'
 
-            // clean 제거 + Gradle 캐시 사용 + 병렬 빌드
             sh './gradlew bootJar -x test --build-cache --parallel --daemon'
 
             env.SHORT_HASH = sh(
@@ -53,7 +117,6 @@ pipeline {
 
             env.TAG = "${env.BUILD_NUMBER}-${env.SHORT_HASH}"
 
-            // plain.jar 제외하고 실제 실행 jar 1개 선택
             env.JAR_FILE = sh(
               script: "find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1",
               returnStdout: true
@@ -68,19 +131,21 @@ pipeline {
 
             sh "ls -lh ${env.JAR_FILE}"
             echo "실행 JAR: ${env.JAR_FILE}"
-            echo "===== [2/5] Gradle 빌드 완료 ====="
+            echo "===== [3/6] Gradle 빌드 완료 ====="
           }
         }
       }
     }
 
     stage('Docker Build') {
+      when {
+        expression { env.BACKEND_CHANGED == "true" }
+      }
       steps {
         script {
-          echo "===== [3/5] Docker 이미지 빌드 시작 ====="
+          echo "===== [4/6] Docker 이미지 빌드 시작 ====="
           echo "생성할 이미지 태그: ${IMAGE}:${env.TAG}"
 
-          // 이전 latest를 캐시 소스로만 사용
           sh "docker pull ${IMAGE}:latest || true"
 
           dir('DDGo') {
@@ -94,15 +159,18 @@ pipeline {
             """
           }
 
-          echo "===== [3/5] Docker 이미지 빌드 완료 ====="
+          echo "===== [4/6] Docker 이미지 빌드 완료 ====="
         }
       }
     }
 
     stage('Docker Push') {
+      when {
+        expression { env.BACKEND_CHANGED == "true" }
+      }
       steps {
         script {
-          echo "===== [4/5] DockerHub Push 시작 ====="
+          echo "===== [5/6] DockerHub Push 시작 ====="
 
           docker.withRegistry("${REGISTRY}", 'dockerhub-cred') {
             sh "docker push ${IMAGE}:${env.TAG}"
@@ -110,15 +178,18 @@ pipeline {
           }
 
           echo "DockerHub Push 완료: ${IMAGE}:${env.TAG}"
-          echo "===== [4/5] DockerHub Push 완료 ====="
+          echo "===== [5/6] DockerHub Push 완료 ====="
         }
       }
     }
 
     stage('Deploy + HealthCheck + Rollback') {
+      when {
+        expression { env.BACKEND_CHANGED == "true" }
+      }
       steps {
         script {
-          echo "===== [5/5] 배포 시작 ====="
+          echo "===== [6/6] 배포 시작 ====="
 
           def prev = sh(
             script: """
@@ -228,23 +299,32 @@ pipeline {
 
   post {
     success {
-      echo "########################################"
-      echo "# 최종 결과: 배포 성공"
-      echo "# 이미지: ${IMAGE}:${env.TAG}"
-      echo "########################################"
-
       script {
-        currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
-      }
+        if (env.BACKEND_CHANGED == "true") {
+          echo "########################################"
+          echo "# 최종 결과: 배포 성공"
+          echo "# 이미지: ${IMAGE}:${env.TAG}"
+          echo "########################################"
 
-      mattermostSend(
-        color: 'good',
-        message: """✅ **DDGo 배포 성공**
+          currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
+
+          mattermostSend(
+            color: 'good',
+            message: """✅ **DDGo 배포 성공**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
 - Image: ${IMAGE}:${env.TAG}
 - URL: ${env.BUILD_URL}"""
-      )
+          )
+        } else {
+          echo "########################################"
+          echo "# 최종 결과: 백엔드 변경 없음"
+          echo "# 빌드/배포 스킵"
+          echo "########################################"
+
+          currentBuild.description = "백엔드 변경 없음 - 스킵"
+        }
+      }
     }
 
     failure {
