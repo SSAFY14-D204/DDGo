@@ -35,6 +35,19 @@ android {
             abiFilters.add("armeabi-v7a")
         }
 
+        // 🦾 MuJoCo JNI 빌드 옵션
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_PLATFORM=android-28"  // qsort_r은 API 28+에서 제공됨
+                )
+                // 💡 빌드 대상 라이브러리만 명시하여 qhull 등 부가적인 실행 파일 빌드 제외
+                targets.add("ddgo_mujoco")
+            }
+        }
+
         // 💡 API 서버 주소 환경 변수 주입
         buildConfigField(
             "String",
@@ -73,9 +86,21 @@ android {
         noCompress += listOf("tflite", "task")
     }
 
+    // 🦾 CMake 연동 (MuJoCo JNI)
+    externalNativeBuild {
+        cmake {
+            path = file("CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            // 여러 라이브러리에서 중복될 수 있는 C++ STL 충돌 방지
+            pickFirsts += listOf("**/libc++_shared.so")
         }
     }
 }
