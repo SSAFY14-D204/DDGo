@@ -1,5 +1,7 @@
 package com.ddgo.app.data.ml.mujoco
 
+import com.ddgo.app.domain.model.BenchmarkResult
+import com.ddgo.app.domain.model.ModelInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

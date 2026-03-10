@@ -16,11 +16,25 @@
 
 ## 아키텍처 개요
 
+DDGo 앱의 Clean Architecture 레이어에 맞게 구성되어 있습니다.
+
 ```
+[feature 계층]
+MyViewModel
+    │  @Inject PhysicsEngine (인터페이스)
+    ▼
+[domain 계층]
+PhysicsEngine.kt (interface)        ← 계약서만 존재, Android 의존성 없음
+domain/model/
+    ├── SimState.kt
+    ├── ModelInfo.kt
+    └── BenchmarkResult.kt
+    ▼
+[data 계층]
 MuJocoModels.kt          ← 여기에 MJCF XML 문자열 추가
       │
       ▼
-MuJoCoEngine.kt          ← init(xml) 으로 모델 로드
+MuJoCoEngine.kt          ← PhysicsEngine 구현체, init(xml) 으로 모델 로드
       │  JNI
       ▼
 mujoco_jni.cpp           ← C++ 물리 연산 실행
@@ -33,6 +47,7 @@ libmujoco.so             ← MuJoCo 3.2.5 네이티브 라이브러리 (NDK 빌�
 - 모델은 **MJCF XML 문자열** 형태로 관리. 별도 파일(.xml) 없이 Kotlin 코드 안에 정의.
 - 렌더링 없음 — 순수 물리 연산(CPU)만 수행.
 - 모델은 한 번에 1개만 로드 가능 (단일 인스턴스).
+- ViewModel은 `MuJoCoEngine`을 직접 참조하지 않고 `PhysicsEngine` 인터페이스를 주입받아 사용.
 
 ---
 
@@ -41,11 +56,21 @@ libmujoco.so             ← MuJoCo 3.2.5 네이티브 라이브러리 (NDK 빌�
 ```
 app/src/main/
 ├── cpp/
-│   └── mujoco_jni.cpp                        # C++ JNI 브릿지 (패키지: data.ml.mujoco)
-└── java/com/ddgo/app/data/ml/mujoco/
-    ├── MuJocoModels.kt    ← ✏️ 모델 추가는 여기
-    ├── MuJoCoEngine.kt                        # Kotlin API 싱글톤
-    └── MuJocoBenchmark.kt                     # 성능 벤치마크 유틸
+│   └── mujoco_jni.cpp                              # C++ JNI 브릿지 (⚠️ 패키지경로 고정)
+└── java/com/ddgo/app/
+    ├── domain/
+    │   ├── model/
+    │   │   ├── SimState.kt                         # 시뮬레이션 상태 (time, qpos0, qvel0)
+    │   │   ├── ModelInfo.kt                        # 모델 구조 (nq, nv, nbody, ngeom)
+    │   │   └── BenchmarkResult.kt                  # 벤치마크 결과 (stepsPerSec 등)
+    │   └── repository/
+    │       └── PhysicsEngine.kt                    # 인터페이스 (계약서)
+    ├── data/ml/mujoco/
+    │   ├── MuJocoModels.kt    ← ✏️ 모델 추가는 여기
+    │   ├── MuJoCoEngine.kt                         # PhysicsEngine 구현체 (JNI object 싱글톤)
+    │   └── MuJocoBenchmark.kt                      # 성능 벤치마크 유틸
+    └── di/
+        └── MlModule.kt                             # PhysicsEngine → MuJoCoEngine 바인딩
 ```
 
 ---
@@ -79,21 +104,30 @@ object MuJocoModels {
 }
 ```
 
-### Step 2 — 모델 로드 및 실행
+### Step 2 — ViewModel에서 주입받아 사용
+
+`MuJoCoEngine`을 직접 참조하지 않고 **`PhysicsEngine` 인터페이스를 Hilt로 주입**받습니다.
 
 ```kotlin
-// ViewModel 또는 UseCase에서
-viewModelScope.launch(Dispatchers.Default) {
-    MuJoCoEngine.load()                       // 라이브러리 로드 (최초 1회)
-    MuJoCoEngine.init(MuJocoModels.MY_MODEL)  // 모델 초기화
+@HiltViewModel
+class MyViewModel @Inject constructor(
+    private val physicsEngine: PhysicsEngine   // MuJoCoEngine이 주입됨
+) : ViewModel() {
 
-    repeat(500) {
-        MuJoCoEngine.step()                   // 물리 1스텝 (0.002s)
+    fun runSimulation() {
+        viewModelScope.launch(Dispatchers.Default) {
+            physicsEngine.load()                        // 라이브러리 로드 (최초 1회)
+            physicsEngine.init(MuJocoModels.MY_MODEL)  // 모델 초기화
+
+            repeat(500) {
+                physicsEngine.step()                    // 물리 1스텝 (0.002s)
+            }
+            // 시뮬레이션 1.0초 경과
+
+            val state: SimState? = physicsEngine.getState()      // 상태 읽기
+            physicsEngine.close()                                 // 리소스 해제
+        }
     }
-    // 시뮬레이션 1.0초 경과
-
-    val state = MuJoCoEngine.getState()       // 상태 읽기
-    MuJoCoEngine.close()                      // 리소스 해제
 }
 ```
 
@@ -286,29 +320,42 @@ nq=28, nv=27 | timestep=0.002 | integrator=RK4
 
 ### 전체 생명주기
 
+ViewModel에서 `PhysicsEngine` 인터페이스로 주입받아 사용합니다.
+반환 타입 (`SimState`, `ModelInfo`, `BenchmarkResult`)은 모두 `domain.model` 패키지에 있습니다.
+
 ```kotlin
 // 1. 라이브러리 로드 (앱 기동 시 1회)
-if (!MuJoCoEngine.load()) return  // API 28 미만 기기 차단
+if (!physicsEngine.load()) return  // API 28 미만 기기 차단
 
 // 2. 모델 초기화
-if (!MuJoCoEngine.init(MuJocoModels.HUMANOID)) return  // XML 오류 시 false
+if (!physicsEngine.init(MuJocoModels.HUMANOID)) return  // XML 오류 시 false
 
 // 3. 모델 구조 확인
-val info: ModelInfo? = MuJoCoEngine.getModelInfo()
+val info: ModelInfo? = physicsEngine.getModelInfo()
 // info.nq / info.nv / info.nbody / info.ngeom
 
 // 4. 시뮬레이션 루프
 repeat(N) {
-    MuJoCoEngine.step()                  // 1스텝 (timestep 만큼 진행)
-    val state = MuJoCoEngine.getState()  // time / qpos[0] / qvel[0]
+    physicsEngine.step()                      // 1스텝 (timestep 만큼 진행)
+    val state: SimState? = physicsEngine.getState()  // time / qpos[0] / qvel[0]
 }
 
 // 5. 성능 측정
-val result: BenchmarkResult? = MuJoCoEngine.benchmark(nSteps = 10_000)
+val result: BenchmarkResult? = physicsEngine.benchmark(nSteps = 10_000)
 // result.stepsPerSec / result.realTimeFactor / result.elapsedMs
 
 // 6. 해제 (모델 교체 또는 종료 시)
-MuJoCoEngine.close()
+physicsEngine.close()
+```
+
+### import 경로
+
+```kotlin
+import com.ddgo.app.domain.repository.PhysicsEngine   // 인터페이스
+import com.ddgo.app.domain.model.SimState             // 시뮬레이션 상태
+import com.ddgo.app.domain.model.ModelInfo            // 모델 구조 정보
+import com.ddgo.app.domain.model.BenchmarkResult      // 벤치마크 결과
+import com.ddgo.app.data.ml.mujoco.MuJocoModels       // MJCF XML 상수
 ```
 
 ### `realTimeFactor` 해석
@@ -414,5 +461,6 @@ fun getBodyPos(bodyId: Int): DoubleArray? = nativeGetBodyPos(bodyId)
 | **동시 모델** | 단일 인스턴스. 모델 교체 시 반드시 `close()` → `init()` 순서 |
 | **스레드** | `step()` / `benchmark()`는 `Dispatchers.Default`(백그라운드)에서 호출 |
 | **렌더링** | 현재 미지원. 물리 연산 결과만 수치로 반환 |
-| **JNI 패키지** | 함수명은 반드시 `data_ml_mujoco` 포함 (`data_mujoco` 아님) |
+| **JNI 패키지** | 함수명은 반드시 `data_ml_mujoco` 포함 (`data_mujoco` 아님). `MuJoCoEngine`의 패키지/클래스명 변경 금지 |
+| **DI 사용** | ViewModel은 `PhysicsEngine` 인터페이스로 주입받음. `MuJoCoEngine`을 직접 참조하지 말 것 |
 | **XML 오류** | `init()` 반환값이 `false`일 때 Logcat `DDGo_MuJoCo` 태그에서 상세 오류 확인 가능 |
