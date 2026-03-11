@@ -29,13 +29,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // 💡 AI 연산 최적화를 위해 64비트 아키텍처 우선 설정
-        ndk {
-            abiFilters.add("arm64-v8a")
-            abiFilters.add("armeabi-v7a")
-        }
-
-        // 🦾 MuJoCo JNI 빌드 옵션
+        // 🦾 MuJoCo JNI 빌드 옵션 — CMake는 ARM 전용 (MuJoCo x86_64 미지원)
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
@@ -45,6 +39,9 @@ android {
                 )
                 // 💡 빌드 대상 라이브러리만 명시하여 qhull 등 부가적인 실행 파일 빌드 제외
                 targets.add("ddgo_mujoco")
+                // MuJoCo는 ARM 전용 빌드 (x86_64 에뮬레이터에서도 berberis로 실행되나
+                // MuJoCo는 SVE를 사용하지 않아 문제없음)
+                abiFilters("arm64-v8a", "armeabi-v7a")
             }
         }
 
@@ -63,7 +60,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Release APK: ARM 전용 (APK 크기 최소화)
+            ndk {
+                abiFilters.add("arm64-v8a")
+                abiFilters.add("armeabi-v7a")
+            }
         }
+        // debug: ndk abiFilters 제한 없음
+        // → TFLite/FFmpeg x86_64 라이브러리 포함 → 에뮬레이터에서 berberis 없이 네이티브 실행
     }
 
     compileOptions {
@@ -97,6 +101,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // JUnit Jupiter 여러 JAR에 중복 포함된 라이선스 파일 충돌 방지
+            excludes += "META-INF/LICENSE.md"
+            excludes += "META-INF/LICENSE-notice.md"
         }
         jniLibs {
             // 여러 라이브러리에서 중복될 수 있는 C++ STL 충돌 방지
@@ -152,7 +159,8 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
-
+    implementation("com.github.wseemann:FFmpegMediaMetadataRetriever-core:1.0.19")
+    implementation("com.github.wseemann:FFmpegMediaMetadataRetriever-native:1.0.19")
     // Desugaring (Java 8+ API 지원)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
