@@ -16,16 +16,33 @@ sealed class ScreenRoutes(val route: String) {
         const val REGISTER_PASSWORD = "register_password"
     }
 
+    /** 메인 화면(탭 UI)의 route */
     object Main : ScreenRoutes("main")
 
-    // 메인 하단 탭 라우트
-    object Calendar : ScreenRoutes("calendar")
-    object Community : ScreenRoutes("community")
-    object Climbing : ScreenRoutes("climbing")
-    object Analysis : ScreenRoutes("analysis")
-    object Profile : ScreenRoutes("profile")
+    /**
+     * 메인 플로우 전체를 감싸는 서브 그래프의 route.
+     * Splash/Auth 이후 진입하며, Main 화면과 그 하위 기능 그래프들을 포함합니다.
+     */
+    object MainGraph : ScreenRoutes("main_graph")
 
-    // (레거시 - 추후 정리 예정)
-    object Upload : ScreenRoutes("upload")
-    object Report : ScreenRoutes("report")
-}
+    /**
+     * 클라이밍 기능 전체 라우트.
+     * Upload(영상 업로드)와 Record(실시간 기록) 두 개의 독립적인 서브 그래프로 구성됩니다.
+     */
+    object Climbing : ScreenRoutes("climbing_graph") {
+
+        /** 영상 업로드 플로우 (갤러리 선택 → 챌린지 생성 → 홀드 선택 → 결과 확인) */
+        object Upload : ScreenRoutes("upload_graph") {
+            const val ATTEMPT_UPLOAD = "attempt_upload"
+            const val CHALLENGE_CREATE = "challenge_create"
+            const val CHALLENGE_HOLD = "challenge_hold"
+            const val ATTEMPT_RESULT = "attempt_result"
+        }
+
+        /** 실시간 기록 플로우 (카메라 권한 → 기록 → 기록 결과) */
+        object Record : ScreenRoutes("record_graph") {
+            const val RECORD_MAIN = "record_main"
+        }
+    }
+    }
+
