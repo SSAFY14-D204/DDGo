@@ -8,7 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,7 +17,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -31,12 +29,12 @@ fun AttemptUploadScreen(
     viewModel: UploadViewModel = hiltViewModel(),
     onNavigateToNext: () -> Unit = {}
 ) {
-    // Photo Picker: 동영상 1개만 선택 가능
+    // 선택 완료 즉시 → ViewModel에 URI 저장 + 다음 화면 이동
     val videoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.updateVideoUri(uri.toString())
+            viewModel.updateVideoUri(uri.toString()) // 썸네일 추출은 ViewModel에서 백그라운드 처리
             onNavigateToNext()
         }
     }
@@ -52,7 +50,7 @@ fun AttemptUploadScreen(
                 .padding(horizontal = 24.dp, vertical = 48.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // 상단 안내 텍스트
+            // 안내 텍스트
             Column {
                 Text(
                     text = "분석하고 싶은 문제의",
@@ -68,11 +66,13 @@ fun AttemptUploadScreen(
                 )
             }
 
-            // 동영상 선택 버튼
+            // 갤러리 선택 버튼
             Button(
                 onClick = {
                     videoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.VideoOnly
+                        )
                     )
                 },
                 modifier = Modifier
