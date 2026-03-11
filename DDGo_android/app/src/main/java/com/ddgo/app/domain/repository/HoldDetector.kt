@@ -1,5 +1,6 @@
 package com.ddgo.app.domain.repository
 
+import android.graphics.Bitmap
 import com.ddgo.app.domain.model.Hold
 
 /**
@@ -10,9 +11,9 @@ import com.ddgo.app.domain.model.Hold
  */
 interface HoldDetector {
     /**
-     * 비디오에서 클라이밍 홀드를 검출합니다.
-     * @param videoUri 로컬 비디오 파일 URI
+     * 이미지(비트맵)에서 클라이밍 홀드를 검출합니다.
+     * @param bitmap 감지 대상 이미지 프레임
      * @return 검출된 Hold 리스트
      */
-    suspend fun detectFromVideo(videoUri: String): List<Hold>
+    suspend fun detectFromFrame(bitmap: Bitmap): List<Hold>
 }
