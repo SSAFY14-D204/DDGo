@@ -19,6 +19,10 @@ pipeline {
     DEPLOY_BRANCH = ""
     DEPLOY_COMMIT_MSG = ""
     DEPLOY_COMMIT_AUTHOR = ""
+
+    SHORT_HASH = ""
+    TAG = ""
+    JAR_FILE = ""
   }
 
   stages {
@@ -29,24 +33,35 @@ pipeline {
         echo "===== [1/6] 소스 체크아웃 완료 ====="
 
         script {
-          env.DEPLOY_BRANCH = sh(
-            script: "git rev-parse --abbrev-ref HEAD",
+          def gitBranch = sh(
+            script: "git rev-parse --abbrev-ref HEAD || true",
             returnStdout: true
           ).trim()
 
-          env.DEPLOY_COMMIT_MSG = sh(
-            script: "git log -1 --pretty=%s",
+          def gitCommitMsg = sh(
+            script: "git log -1 --pretty=%s || true",
             returnStdout: true
           ).trim()
 
-          env.DEPLOY_COMMIT_AUTHOR = sh(
-            script: "git log -1 --pretty=%an",
-            returnStdout: true
-          ).trim()
+          def webhookBranch = env.gitlabSourceBranch?.trim() ?:
+                              env.gitlabBranch?.trim() ?:
+                              env.BRANCH_NAME?.trim()
+
+          def webhookUser = env.gitlabUserName?.trim() ?:
+                            env.gitlabUserUsername?.trim()
+
+          env.DEPLOY_BRANCH = webhookBranch ?: (gitBranch ?: "HEAD")
+          env.DEPLOY_COMMIT_MSG = gitCommitMsg ?: "(커밋 메시지 없음)"
+          env.DEPLOY_COMMIT_AUTHOR = webhookUser ?: "(푸시 사용자 없음)"
 
           echo "배포 대상 브랜치: ${env.DEPLOY_BRANCH}"
           echo "커밋 메시지: ${env.DEPLOY_COMMIT_MSG}"
-          echo "커밋 작성자: ${env.DEPLOY_COMMIT_AUTHOR}"
+          echo "푸시 사용자: ${env.DEPLOY_COMMIT_AUTHOR}"
+
+          echo "gitlabUserName: ${env.gitlabUserName}"
+          echo "gitlabUserUsername: ${env.gitlabUserUsername}"
+          echo "gitlabBranch: ${env.gitlabBranch}"
+          echo "gitlabSourceBranch: ${env.gitlabSourceBranch}"
 
           currentBuild.description = """
 브랜치: ${env.DEPLOY_BRANCH}
@@ -80,7 +95,8 @@ pipeline {
           echo "gitlabBefore: ${beforeSha}"
           echo "gitlabAfter : ${afterSha}"
 
-          if (beforeSha?.trim() && afterSha?.trim() &&
+          if (beforeSha?.trim() &&
+              afterSha?.trim() &&
               beforeSha != "0000000000000000000000000000000000000000" &&
               afterSha != "0000000000000000000000000000000000000000") {
 
