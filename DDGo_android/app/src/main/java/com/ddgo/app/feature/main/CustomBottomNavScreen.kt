@@ -1,7 +1,9 @@
 package com.ddgo.app.feature.main
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -93,7 +95,8 @@ class BumpShape(
 @Composable
 fun CustomBottomNavigationBar(
     selectedIndex: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    onNavigateToDebug: () -> Unit = {}
 ) {
     val activeColor = Color(0xFF42A5F5)
     val inactiveColor = Color(0xFF788490)
@@ -151,7 +154,8 @@ fun CustomBottomNavigationBar(
                 isSelected = selectedIndex == MainTab.PROFILE,
                 activeColor = activeColor,
                 inactiveColor = inactiveColor,
-                onClick = { onTabSelected(MainTab.PROFILE) }
+                onClick = { onTabSelected(MainTab.PROFILE) },
+                onLongClick = onNavigateToDebug
             )
         }
 
@@ -191,6 +195,7 @@ fun CustomBottomNavigationBar(
 }
 
 // 개별 네비게이션 아이템 컴포저블
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BottomNavItem(
     icon: ImageVector,
@@ -198,13 +203,23 @@ fun BottomNavItem(
     isSelected: Boolean,
     activeColor: Color,
     inactiveColor: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
     val color = if (isSelected) activeColor else inactiveColor
 
     Column(
         modifier = Modifier
-            .clickable(onClick = onClick)
+            .let { defaultModifier ->
+                if (onLongClick != null) {
+                    defaultModifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    defaultModifier.clickable(onClick = onClick)
+                }
+            }
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center

@@ -21,7 +21,9 @@ import com.ddgo.app.feature.profile.ProfileScreen
  * 초기 탭은 캘린더(index=0).
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    onNavigateToDebug: () -> Unit = {}
+) {
     // 탭 상태 (화면 회전 등에도 유지되도록 rememberSaveable)
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
 
@@ -29,7 +31,8 @@ fun MainScreen() {
         bottomBar = {
             CustomBottomNavigationBar(
                 selectedIndex = selectedTab,
-                onTabSelected = { selectedTab = it }
+                onTabSelected = { selectedTab = it },
+                onNavigateToDebug = onNavigateToDebug
             )
         }
     ) { innerPadding ->

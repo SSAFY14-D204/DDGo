@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.ddgo.app.feature.auth.authGraph
+import com.ddgo.app.feature.debug.debugGraph
 import com.ddgo.app.feature.main.MainScreen
 import com.ddgo.app.feature.splash.SplashScreen
 
@@ -37,14 +38,20 @@ fun NavGraph() {
             navController = navController,
             onLoginSuccess = {
                 navController.navigate(ScreenRoutes.Main.route) {
-                    popUpTo(0) { inclusive = true } 
+                    popUpTo(0) { inclusive = true }
                     launchSingleTop = true
                 }
             }
         )
 
         composable(route = ScreenRoutes.Main.route) {
-            MainScreen()
+            MainScreen(
+                onNavigateToDebug = { navController.navigate("debug_main") }
+            )
         }
+
+        // 디버깅 페이지 연결 //
+        debugGraph(navController = navController)
+
     }
 }
