@@ -1,3 +1,11 @@
+def backendChanged = false
+def deployBranch = ""
+def deployCommitMsg = ""
+def deployCommitAuthor = ""
+def shortHash = ""
+def tag = ""
+def jarFile = ""
+
 pipeline {
   agent any
 
@@ -14,15 +22,6 @@ pipeline {
     GRADLE_USER_HOME = "/var/lib/jenkins/.gradle"
     DOCKER_BUILDKIT = "1"
     COMPOSE_DOCKER_CLI_BUILD = "1"
-    BACKEND_CHANGED = "false"
-
-    DEPLOY_BRANCH = ""
-    DEPLOY_COMMIT_MSG = ""
-    DEPLOY_COMMIT_AUTHOR = ""
-
-    SHORT_HASH = ""
-    TAG = ""
-    JAR_FILE = ""
   }
 
   stages {
@@ -38,7 +37,7 @@ pipeline {
             returnStdout: true
           ).trim()
 
-          def gitCommitMsg = sh(
+          def gitMsg = sh(
             script: "git log -1 --pretty=%s || true",
             returnStdout: true
           ).trim()
@@ -50,13 +49,13 @@ pipeline {
           def webhookUser = env.gitlabUserName?.trim() ?:
                             env.gitlabUserUsername?.trim()
 
-          env.DEPLOY_BRANCH = webhookBranch ?: (gitBranch ?: "HEAD")
-          env.DEPLOY_COMMIT_MSG = gitCommitMsg ?: "(커밋 메시지 없음)"
-          env.DEPLOY_COMMIT_AUTHOR = webhookUser ?: "(푸시 사용자 없음)"
+          deployBranch = webhookBranch ?: (gitBranch ?: "HEAD")
+          deployCommitMsg = gitMsg ?: "(커밋 메시지 없음)"
+          deployCommitAuthor = webhookUser ?: "(푸시 사용자 없음)"
 
-          echo "배포 대상 브랜치: ${env.DEPLOY_BRANCH}"
-          echo "커밋 메시지: ${env.DEPLOY_COMMIT_MSG}"
-          echo "푸시 사용자: ${env.DEPLOY_COMMIT_AUTHOR}"
+          echo "배포 대상 브랜치: ${deployBranch}"
+          echo "커밋 메시지: ${deployCommitMsg}"
+          echo "푸시 사용자: ${deployCommitAuthor}"
 
           echo "gitlabUserName: ${env.gitlabUserName}"
           echo "gitlabUserUsername: ${env.gitlabUserUsername}"
@@ -64,9 +63,9 @@ pipeline {
           echo "gitlabSourceBranch: ${env.gitlabSourceBranch}"
 
           currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
 """.trim()
 
           mattermostSend(
@@ -74,9 +73,9 @@ pipeline {
             message: """🚀 **DDGo 배포 시작**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
-- 브랜치: ${env.DEPLOY_BRANCH}
-- 커밋: ${env.DEPLOY_COMMIT_MSG}
-- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
 - URL: ${env.BUILD_URL}"""
           )
         }
@@ -125,30 +124,28 @@ pipeline {
           echo "변경 파일 목록:"
           changedFiles.each { echo "- ${it}" }
 
-          def backendChanged = changedFiles.any { file ->
+          backendChanged = changedFiles.any { file ->
             file.startsWith('DDGo/') ||
             file == 'docker-compose.yml' ||
             file == '.env'
           }
 
           if (backendChanged) {
-            env.BACKEND_CHANGED = "true"
             echo "백엔드 관련 변경 감지됨"
 
             currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
 상태: 백엔드 변경 감지
 """.trim()
           } else {
-            env.BACKEND_CHANGED = "false"
             echo "백엔드 관련 변경 없음 -> 백엔드 빌드/배포를 스킵합니다."
 
             currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
 상태: 백엔드 변경 없음 - 스킵
 """.trim()
           }
@@ -160,42 +157,41 @@ pipeline {
 
     stage('Build Jar') {
       when {
-        expression { env.BACKEND_CHANGED == "true" }
+        expression { backendChanged }
       }
       steps {
         dir('DDGo') {
           script {
             echo "===== [3/6] Gradle 빌드 시작 ====="
             sh 'chmod +x gradlew'
-
             sh './gradlew bootJar -x test --build-cache --parallel --daemon'
 
-            env.SHORT_HASH = sh(
+            shortHash = sh(
               script: "git rev-parse --short HEAD",
               returnStdout: true
             ).trim()
 
-            env.TAG = "${env.BUILD_NUMBER}-${env.SHORT_HASH}"
+            tag = "${env.BUILD_NUMBER}-${shortHash}"
 
-            env.JAR_FILE = sh(
+            jarFile = sh(
               script: "find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1",
               returnStdout: true
             ).trim()
 
-            if (!env.JAR_FILE) {
+            if (!jarFile) {
               error("배포할 JAR 파일을 찾지 못했습니다.")
             }
 
-            currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.TAG}"
+            currentBuild.displayName = "#${env.BUILD_NUMBER} ${tag}"
             currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
-이미지 태그: ${IMAGE}:${env.TAG}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+이미지 태그: ${env.IMAGE}:${tag}
 """.trim()
 
-            sh "ls -lh ${env.JAR_FILE}"
-            echo "실행 JAR: ${env.JAR_FILE}"
+            sh "ls -lh ${jarFile}"
+            echo "실행 JAR: ${jarFile}"
             echo "===== [3/6] Gradle 빌드 완료 ====="
           }
         }
@@ -204,22 +200,22 @@ pipeline {
 
     stage('Docker Build') {
       when {
-        expression { env.BACKEND_CHANGED == "true" }
+        expression { backendChanged }
       }
       steps {
         script {
           echo "===== [4/6] Docker 이미지 빌드 시작 ====="
-          echo "생성할 이미지 태그: ${IMAGE}:${env.TAG}"
+          echo "생성할 이미지 태그: ${env.IMAGE}:${tag}"
 
-          sh "docker pull ${IMAGE}:latest || true"
+          sh "docker pull ${env.IMAGE}:latest || true"
 
           dir('DDGo') {
             sh """
               docker build \
-                --build-arg JAR_FILE=${env.JAR_FILE} \
-                --cache-from ${IMAGE}:latest \
-                -t ${IMAGE}:${env.TAG} \
-                -t ${IMAGE}:latest \
+                --build-arg JAR_FILE=${jarFile} \
+                --cache-from ${env.IMAGE}:latest \
+                -t ${env.IMAGE}:${tag} \
+                -t ${env.IMAGE}:latest \
                 .
             """
           }
@@ -231,18 +227,18 @@ pipeline {
 
     stage('Docker Push') {
       when {
-        expression { env.BACKEND_CHANGED == "true" }
+        expression { backendChanged }
       }
       steps {
         script {
           echo "===== [5/6] DockerHub Push 시작 ====="
 
-          docker.withRegistry("${REGISTRY}", 'dockerhub-cred') {
-            sh "docker push ${IMAGE}:${env.TAG}"
-            sh "docker push ${IMAGE}:latest"
+          docker.withRegistry("${env.REGISTRY}", 'dockerhub-cred') {
+            sh "docker push ${env.IMAGE}:${tag}"
+            sh "docker push ${env.IMAGE}:latest"
           }
 
-          echo "DockerHub Push 완료: ${IMAGE}:${env.TAG}"
+          echo "DockerHub Push 완료: ${env.IMAGE}:${tag}"
           echo "===== [5/6] DockerHub Push 완료 ====="
         }
       }
@@ -250,7 +246,7 @@ pipeline {
 
     stage('Deploy + HealthCheck + Rollback') {
       when {
-        expression { env.BACKEND_CHANGED == "true" }
+        expression { backendChanged }
       }
       steps {
         script {
@@ -258,7 +254,7 @@ pipeline {
 
           def prev = sh(
             script: """
-              cd ${DEPLOY_DIR}
+              cd ${env.DEPLOY_DIR}
               if [ -f .env ]; then
                 grep '^DOCKER_IMAGE=' .env | cut -d'=' -f2
               fi
@@ -267,14 +263,14 @@ pipeline {
           ).trim()
 
           echo "이전 배포 이미지: ${prev ?: '없음'}"
-          echo "새 배포 이미지: ${IMAGE}:${env.TAG}"
+          echo "새 배포 이미지: ${env.IMAGE}:${tag}"
 
           try {
             sh """
               set -e
-              docker image inspect ${IMAGE}:${env.TAG} >/dev/null 2>&1 || docker pull ${IMAGE}:${env.TAG}
-              cd ${DEPLOY_DIR}
-              sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${IMAGE}:${env.TAG}|' .env
+              docker image inspect ${env.IMAGE}:${tag} >/dev/null 2>&1 || docker pull ${env.IMAGE}:${tag}
+              cd ${env.DEPLOY_DIR}
+              sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${env.IMAGE}:${tag}|' .env
               docker rm -f ddgo-backend || true
               docker compose up -d --no-deps backend
               docker compose ps
@@ -305,7 +301,7 @@ pipeline {
             }
 
             echo "===== 배포 성공 ====="
-            echo "최종 배포 이미지: ${IMAGE}:${env.TAG}"
+            echo "최종 배포 이미지: ${env.IMAGE}:${tag}"
 
           } catch (e) {
             echo "===== 배포 실패 감지 ====="
@@ -316,7 +312,7 @@ pipeline {
               sh """
                 set -e
                 docker image inspect ${prev} >/dev/null 2>&1 || docker pull ${prev}
-                cd ${DEPLOY_DIR}
+                cd ${env.DEPLOY_DIR}
                 sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${prev}|' .env
                 docker rm -f ddgo-backend || true
                 docker compose up -d --no-deps backend
@@ -333,18 +329,18 @@ pipeline {
                 message: """⚠️ **DDGo 배포 실패 → 롤백 완료**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
-- 브랜치: ${env.DEPLOY_BRANCH}
-- 커밋: ${env.DEPLOY_COMMIT_MSG}
-- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
-- 실패 이미지: ${IMAGE}:${env.TAG}
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- 실패 이미지: ${env.IMAGE}:${tag}
 - 복구 이미지: ${prev}
 - URL: ${env.BUILD_URL}"""
               )
 
               currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
 상태: 배포 실패 → 롤백 완료
 복구 이미지: ${prev}
 """.trim()
@@ -356,18 +352,18 @@ pipeline {
                 message: """❌ **DDGo 배포 실패**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
-- 브랜치: ${env.DEPLOY_BRANCH}
-- 커밋: ${env.DEPLOY_COMMIT_MSG}
-- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
-- 실패 이미지: ${IMAGE}:${env.TAG}
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- 실패 이미지: ${env.IMAGE}:${tag}
 - 롤백 불가: 이전 이미지 없음
 - URL: ${env.BUILD_URL}"""
               )
 
               currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
 상태: 배포 실패 (롤백 불가)
 """.trim()
             }
@@ -382,18 +378,18 @@ pipeline {
   post {
     success {
       script {
-        if (env.BACKEND_CHANGED == "true") {
+        if (backendChanged) {
           echo "########################################"
           echo "# 최종 결과: 배포 성공"
-          echo "# 이미지: ${IMAGE}:${env.TAG}"
+          echo "# 이미지: ${env.IMAGE}:${tag}"
           echo "########################################"
 
           currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
 상태: 배포 성공
-이미지: ${IMAGE}:${env.TAG}
+이미지: ${env.IMAGE}:${tag}
 """.trim()
         } else {
           echo "########################################"
@@ -402,9 +398,9 @@ pipeline {
           echo "########################################"
 
           currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
 상태: 백엔드 변경 없음 - 스킵
 """.trim()
         }
@@ -414,11 +410,11 @@ pipeline {
           message: """✅ **DDGo 파이프라인 성공**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
-- 결과: ${env.BACKEND_CHANGED == "true" ? "백엔드 배포 완료" : "백엔드 변경 없음 (스킵)"}
-- 브랜치: ${env.DEPLOY_BRANCH}
-- 커밋: ${env.DEPLOY_COMMIT_MSG}
-- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
-- ${env.BACKEND_CHANGED == "true" ? "Image: ${IMAGE}:${env.TAG}" : "Image: 없음"}
+- 결과: ${backendChanged ? "백엔드 배포 완료" : "백엔드 변경 없음 (스킵)"}
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- ${backendChanged ? "Image: ${env.IMAGE}:${tag}" : "Image: 없음"}
 - URL: ${env.BUILD_URL}"""
         )
       }
@@ -433,9 +429,9 @@ pipeline {
       script {
         if (!currentBuild.description) {
           currentBuild.description = """
-브랜치: ${env.DEPLOY_BRANCH}
-커밋: ${env.DEPLOY_COMMIT_MSG}
-작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
 상태: 배포 실패
 """.trim()
         }
@@ -446,9 +442,9 @@ pipeline {
         message: """❌ **DDGo 배포 실패**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
-- 브랜치: ${env.DEPLOY_BRANCH}
-- 커밋: ${env.DEPLOY_COMMIT_MSG}
-- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
 - URL: ${env.BUILD_URL}"""
       )
     }
