@@ -15,25 +15,56 @@ pipeline {
     DOCKER_BUILDKIT = "1"
     COMPOSE_DOCKER_CLI_BUILD = "1"
     BACKEND_CHANGED = "false"
+
+    DEPLOY_BRANCH = ""
+    DEPLOY_COMMIT_MSG = ""
+    DEPLOY_COMMIT_AUTHOR = ""
   }
 
   stages {
     stage('Checkout') {
       steps {
+        echo "===== [1/6] 소스 체크아웃 시작 ====="
+        checkout scm
+        echo "===== [1/6] 소스 체크아웃 완료 ====="
+
         script {
+          env.DEPLOY_BRANCH = sh(
+            script: "git rev-parse --abbrev-ref HEAD",
+            returnStdout: true
+          ).trim()
+
+          env.DEPLOY_COMMIT_MSG = sh(
+            script: "git log -1 --pretty=%s",
+            returnStdout: true
+          ).trim()
+
+          env.DEPLOY_COMMIT_AUTHOR = sh(
+            script: "git log -1 --pretty=%an",
+            returnStdout: true
+          ).trim()
+
+          echo "배포 대상 브랜치: ${env.DEPLOY_BRANCH}"
+          echo "커밋 메시지: ${env.DEPLOY_COMMIT_MSG}"
+          echo "커밋 작성자: ${env.DEPLOY_COMMIT_AUTHOR}"
+
+          currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+""".trim()
+
           mattermostSend(
             color: '#2F86EB',
             message: """🚀 **DDGo 배포 시작**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
-- Branch: ${env.BRANCH_NAME ?: "dev"}
+- 브랜치: ${env.DEPLOY_BRANCH}
+- 커밋: ${env.DEPLOY_COMMIT_MSG}
+- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
 - URL: ${env.BUILD_URL}"""
           )
         }
-
-        echo "===== [1/6] 소스 체크아웃 시작 ====="
-        checkout scm
-        echo "===== [1/6] 소스 체크아웃 완료 ====="
       }
     }
 
@@ -87,10 +118,23 @@ pipeline {
           if (backendChanged) {
             env.BACKEND_CHANGED = "true"
             echo "백엔드 관련 변경 감지됨"
+
+            currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+상태: 백엔드 변경 감지
+""".trim()
           } else {
             env.BACKEND_CHANGED = "false"
-            currentBuild.description = "백엔드 변경 없음 - 배포 스킵"
             echo "백엔드 관련 변경 없음 -> 백엔드 빌드/배포를 스킵합니다."
+
+            currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+상태: 백엔드 변경 없음 - 스킵
+""".trim()
           }
 
           echo "===== [2/6] 변경 경로 검사 완료 ====="
@@ -127,7 +171,12 @@ pipeline {
             }
 
             currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.TAG}"
-            currentBuild.description = "이미지 태그: ${IMAGE}:${env.TAG}"
+            currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+이미지 태그: ${IMAGE}:${env.TAG}
+""".trim()
 
             sh "ls -lh ${env.JAR_FILE}"
             echo "실행 JAR: ${env.JAR_FILE}"
@@ -268,12 +317,21 @@ pipeline {
                 message: """⚠️ **DDGo 배포 실패 → 롤백 완료**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
+- 브랜치: ${env.DEPLOY_BRANCH}
+- 커밋: ${env.DEPLOY_COMMIT_MSG}
+- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
 - 실패 이미지: ${IMAGE}:${env.TAG}
 - 복구 이미지: ${prev}
 - URL: ${env.BUILD_URL}"""
               )
 
-              currentBuild.description = "배포 실패 → 롤백 완료 (${prev})"
+              currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+상태: 배포 실패 → 롤백 완료
+복구 이미지: ${prev}
+""".trim()
             } else {
               echo "이전 배포 이미지가 없어 롤백을 수행할 수 없습니다."
 
@@ -282,12 +340,20 @@ pipeline {
                 message: """❌ **DDGo 배포 실패**
 - Job: ${env.JOB_NAME}
 - Build: #${env.BUILD_NUMBER}
+- 브랜치: ${env.DEPLOY_BRANCH}
+- 커밋: ${env.DEPLOY_COMMIT_MSG}
+- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
 - 실패 이미지: ${IMAGE}:${env.TAG}
 - 롤백 불가: 이전 이미지 없음
 - URL: ${env.BUILD_URL}"""
               )
 
-              currentBuild.description = "배포 실패 (롤백 불가)"
+              currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+상태: 배포 실패 (롤백 불가)
+""".trim()
             }
 
             throw e
@@ -306,24 +372,38 @@ pipeline {
           echo "# 이미지: ${IMAGE}:${env.TAG}"
           echo "########################################"
 
-          currentBuild.description = "배포 성공 (${IMAGE}:${env.TAG})"
+          currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+상태: 배포 성공
+이미지: ${IMAGE}:${env.TAG}
+""".trim()
         } else {
           echo "########################################"
           echo "# 최종 결과: 백엔드 변경 없음"
           echo "# 빌드/배포 스킵"
           echo "########################################"
 
-          currentBuild.description = "백엔드 변경 없음 - 스킵"
+          currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+상태: 백엔드 변경 없음 - 스킵
+""".trim()
         }
 
         mattermostSend(
           color: 'good',
           message: """✅ **DDGo 파이프라인 성공**
-  - Job: ${env.JOB_NAME}
-  - Build: #${env.BUILD_NUMBER}
-  - 결과: ${env.BACKEND_CHANGED == "true" ? "백엔드 배포 완료" : "백엔드 변경 없음 (스킵)"}
-  - ${env.BACKEND_CHANGED == "true" ? "Image: ${IMAGE}:${env.TAG}" : "Image: 없음"}
-  - URL: ${env.BUILD_URL}"""
+- Job: ${env.JOB_NAME}
+- Build: #${env.BUILD_NUMBER}
+- 결과: ${env.BACKEND_CHANGED == "true" ? "백엔드 배포 완료" : "백엔드 변경 없음 (스킵)"}
+- 브랜치: ${env.DEPLOY_BRANCH}
+- 커밋: ${env.DEPLOY_COMMIT_MSG}
+- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+- ${env.BACKEND_CHANGED == "true" ? "Image: ${IMAGE}:${env.TAG}" : "Image: 없음"}
+- URL: ${env.BUILD_URL}"""
         )
       }
     }
@@ -336,16 +416,24 @@ pipeline {
 
       script {
         if (!currentBuild.description) {
-          currentBuild.description = "배포 실패"
+          currentBuild.description = """
+브랜치: ${env.DEPLOY_BRANCH}
+커밋: ${env.DEPLOY_COMMIT_MSG}
+작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+상태: 배포 실패
+""".trim()
         }
       }
 
       mattermostSend(
         color: 'danger',
         message: """❌ **DDGo 배포 실패**
-  - Job: ${env.JOB_NAME}
-  - Build: #${env.BUILD_NUMBER}
-  - URL: ${env.BUILD_URL}"""
+- Job: ${env.JOB_NAME}
+- Build: #${env.BUILD_NUMBER}
+- 브랜치: ${env.DEPLOY_BRANCH}
+- 커밋: ${env.DEPLOY_COMMIT_MSG}
+- 작성자: ${env.DEPLOY_COMMIT_AUTHOR}
+- URL: ${env.BUILD_URL}"""
       )
     }
 
