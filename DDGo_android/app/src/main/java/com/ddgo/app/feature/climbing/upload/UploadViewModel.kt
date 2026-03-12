@@ -7,11 +7,18 @@ import android.media.MediaFormat
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import java.io.File
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.domain.model.Hold
+import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.domain.repository.HoldDetector
+import com.ddgo.app.domain.repository.PersonDetector
+import com.ddgo.app.domain.repository.PoseEstimator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +47,10 @@ private const val TAG = "UploadViewModel"
 
 @HiltViewModel
 class UploadViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val personDetector: PersonDetector,
+    private val holdDetector: HoldDetector,
+    private val poseEstimator: PoseEstimator
 ) : ViewModel() {
 
     // UI 레이어에 노출할 상태 (로딩, 성공, 실패 등)
@@ -69,12 +79,44 @@ class UploadViewModel @Inject constructor(
     var holdColor by mutableStateOf("")
         private set
 
-    // --- 3. ChallengeHoldScreen (홀드 정보) ---
+    // --- 3. ChallengeHoldScreen (홀드 탐지 결과) ---
+    /** PersonDetector가 선택한 최적 프레임 (홀드 탐지에 사용된 실제 이미지) */
+    var bestFrameBitmap by mutableStateOf<Bitmap?>(null)
+        private set
+
+    /** HoldDetector가 탐지한 홀드 목록 */
+    var detectedHolds by mutableStateOf<List<Hold>>(emptyList())
+        private set
+
     // TODO: 홀드 데이터 형태에 맞춰 타입 변경 (예: 데이터 클래스)
+    /** 사용자가 선택한 시작 홀드 */
     var selectedHoldInfo by mutableStateOf<String?>(null)
         private set
 
-    // --- 4. AttemptUploadScreen (추가 영상 업로드) ---
+    /** 사용자가 선택한 끝 홀드 */
+    var selectedEndHoldInfo by mutableStateOf<String?>(null)
+        private set
+
+    // --- 4. AttemptResultScreen (포즈 오버레이 + 분석 타임라인) ---
+
+    /** 현재 재생 프레임의 MediaPipe 33 랜드마크 (실시간 업데이트) */
+    var currentPoseLandmarks by mutableStateOf<List<PoseLandmark>>(emptyList())
+        private set
+
+    /**
+     * 분석 피드백 포인트 목록.
+     * MVP에서는 플레이스홀더 데이터를 사용하며, 서버 연동 시 updateAnalysisPoints()로 교체합니다.
+     */
+    var analysisPoints by mutableStateOf<List<AnalysisPoint>>(
+        listOf(
+            AnalysisPoint(1, 21_000L, "2지점 상태가 길었어요"),
+            AnalysisPoint(2, 48_000L, "오른쪽 팔에 과도한\n무게가 실렸어요"),
+            AnalysisPoint(3, 66_000L, "무게 이동이 늦어졌어요")
+        )
+    )
+        private set
+
+    // --- 5. AttemptUploadScreen (추가 영상 업로드) ---
     var additionalVideoUri by mutableStateOf<String?>(null)
         private set
 
@@ -83,27 +125,66 @@ class UploadViewModel @Inject constructor(
     /**
      * 영상 URI를 저장하고, 백그라운드에서 썸네일·메타데이터를 추출합니다.
      *
+     * ⚠️ Photo Picker URI 대응:
+     *   Android 13+ PickVisualMedia가 반환하는 content://media/picker/0/... URI는
+     *   FFmpegMediaMetadataRetriever.getFrameAtTime()이 FileDescriptor 방식으로 열면
+     *   null을 반환하는 알려진 문제가 있습니다.
+     *   → 선택 직후 앱 캐시 디렉토리에 복사 → file:// URI로 변환 후 파이프라인 진행.
+     *
      * 썸네일 추출 전략: PersonDetectorImpl과 동일한 방식
      *   1. MediaExtractor.advance()로 컨테이너를 순서대로 순회 → 첫 번째 실제 PTS 수집
-     *      (계산된 임의 타임스탬프가 아닌 실제 존재하는 PTS → null 프레임 원천 차단)
      *   2. 수집한 PTS를 FFmpegMediaMetadataRetriever.OPTION_CLOSEST 에 전달
-     *      (Python cap.read()의 순차 읽기와 동일 원리)
      */
     fun updateVideoUri(uri: String) {
-        videoUri = uri
-        extractVideoMetadata(Uri.parse(uri))
+        viewModelScope.launch(Dispatchers.IO) {
+            val fileUri = copyToTempFileIfNeeded(Uri.parse(uri))
+            withContext(Dispatchers.Main) {
+                videoUri = fileUri
+            }
+            extractVideoMetadata(Uri.parse(fileUri))
+        }
+    }
+
+    /**
+     * content:// URI를 앱 캐시 디렉토리의 임시 파일로 복사해 file:// URI 문자열로 반환합니다.
+     *
+     * file:// URI(테스트 코드 방식)는 그대로 반환합니다.
+     * 복사 실패 시 원본 URI 문자열을 반환합니다(폴백).
+     */
+    private fun copyToTempFileIfNeeded(uri: Uri): String {
+        if (uri.scheme == "file") return uri.toString()
+
+        return try {
+            val tempFile = File(context.cacheDir, "temp_climbing_video.mp4")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Log.d(TAG, "📋 영상 캐시 복사 완료: ${tempFile.absolutePath}")
+            Uri.fromFile(tempFile).toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ 캐시 복사 실패 → 원본 URI 사용: ${e.message}")
+            uri.toString()
+        }
     }
 
     private fun extractVideoMetadata(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 // ── Step 1: 파일명 추출 ─────────────────────────────────────
-                val name = context.contentResolver.query(
-                    uri,
-                    arrayOf(OpenableColumns.DISPLAY_NAME),
-                    null, null, null
-                )?.use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(0) else null
+                // file:// URI(복사된 임시 파일)는 path에서 직접 추출
+                // content:// URI는 ContentResolver query 사용
+                val name = if (uri.scheme == "file") {
+                    uri.path?.let { File(it).name }
+                } else {
+                    context.contentResolver.query(
+                        uri,
+                        arrayOf(OpenableColumns.DISPLAY_NAME),
+                        null, null, null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    }
                 }
 
                 // ── Step 2: MediaExtractor → 첫 번째 실제 PTS 수집 ──────────
@@ -116,10 +197,7 @@ class UploadViewModel @Inject constructor(
                 // PersonDetectorImpl과 동일: OPTION_CLOSEST + 실제 PTS → null 없음
                 val retriever = FFmpegMediaMetadataRetriever()
                 val (durationStr, frame) = try {
-                    val pfd = context.contentResolver.openFileDescriptor(uri, "r")
-                        ?: return@runCatching null
-                    retriever.setDataSource(pfd.fileDescriptor)
-                    pfd.close()
+                    if (!setRetrieverDataSource(retriever, uri)) return@runCatching null
 
                     val durationMs = retriever
                         .extractMetadata(FFmpegMediaMetadataRetriever.METADATA_KEY_DURATION)
@@ -152,6 +230,36 @@ class UploadViewModel @Inject constructor(
     }
 
     /**
+     * PersonDetectorImpl.setDataSource()와 완전히 동일한 패턴으로
+     * FFmpegMediaMetadataRetriever에 데이터 소스를 설정합니다.
+     *
+     *   file:// URI → uri.path 직접 전달 (테스트에서 사용하는 방식)
+     *   content:// URI → contentResolver.openFileDescriptor() (갤러리 picker URI)
+     *
+     * @return 설정 성공 여부
+     */
+    private fun setRetrieverDataSource(
+        retriever: FFmpegMediaMetadataRetriever,
+        uri: Uri
+    ): Boolean {
+        return try {
+            if (uri.scheme == "file") {
+                // 테스트 코드(extractFrame)와 동일 경로: 직접 파일 경로 사용
+                retriever.setDataSource(uri.path ?: return false)
+            } else {
+                // 갤러리 content:// URI: ContentResolver 경유
+                val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return false
+                retriever.setDataSource(pfd.fileDescriptor)
+                pfd.close()
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ setRetrieverDataSource 실패 (scheme=${uri.scheme}): ${e.message}")
+            false
+        }
+    }
+
+    /**
      * MediaExtractor로 컨테이너를 순서대로 순회해 첫 번째 실제 비디오 PTS를 반환합니다.
      *
      * PersonDetectorImpl.getActualSampleTimestampsUs() 에서 첫 PTS만 뽑는 경량 버전.
@@ -160,9 +268,14 @@ class UploadViewModel @Inject constructor(
     private fun getFirstActualPts(uri: Uri): Long {
         val extractor = MediaExtractor()
         return try {
-            val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return 0L
-            extractor.setDataSource(pfd.fileDescriptor)
-            pfd.close()
+            // PersonDetectorImpl.setupExtractor()와 동일한 패턴으로 scheme 분기
+            if (uri.scheme == "file") {
+                extractor.setDataSource(uri.path ?: return 0L)
+            } else {
+                val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return 0L
+                extractor.setDataSource(pfd.fileDescriptor)
+                pfd.close()
+            }
 
             // 비디오 트랙 선택
             var videoTrack = -1
@@ -204,11 +317,102 @@ class UploadViewModel @Inject constructor(
         selectedHoldInfo = info
     }
 
+    fun updateSelectedEndHoldInfo(info: String) {
+        selectedEndHoldInfo = info
+    }
+
+    fun updateAnalysisPoints(points: List<AnalysisPoint>) {
+        analysisPoints = points
+    }
+
+    /**
+     * ExoPlayer TextureView 캡처 프레임으로 실시간 포즈 추론을 실행합니다.
+     * AttemptResultScreen의 LaunchedEffect 루프에서 150ms 간격으로 호출됩니다.
+     * 이전 추론이 진행 중이면 자동으로 건너뜁니다 (PoseEstimatorImpl 내부 플래그).
+     */
+    fun updatePoseFrame(bitmap: Bitmap) {
+        viewModelScope.launch(Dispatchers.Default) {
+            val landmarks = poseEstimator.estimateFromFrame(bitmap)
+            if (landmarks.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    currentPoseLandmarks = landmarks
+                }
+            }
+        }
+    }
+
     fun updateAdditionalVideoUri(uri: String) {
         additionalVideoUri = uri
     }
 
     // ====== 비즈니스 로직 ======
+
+    /**
+     * PersonDetector → 최적 프레임 탐색 → HoldDetector → 홀드 탐지 전체 파이프라인.
+     *
+     * 호출 시점: ChallengeHoldScreen 진입 직후 (LaunchedEffect)
+     * 완료 시점: UploadUiState.Success → 화면이 자동으로 다음 화면으로 이동
+     *
+     * 파이프라인:
+     *   1. PersonDetector.findBestFrameTime()  → bestTimeUs (사람이 가장 적은 프레임 PTS)
+     *   2. FFmpegMediaMetadataRetriever        → bestTimeUs PTS로 실제 Bitmap 추출
+     *   3. HoldDetector.detectFromFrame()      → List<Hold> (정규화 좌표 0~1)
+     */
+    fun runHoldDetection() {
+        val uri = videoUri ?: run {
+            Log.e(TAG, "❌ videoUri 없음 - 홀드 탐지 불가")
+            _uiState.value = UploadUiState.Error("영상을 먼저 선택해주세요.")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = UploadUiState.Loading
+
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    // ── Step 1: PersonDetector → 사람이 가장 적은 최적 프레임 PTS ─
+                    Log.d(TAG, "▶ [1/3] PersonDetector 시작")
+                    val bestTimeUs = personDetector.findBestFrameTime(uri)
+                    Log.d(TAG, "✅ [1/3] 최적 프레임: ${bestTimeUs / 1000}ms")
+
+                    // ── Step 2: 최적 PTS → Bitmap 추출 ────────────────────────────
+                    // PersonDetectorImpl.setDataSource()와 완전히 동일한 패턴:
+                    //   file:// URI → uri.path 직접 전달 (테스트 코드 동일)
+                    //   content:// URI → contentResolver.openFileDescriptor()
+                    // → 두 경로 모두 안전하게 처리
+                    Log.d(TAG, "▶ [2/3] 프레임 추출 시작 (PTS=${bestTimeUs / 1000}ms, uri=${uri})")
+                    val retriever = FFmpegMediaMetadataRetriever()
+                    val bitmap = try {
+                        val parsedUri = Uri.parse(uri)
+                        if (!setRetrieverDataSource(retriever, parsedUri)) {
+                            throw IllegalStateException("setDataSource 실패 (scheme=${parsedUri.scheme})")
+                        }
+                        retriever.getFrameAtTime(
+                            bestTimeUs,
+                            FFmpegMediaMetadataRetriever.OPTION_CLOSEST
+                        ) ?: throw IllegalStateException("getFrameAtTime 반환 null (PTS=${bestTimeUs / 1000}ms)")
+                    } finally {
+                        retriever.release()
+                    }
+                    Log.d(TAG, "✅ [2/3] 프레임 추출 성공 (${bitmap.width}x${bitmap.height})")
+
+                    // ── Step 3: HoldDetector → 홀드 탐지 ────────────────────────
+                    Log.d(TAG, "▶ [3/3] HoldDetector 시작")
+                    val holds = holdDetector.detectFromFrame(bitmap)
+                    Log.d(TAG, "✅ [3/3] 홀드 탐지 완료: ${holds.size}개")
+
+                    Pair(bitmap, holds)
+                }
+            }.onSuccess { (bitmap, holds) ->
+                bestFrameBitmap = bitmap
+                detectedHolds   = holds
+                _uiState.value  = UploadUiState.Success
+            }.onFailure { e ->
+                Log.e(TAG, "❌ runHoldDetection 실패", e)
+                _uiState.value = UploadUiState.Error(e.message ?: "홀드 탐지 중 오류가 발생했습니다.")
+            }
+        }
+    }
 
     /**
      * 최종 챌린지 또는 영상을 서버에 제출합니다.

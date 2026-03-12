@@ -66,8 +66,14 @@ android {
                 abiFilters.add("armeabi-v7a")
             }
         }
-        // debug: ndk abiFilters 제한 없음
-        // → TFLite/FFmpeg x86_64 라이브러리 포함 → 에뮬레이터에서 berberis 없이 네이티브 실행
+        debug {
+            // x86_64 제외 → 에뮬레이터가 arm64-v8a 번역 레이어(berberis)로 실행
+            // → MediaPipe arm64 JNI 정상 동작
+            ndk {
+                abiFilters.add("arm64-v8a")
+                abiFilters.add("armeabi-v7a")
+            }
+        }
     }
 
     compileOptions {
