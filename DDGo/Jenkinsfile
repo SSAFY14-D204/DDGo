@@ -61,23 +61,6 @@ pipeline {
           echo "gitlabUserUsername: ${env.gitlabUserUsername}"
           echo "gitlabBranch: ${env.gitlabBranch}"
           echo "gitlabSourceBranch: ${env.gitlabSourceBranch}"
-
-          currentBuild.description = """
-브랜치: ${deployBranch}
-커밋: ${deployCommitMsg}
-작성자: ${deployCommitAuthor}
-""".trim()
-
-          mattermostSend(
-            color: '#2F86EB',
-            message: """🚀 **DDGo 배포 시작**
-- Job: ${env.JOB_NAME}
-- Build: #${env.BUILD_NUMBER}
-- 브랜치: ${deployBranch}
-- 커밋: ${deployCommitMsg}
-- 작성자: ${deployCommitAuthor}
-- URL: ${env.BUILD_URL}"""
-          )
         }
       }
     }
@@ -125,28 +108,35 @@ pipeline {
           changedFiles.each { echo "- ${it}" }
 
           backendChanged = changedFiles.any { file ->
-            file.startsWith('DDGo/') ||
-            file == 'docker-compose.yml' ||
-            file == '.env'
+            file.startsWith('DDGo/')
           }
 
           if (backendChanged) {
-            echo "백엔드 관련 변경 감지됨"
+            echo "DDGo 폴더 내부 변경 감지됨 -> MM 알림 및 빌드/배포 진행"
 
             currentBuild.description = """
 브랜치: ${deployBranch}
 커밋: ${deployCommitMsg}
 작성자: ${deployCommitAuthor}
-상태: 백엔드 변경 감지
+상태: DDGo 변경 감지
 """.trim()
+
+            mattermostSend(
+              color: '#2F86EB',
+              message: """🚀 **DDGo 배포 시작**
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- URL: ${env.BUILD_URL}"""
+            )
           } else {
-            echo "백엔드 관련 변경 없음 -> 백엔드 빌드/배포를 스킵합니다."
+            echo "DDGo 폴더 내부 변경 없음 -> MM 알림 / 빌드 / 배포 스킵"
 
             currentBuild.description = """
 브랜치: ${deployBranch}
 커밋: ${deployCommitMsg}
 작성자: ${deployCommitAuthor}
-상태: 백엔드 변경 없음 - 스킵
+상태: DDGo 변경 없음 - 스킵
 """.trim()
           }
 
@@ -187,7 +177,7 @@ pipeline {
 브랜치: ${deployBranch}
 커밋: ${deployCommitMsg}
 작성자: ${deployCommitAuthor}
-이미지 태그: ${env.IMAGE}:${tag}
+상태: Gradle 빌드 완료
 """.trim()
 
             sh "ls -lh ${jarFile}"
@@ -327,13 +317,9 @@ pipeline {
               mattermostSend(
                 color: 'warning',
                 message: """⚠️ **DDGo 배포 실패 → 롤백 완료**
-- Job: ${env.JOB_NAME}
-- Build: #${env.BUILD_NUMBER}
 - 브랜치: ${deployBranch}
 - 커밋: ${deployCommitMsg}
 - 작성자: ${deployCommitAuthor}
-- 실패 이미지: ${env.IMAGE}:${tag}
-- 복구 이미지: ${prev}
 - URL: ${env.BUILD_URL}"""
               )
 
@@ -342,7 +328,6 @@ pipeline {
 커밋: ${deployCommitMsg}
 작성자: ${deployCommitAuthor}
 상태: 배포 실패 → 롤백 완료
-복구 이미지: ${prev}
 """.trim()
             } else {
               echo "이전 배포 이미지가 없어 롤백을 수행할 수 없습니다."
@@ -350,13 +335,9 @@ pipeline {
               mattermostSend(
                 color: 'danger',
                 message: """❌ **DDGo 배포 실패**
-- Job: ${env.JOB_NAME}
-- Build: #${env.BUILD_NUMBER}
 - 브랜치: ${deployBranch}
 - 커밋: ${deployCommitMsg}
 - 작성자: ${deployCommitAuthor}
-- 실패 이미지: ${env.IMAGE}:${tag}
-- 롤백 불가: 이전 이미지 없음
 - URL: ${env.BUILD_URL}"""
               )
 
@@ -381,7 +362,6 @@ pipeline {
         if (backendChanged) {
           echo "########################################"
           echo "# 최종 결과: 배포 성공"
-          echo "# 이미지: ${env.IMAGE}:${tag}"
           echo "########################################"
 
           currentBuild.description = """
@@ -389,34 +369,30 @@ pipeline {
 커밋: ${deployCommitMsg}
 작성자: ${deployCommitAuthor}
 상태: 배포 성공
-이미지: ${env.IMAGE}:${tag}
 """.trim()
+
+          mattermostSend(
+            color: 'good',
+            message: """✅ **DDGo 파이프라인 성공**
+- 결과: 백엔드 배포 완료
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- URL: ${env.BUILD_URL}"""
+          )
         } else {
           echo "########################################"
-          echo "# 최종 결과: 백엔드 변경 없음"
-          echo "# 빌드/배포 스킵"
+          echo "# 최종 결과: DDGo 변경 없음"
+          echo "# MM 알림 / 빌드 / 배포 스킵"
           echo "########################################"
 
           currentBuild.description = """
 브랜치: ${deployBranch}
 커밋: ${deployCommitMsg}
 작성자: ${deployCommitAuthor}
-상태: 백엔드 변경 없음 - 스킵
+상태: DDGo 변경 없음 - 스킵
 """.trim()
         }
-
-        mattermostSend(
-          color: 'good',
-          message: """✅ **DDGo 파이프라인 성공**
-- Job: ${env.JOB_NAME}
-- Build: #${env.BUILD_NUMBER}
-- 결과: ${backendChanged ? "백엔드 배포 완료" : "백엔드 변경 없음 (스킵)"}
-- 브랜치: ${deployBranch}
-- 커밋: ${deployCommitMsg}
-- 작성자: ${deployCommitAuthor}
-- ${backendChanged ? "Image: ${env.IMAGE}:${tag}" : "Image: 없음"}
-- URL: ${env.BUILD_URL}"""
-        )
       }
     }
 
@@ -435,18 +411,18 @@ pipeline {
 상태: 배포 실패
 """.trim()
         }
-      }
 
-      mattermostSend(
-        color: 'danger',
-        message: """❌ **DDGo 배포 실패**
-- Job: ${env.JOB_NAME}
-- Build: #${env.BUILD_NUMBER}
+        if (backendChanged) {
+          mattermostSend(
+            color: 'danger',
+            message: """❌ **DDGo 배포 실패**
 - 브랜치: ${deployBranch}
 - 커밋: ${deployCommitMsg}
 - 작성자: ${deployCommitAuthor}
 - URL: ${env.BUILD_URL}"""
-      )
+          )
+        }
+      }
     }
 
     always {
