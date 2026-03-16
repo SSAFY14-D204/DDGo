@@ -32,7 +32,7 @@ android {
         buildConfigField(
             "String",
             "BASE_URL",
-            "\"${localProperties.getProperty("api.base.url") ?: "https://api.ddgo.com/"}\""
+            "\"${localProperties.getProperty("api.base.url") ?: "https://j14d204.p.ssafy.io/api/"}\""
         )
     }
 

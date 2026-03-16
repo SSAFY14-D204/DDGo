@@ -2,7 +2,9 @@ package com.ddgo.app.data.mapper
 
 import com.ddgo.app.data.remote.auth.LoginResponseDto
 import com.ddgo.app.data.remote.auth.RefreshTokenResponseDto
+import com.ddgo.app.data.remote.auth.UserResponseDto
 import com.ddgo.app.domain.model.AuthToken
+import com.ddgo.app.domain.model.User
 
 /**
  * Auth 관련 DTO → Domain Model 변환 매퍼.
@@ -22,5 +24,16 @@ object AuthMapper {
     fun RefreshTokenResponseDto.toDomain(): AuthToken = AuthToken(
         accessToken = this.accessToken,
         refreshToken = this.refreshToken
+    )
+
+    /** 내 정보 응답 DTO → User 도메인 모델로 변환 */
+    fun UserResponseDto.toDomain(): User = User(
+        id = this.id,
+        username = this.username,
+        nickname = this.nickname,
+        sex = this.sex,
+        heightCm = this.heightCm,
+        weightKg = this.weightKg,
+        wingspanCm = this.wingspanCm
     )
 }

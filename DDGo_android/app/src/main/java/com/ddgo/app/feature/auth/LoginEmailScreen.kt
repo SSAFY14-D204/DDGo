@@ -32,7 +32,7 @@ import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit) {
+fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterClick: () -> Unit = {}) {
     val isImeVisible = WindowInsets.isImeVisible
 
     Box(
@@ -157,7 +157,7 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                TextButton(onClick = { /* TODO go to register */ }) {
+                TextButton(onClick = onRegisterClick) {
                     Text(
                         "회원가입",
                         color = Color(0xFF1DA1F2),

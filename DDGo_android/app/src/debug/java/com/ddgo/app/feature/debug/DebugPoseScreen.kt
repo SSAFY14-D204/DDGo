@@ -19,16 +19,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -65,18 +71,46 @@ import kotlin.math.abs
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DebugPoseScreen(
-    viewModel: DebugPoseViewModel = hiltViewModel()
+    viewModel: DebugPoseViewModel = hiltViewModel(),
+    onNavigateToSplash: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val selectedVideoName = uiState.selectedVideoName
     val selectedVideoUri = uiState.selectedVideoUri
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
     val pickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
         persistReadPermission(context, uri)
         viewModel.analyzeVideo(uri, context.resolveDisplayName(uri))
+    }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("로그아웃") },
+            text = { Text("정말 로그아웃 하시겠습니까?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        viewModel.logout(onSuccess = onNavigateToSplash)
+                    }
+                ) {
+                    Text("확인")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showLogoutDialog = false }
+                ) {
+                    Text("취소")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -99,12 +133,40 @@ fun DebugPoseScreen(
                 body = "debug 화면은 ViewModel이 디버그 전용 분석기를 호출하고, 분석기 내부에서 MediaCodec 순차 디코딩(cap.read() 유사) 후 MediaPipe Pose와 VisionMapper 변환을 수행하도록 분리했습니다."
             )
 
-            DdgoPrimaryButton(
-                text = if (uiState.isAnalyzing) "영상 분석 중" else "동영상 업로드",
-                onClick = { pickerLauncher.launch(arrayOf("video/*")) },
-                enabled = !uiState.isAnalyzing,
-                isLoading = uiState.isAnalyzing
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DdgoPrimaryButton(
+                    text = if (uiState.isAnalyzing) "영상 분석 중" else "동영상 업로드",
+                    onClick = { pickerLauncher.launch(arrayOf("video/*")) },
+                    enabled = !uiState.isAnalyzing && !uiState.isLoggingOut,
+                    isLoading = uiState.isAnalyzing,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Button(
+                    onClick = { showLogoutDialog = true },
+                    enabled = !uiState.isLoggingOut,
+                    modifier = Modifier
+                        .height(52.dp)
+                        .weight(0.6f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    if (uiState.isLoggingOut) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("로그아웃", color = Color.White)
+                    }
+                }
+            }
 
             if (selectedVideoName != null) {
                 StatusCard(

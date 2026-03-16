@@ -2,6 +2,8 @@ package com.ddgo.app.data.remote.auth
 
 import com.ddgo.app.data.remote.common.ApiResponse
 import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
 import retrofit2.http.POST
 
 /**
@@ -21,4 +23,10 @@ interface AuthApi {
 
     @POST("v1/users/logout")
     suspend fun logout(): ApiResponse<EmptyDto>
+
+    @GET("v1/users/me")
+    suspend fun getMyInfo(): ApiResponse<UserResponseDto>
+
+    @DELETE("v1/users/me")
+    suspend fun deleteMe(): ApiResponse<EmptyDto>
 }

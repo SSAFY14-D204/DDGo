@@ -7,7 +7,11 @@ package com.ddgo.app.domain.model
  * AuthMapper를 통해서만 생성됩니다.
  */
 data class User(
-    val id: String,
-    val email: String,
-    val nickname: String
+    val id: Long,
+    val username: String,
+    val nickname: String,
+    val sex: String? = null,
+    val heightCm: Float? = null,
+    val weightKg: Float? = null,
+    val wingspanCm: Float? = null
 )
