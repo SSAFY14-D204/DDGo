@@ -6,6 +6,7 @@ import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
 import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
 import com.ssafy.DDGo.users.dto.request.UserOnboardRequest;
+import com.ssafy.DDGo.users.dto.request.UserProfileUpdateRequest;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
 import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserPasswordUpdateRequest;
@@ -62,8 +63,23 @@ public class UserController {
     public ResponseEntity<ApiResponse<Void>> updateOnboardInfo(
             Authentication authentication,
             @RequestBody @Valid UserOnboardRequest request) {
-        userService.updateOnboardInfo(authentication.getName(), request);
+        // 온보딩 단계에서도 동일한 로직을 수행하도록 처리
+        userService.updateUserProfile(authentication.getName(),
+                UserProfileUpdateRequest.builder()
+                        .sex(request.getSex())
+                        .heightCm(request.getHeightCm())
+                        .weightKg(request.getWeightKg())
+                        .wingspanCm(request.getWingspanCm())
+                        .build());
         return ResponseEntity.ok(ApiResponse.success("신체 정보 등록 성공", null));
+    }
+
+    @PatchMapping("/profile")
+    public ResponseEntity<ApiResponse<Void>> updateProfile(
+            Authentication authentication,
+            @RequestBody @Valid UserProfileUpdateRequest request) {
+        userService.updateUserProfile(authentication.getName(), request);
+        return ResponseEntity.ok(ApiResponse.success("신체 정보 수정 성공", null));
     }
 
     @DeleteMapping("/me")
