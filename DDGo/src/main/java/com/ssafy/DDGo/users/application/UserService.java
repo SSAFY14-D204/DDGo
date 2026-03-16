@@ -10,7 +10,7 @@ import com.ssafy.DDGo.users.domain.UserProfile;
 import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
 import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
-import com.ssafy.DDGo.users.dto.request.UserOnboardRequest;
+import com.ssafy.DDGo.users.dto.request.UserProfileUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserPasswordUpdateRequest;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
@@ -104,7 +104,7 @@ public class UserService {
     }
 
     @Transactional
-    public void updateOnboardInfo(String username, UserOnboardRequest request) {
+    public void updateUserProfile(String username, UserProfileUpdateRequest request) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
 

@@ -45,10 +45,26 @@ public class UserProfile extends BaseTimeEntity {
         this.wingspanCm = wingspanCm;
     }
 
+    public void updateSex(String sex) {
+        if (sex != null) this.sex = sex;
+    }
+
+    public void updateHeightCm(Integer heightCm) {
+        if (heightCm != null) this.heightCm = heightCm;
+    }
+
+    public void updateWeightKg(Integer weightKg) {
+        if (weightKg != null) this.weightKg = weightKg;
+    }
+
+    public void updateWingspanCm(Integer wingspanCm) {
+        if (wingspanCm != null) this.wingspanCm = wingspanCm;
+    }
+
     public void updateProfile(String sex, Integer heightCm, Integer weightKg, Integer wingspanCm) {
-        this.sex = sex;
-        this.heightCm = heightCm;
-        this.weightKg = weightKg;
-        this.wingspanCm = wingspanCm;
+        updateSex(sex);
+        updateHeightCm(heightCm);
+        updateWeightKg(weightKg);
+        updateWingspanCm(wingspanCm);
     }
 }
