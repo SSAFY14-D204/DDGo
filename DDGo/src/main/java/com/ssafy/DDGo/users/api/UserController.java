@@ -5,6 +5,7 @@ import com.ssafy.DDGo.users.application.UserService;
 import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
 import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
+import com.ssafy.DDGo.users.dto.request.UserOnboardRequest;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
 import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserPasswordUpdateRequest;
@@ -55,6 +56,14 @@ public class UserController {
             @RequestBody @Valid UserNicknameUpdateRequest request) {
         userService.updateNickname(authentication.getName(), request);
         return ResponseEntity.ok(ApiResponse.success("닉네임 변경 성공", null));
+    }
+
+    @PatchMapping("/onboard")
+    public ResponseEntity<ApiResponse<Void>> updateOnboardInfo(
+            Authentication authentication,
+            @RequestBody @Valid UserOnboardRequest request) {
+        userService.updateOnboardInfo(authentication.getName(), request);
+        return ResponseEntity.ok(ApiResponse.success("신체 정보 등록 성공", null));
     }
 
     @DeleteMapping("/me")

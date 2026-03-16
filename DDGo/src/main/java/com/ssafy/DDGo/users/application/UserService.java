@@ -4,10 +4,13 @@ import com.ssafy.DDGo.global.auth.JwtTokenProvider;
 import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
 import com.ssafy.DDGo.users.dao.UserRepository;
+import com.ssafy.DDGo.users.dao.UserProfileRepository;
 import com.ssafy.DDGo.users.domain.User;
+import com.ssafy.DDGo.users.domain.UserProfile;
 import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
 import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
+import com.ssafy.DDGo.users.dto.request.UserOnboardRequest;
 import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserPasswordUpdateRequest;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
@@ -31,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final StringRedisTemplate redisTemplate;
@@ -93,7 +97,26 @@ public class UserService {
     public UserInfoResponse getUserInfo(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
-        return UserInfoResponse.from(user);
+
+        UserProfile userProfile = userProfileRepository.findByUserId(user.getId()).orElse(null);
+
+        return UserInfoResponse.from(user, userProfile);
+    }
+
+    @Transactional
+    public void updateOnboardInfo(String username, UserOnboardRequest request) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
+
+        UserProfile userProfile = userProfileRepository.findByUserId(user.getId())
+                .orElse(UserProfile.builder()
+                        .userId(user.getId())
+                        .build());
+
+        userProfile.updateProfile(request.getSex(), request.getHeightCm(), request.getWeightKg(),
+                request.getWingspanCm());
+
+        userProfileRepository.save(userProfile);
     }
 
     @Transactional
