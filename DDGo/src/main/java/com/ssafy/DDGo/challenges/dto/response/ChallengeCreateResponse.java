@@ -21,9 +21,9 @@ public class ChallengeCreateResponse {
     public static ChallengeCreateResponse from(Challenge challenge) {
         return ChallengeCreateResponse.builder()
                 .id(challenge.getId())
-                .gymName(challenge.getGymName())
-                .problemColor(challenge.getProblemColor())
-                .gradeLabel(challenge.getGradeLabel())
+                .gymName(challenge.getGymNameSnapshot())
+                .problemColor(challenge.getProblemColorSnapshot())
+                .gradeLabel(challenge.getGradeLabelSnapshot())
                 .challengeStatus(challenge.getChallengeStatus().name())
                 .startedAt(challenge.getStartedAt())
                 .createdAt(challenge.getCreatedAt())
