@@ -16,6 +16,7 @@ import androidx.lifecycle.viewModelScope
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.data.ml.color.HoldColorClassifier
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
@@ -50,7 +51,8 @@ class UploadViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val personDetector: PersonDetector,
     private val holdDetector: HoldDetector,
-    private val poseEstimator: PoseEstimator
+    private val poseEstimator: PoseEstimator,
+    private val holdColorClassifier: HoldColorClassifier
 ) : ViewModel() {
 
     // UI 레이어에 노출할 상태 (로딩, 성공, 실패 등)
@@ -188,13 +190,10 @@ class UploadViewModel @Inject constructor(
                 }
 
                 // ── Step 2: MediaExtractor → 첫 번째 실제 PTS 수집 ──────────
-                // PersonDetectorImpl.getActualSampleTimestampsUs()와 동일 원리:
-                // seek 없이 컨테이너 앞에서부터 advance()로 순서대로 걸어 실제 PTS를 얻음
                 val firstPts = getFirstActualPts(uri)
                 Log.d(TAG, "   첫 번째 실제 PTS: ${firstPts / 1000}ms")
 
                 // ── Step 3: FFmpegMediaMetadataRetriever로 안정적 프레임 추출 ─
-                // PersonDetectorImpl과 동일: OPTION_CLOSEST + 실제 PTS → null 없음
                 val retriever = FFmpegMediaMetadataRetriever()
                 val (durationStr, frame) = try {
                     if (!setRetrieverDataSource(retriever, uri)) return@runCatching null
@@ -229,25 +228,14 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    /**
-     * PersonDetectorImpl.setDataSource()와 완전히 동일한 패턴으로
-     * FFmpegMediaMetadataRetriever에 데이터 소스를 설정합니다.
-     *
-     *   file:// URI → uri.path 직접 전달 (테스트에서 사용하는 방식)
-     *   content:// URI → contentResolver.openFileDescriptor() (갤러리 picker URI)
-     *
-     * @return 설정 성공 여부
-     */
     private fun setRetrieverDataSource(
         retriever: FFmpegMediaMetadataRetriever,
         uri: Uri
     ): Boolean {
         return try {
             if (uri.scheme == "file") {
-                // 테스트 코드(extractFrame)와 동일 경로: 직접 파일 경로 사용
                 retriever.setDataSource(uri.path ?: return false)
             } else {
-                // 갤러리 content:// URI: ContentResolver 경유
                 val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return false
                 retriever.setDataSource(pfd.fileDescriptor)
                 pfd.close()
@@ -259,16 +247,9 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    /**
-     * MediaExtractor로 컨테이너를 순서대로 순회해 첫 번째 실제 비디오 PTS를 반환합니다.
-     *
-     * PersonDetectorImpl.getActualSampleTimestampsUs() 에서 첫 PTS만 뽑는 경량 버전.
-     * 디코딩 없이 패킷 헤더만 읽으므로 빠릅니다.
-     */
     private fun getFirstActualPts(uri: Uri): Long {
         val extractor = MediaExtractor()
         return try {
-            // PersonDetectorImpl.setupExtractor()와 동일한 패턴으로 scheme 분기
             if (uri.scheme == "file") {
                 extractor.setDataSource(uri.path ?: return 0L)
             } else {
@@ -277,7 +258,6 @@ class UploadViewModel @Inject constructor(
                 pfd.close()
             }
 
-            // 비디오 트랙 선택
             var videoTrack = -1
             for (i in 0 until extractor.trackCount) {
                 val mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)
@@ -289,7 +269,6 @@ class UploadViewModel @Inject constructor(
             }
             extractor.selectTrack(videoTrack)
 
-            // 컨테이너의 첫 번째 실제 PTS (음수면 0 처리)
             extractor.sampleTime.coerceAtLeast(0L)
 
         } catch (e: Exception) {
@@ -349,14 +328,6 @@ class UploadViewModel @Inject constructor(
 
     /**
      * PersonDetector → 최적 프레임 탐색 → HoldDetector → 홀드 탐지 전체 파이프라인.
-     *
-     * 호출 시점: ChallengeHoldScreen 진입 직후 (LaunchedEffect)
-     * 완료 시점: UploadUiState.Success → 화면이 자동으로 다음 화면으로 이동
-     *
-     * 파이프라인:
-     *   1. PersonDetector.findBestFrameTime()  → bestTimeUs (사람이 가장 적은 프레임 PTS)
-     *   2. FFmpegMediaMetadataRetriever        → bestTimeUs PTS로 실제 Bitmap 추출
-     *   3. HoldDetector.detectFromFrame()      → List<Hold> (정규화 좌표 0~1)
      */
     fun runHoldDetection() {
         val uri = videoUri ?: run {
@@ -370,16 +341,10 @@ class UploadViewModel @Inject constructor(
 
             runCatching {
                 withContext(Dispatchers.IO) {
-                    // ── Step 1: PersonDetector → 사람이 가장 적은 최적 프레임 PTS ─
                     Log.d(TAG, "▶ [1/3] PersonDetector 시작")
                     val bestTimeUs = personDetector.findBestFrameTime(uri)
                     Log.d(TAG, "✅ [1/3] 최적 프레임: ${bestTimeUs / 1000}ms")
 
-                    // ── Step 2: 최적 PTS → Bitmap 추출 ────────────────────────────
-                    // PersonDetectorImpl.setDataSource()와 완전히 동일한 패턴:
-                    //   file:// URI → uri.path 직접 전달 (테스트 코드 동일)
-                    //   content:// URI → contentResolver.openFileDescriptor()
-                    // → 두 경로 모두 안전하게 처리
                     Log.d(TAG, "▶ [2/3] 프레임 추출 시작 (PTS=${bestTimeUs / 1000}ms, uri=${uri})")
                     val retriever = FFmpegMediaMetadataRetriever()
                     val bitmap = try {
@@ -396,10 +361,22 @@ class UploadViewModel @Inject constructor(
                     }
                     Log.d(TAG, "✅ [2/3] 프레임 추출 성공 (${bitmap.width}x${bitmap.height})")
 
-                    // ── Step 3: HoldDetector → 홀드 탐지 ────────────────────────
-                    Log.d(TAG, "▶ [3/3] HoldDetector 시작")
-                    val holds = holdDetector.detectFromFrame(bitmap)
-                    Log.d(TAG, "✅ [3/3] 홀드 탐지 완료: ${holds.size}개")
+                    Log.d(TAG, "▶ [3/4] HoldDetector 시작")
+                    val rawHolds = holdDetector.detectFromFrame(bitmap)
+                    Log.d(TAG, "✅ [3/4] 홀드 탐지 완료: ${rawHolds.size}개")
+
+                    Log.d(TAG, "▶ [4/4] 색상 분류 시작 (목표 색: '$holdColor')")
+                    val holds = if (holdColor.isBlank()) {
+                        rawHolds.map { holdColorClassifier.classifySingle(bitmap, it) }
+                    } else {
+                        holdColorClassifier.classifyAndFilter(
+                            bitmap          = bitmap,
+                            holds           = rawHolds,
+                            targetColorName = holdColor,
+                            scoreThreshold  = 0.25f
+                        )
+                    }
+                    Log.d(TAG, "✅ [4/4] 색상 필터 완료: ${rawHolds.size}개 → ${holds.size}개")
 
                     Pair(bitmap, holds)
                 }
