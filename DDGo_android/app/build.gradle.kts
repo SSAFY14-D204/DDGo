@@ -21,29 +21,12 @@ android {
 
     defaultConfig {
         applicationId = "com.ddgo.app"
-        // 💡 MediaPipe 및 Java 8+ API 최적화를 위한 MinSDK 26
         minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // 🦾 MuJoCo JNI 빌드 옵션 — CMake는 ARM 전용 (MuJoCo x86_64 미지원)
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-                arguments += listOf(
-                    "-DANDROID_STL=c++_shared",
-                    "-DANDROID_PLATFORM=android-28"  // qsort_r은 API 28+에서 제공됨
-                )
-                // 💡 빌드 대상 라이브러리만 명시하여 qhull 등 부가적인 실행 파일 빌드 제외
-                targets.add("ddgo_mujoco")
-                // MuJoCo는 ARM 전용 빌드 (x86_64 에뮬레이터에서도 berberis로 실행되나
-                // MuJoCo는 SVE를 사용하지 않아 문제없음)
-                abiFilters("arm64-v8a", "armeabi-v7a")
-            }
-        }
 
         // 💡 API 서버 주소 환경 변수 주입
         buildConfigField(
@@ -96,24 +79,12 @@ android {
         noCompress += listOf("tflite", "task")
     }
 
-    // 🦾 CMake 연동 (MuJoCo JNI)
-    externalNativeBuild {
-        cmake {
-            path = file("CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
-
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             // JUnit Jupiter 여러 JAR에 중복 포함된 라이선스 파일 충돌 방지
             excludes += "META-INF/LICENSE.md"
             excludes += "META-INF/LICENSE-notice.md"
-        }
-        jniLibs {
-            // 여러 라이브러리에서 중복될 수 있는 C++ STL 충돌 방지
-            pickFirsts += listOf("**/libc++_shared.so")
         }
     }
 }

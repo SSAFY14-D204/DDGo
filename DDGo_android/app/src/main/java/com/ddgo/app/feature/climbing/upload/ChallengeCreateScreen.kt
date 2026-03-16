@@ -93,7 +93,7 @@ private val HOLD_COLORS = listOf(
     HoldColor("blue",   Color(0xFF1565C0)),
     HoldColor("purple", Color(0xFF7B1FA2)),
     HoldColor("brown",  Color(0xFF5D4037)),
-    HoldColor("pink",   Color(0xFFE91E63)),
+    HoldColor("pink",   Color(0xFFF16698)),
     HoldColor("white",  Color(0xFFFFFFFF)),
     HoldColor("gray",   Color(0xFF757575)),
     HoldColor("black",  Color(0xFF212121)),
@@ -611,7 +611,11 @@ private fun ColorStep(
                     Spacer(Modifier.height(8.dp))
 
                     Button(
-                        onClick = onNext,
+                        onClick = {
+                            // 현재 선택된 색상을 반드시 ViewModel에 저장한 뒤 이동
+                            onConfirm(selectedIndex)
+                            onNext()
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp),

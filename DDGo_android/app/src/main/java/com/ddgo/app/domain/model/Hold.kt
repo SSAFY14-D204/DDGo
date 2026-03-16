@@ -5,11 +5,15 @@ package com.ddgo.app.domain.model
  * YOLO 검출 결과를 VisionMapper를 통해 변환한 순수 Kotlin 모델입니다.
  *
  * @param boundingBox 이미지 내 홀드 위치 (정규화 좌표 0~1)
- * @param confidence 검출 신뢰도 (0~1)
+ * @param confidence  검출 신뢰도 (0~1)
+ * @param colorLabel  HSV 후처리로 분류된 색상 이름 (기본값 "unknown")
+ * @param colorScore  색상 분류 신뢰도 (0~1, 기본값 0)
  */
 data class Hold(
     val boundingBox: BoundingBox,
-    val confidence: Float
+    val confidence: Float,
+    val colorLabel: String = "unknown",
+    val colorScore: Float = 0f
 ) {
     data class BoundingBox(
         val left: Float,
