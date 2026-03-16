@@ -35,4 +35,15 @@ data class RefreshTokenResponseDto(
 )
 
 @Serializable
+data class UserResponseDto(
+    @SerialName("id") val id: Long,
+    @SerialName("username") val username: String,
+    @SerialName("nickname") val nickname: String,
+    @SerialName("sex") val sex: String? = null,
+    @SerialName("heightCm") val heightCm: Float? = null,
+    @SerialName("weightKg") val weightKg: Float? = null,
+    @SerialName("wingspanCm") val wingspanCm: Float? = null
+)
+
+@Serializable
 class EmptyDto()

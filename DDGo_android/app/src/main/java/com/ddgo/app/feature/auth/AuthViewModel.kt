@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.domain.usecase.LoginUseCase
+import com.ddgo.app.domain.usecase.RegisterUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +16,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val loginUseCase: LoginUseCase
+    private val loginUseCase: LoginUseCase,
+    private val registerUseCase: RegisterUseCase
 ):ViewModel(){
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState = _uiState.asStateFlow()
@@ -32,6 +34,23 @@ class AuthViewModel @Inject constructor(
                 _uiState.value = AuthUiState.Error(it.message ?: "로그인 실패")
             }
         }
+    }
+
+    fun register() {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            // 개발 단계 편의를 위해 @ 검증/파싱 없이 그대로 닉네임으로 사용
+            val nickname = username
+            registerUseCase(username, password, nickname).onSuccess {
+                _uiState.value = AuthUiState.Success
+            }.onFailure {
+                _uiState.value = AuthUiState.Error(it.message ?: "회원가입 실패")
+            }
+        }
+    }
+
+    fun resetUiState() {
+        _uiState.value = AuthUiState.Idle
     }
 }
 

@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.auth
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -7,18 +8,41 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
 fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, onBack: () -> Unit = {}) {
+    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(uiState) {
+        when (uiState) {
+            is AuthUiState.Success -> {
+                Toast.makeText(context, "회원가입이 완료되었습니다.", Toast.LENGTH_SHORT).show()
+                viewModel.resetUiState()
+                onRegComplete()
+            }
+            is AuthUiState.Error -> {
+                Toast.makeText(context, (uiState as AuthUiState.Error).message, Toast.LENGTH_SHORT).show()
+                viewModel.resetUiState()
+            }
+            else -> {}
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -64,6 +88,7 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
                 value = viewModel.password,
                 onValueChange = { viewModel.password = it },
                 placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
+                visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -89,21 +114,30 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
         }
 
         Button(
-            onClick = onRegComplete,
+            onClick = { viewModel.register() },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(56.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64788D))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64788D)),
+            enabled = uiState != AuthUiState.Loading && viewModel.password.isNotBlank()
         ) {
-            Text(
-                "다음",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = PretendardFamily
-            )
+            if (uiState == AuthUiState.Loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text(
+                    "다음",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = PretendardFamily
+                )
+            }
         }
     }
 }

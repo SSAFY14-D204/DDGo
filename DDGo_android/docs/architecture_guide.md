@@ -59,8 +59,10 @@ app/src/main/java/com/ddgo/app/
 │   │   ├── upload/          # UploadApi.kt, UploadDto.kt
 │   │   └── report/          # ReportApi.kt, ReportDto.kt
 │   ├── ml/                  # 온디바이스 AI
+│   │   ├── common/          # 공통 ML 로직
 │   │   ├── mediapipe/PoseEstimatorImpl.kt
 │   │   ├── yolo/HoldDetectorImpl.kt
+│   │   ├── persondetect/    # 사람 탐지 구현체
 │   │   └── mujoco/          # MuJoCo 물리 시뮬레이션
 │   │       ├── MuJoCoEngine.kt    # PhysicsEngine 구현체 (JNI 래퍼)
 │   │       ├── MuJocoBenchmark.kt # 벤치마크 러너
@@ -88,15 +90,25 @@ app/src/main/java/com/ddgo/app/
 │   │   ├── AuthRepository.kt
 │   │   ├── UploadRepository.kt
 │   │   ├── PoseEstimator.kt
+│   │   ├── PersonDetector.kt  # 사람 탐지 인터페이스
 │   │   ├── HoldDetector.kt
 │   │   └── PhysicsEngine.kt   # MuJoCo 물리 엔진 인터페이스
 │   └── usecase/             # 복잡한 비즈니스 로직
+│       ├── LoginUseCase.kt
+│       ├── GetMyInfoUseCase.kt
+│       ├── RegisterUseCase.kt
+│       ├── EstimatePoseFromVideoUseCase.kt
 │       └── ExtractFailClipUseCase.kt
 │
 ├── feature/                 # 📱 화면 (UI만 담당)
-│   ├── auth/                # AuthScreen.kt, AuthViewModel.kt
-│   ├── upload/              # UploadScreen.kt, UploadViewModel.kt
-│   └── report/              # ReportScreen.kt, ReportViewModel.kt
+│   ├── splash/              # 앱 진입 화면
+│   ├── main/                # MainScreen, CustomBottomNavScreen 등
+│   ├── auth/                # WelcomeScreen, LoginEmailScreen, AuthViewModel 등
+│   ├── climbing/            # 클라이밍 기능 (upload, record 포함)
+│   ├── analysis/            # 분석 화면
+│   ├── calendar/            # 캘린더 화면
+│   ├── community/           # 커뮤니티 화면
+│   └── profile/             # ProfileScreen 등
 │
 └── navigation/              # 🧭 화면 이동
     ├── NavGraph.kt
@@ -107,19 +119,19 @@ app/src/main/java/com/ddgo/app/
 
 ## 3. 기능 추가 시 체크리스트
 
-### ✅ Case 1: 새 API 화면 추가 (예: "내 프로필" 화면)
+### ✅ Case 1: 새 API 화면 추가 (예시 구조)
 
 **총 작업 파일: 8개**
 
 ```
-① data/remote/profile/ProfileApi.kt         # API 엔드포인트
-② data/remote/profile/ProfileDto.kt         # 서버 응답 형태
-③ data/mapper/ProfileMapper.kt              # DTO → Domain 변환
-④ domain/model/Profile.kt                   # 앱 내부 데이터 모델
-⑤ domain/repository/ProfileRepository.kt   # 계약서 (인터페이스)
-⑥ data/repository/ProfileRepositoryImpl.kt # 실제 구현체
-⑦ feature/profile/ProfileViewModel.kt      # 상태 관리
-⑧ feature/profile/ProfileScreen.kt         # UI
+① data/remote/feature/FeatureApi.kt         # API 엔드포인트
+② data/remote/feature/FeatureDto.kt         # 서버 응답 형태
+③ data/mapper/FeatureMapper.kt              # DTO → Domain 변환
+④ domain/model/FeatureModel.kt              # 앱 내부 데이터 모델
+⑤ domain/repository/FeatureRepository.kt    # 계약서 (인터페이스)
+⑥ data/repository/FeatureRepositoryImpl.kt  # 실제 구현체
+⑦ feature/feature_name/FeatureViewModel.kt  # 상태 관리
+⑧ feature/feature_name/FeatureScreen.kt     # UI
 ```
 
 **+ 연결 작업 (기존 파일 수정):**
@@ -127,30 +139,28 @@ app/src/main/java/com/ddgo/app/
 ```kotlin
 // di/RepositoryModule.kt 에 추가
 @Binds @Singleton
-abstract fun bindProfileRepository(impl: ProfileRepositoryImpl): ProfileRepository
+abstract fun bindFeatureRepository(impl: FeatureRepositoryImpl): FeatureRepository
 
 // di/NetworkModule.kt 에 추가
 @Provides @Singleton
-fun provideProfileApi(retrofit: Retrofit): ProfileApi = retrofit.create(ProfileApi::class.java)
+fun provideFeatureApi(retrofit: Retrofit): FeatureApi = retrofit.create(FeatureApi::class.java)
 
 // navigation/ScreenRoutes.kt 에 추가
-object Profile : ScreenRoutes("profile")
+object Feature : ScreenRoutes("feature")
 
 // navigation/NavGraph.kt 에 추가
-composable(route = ScreenRoutes.Profile.route) { ProfileScreen() }
+composable(route = ScreenRoutes.Feature.route) { FeatureScreen() }
 ```
 
 ---
 
-### ✅ Case 2: 새 AI 모델 추가 (예: "동작 분류 AI")
+### ✅ Case 2: 새 AI 모델 추가 (예: "사람 탐지 AI")
 
 **총 작업 파일: 4개**
 
 ```
-① domain/model/Motion.kt                           # AI 출력 도메인 모델
-② domain/repository/MotionClassifier.kt           # AI 인터페이스 (계약서)
-③ data/ml/motionclassifier/MotionClassifierImpl.kt # TFLite 구현체
-④ data/mapper/VisionMapper.kt                      # toMotion() 함수 추가
+① domain/repository/PersonDetector.kt           # AI 인터페이스 (계약서)
+② data/ml/persondetect/PersonDetectorImpl.kt    # 실제 구현체
 ```
 
 **+ 연결 작업 (기존 파일 수정):**
@@ -158,10 +168,10 @@ composable(route = ScreenRoutes.Profile.route) { ProfileScreen() }
 ```kotlin
 // di/MlModule.kt 에 추가
 @Binds @Singleton
-abstract fun bindMotionClassifier(impl: MotionClassifierImpl): MotionClassifier
+abstract fun bindPersonDetector(impl: PersonDetectorImpl): PersonDetector
 
 // data/work/VideoAnalyzeWorker.kt 에 추가
-// MotionClassifier를 AssistedInject로 주입 후 doWork()에서 호출
+// PersonDetector를 AssistedInject로 주입 후 doWork()에서 호출
 ```
 
 ---
@@ -171,9 +181,9 @@ abstract fun bindMotionClassifier(impl: MotionClassifierImpl): MotionClassifier
 `data/work/` 에 새 Worker 파일을 만들고 `@HiltWorker`를 붙입니다.
 
 ```kotlin
-// data/work/ThumbnailWorker.kt
+// data/work/VideoAnalyzeWorker.kt
 @HiltWorker
-class ThumbnailWorker @AssistedInject constructor(
+class VideoAnalyzeWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     // 필요한 의존성 주입
@@ -199,14 +209,17 @@ class ThumbnailWorker @AssistedInject constructor(
 ```kotlin
 // ✅ 올바른 Mapper 작성법
 object AuthMapper {
-    fun LoginResponseDto.toUser(): User = User(
-        id = userId, email = email  // 필드 이름만 매핑
+    fun UserResponseDto.toDomain(): User = User(
+        id = this.id,
+        username = this.username,
+        nickname = this.nickname,
+        // ...나머지 필드 매핑
     )
 }
 
 // ❌ 잘못된 예: Mapper에서 API 호출
 object BadMapper {
-    fun toUser(dto: LoginResponseDto): User {
+    fun toUser(dto: UserResponseDto): User {
         api.log() // 절대 금지!
         return User(...)
     }

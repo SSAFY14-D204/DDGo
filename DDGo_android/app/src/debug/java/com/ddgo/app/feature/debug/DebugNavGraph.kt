@@ -6,6 +6,12 @@ import androidx.navigation.compose.composable
 
 fun NavGraphBuilder.debugGraph(navController: NavController) {
     composable("debug_main") {
-        DebugPoseScreen()
+        DebugPoseScreen(
+            onNavigateToSplash = {
+                navController.navigate(com.ddgo.app.navigation.ScreenRoutes.Splash.route) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        )
     }
 }

@@ -37,7 +37,8 @@ fun NavGraphBuilder.authGraph(
 
             LoginEmailScreen(
                 viewModel = viewModel,
-                onNext = { navController.navigate(ScreenRoutes.Auth.LOGIN_PASSWORD) }
+                onNext = { navController.navigate(ScreenRoutes.Auth.LOGIN_PASSWORD) },
+                onRegisterClick = { navController.navigate(ScreenRoutes.Auth.REGISTER_EMAIL) }
             )
         }
 
