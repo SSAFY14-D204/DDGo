@@ -31,7 +31,15 @@ public class JwtTokenProvider {
             @Value("${jwt.secret}") String secretKey,
             @Value("${jwt.access-expiration}") long accessExpirationTime,
             @Value("${jwt.refresh-expiration}") long refreshExpirationTime) {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        
+        // Base64 문자열에 '-', '_' 등이 포함되어 있을 수 있으므로 처리
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(secretKey);
+        } catch (io.jsonwebtoken.io.DecodingException e) {
+            keyBytes = Decoders.BASE64URL.decode(secretKey);
+        }
+        
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.accessExpirationTime = accessExpirationTime;
         this.refreshExpirationTime = refreshExpirationTime;

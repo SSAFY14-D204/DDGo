@@ -42,9 +42,9 @@ public class ChallengeListResponse {
     public static ChallengeListResponse from(Challenge challenge) {
         return ChallengeListResponse.builder()
                 .id(challenge.getId())
-                .gymName(challenge.getGymName())
-                .problemColor(challenge.getProblemColor())
-                .gradeLabel(challenge.getGradeLabel())
+                .gymName(challenge.getGymNameSnapshot())
+                .problemColor(challenge.getProblemColorSnapshot())
+                .gradeLabel(challenge.getGradeLabelSnapshot())
                 .challengeStatus(challenge.getChallengeStatus().name())
                 .challengeResult(challenge.getChallengeResult() != null
                         ? challenge.getChallengeResult().name()

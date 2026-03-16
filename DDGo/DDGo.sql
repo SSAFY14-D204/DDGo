@@ -1,12 +1,18 @@
 -- =========================================================
--- DDgo DDL (MariaDB + MinIO / Soft Delete )
+-- DDgo DDL (MariaDB + MinIO / Soft Delete)
+-- - climbing_brands 추가
+-- - climbing_gyms에 지도 API 매칭/외부 장소 정보 컬럼 추가
+-- - 암장 선택 필수
+-- - 난이도 선택 필수
 -- =========================================================
 
 -- 0) DB 생성/선택
 CREATE DATABASE IF NOT EXISTS `ddgo_db`;
 USE `ddgo_db`;
 
--- 1) Drop (자식 -> 부모)
+-- 1) Drop (트리거 -> 자식 -> 부모)
+DROP TRIGGER IF EXISTS `trg_challenges_init_attempt_counter`;
+
 DROP TABLE IF EXISTS `challenge_attempt_counters`;
 DROP TABLE IF EXISTS `attempt_metrics`;
 DROP TABLE IF EXISTS `attempt_video`;
@@ -14,6 +20,9 @@ DROP TABLE IF EXISTS `attempt_feedbacks`;
 DROP TABLE IF EXISTS `attempts`;
 DROP TABLE IF EXISTS `challenge_summaries`;
 DROP TABLE IF EXISTS `challenges`;
+DROP TABLE IF EXISTS `climbing_gym_grades`;
+DROP TABLE IF EXISTS `climbing_gyms`;
+DROP TABLE IF EXISTS `climbing_brands`;
 DROP TABLE IF EXISTS `user_profiles`;
 DROP TABLE IF EXISTS `users`;
 
@@ -58,15 +67,133 @@ CREATE TABLE `user_profiles` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 3) challenges
+-- 3) climbing_brands
+--   - 브랜드 마스터
+--   - 브랜드 로고는 MinIO 참조 정보로 관리
+-- =========================================================
+CREATE TABLE `climbing_brands` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+
+  `name` VARCHAR(50) NOT NULL COMMENT '예: 더클라임, 몽키즈클라이밍',
+  `display_name` VARCHAR(80) NULL COMMENT '표시용 브랜드명',
+
+  `logo_bucket` VARCHAR(100) NULL COMMENT '브랜드 로고 bucket',
+  `logo_object_key` VARCHAR(1024) NULL COMMENT '브랜드 로고 object key',
+  `logo_content_type` VARCHAR(100) NULL COMMENT '예: image/png',
+  `logo_etag` VARCHAR(64) NULL COMMENT 'MinIO etag',
+
+  `source_note` VARCHAR(255) NULL COMMENT '출처/비고',
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_climbing_brands_name` (`name`),
+  KEY `ix_climbing_brands_is_active_deleted` (`is_active`, `deleted_at`),
+  KEY `ix_climbing_brands_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 4) climbing_gyms
+--   - 사용자가 challenge 생성 시 실제로 선택하는 클라이밍장
+--   - 브랜드와 FK로 연결
+--   - 지도 API 외부 장소 정보 / 매칭 상태 관리
+--   - 지점 전용 로고가 필요하면 브랜드 로고 override 가능
+-- =========================================================
+CREATE TABLE `climbing_gyms` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+
+  `brand_id` INT NULL COMMENT '브랜드 FK (미매칭 시 NULL 가능)',
+  `map_provider` ENUM('KAKAO','NAVER','GOOGLE','MANUAL') NULL,
+  `external_place_id` VARCHAR(120) NULL,
+  `place_name_raw` VARCHAR(150) NULL,
+
+  `name` VARCHAR(100) NOT NULL COMMENT '예: 몽키즈클라이밍 고양화정점',
+  `branch_name` VARCHAR(50) NULL COMMENT '예: 고양화정점',
+  `display_name` VARCHAR(120) NOT NULL COMMENT '예: 몽키즈클라이밍 · 고양화정점',
+  `region` VARCHAR(50) NULL COMMENT '예: 경기 고양',
+
+  `address_name` VARCHAR(255) NULL,
+  `road_address_name` VARCHAR(255) NULL,
+  `latitude` DECIMAL(10,7) NULL,
+  `longitude` DECIMAL(10,7) NULL,
+
+  `logo_bucket` VARCHAR(100) NULL COMMENT '지점 전용 로고 bucket (없으면 브랜드 로고 사용)',
+  `logo_object_key` VARCHAR(1024) NULL COMMENT '지점 전용 로고 object key',
+  `logo_content_type` VARCHAR(100) NULL COMMENT '예: image/png',
+  `logo_etag` VARCHAR(64) NULL COMMENT 'MinIO etag',
+
+  `source_note` VARCHAR(255) NULL COMMENT '데이터 출처/비고',
+  `gym_source` ENUM('CURATED','MAP_IMPORTED') NOT NULL DEFAULT 'CURATED',
+  `grade_source` ENUM('CURATED','STANDARD_FALLBACK') NOT NULL DEFAULT 'CURATED',
+  `match_status` ENUM('VERIFIED','AUTO_MATCHED','UNMATCHED_IMPORTED') NOT NULL DEFAULT 'VERIFIED',
+  `needs_review` TINYINT(1) NOT NULL DEFAULT 0,
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_climbing_gyms_display_name` (`display_name`),
+  UNIQUE KEY `uk_climbing_gyms_provider_place` (`map_provider`, `external_place_id`),
+  KEY `ix_climbing_gyms_brand_id` (`brand_id`),
+  KEY `ix_climbing_gyms_name` (`name`),
+  KEY `ix_climbing_gyms_region` (`region`),
+  KEY `ix_climbing_gyms_lat_lng` (`latitude`, `longitude`),
+  KEY `ix_climbing_gyms_is_active_deleted` (`is_active`, `deleted_at`),
+  KEY `ix_climbing_gyms_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 5) climbing_gym_grades
+--   - 클라이밍장별 난이도 색상 체계
+--   - 같은 color_name이라도 gym마다 의미가 다름
+-- =========================================================
+CREATE TABLE `climbing_gym_grades` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `gym_id` INT NOT NULL,
+
+  `color_name` VARCHAR(30) NOT NULL COMMENT '예: 빨강, 주황, 노랑, 초록',
+  `sort_order` INT NOT NULL COMMENT '해당 gym 내부 난이도 순서(작을수록 쉬움)',
+  `color_hex` VARCHAR(20) NULL COMMENT '예: #FF0000',
+  `grade_label` VARCHAR(30) NULL COMMENT '예: 입문, 초급',
+  `is_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+
+  PRIMARY KEY (`id`),
+
+  UNIQUE KEY `uk_climbing_gym_grades_gym_color` (`gym_id`, `color_name`),
+  UNIQUE KEY `uk_climbing_gym_grades_gym_sort_order` (`gym_id`, `sort_order`),
+  UNIQUE KEY `uk_climbing_gym_grades_id_gym` (`id`, `gym_id`),
+
+  KEY `ix_climbing_gym_grades_gym_id` (`gym_id`),
+  KEY `ix_climbing_gym_grades_gym_enabled_deleted` (`gym_id`, `is_enabled`, `deleted_at`),
+  KEY `ix_climbing_gym_grades_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 6) challenges
+--   - gym_id 필수
+--   - gym_grade_id 필수
+--   - snapshot 컬럼은 생성 시점 표시 안정성 보존용
 -- =========================================================
 CREATE TABLE `challenges` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `user_id` INT NOT NULL COMMENT '회원 기본 키',
 
-  `gym_name` VARCHAR(50) NULL,
-  `problem_color` VARCHAR(30) NOT NULL,
-  `grade_label` VARCHAR(30) NULL,
+  `gym_id` INT NOT NULL COMMENT '선택한 클라이밍장 ID',
+  `gym_grade_id` INT NOT NULL COMMENT '선택한 클라이밍장 내부 난이도 ID',
+
+  `gym_name_snapshot` VARCHAR(100) NOT NULL COMMENT '생성 시점 gym 표시명 snapshot',
+  `problem_color_snapshot` VARCHAR(30) NOT NULL COMMENT '생성 시점 색상명 snapshot',
+  `grade_label_snapshot` VARCHAR(30) NULL COMMENT '생성 시점 grade label snapshot',
+  `sort_order_snapshot` INT NOT NULL COMMENT '생성 시점 난이도 순서 snapshot',
 
   `challenge_status` ENUM('ACTIVE','CLOSED') NOT NULL DEFAULT 'ACTIVE',
   `challenge_result` ENUM('SUCCESS','FAIL','UNKNOWN') NULL,
@@ -83,18 +210,16 @@ CREATE TABLE `challenges` (
   PRIMARY KEY (`id`),
 
   KEY `ix_challenges_user_id` (`user_id`),
+  KEY `ix_challenges_gym_id` (`gym_id`),
+  KEY `ix_challenges_gym_grade_id` (`gym_grade_id`),
+  KEY `ix_challenges_gym_grade_gym` (`gym_grade_id`, `gym_id`),
 
-  -- 홈 목록(진행/종료)에서 가장 자주 쓰는 패턴:
-  -- WHERE user_id=? AND deleted_at IS NULL AND challenge_status=? ORDER BY created_at DESC
   KEY `ix_challenges_user_deleted_status_created` (`user_id`, `deleted_at`, `challenge_status`, `created_at`),
-
-  -- 유저의 전체 목록(상태 무관) 정렬:
   KEY `ix_challenges_user_deleted_created` (`user_id`, `deleted_at`, `created_at`)
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 4) challenge_summaries (Challenge 1개당 1개)
---   - max_crux_duration_ms = 해당 challenge의 attempt_metrics.crux_duration_ms 최댓값(집계 결과 저장)
+-- 7) challenge_summaries (Challenge 1개당 1개)
 -- =========================================================
 CREATE TABLE `challenge_summaries` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -117,14 +242,7 @@ CREATE TABLE `challenge_summaries` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 5) challenge_attempt_counters (C: attempt_no 안전 발급용)
---  - challenge_id별 next_attempt_no를 원자적으로 증가시키기 위한 카운터
---  - 애플리케이션에서 다음 방식 권장:
---    1) UPDATE challenge_attempt_counters
---         SET next_attempt_no = LAST_INSERT_ID(next_attempt_no + 1)
---       WHERE challenge_id = ?;
---    2) SELECT LAST_INSERT_ID();  -- 방금 발급된 attempt_no
---    3) 그 attempt_no로 attempts INSERT
+-- 8) challenge_attempt_counters
 -- =========================================================
 CREATE TABLE `challenge_attempt_counters` (
   `challenge_id` INT NOT NULL,
@@ -137,12 +255,7 @@ CREATE TABLE `challenge_attempt_counters` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 6) attempts
---   B) 시간 기준 확정:
---     - analysis_started_at / analysis_ended_at : 분석 파이프라인 시간
---     - duration_ms : "영상 길이(ms)" (메타데이터 기반, 도메인 값)
---   C) attempt_no는 카운터 테이블로 안전 발급
---   A) soft delete + 정렬/조회 패턴 인덱스 강화
+-- 9) attempts
 -- =========================================================
 CREATE TABLE `attempts` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -153,13 +266,10 @@ CREATE TABLE `attempts` (
     NOT NULL DEFAULT 'UPLOADING',
   `attempt_result` ENUM('SUCCESS','FAIL','UNKNOWN') NULL,
 
-  -- 분석 파이프라인 기준 시간 (명확히!)
   `analysis_started_at` DATETIME NULL,
   `analysis_ended_at` DATETIME NULL,
 
-  -- 영상 메타 기준(영상 길이)
   `duration_ms` INT NULL,
-
   `max_hold_no` INT NULL,
 
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -169,15 +279,12 @@ CREATE TABLE `attempts` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_attempts_challenge_attempt_no` (`challenge_id`, `attempt_no`),
 
-  -- challenge 상세: WHERE challenge_id=? AND deleted_at IS NULL ORDER BY attempt_no ASC(or created_at ASC)
   KEY `ix_attempts_challenge_deleted_attemptno` (`challenge_id`, `deleted_at`, `attempt_no`),
-
-  -- challenge 내 최신순 목록/필터:
   KEY `ix_attempts_challenge_deleted_created` (`challenge_id`, `deleted_at`, `created_at`)
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 7) attempt_feedbacks (Attempt 1개당 1개)
+-- 10) attempt_feedbacks
 -- =========================================================
 CREATE TABLE `attempt_feedbacks` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -187,7 +294,6 @@ CREATE TABLE `attempt_feedbacks` (
   `risk_alert` VARCHAR(200) NULL,
   `next_mission` VARCHAR(200) NULL,
 
-  -- E: 버전/추적용
   `model_version` VARCHAR(50) NULL,
   `prompt_version` VARCHAR(50) NULL,
   `generated_at` DATETIME NULL,
@@ -203,7 +309,7 @@ CREATE TABLE `attempt_feedbacks` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 8) attempt_video (Attempt 1개당 1개 / MinIO 참조)
+-- 11) attempt_video
 -- =========================================================
 CREATE TABLE `attempt_video` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -231,7 +337,7 @@ CREATE TABLE `attempt_video` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 9) attempt_metrics (Attempt 1개당 1개)
+-- 12) attempt_metrics
 -- =========================================================
 CREATE TABLE `attempt_metrics` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -261,9 +367,29 @@ ALTER TABLE `user_profiles`
   ON UPDATE RESTRICT
   ON DELETE RESTRICT;
 
+ALTER TABLE `climbing_gyms`
+  ADD CONSTRAINT `fk_climbing_gyms_climbing_brands`
+  FOREIGN KEY (`brand_id`) REFERENCES `climbing_brands` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `climbing_gym_grades`
+  ADD CONSTRAINT `fk_climbing_gym_grades_climbing_gyms`
+  FOREIGN KEY (`gym_id`) REFERENCES `climbing_gyms` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
 ALTER TABLE `challenges`
   ADD CONSTRAINT `fk_challenges_users`
   FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_challenges_climbing_gyms`
+  FOREIGN KEY (`gym_id`) REFERENCES `climbing_gyms` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_challenges_climbing_gym_grades`
+  FOREIGN KEY (`gym_grade_id`, `gym_id`) REFERENCES `climbing_gym_grades` (`id`, `gym_id`)
   ON UPDATE RESTRICT
   ON DELETE RESTRICT;
 
@@ -304,7 +430,7 @@ ALTER TABLE `attempt_metrics`
   ON DELETE RESTRICT;
 
 -- =========================================================
--- C) 카운터 자동 초기화 트리거
+-- Trigger
 --  - challenge 생성 시 counters row 자동 생성
 -- =========================================================
 DELIMITER //

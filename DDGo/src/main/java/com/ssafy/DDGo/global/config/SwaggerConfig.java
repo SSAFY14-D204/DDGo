@@ -60,4 +60,13 @@ public class SwaggerConfig {
                                 .pathsToMatch("/v1/challenges/*/attempts/**", "/v1/attempts/**")
                                 .build();
         }
+
+        // ── 탭 4: Gyms ─────────────────────────────────────────────────────
+        @Bean
+        public GroupedOpenApi gymsApi() {
+                return GroupedOpenApi.builder()
+                                .group("4. Gyms")
+                                .pathsToMatch("/api/gyms/**")
+                                .build();
+        }
 }
