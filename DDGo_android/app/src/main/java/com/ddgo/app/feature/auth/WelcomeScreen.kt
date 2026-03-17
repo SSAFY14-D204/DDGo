@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
@@ -61,20 +60,8 @@ fun AuthLandingScreen(onRegisterClick: () -> Unit, onLoginClick: () -> Unit) {
                 fontSize = 16.sp,
                 fontFamily = PretendardFamily
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "DDgo",
-                style = TextStyle(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 64.sp,
-                    fontFamily = PretendardFamily
-                )
-            )
-            Text(
-                text = "\uB514\uB514\uACE0",
-                fontSize = 32.sp,
-                fontFamily = PretendardFamily
-            )
+            Spacer(modifier = Modifier.height(10.dp))
+            DdgoKoreanWordmark(fontSize = 60.sp)
         }
 
         Column(
