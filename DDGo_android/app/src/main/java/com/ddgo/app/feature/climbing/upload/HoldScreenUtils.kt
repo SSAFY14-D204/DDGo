@@ -23,7 +23,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -95,15 +98,17 @@ internal fun DrawScope.drawConfidenceLabel(
     }
 }
 
-// ── 수동 홀드 추가: 확대 팝업 ───────────────────────────────────────────────────
+// ── 수동 홀드 추가: 확대 팝업 (다중 선택) ────────────────────────────────────────
 @Composable
 internal fun CandidateHoldPopup(
     bitmap: Bitmap,
     candidates: List<Hold>,
     accentColor: Color,
-    onSelect: (Hold) -> Unit,
+    onSelect: (List<Hold>) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var selectedHolds by remember { mutableStateOf(emptySet<Hold>()) }
+
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -120,7 +125,11 @@ internal fun CandidateHoldPopup(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text       = "근처에서 ${candidates.size}개의 후보가 감지됐어요\n추가할 홀드를 선택해주세요",
+                text = if (selectedHolds.isEmpty()) {
+                    "근처에서 ${candidates.size}개의 후보가 감지됐어요\n추가할 홀드를 모두 선택해주세요"
+                } else {
+                    "근처에서 ${candidates.size}개의 후보가 감지됐어요\n${selectedHolds.size}개 선택됨"
+                },
                 fontSize   = 13.sp,
                 color      = Color.White.copy(alpha = 0.5f),
                 lineHeight = 18.sp
@@ -136,7 +145,14 @@ internal fun CandidateHoldPopup(
                         bitmap      = bitmap,
                         hold        = hold,
                         accentColor = accentColor,
-                        onClick     = { onSelect(hold) }
+                        isSelected  = hold in selectedHolds,
+                        onToggle    = {
+                            selectedHolds = if (hold in selectedHolds) {
+                                selectedHolds - hold
+                            } else {
+                                selectedHolds + hold
+                            }
+                        }
                     )
                 }
             }
@@ -144,15 +160,41 @@ internal fun CandidateHoldPopup(
             Spacer(Modifier.height(16.dp))
 
             Button(
-                onClick  = onDismiss,
-                modifier = Modifier.fillMaxWidth().height(44.dp),
+                onClick = {
+                    if (selectedHolds.isNotEmpty()) {
+                        onSelect(selectedHolds.toList())
+                        onDismiss()
+                    }
+                },
+                enabled  = selectedHolds.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape  = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.10f),
-                    contentColor   = Color.White
+                    containerColor         = accentColor,
+                    contentColor           = Color.Black,
+                    disabledContainerColor = Color.White.copy(alpha = 0.10f),
+                    disabledContentColor   = Color.White.copy(alpha = 0.35f)
                 )
             ) {
-                Text("닫기", fontSize = 14.sp)
+                Text(
+                    text       = if (selectedHolds.isEmpty()) "홀드를 선택해주세요" else "${selectedHolds.size}개 추가하기",
+                    fontSize   = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Button(
+                onClick  = onDismiss,
+                modifier = Modifier.fillMaxWidth().height(40.dp),
+                shape  = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.08f),
+                    contentColor   = Color.White.copy(alpha = 0.6f)
+                )
+            ) {
+                Text("취소", fontSize = 13.sp)
             }
         }
     }
@@ -163,42 +205,79 @@ private fun CandidateHoldCard(
     bitmap: Bitmap,
     hold: Hold,
     accentColor: Color,
-    onClick: () -> Unit
+    isSelected: Boolean,
+    onToggle: () -> Unit
 ) {
     val cropped   = remember(hold.boundingBox) { cropHoldRegion(bitmap, hold) }
     val holdColor = holdLabelToComposeColor(hold.colorLabel)
 
-    Column(
-        modifier = Modifier
-            .width(130.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF2C2C2E))
-            .border(2.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Image(
-            bitmap             = cropped.asImageBitmap(),
-            contentDescription = "후보 홀드",
+    Box {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(100.dp)
-                .clip(RoundedCornerShape(8.dp)),
-            contentScale = ContentScale.Fit
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            verticalAlignment      = Alignment.CenterVertically,
-            horizontalArrangement  = Arrangement.spacedBy(6.dp)
+                .width(130.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isSelected) Color(0xFF1E2E1E) else Color(0xFF2C2C2E)
+                )
+                .border(
+                    width = 2.dp,
+                    color = if (isSelected) accentColor else accentColor.copy(alpha = 0.25f),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .clickable { onToggle() }
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(modifier = Modifier.size(10.dp).background(holdColor, CircleShape))
-            Text(hold.colorLabel, fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+            Image(
+                bitmap             = cropped.asImageBitmap(),
+                contentDescription = "후보 홀드",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Fit
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(modifier = Modifier.size(10.dp).background(holdColor, CircleShape))
+                Text(hold.colorLabel, fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text     = "${(hold.confidence * 100).toInt()}%",
+                fontSize = 10.sp,
+                color    = Color.White.copy(alpha = 0.4f)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text       = if (isSelected) "✓ 선택됨" else "탭하여 선택",
+                fontSize   = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color      = if (isSelected) accentColor else Color.White.copy(alpha = 0.35f)
+            )
         }
-        Spacer(Modifier.height(2.dp))
-        Text("${(hold.confidence * 100).toInt()}%", fontSize = 10.sp, color = Color.White.copy(alpha = 0.4f))
-        Spacer(Modifier.height(4.dp))
-        Text("추가", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = accentColor)
+
+        // 선택 완료 뱃지 (우상단)
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(20.dp)
+                    .background(accentColor, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text       = "✓",
+                    fontSize   = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color      = Color.Black
+                )
+            }
+        }
     }
 }
 

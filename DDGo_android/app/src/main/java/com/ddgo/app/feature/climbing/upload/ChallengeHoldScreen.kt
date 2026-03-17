@@ -14,7 +14,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +36,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,10 +46,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -165,6 +170,9 @@ private fun HoldReviewContent(
     val candidateHolds = viewModel.candidateHolds
     val showCandidatePopup = viewModel.showCandidatePopup
 
+    var zoom by remember { mutableStateOf(1f) }
+    var panOffset by remember { mutableStateOf(Offset.Zero) }
+
     if (bitmap == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -218,91 +226,145 @@ private fun HoldReviewContent(
             val scaledH = bitmap.height * scale
             val offX = (cW - scaledW) / 2f
             val offY = (cH - scaledH) / 2f
+            val pivotX = cW / 2f
+            val pivotY = cH / 2f
 
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "홀드 탐지 프레임",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
+            // pointerInput 내부에서 항상 최신 상태값을 참조하기 위한 스냅샷
+            val currentZoom by rememberUpdatedState(zoom)
+            val currentPan by rememberUpdatedState(panOffset)
 
-            Canvas(
+            // 터치 이벤트 수신 레이어 (graphicsLayer 변환 적용 전 레이아웃 좌표 기준)
+            // clipToBounds: 줌 시 이미지가 이 영역 밖으로 넘치지 않도록 클리핑
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(holds, allRawHolds) {
-                        detectTapGestures { tap ->
-                            val imageRight = offX + scaledW
-                            val imageBottom = offY + scaledH
-                            if (tap.x !in offX..imageRight || tap.y !in offY..imageBottom) {
-                                return@detectTapGestures
-                            }
-
-                            var tappedExisting = false
-                            holds.forEach { hold ->
-                                val rect = hold.toScreenRect(offX, offY, scaledW, scaledH)
-                                val polygon = hold.toScreenPolygon(offX, offY, scaledW, scaledH)
-                                val hit = if (polygon.size >= 3) {
-                                    pointInPolygon(tap, polygon)
-                                } else {
-                                    tap.x in rect.l..rect.r && tap.y in rect.t..rect.b
-                                }
-                                if (hit) {
-                                    tappedExisting = true
-                                }
-                            }
-
-                            if (!tappedExisting) {
-                                val normX = ((tap.x - offX) / scaledW).coerceIn(0f, 1f)
-                                val normY = ((tap.y - offY) / scaledH).coerceIn(0f, 1f)
-                                viewModel.findCandidatesNearTap(normX, normY)
+                    .clipToBounds()
+                    // 핀치 줌·패닝 처리
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, gestureZoom, _ ->
+                            val newZoom = (currentZoom * gestureZoom).coerceIn(1f, 5f)
+                            val maxX = cW * (newZoom - 1f) / 2f
+                            val maxY = cH * (newZoom - 1f) / 2f
+                            zoom = newZoom
+                            panOffset = if (newZoom == 1f) {
+                                Offset.Zero
+                            } else {
+                                Offset(
+                                    x = (currentPan.x + pan.x).coerceIn(-maxX, maxX),
+                                    y = (currentPan.y + pan.y).coerceIn(-maxY, maxY)
+                                )
                             }
                         }
                     }
-            ) {
-                holds.forEach { hold ->
-                    val rect = hold.toScreenRect(offX, offY, scaledW, scaledH)
-                    val polygon = hold.toScreenPolygon(offX, offY, scaledW, scaledH)
-                    val polygonPath = polygon.toPath()
-                    val hasPolygon = polygon.size >= 3
-                    val outlineColor = holdLabelToComposeColor(hold.colorLabel)
-                    val strokePx = 2f * density
+                    // 단일 탭·더블탭 처리
+                    .pointerInput(holds, allRawHolds) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                // 더블탭으로 줌 초기화
+                                zoom = 1f
+                                panOffset = Offset.Zero
+                            },
+                            onTap = { tap ->
+                                val z = currentZoom
+                                val p = currentPan
+                                // graphicsLayer 역변환: 화면 좌표 → 이미지 레이아웃 좌표
+                                val localX = (tap.x - p.x - pivotX) / z + pivotX
+                                val localY = (tap.y - p.y - pivotY) / z + pivotY
+                                val localTap = Offset(localX, localY)
 
-                    if (hasPolygon) {
-                        drawPath(
-                            path = polygonPath,
-                            color = outlineColor.copy(alpha = 0.15f)
-                        )
-                        drawPath(
-                            path = polygonPath,
-                            color = outlineColor.copy(alpha = 0.85f),
-                            style = Stroke(
-                                width = strokePx,
-                                cap = StrokeCap.Round,
-                                join = StrokeJoin.Round
-                            )
-                        )
-                    } else {
-                        drawRect(
-                            color = outlineColor.copy(alpha = 0.12f),
-                            topLeft = Offset(rect.l, rect.t),
-                            size = Size(rect.r - rect.l, rect.b - rect.t)
-                        )
-                        drawRect(
-                            color = outlineColor.copy(alpha = 0.85f),
-                            topLeft = Offset(rect.l, rect.t),
-                            size = Size(rect.r - rect.l, rect.b - rect.t),
-                            style = Stroke(width = strokePx)
+                                val imageRight = offX + scaledW
+                                val imageBottom = offY + scaledH
+                                if (localTap.x !in offX..imageRight || localTap.y !in offY..imageBottom) {
+                                    return@detectTapGestures
+                                }
+
+                                var tappedExisting = false
+                                holds.forEach { hold ->
+                                    val rect = hold.toScreenRect(offX, offY, scaledW, scaledH)
+                                    val polygon = hold.toScreenPolygon(offX, offY, scaledW, scaledH)
+                                    val hit = if (polygon.size >= 3) {
+                                        pointInPolygon(localTap, polygon)
+                                    } else {
+                                        localTap.x in rect.l..rect.r && localTap.y in rect.t..rect.b
+                                    }
+                                    if (hit) tappedExisting = true
+                                }
+
+                                if (!tappedExisting) {
+                                    val normX = ((localTap.x - offX) / scaledW).coerceIn(0f, 1f)
+                                    val normY = ((localTap.y - offY) / scaledH).coerceIn(0f, 1f)
+                                    viewModel.findCandidatesNearTap(normX, normY)
+                                }
+                            }
                         )
                     }
-
-                    drawConfidenceLabel(
-                        label = "${(hold.confidence * 100).toInt()}%",
-                        boxLeft = rect.l,
-                        boxTop = rect.t,
-                        boxBottom = rect.b,
-                        color = outlineColor,
-                        isSelected = false
+            ) {
+                // 줌·패닝 변환이 적용되는 시각적 레이어 (Image + Canvas 오버레이 함께 이동)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = panOffset.x
+                            translationY = panOffset.y
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        }
+                ) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "홀드 탐지 프레임",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
                     )
+
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        holds.forEach { hold ->
+                            val rect = hold.toScreenRect(offX, offY, scaledW, scaledH)
+                            val polygon = hold.toScreenPolygon(offX, offY, scaledW, scaledH)
+                            val polygonPath = polygon.toPath()
+                            val hasPolygon = polygon.size >= 3
+                            val outlineColor = holdLabelToComposeColor(hold.colorLabel)
+                            val strokePx = 2f * density
+
+                            if (hasPolygon) {
+                                drawPath(
+                                    path = polygonPath,
+                                    color = outlineColor.copy(alpha = 0.15f)
+                                )
+                                drawPath(
+                                    path = polygonPath,
+                                    color = outlineColor.copy(alpha = 0.85f),
+                                    style = Stroke(
+                                        width = strokePx,
+                                        cap = StrokeCap.Round,
+                                        join = StrokeJoin.Round
+                                    )
+                                )
+                            } else {
+                                drawRect(
+                                    color = outlineColor.copy(alpha = 0.12f),
+                                    topLeft = Offset(rect.l, rect.t),
+                                    size = Size(rect.r - rect.l, rect.b - rect.t)
+                                )
+                                drawRect(
+                                    color = outlineColor.copy(alpha = 0.85f),
+                                    topLeft = Offset(rect.l, rect.t),
+                                    size = Size(rect.r - rect.l, rect.b - rect.t),
+                                    style = Stroke(width = strokePx)
+                                )
+                            }
+
+                            drawConfidenceLabel(
+                                label = "${(hold.confidence * 100).toInt()}%",
+                                boxLeft = rect.l,
+                                boxTop = rect.t,
+                                boxBottom = rect.b,
+                                color = outlineColor,
+                                isSelected = false
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -344,7 +406,7 @@ private fun HoldReviewContent(
             bitmap = bitmap,
             candidates = candidateHolds,
             accentColor = COLOR_START,
-            onSelect = { hold -> viewModel.selectManualHold(hold) },
+            onSelect = { holds -> holds.forEach { viewModel.selectManualHold(it) } },
             onDismiss = { viewModel.dismissCandidatePopup() }
         )
     }
