@@ -509,6 +509,7 @@ class UploadViewModel @Inject constructor(
     /**
      * 터치 지점(정규화 좌표) 근처에서 후보 홀드를 탐색하여 팝업 상태를 업데이트합니다.
      * Screen에서 화면 좌표 → 정규화 좌표로 변환 후 호출합니다.
+     * 이미 선택된 홀드도 포함하여 팝업에서 선택/취소를 모두 처리할 수 있습니다.
      *
      * @param tapNormX 터치 x 좌표 (0~1, 이미지 정규화 좌표)
      * @param tapNormY 터치 y 좌표 (0~1, 이미지 정규화 좌표)
@@ -522,10 +523,11 @@ class UploadViewModel @Inject constructor(
     }
 
     /**
-     * 후보 팝업에서 홀드를 선택하여 detectedHolds에 추가하고 팝업을 닫습니다.
+     * 팝업에서 확인 시 호출. 추가/제거를 한 번에 적용합니다.
      */
-    fun selectManualHold(hold: Hold) {
-        addManualHold(hold)
+    fun applyHoldChanges(toAdd: List<Hold>, toRemove: List<Hold>) {
+        toAdd.forEach { addManualHold(it) }
+        toRemove.forEach { removeHold(it) }
         dismissCandidatePopup()
     }
 
@@ -533,6 +535,16 @@ class UploadViewModel @Inject constructor(
     fun dismissCandidatePopup() {
         showCandidatePopup = false
         candidateHolds = emptyList()
+    }
+
+    /**
+     * detectedHolds에서 홀드를 제거합니다.
+     */
+    fun removeHold(hold: Hold) {
+        detectedHolds = detectedHolds.filter { existing ->
+            existing.boundingBox != hold.boundingBox
+        }
+        Log.d(TAG, "❌ 홀드 제거: bbox=${hold.boundingBox}, color=${hold.colorLabel}")
     }
 
     /**
@@ -550,7 +562,8 @@ class UploadViewModel @Inject constructor(
     }
 
     /**
-     * 터치 지점 근처에서 현재 detectedHolds에 없는 후보 홀드를 필터링합니다.
+     * 터치 지점 근처의 홀드를 반환합니다.
+     * 이미 선택된 홀드도 포함하여 팝업에서 선택/취소를 모두 처리할 수 있도록 합니다.
      *
      * @param tapNormX 터치 x 좌표 (0~1)
      * @param tapNormY 터치 y 좌표 (0~1)
@@ -561,9 +574,7 @@ class UploadViewModel @Inject constructor(
         tapNormY: Float,
         searchRadius: Float = 0.12f
     ): List<Hold> {
-        val existingBoxes = detectedHolds.map { it.boundingBox }.toSet()
         return allRawHolds
-            .filter { it.boundingBox !in existingBoxes }
             .filter { hold ->
                 val cx = (hold.boundingBox.left + hold.boundingBox.right) / 2f
                 val cy = (hold.boundingBox.top + hold.boundingBox.bottom) / 2f

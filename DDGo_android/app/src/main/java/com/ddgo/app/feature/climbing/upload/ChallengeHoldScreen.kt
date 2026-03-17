@@ -204,10 +204,10 @@ private fun HoldReviewContent(
                 fontSize = 13.sp,
                 color = Color.White.copy(alpha = 0.5f)
             )
-            if (allRawHolds.size > holds.size) {
+            if (allRawHolds.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "빈 영역을 터치하면 누락된 홀드를 추가할 수 있어요",
+                    text = "홀드 주변을 터치하면 선택/취소할 수 있어요",
                     fontSize = 11.sp,
                     color = Color.White.copy(alpha = 0.35f)
                 )
@@ -257,7 +257,7 @@ private fun HoldReviewContent(
                         }
                     }
                     // 단일 탭·더블탭 처리
-                    .pointerInput(holds, allRawHolds) {
+                    .pointerInput(allRawHolds) {
                         detectTapGestures(
                             onDoubleTap = {
                                 // 더블탭으로 줌 초기화
@@ -278,23 +278,10 @@ private fun HoldReviewContent(
                                     return@detectTapGestures
                                 }
 
-                                var tappedExisting = false
-                                holds.forEach { hold ->
-                                    val rect = hold.toScreenRect(offX, offY, scaledW, scaledH)
-                                    val polygon = hold.toScreenPolygon(offX, offY, scaledW, scaledH)
-                                    val hit = if (polygon.size >= 3) {
-                                        pointInPolygon(localTap, polygon)
-                                    } else {
-                                        localTap.x in rect.l..rect.r && localTap.y in rect.t..rect.b
-                                    }
-                                    if (hit) tappedExisting = true
-                                }
-
-                                if (!tappedExisting) {
-                                    val normX = ((localTap.x - offX) / scaledW).coerceIn(0f, 1f)
-                                    val normY = ((localTap.y - offY) / scaledH).coerceIn(0f, 1f)
-                                    viewModel.findCandidatesNearTap(normX, normY)
-                                }
+                                // 탭 위치 근처 홀드 팝업 열기 (선택됨/선택 안 됨 모두 포함)
+                                val normX = ((localTap.x - offX) / scaledW).coerceIn(0f, 1f)
+                                val normY = ((localTap.y - offY) / scaledH).coerceIn(0f, 1f)
+                                viewModel.findCandidatesNearTap(normX, normY)
                             }
                         )
                     }
@@ -405,8 +392,9 @@ private fun HoldReviewContent(
         CandidateHoldPopup(
             bitmap = bitmap,
             candidates = candidateHolds,
+            alreadySelected = holds,
             accentColor = COLOR_START,
-            onSelect = { holds -> holds.forEach { viewModel.selectManualHold(it) } },
+            onApply = { toAdd, toRemove -> viewModel.applyHoldChanges(toAdd, toRemove) },
             onDismiss = { viewModel.dismissCandidatePopup() }
         )
     }
