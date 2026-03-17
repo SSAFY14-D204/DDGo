@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -44,6 +46,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,7 +69,18 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.ddgo.app.core.ui.components.DdgoPrimaryButton
 import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.model.PoseLandmark
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,16 +91,58 @@ fun DebugPoseScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val selectedVideoName = uiState.selectedVideoName
     val selectedVideoUri = uiState.selectedVideoUri
+    val latestPoseFrames by rememberUpdatedState(uiState.poseFrames)
+    val latestSelectedVideoName by rememberUpdatedState(selectedVideoName)
+    val latestSelectedVideoUri by rememberUpdatedState(selectedVideoUri)
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var isExportingJson by remember { mutableStateOf(false) }
+    var exportSuccessMessage by remember { mutableStateOf<String?>(null) }
+    var exportErrorMessage by remember { mutableStateOf<String?>(null) }
 
     val pickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
         persistReadPermission(context, uri)
+        exportSuccessMessage = null
+        exportErrorMessage = null
         viewModel.analyzeVideo(uri, context.resolveDisplayName(uri))
+    }
+    val exportJsonLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { destinationUri: Uri? ->
+        destinationUri ?: return@rememberLauncherForActivityResult
+
+        val sourceVideoUri = latestSelectedVideoUri ?: run {
+            exportErrorMessage = "저장할 분석 대상 비디오 정보가 없습니다."
+            return@rememberLauncherForActivityResult
+        }
+
+        isExportingJson = true
+        exportSuccessMessage = null
+        exportErrorMessage = null
+
+        coroutineScope.launch {
+            runCatching {
+                exportPoseResultsJson(
+                    context = context,
+                    destinationUri = destinationUri,
+                    sourceVideoUri = sourceVideoUri,
+                    sourceVideoName = latestSelectedVideoName,
+                    poseFrames = latestPoseFrames
+                )
+            }.onSuccess {
+                exportSuccessMessage =
+                    "전체 결과를 ${context.resolveDisplayName(destinationUri)} 파일로 저장했습니다."
+            }.onFailure { error ->
+                exportErrorMessage = error.message ?: "전체 결과 JSON 저장에 실패했습니다."
+            }
+
+            isExportingJson = false
+        }
     }
 
     if (showLogoutDialog) {
@@ -187,6 +244,13 @@ fun DebugPoseScreen(
                 )
             }
 
+            if (isExportingJson) {
+                StatusCard(
+                    title = "JSON 저장",
+                    body = "분석 결과 전체를 JSON 파일로 저장하고 있습니다."
+                )
+            }
+
             uiState.errorMessage?.let { message ->
                 StatusCard(
                     title = "오류",
@@ -196,11 +260,33 @@ fun DebugPoseScreen(
                 )
             }
 
+            exportErrorMessage?.let { message ->
+                StatusCard(
+                    title = "JSON 저장 오류",
+                    body = message,
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+
+            exportSuccessMessage?.let { message ->
+                StatusCard(
+                    title = "JSON 저장 완료",
+                    body = message
+                )
+            }
+
             if (selectedVideoUri != null && !uiState.isAnalyzing && uiState.errorMessage == null) {
                 DebugPoseResultCard(
                     videoUri = selectedVideoUri,
                     videoName = selectedVideoName,
-                    poses = uiState.poseFrames
+                    poseFrames = uiState.poseFrames,
+                    isExportingJson = isExportingJson,
+                    onExportJson = {
+                        exportSuccessMessage = null
+                        exportErrorMessage = null
+                        exportJsonLauncher.launch(buildPoseExportFileName(selectedVideoName))
+                    }
                 )
             }
         }
@@ -211,7 +297,9 @@ fun DebugPoseScreen(
 private fun DebugPoseResultCard(
     videoUri: Uri,
     videoName: String?,
-    poses: List<Pose>
+    poseFrames: List<DebugPoseFrameResult>,
+    isExportingJson: Boolean,
+    onExportJson: () -> Unit
 ) {
     val context = LocalContext.current
     val exoPlayer = remember(videoUri) {
@@ -251,9 +339,10 @@ private fun DebugPoseResultCard(
         }
     }
 
-    val currentPose = remember(poses, currentPositionMs) {
-        poses.minByOrNull { pose -> abs(pose.frameTimeMs - currentPositionMs) }
+    val currentFrame = remember(poseFrames, currentPositionMs) {
+        poseFrames.minByOrNull { frame -> abs(frame.pose.frameTimeMs - currentPositionMs) }
     }
+    val currentPose = currentFrame?.pose
     val videoContentRect = remember(containerSize, playerVideoSize) {
         calculateVideoContentRect(
             containerSize = containerSize,
@@ -318,22 +407,90 @@ private fun DebugPoseResultCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                MetricChip(label = "검출 프레임", value = poses.size.toString())
+                MetricChip(label = "검출 프레임", value = poseFrames.size.toString())
                 MetricChip(
                     label = "현재 오버레이",
                     value = currentPose?.frameTimeMs?.let { "${it}ms" } ?: "없음"
                 )
             }
 
+            Button(
+                onClick = onExportJson,
+                enabled = !isExportingJson,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isExportingJson) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("전체 결과 JSON 저장")
+                }
+            }
+
+            CurrentPoseJsonCard(frameResult = currentFrame)
+
             Text(
-                text = if (poses.isEmpty()) {
+                text = if (poseFrames.isEmpty()) {
                     "샘플링한 프레임에서 포즈를 찾지 못했습니다. 모델 파일이 없거나 인물이 작게 보이는 영상이면 이렇게 나타날 수 있습니다."
                 } else {
-                    "PlayerView가 실제로 보여주는 비디오 영역에 맞춰 랜드마크를 오버레이합니다."
+                    "PlayerView가 실제로 보여주는 비디오 영역에 맞춰 랜드마크를 오버레이하고, 아래 JSON에는 같은 프레임의 normalized landmarks와 worldLandmarks를 함께 표시합니다. 버튼을 누르면 전체 감지 프레임을 하나의 JSON 파일로 저장할 수 있습니다."
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun CurrentPoseJsonCard(frameResult: DebugPoseFrameResult?) {
+    val jsonText = remember(frameResult) {
+        frameResult?.toPrettyJson()
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "현재 프레임 JSON",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = frameResult?.pose?.frameTimeMs?.let {
+                    "현재 재생 위치와 가장 가까운 ${it}ms 프레임 결과입니다."
+                } ?: "재생 위치에 대응되는 포즈 결과가 없습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            SelectionContainer {
+                Text(
+                    text = jsonText ?: "{\n  \"message\": \"pose not detected\"\n}",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .padding(14.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }
@@ -551,6 +708,115 @@ private val POSE_CONNECTIONS = listOf(
     28 to 30,
     30 to 32
 )
+
+private val PoseJsonFormatter = Json {
+    prettyPrint = true
+}
+
+private fun DebugPoseFrameResult.toPrettyJson(): String {
+    return PoseJsonFormatter.encodeToString(JsonObject.serializer(), toJsonObject())
+}
+
+private fun DebugPoseFrameResult.toJsonObject(): JsonObject {
+    val jsonObject = buildJsonObject {
+        put("frameTimeMs", JsonPrimitive(pose.frameTimeMs))
+        put(
+            "landmarks",
+            buildJsonArray {
+                pose.landmarks.forEach { landmark ->
+                    add(landmark.toJsonObject())
+                }
+            }
+        )
+        put(
+            "worldLandmarks",
+            buildJsonArray {
+                worldLandmarks.forEach { landmark ->
+                    add(landmark.toJsonObject())
+                }
+            }
+        )
+    }
+
+    return jsonObject
+}
+
+private fun PoseLandmark.toJsonObject(): JsonObject = buildJsonObject {
+    put("index", JsonPrimitive(index))
+    put("x", JsonPrimitive(x))
+    put("y", JsonPrimitive(y))
+    put("z", JsonPrimitive(z))
+}
+
+private fun DebugPoseWorldLandmark.toJsonObject(): JsonObject = buildJsonObject {
+    put("index", JsonPrimitive(index))
+    put("x", JsonPrimitive(x))
+    put("y", JsonPrimitive(y))
+    put("z", JsonPrimitive(z))
+}
+
+private suspend fun exportPoseResultsJson(
+    context: Context,
+    destinationUri: Uri,
+    sourceVideoUri: Uri,
+    sourceVideoName: String?,
+    poseFrames: List<DebugPoseFrameResult>
+) {
+    val exportJson = buildPoseExportJson(
+        sourceVideoUri = sourceVideoUri,
+        sourceVideoName = sourceVideoName,
+        poseFrames = poseFrames
+    )
+
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val outputStream = context.contentResolver.openOutputStream(destinationUri)
+            ?: throw IllegalStateException("저장할 JSON 파일을 열 수 없습니다.")
+
+        outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
+            writer.write(exportJson)
+        }
+    }
+}
+
+private fun buildPoseExportJson(
+    sourceVideoUri: Uri,
+    sourceVideoName: String?,
+    poseFrames: List<DebugPoseFrameResult>
+): String {
+    val jsonObject = buildJsonObject {
+        put("schemaVersion", JsonPrimitive(1))
+        put("exportedAt", JsonPrimitive(Instant.now().toString()))
+        put("videoName", JsonPrimitive(sourceVideoName ?: "selected_video"))
+        put("videoUri", JsonPrimitive(sourceVideoUri.toString()))
+        put("detectedFrameCount", JsonPrimitive(poseFrames.size))
+        put(
+            "frames",
+            buildJsonArray {
+                poseFrames.forEach { frame ->
+                    add(frame.toJsonObject())
+                }
+            }
+        )
+    }
+
+    return PoseJsonFormatter.encodeToString(JsonObject.serializer(), jsonObject)
+}
+
+private fun buildPoseExportFileName(videoName: String?): String {
+    val baseName = videoName
+        ?.substringBeforeLast('.')
+        ?.replace(INVALID_FILE_NAME_CHARS, "_")
+        ?.replace(WHITESPACE_REGEX, "_")
+        ?.trim('_')
+        ?.takeIf { it.isNotBlank() }
+        ?: "pose_result"
+    val timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+        .format(LocalDateTime.now())
+    return "${baseName}_pose_$timestamp.json"
+}
+
+private val INVALID_FILE_NAME_CHARS = Regex("[\\\\/:*?\"<>|]")
+private val WHITESPACE_REGEX = Regex("\\s+")
 
 
 

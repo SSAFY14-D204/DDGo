@@ -106,8 +106,9 @@ class PoseEstimatorImpl @Inject constructor(
             val landmarker = imageLandmarker ?: return@withContext emptyList()
             if (isRunning) return@withContext emptyList()
             isRunning = true
+            val mpImage = BitmapImageBuilder(bitmap).build()
             try {
-                val result = landmarker.detect(BitmapImageBuilder(bitmap).build())
+                val result = landmarker.detect(mpImage)
                 // landmarks(): List<List<NormalizedLandmark>> — 첫 번째 감지 포즈 사용
                 if (result.landmarks().isEmpty()) emptyList()
                 else result.landmarks()[0].mapIndexed { idx, lm: NormalizedLandmark ->
@@ -117,6 +118,7 @@ class PoseEstimatorImpl @Inject constructor(
                 Log.e(TAG, "estimateFromFrame 실패: ${e.message}")
                 emptyList()
             } finally {
+                mpImage.close()
                 isRunning = false
             }
         }

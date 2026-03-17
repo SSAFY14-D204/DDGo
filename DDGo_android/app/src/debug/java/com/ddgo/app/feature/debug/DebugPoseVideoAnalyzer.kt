@@ -42,11 +42,11 @@ class DebugPoseVideoAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    suspend operator fun invoke(videoUri: String): Result<List<Pose>> = withContext(Dispatchers.IO) {
+    suspend operator fun invoke(videoUri: String): Result<List<DebugPoseFrameResult>> = withContext(Dispatchers.IO) {
         runCatching { analyzeInternal(videoUri) }
     }
 
-    private fun analyzeInternal(videoUri: String): List<Pose> {
+    private fun analyzeInternal(videoUri: String): List<DebugPoseFrameResult> {
         val uri = Uri.parse(videoUri)
         val poseLandmarker = createPoseLandmarker()
 
@@ -63,7 +63,7 @@ class DebugPoseVideoAnalyzer @Inject constructor(
     private fun analyzeSequentialFrames(
         uri: Uri,
         poseLandmarker: PoseLandmarker
-    ): List<Pose> {
+    ): List<DebugPoseFrameResult> {
         val extractor = MediaExtractor()
 
         try {
@@ -121,9 +121,9 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         width: Int,
         height: Int,
         frameRate: Int?
-    ): List<Pose> {
+    ): List<DebugPoseFrameResult> {
         val bufferInfo = MediaCodec.BufferInfo()
-        val poses = ArrayList<Pose>()
+        val poses = ArrayList<DebugPoseFrameResult>()
         var inputEnded = false
         var outputEnded = false
         var lastProcessedUs = Long.MIN_VALUE
@@ -235,7 +235,7 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         presentationTimeUs: Long,
         rotationDegrees: Int,
         frameLabel: String
-    ): Pose? {
+    ): DebugPoseFrameResult? {
         val image = decoder.getOutputImage(outputBufferIndex)
         if (image == null) {
             Log.w(TAG, "$frameLabel frame=image_unavailable")
@@ -275,21 +275,41 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         frameBitmap: Bitmap,
         frameTimeMs: Long,
         frameLabel: String
-    ): Pose? {
+    ): DebugPoseFrameResult? {
         val mpImage = BitmapImageBuilder(frameBitmap).build()
 
         try {
             val result = poseLandmarker.detectForVideo(mpImage, frameTimeMs)
             val landmarks = result.landmarks().firstOrNull().orEmpty()
+            val worldLandmarks = result.worldLandmarks().firstOrNull().orEmpty()
             if (landmarks.isEmpty()) {
                 Log.w(TAG, "$frameLabel pose=not_detected timestampMs=${result.timestampMs()}")
                 return null
             }
 
-            return VisionMapper.toPose(
+            if (worldLandmarks.size != landmarks.size) {
+                Log.w(
+                    TAG,
+                    "$frameLabel pose=world_landmark_mismatch normalized=${landmarks.size} world=${worldLandmarks.size}"
+                )
+            }
+
+            val pose = VisionMapper.toPose(
                 frameTimeMs = result.timestampMs(),
                 rawLandmarks = landmarks.map { landmark ->
                     Triple(landmark.x(), landmark.y(), landmark.z())
+                }
+            )
+
+            return DebugPoseFrameResult(
+                pose = pose,
+                worldLandmarks = worldLandmarks.mapIndexed { index, landmark ->
+                    DebugPoseWorldLandmark(
+                        index = index,
+                        x = landmark.x(),
+                        y = landmark.y(),
+                        z = landmark.z()
+                    )
                 }
             )
         } finally {
@@ -299,13 +319,14 @@ class DebugPoseVideoAnalyzer @Inject constructor(
 
     private fun logPoseResult(
         frameLabel: String,
-        pose: Pose?
+        frameResult: DebugPoseFrameResult?
     ) {
-        if (pose == null) return
+        if (frameResult == null) return
+        val pose = frameResult.pose
 
         Log.i(
             TAG,
-            "$frameLabel pose=detected landmarks=${pose.landmarks.size} keyJoints=${pose.formatKeyJoints()}"
+            "$frameLabel pose=detected landmarks=${pose.landmarks.size} worldLandmarks=${frameResult.worldLandmarks.size} keyJoints=${pose.formatKeyJoints()} keyWorldJoints=${frameResult.formatKeyWorldJoints()}"
         )
 
         pose.landmarks
@@ -314,6 +335,15 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                 Log.d(
                     TAG,
                     "$frameLabel joints[$chunkIndex]=${chunk.joinToString(separator = " | ") { it.toDebugString() }}"
+                )
+            }
+
+        frameResult.worldLandmarks
+            .chunked(LANDMARKS_PER_LOG_LINE)
+            .forEachIndexed { chunkIndex, chunk ->
+                Log.d(
+                    TAG,
+                    "$frameLabel worldJoints[$chunkIndex]=${chunk.joinToString(separator = " | ") { it.toDebugString() }}"
                 )
             }
     }
@@ -545,7 +575,18 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         }
     }
 
+    private fun DebugPoseFrameResult.formatKeyWorldJoints(): String {
+        val landmarksByIndex = worldLandmarks.associateBy { it.index }
+        return KEY_LANDMARK_INDICES.joinToString(separator = ", ") { index ->
+            landmarksByIndex[index]?.toDebugString() ?: "${landmarkName(index)}=missing"
+        }
+    }
+
     private fun PoseLandmark.toDebugString(): String {
+        return "${landmarkName(index)}=(${formatCoordinate(x)},${formatCoordinate(y)},${formatCoordinate(z)})"
+    }
+
+    private fun DebugPoseWorldLandmark.toDebugString(): String {
         return "${landmarkName(index)}=(${formatCoordinate(x)},${formatCoordinate(y)},${formatCoordinate(z)})"
     }
 
