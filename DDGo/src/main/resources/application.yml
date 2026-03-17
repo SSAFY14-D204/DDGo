@@ -35,6 +35,7 @@ management:
 
 minio:
   url: ${MINIO_URL}
+  public-url: ${MINIO_PUBLIC_URL:${MINIO_URL}} # 기본값 설계 (설정 안되면 url과 동일)
   access-key: ${MINIO_ACCESS_KEY}
   secret-key: ${MINIO_SECRET_KEY}
   bucket: ${MINIO_BUCKET}
