@@ -1,11 +1,15 @@
 package com.ddgo.app.core.network
 
+import android.util.Log
+import com.ddgo.app.BuildConfig
 import com.ddgo.app.core.datastore.TokenDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 import javax.inject.Inject
+
+private const val TAG = "AuthInterceptor"
 
 /**
  * 모든 API 요청에 자동으로 Authorization 헤더를 주입하는 OkHttp 인터셉터.
@@ -19,13 +23,29 @@ class AuthInterceptor @Inject constructor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val token = runBlocking { tokenDataStore.accessToken.first() }
+        val hasToken = !token.isNullOrEmpty()
 
-        val request = if (!token.isNullOrEmpty()) {
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "intercept: method=${chain.request().method}, path=${chain.request().url.encodedPath}, " +
+                    "hasToken=$hasToken, tokenLength=${token?.length ?: 0}"
+            )
+        }
+
+        val request = if (hasToken) {
             chain.request().newBuilder()
                 .addHeader("Authorization", "Bearer $token")
                 .build()
         } else {
             chain.request()
+        }
+
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "intercept: authorizationHeaderAttached=${request.header("Authorization") != null}"
+            )
         }
 
         return chain.proceed(request)

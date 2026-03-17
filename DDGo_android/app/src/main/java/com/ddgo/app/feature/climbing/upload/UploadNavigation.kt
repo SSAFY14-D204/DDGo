@@ -107,7 +107,13 @@ fun NavGraphBuilder.uploadGraph(
 
         // 추가 3-2. 로딩 화면
         composable(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
+            }
+            val viewModel: UploadViewModel = hiltViewModel(parentEntry)
+
             AnalysisLoadingScreen(
+                viewModel = viewModel,
                 onLoadingFinished = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) {
                         // 결과 화면 진입 시 뒤로 가기 눌렀을 때 업로드 과정 전체를 생략하기 위한 팝업

@@ -1,9 +1,13 @@
 package com.ddgo.app.di
 
 import com.ddgo.app.data.repository.AuthRepositoryImpl
+import com.ddgo.app.data.repository.AttemptRepositoryImpl
+import com.ddgo.app.data.repository.ChallengeRepositoryImpl
 import com.ddgo.app.data.repository.GymRepositoryImpl
 import com.ddgo.app.data.repository.UploadRepositoryImpl
+import com.ddgo.app.domain.repository.AttemptRepository
 import com.ddgo.app.domain.repository.AuthRepository
+import com.ddgo.app.domain.repository.ChallengeRepository
 import com.ddgo.app.domain.repository.GymRepository
 import com.ddgo.app.domain.repository.UploadRepository
 import dagger.Binds
@@ -47,4 +51,16 @@ abstract class RepositoryModule {
     abstract fun bindGymRepository(
         impl: GymRepositoryImpl
     ): GymRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindChallengeRepository(
+        impl: ChallengeRepositoryImpl
+    ): ChallengeRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAttemptRepository(
+        impl: AttemptRepositoryImpl
+    ): AttemptRepository
 }
