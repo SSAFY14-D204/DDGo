@@ -34,6 +34,18 @@ android {
             "BASE_URL",
             "\"${localProperties.getProperty("api.base.url") ?: "https://j14d204.p.ssafy.io/api/"}\""
         )
+
+        // 카카오맵 API 환경변수 주입
+        buildConfigField(
+            "String",
+            "KAKAO_REST_API_KEY",
+            "\"${localProperties.getProperty("kakao.rest.api.key") ?: ""}\""
+        )
+        buildConfigField(
+            "String",
+            "KAKAO_LOCAL_BASE_URL",
+            "\"https://dapi.kakao.com/\""
+        )
     }
 
     buildTypes {

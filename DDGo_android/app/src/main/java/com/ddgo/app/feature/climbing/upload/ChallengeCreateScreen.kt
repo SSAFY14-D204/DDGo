@@ -1,5 +1,11 @@
 package com.ddgo.app.feature.climbing.upload
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.LocationManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -28,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,11 +46,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,12 +63,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
+import androidx.core.os.CancellationSignal
+import com.ddgo.app.domain.model.NearbyPlace
 
 // ─────────────────────────────────────────────
 // 내부 데이터
@@ -126,10 +141,9 @@ fun ChallengeCreateScreen(
 
     when (step) {
         CreateStep.GYM_NAME -> GymNameStep(
-            initialName = viewModel.gymName,
-            onConfirm   = { viewModel.updateGymInfo(0, it) },
-            onNext      = { step = CreateStep.LEVEL },
-            onBack      = onNavigateBack
+            viewModel = viewModel,
+            onNext = { step = CreateStep.LEVEL },
+            onBack = onNavigateBack
         )
         CreateStep.LEVEL -> LevelStep(
             gymName      = viewModel.gymName,
@@ -184,17 +198,326 @@ private fun CreateAppBar(onBack: () -> Unit) {
 
 @Composable
 private fun GymNameStep(
-    initialName: String,
-    onConfirm: (String) -> Unit,
+    viewModel: UploadViewModel,
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
-    var inputText by remember { mutableStateOf(initialName) }
-    var confirmed by remember { mutableStateOf(initialName.isNotBlank()) }
+    val context = LocalContext.current
+    val gymSearchUiState by viewModel.gymSearchUiState.collectAsState()
+    val gymResolveUiState by viewModel.gymResolveUiState.collectAsState()
+    var locationMessage by remember { mutableStateOf<String?>(null) }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+        if (granted) {
+            loadCurrentLocation(
+                context = context,
+                onSuccess = { latitude, longitude ->
+                    locationMessage = null
+                    viewModel.searchNearbyPlaces(latitude, longitude)
+                },
+                onError = { locationMessage = it }
+            )
+        } else {
+            locationMessage = "위치 권한이 필요합니다."
+        }
+    }
+
+    val searchAroundCurrentLocation = {
+        if (hasLocationPermission(context)) {
+            loadCurrentLocation(
+                context = context,
+                onSuccess = { latitude, longitude ->
+                    locationMessage = null
+                    viewModel.searchNearbyPlaces(latitude, longitude)
+                },
+                onError = { locationMessage = it }
+            )
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        CreateAppBar(onBack = onBack)
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 24.dp)
+        ) {
+            Text(
+                text = "주변 암장을 검색해서 선택해 주세요",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                lineHeight = 32.sp
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = searchAroundCurrentLocation,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4A90E2),
+                    contentColor = Color.White
+                )
+            ) {
+                Text("현재 위치로 주변 암장 검색", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+
+            if (locationMessage != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = locationMessage.orEmpty(),
+                    color = Color(0xFFFF8A8A),
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            when (gymSearchUiState) {
+                GymSearchUiState.Idle -> {
+                    Text(
+                        text = "버튼을 눌러 주변 암장을 검색하세요.",
+                        color = Color(0xFFB0B0B0),
+                        fontSize = 14.sp
+                    )
+                }
+
+                GymSearchUiState.Loading -> {
+                    CircularProgressIndicator(color = Color(0xFF4A90E2))
+                }
+
+                is GymSearchUiState.Error -> {
+                    Text(
+                        text = (gymSearchUiState as GymSearchUiState.Error).message,
+                        color = Color(0xFFFF8A8A),
+                        fontSize = 14.sp
+                    )
+                }
+
+                is GymSearchUiState.Success -> {
+                    val places = (gymSearchUiState as GymSearchUiState.Success).places
+
+                    if (places.isEmpty()) {
+                        Text(
+                            text = "검색 결과가 없습니다.",
+                            color = Color(0xFFB0B0B0),
+                            fontSize = 14.sp
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(280.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(places, key = { it.externalPlaceId }) { place ->
+                                NearbyPlaceItem(
+                                    place = place,
+                                    selected = place.externalPlaceId ==
+                                        viewModel.selectedNearbyPlace?.externalPlaceId,
+                                    onClick = { viewModel.resolveSelectedPlace(place) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            when (gymResolveUiState) {
+                GymResolveUiState.Idle -> Unit
+
+                GymResolveUiState.Loading -> {
+                    Text(
+                        text = "선택한 장소를 확인하는 중입니다...",
+                        color = Color(0xFFB0B0B0),
+                        fontSize = 14.sp
+                    )
+                }
+
+                is GymResolveUiState.Error -> {
+                    Text(
+                        text = (gymResolveUiState as GymResolveUiState.Error).message,
+                        color = Color(0xFFFF8A8A),
+                        fontSize = 14.sp
+                    )
+                }
+
+                is GymResolveUiState.Success -> {
+                    val resolved = (gymResolveUiState as GymResolveUiState.Success).resolvedGym
+                    Text(
+                        text = "선택된 암장: ${resolved.gym.displayName}",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "불러온 난이도 수: ${resolved.grades.size}",
+                        color = Color(0xFFB0B0B0),
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Button(
+                onClick = onNext,
+                enabled = gymResolveUiState is GymResolveUiState.Success,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4A90E2),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF333333),
+                    disabledContentColor = Color(0xFF666666)
+                )
+            ) {
+                Text(text = "다음", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/**
+ * Kakao 검색 결과 장소 1건을 표시하는 아이템.
+ */
+@Composable
+private fun NearbyPlaceItem(
+    place: NearbyPlace,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) Color(0xFF1C3A5E) else Color(0xFF1C1C1E))
+            .clickable(onClick = onClick)
+            .padding(16.dp)
+    ) {
+        Text(
+            text = place.placeName,
+            color = Color.White,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = place.roadAddressName ?: place.addressName ?: "주소 정보 없음",
+            color = Color(0xFFB0B0B0),
+            fontSize = 13.sp,
+            lineHeight = 18.sp
+        )
+
+        if (place.distanceMeters != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "${place.distanceMeters}m",
+                color = Color(0xFF9CCCFF),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun LegacyGymNameStep(
+    viewModel: UploadViewModel,
+    onNext: () -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val gymSearchUiState by viewModel.gymSearchUiState.collectAsState()
+    val gymResolveUiState by viewModel.gymResolveUiState.collectAsState()
+    var locationMessage by remember { mutableStateOf<String?>(null) }
+    var inputText by remember { mutableStateOf("") }
+    var confirmed by remember { mutableStateOf(false) }
     val suggestions = remember(inputText) {
-        if (inputText.isBlank()) emptyList()
-        else GYM_MOCK_LIST.filter { it.contains(inputText, ignoreCase = true) }
+        GYM_MOCK_LIST.filter { it.contains(inputText, ignoreCase = true) }
+    }
+    val onConfirm: (String) -> Unit = {}
+
+    /**
+     * 위치 권한 요청 런처.
+     *
+     * 역할:
+     * - 런타임 권한을 Compose 화면에서 요청합니다.
+     * - 권한 허용 시 현재 위치를 읽고 검색을 시작합니다.
+     */
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+
+        if (granted) {
+            loadCurrentLocation(
+                context = context,
+                onSuccess = { latitude, longitude ->
+                    locationMessage = null
+                    viewModel.searchNearbyPlaces(latitude, longitude)
+                },
+                onError = { locationMessage = it }
+            )
+        } else {
+            locationMessage = "위치 권한이 필요합니다."
+        }
+    }
+
+    /**
+     * 현재 위치 기준 검색 시작.
+     *
+     * 규칙:
+     * - 권한이 있으면 바로 위치 조회
+     * - 없으면 권한 요청
+     */
+    val searchAroundCurrentLocation = {
+        if (hasLocationPermission(context)) {
+            loadCurrentLocation(
+                context = context,
+                onSuccess = { latitude, longitude ->
+                    locationMessage = null
+                    viewModel.searchNearbyPlaces(latitude, longitude)
+                },
+                onError = { locationMessage = it }
+            )
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
     }
 
     Column(
@@ -631,5 +954,77 @@ private fun ColorStep(
                 }
             }
         }
+    }
+}
+
+/**
+ * 현재 위치 권한이 있는지 확인합니다.
+ *
+ * 규칙:
+ * - FINE 또는 COARSE 둘 중 하나라도 있으면 true로 처리합니다.
+ */
+private fun hasLocationPermission(context: Context): Boolean {
+    val fineGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
+    val coarseGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
+    return fineGranted || coarseGranted
+}
+
+/**
+ * 현재 위치를 1회 조회합니다.
+ *
+ * 동작:
+ * - GPS provider가 가능하면 우선 사용
+ * - 아니면 NETWORK provider 사용
+ * - 그래도 실패하면 lastKnownLocation fallback
+ */
+private fun loadCurrentLocation(
+    context: Context,
+    onSuccess: (Double, Double) -> Unit,
+    onError: (String) -> Unit
+) {
+    val locationManager = context.getSystemService(LocationManager::class.java)
+        ?: run {
+            onError("위치 서비스를 사용할 수 없습니다.")
+            return
+        }
+
+    val provider = when {
+        locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+        locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+        else -> null
+    } ?: run {
+        onError("위치 서비스를 켜 주세요.")
+        return
+    }
+
+    try {
+        LocationManagerCompat.getCurrentLocation(
+            locationManager,
+            provider,
+            CancellationSignal(),
+            ContextCompat.getMainExecutor(context)
+        ) { location ->
+            if (location != null) {
+                onSuccess(location.latitude, location.longitude)
+                return@getCurrentLocation
+            }
+
+            val lastKnownLocation = locationManager.getLastKnownLocation(provider)
+            if (lastKnownLocation != null) {
+                onSuccess(lastKnownLocation.latitude, lastKnownLocation.longitude)
+            } else {
+                onError("현재 위치를 가져오지 못했습니다.")
+            }
+        }
+    } catch (_: SecurityException) {
+        onError("위치 권한이 필요합니다.")
     }
 }
