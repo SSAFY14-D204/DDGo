@@ -136,6 +136,11 @@ public class AttemptService {
             throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 시도를 종료할 권한이 없습니다.");
         }
 
+        // 3-1. 상태 검증 (이미 종료된 시도인지 확인)
+        if (attempt.getAttemptStatus() == com.ssafy.DDGo.attempts.domain.AttemptStatus.DONE) {
+            throw new CustomException(ErrorCode.INVALID_ATTEMPT_STATUS, "이미 종료된 시도입니다.");
+        }
+
         // 4. 시도 종료 처리 (기본 정보)
         if (request.baseData() != null) {
             attempt.endAttempt(request.baseData().attemptResult(), request.baseData().durationMs(),

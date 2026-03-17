@@ -1,10 +1,13 @@
 package com.ssafy.DDGo.gyms.application;
 
+import com.ssafy.DDGo.global.exception.CustomException;
+import com.ssafy.DDGo.global.exception.ErrorCode;
 import com.ssafy.DDGo.gyms.dao.ClimbingGymGradeRepository;
 import com.ssafy.DDGo.gyms.dao.ClimbingGymRepository;
 import com.ssafy.DDGo.gyms.domain.ClimbingGym;
 import com.ssafy.DDGo.gyms.domain.ClimbingGymGrade;
 import com.ssafy.DDGo.gyms.dto.request.GymResolveRequest;
+import com.ssafy.DDGo.gyms.dto.response.GymGradesResponse;
 import com.ssafy.DDGo.gyms.dto.response.GymResolveResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,7 +78,9 @@ public class GymService {
                     request.getLatitude(),
                     request.getLongitude()
             );
-        } catch (IllegalArgumentException ignored) {}
+        } catch (IllegalArgumentException e) {
+            log.warn("암장 지도 정보 업데이트 중 잘못된 MapProvider: {}", request.getMapProvider());
+        }
     }
 
     private String normalizePlaceName(String placeName) {
@@ -165,5 +170,18 @@ public class GymService {
     @Transactional(readOnly = true)
     public List<ClimbingGymGrade> getGymGradesOptimized(Long gymId) {
         return gymGradeRepository.findByGymIdAndIsEnabledOrderBySortOrderAsc(gymId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public GymGradesResponse getGymGrades(Long gymId) {
+        ClimbingGym gym = gymRepository.findById(gymId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_INPUT_VALUE, "존재하지 않는 암장입니다."));
+
+        if (Boolean.FALSE.equals(gym.getIsActive())) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "비활성화된 암장입니다.");
+        }
+
+        List<ClimbingGymGrade> grades = getGymGradesOptimized(gymId);
+        return GymGradesResponse.of(gym, grades);
     }
 }

@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 공개 API 경로
                         .requestMatchers("/v1/users/register", "/v1/users/login", "/v1/users/refresh").permitAll()
+                        .requestMatchers("/v1/gyms/resolve").permitAll()
                         // Actuator (Health check)
                         .requestMatchers("/actuator/**", "/error").permitAll()
                         // Swagger UI

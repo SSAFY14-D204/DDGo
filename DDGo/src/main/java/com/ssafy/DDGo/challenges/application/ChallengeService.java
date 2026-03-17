@@ -110,9 +110,12 @@ public class ChallengeService {
                 User user = userRepository.findByUsername(username)
                                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
-                Challenge challenge = challengeRepository.findByIdAndUser(challengeId, user)
+                Challenge challenge = challengeRepository.findById(challengeId)
                                 .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND,
                                                 "챌린지를 찾을 수 없습니다."));
+                if (!challenge.getUser().getId().equals(user.getId())) {
+                        throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 챌린지에 대한 권한이 없습니다.");
+                }
 
                 if (challenge.getChallengeStatus() == ChallengeStatus.CLOSED) {
                         throw new CustomException(ErrorCode.CHALLENGE_ALREADY_CLOSED, "이미 종료된 챌린지입니다.");
@@ -153,9 +156,12 @@ public class ChallengeService {
                 User user = userRepository.findByUsername(username)
                                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
-                Challenge challenge = challengeRepository.findByIdAndUser(challengeId, user)
+                Challenge challenge = challengeRepository.findById(challengeId)
                                 .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND,
                                                 "챌린지를 찾을 수 없습니다."));
+                if (!challenge.getUser().getId().equals(user.getId())) {
+                        throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 챌린지에 대한 권한이 없습니다.");
+                }
 
                 try {
                         String holdsJsonStr = objectMapper.writeValueAsString(request.getHolds());
@@ -176,9 +182,12 @@ public class ChallengeService {
                 User user = userRepository.findByUsername(username)
                                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
-                Challenge challenge = challengeRepository.findByIdAndUser(challengeId, user)
+                Challenge challenge = challengeRepository.findById(challengeId)
                                 .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND,
                                                 "챌린지를 찾을 수 없습니다."));
+                if (!challenge.getUser().getId().equals(user.getId())) {
+                        throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 챌린지에 대한 권한이 없습니다.");
+                }
 
                 return ChallengeStatusResponse.from(challenge);
         }
@@ -188,9 +197,12 @@ public class ChallengeService {
                 User user = userRepository.findByUsername(username)
                                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
-                challengeRepository.findByIdAndUser(challengeId, user)
+                Challenge challenge = challengeRepository.findById(challengeId)
                                 .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND,
                                                 "챌린지를 찾을 수 없습니다."));
+                if (!challenge.getUser().getId().equals(user.getId())) {
+                        throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 챌린지에 대한 권한이 없습니다.");
+                }
 
                 return attemptMetricsRepository.findByChallengeIdOrderByAttemptNo(challengeId)
                                 .stream()
@@ -203,9 +215,12 @@ public class ChallengeService {
                 User user = userRepository.findByUsername(username)
                                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
-                challengeRepository.findByIdAndUser(challengeId, user)
+                Challenge challenge = challengeRepository.findById(challengeId)
                                 .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND,
                                                 "챌린지를 찾을 수 없습니다."));
+                if (!challenge.getUser().getId().equals(user.getId())) {
+                        throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 챌린지에 대한 권한이 없습니다.");
+                }
 
                 ChallengeSummary summary = challengeSummaryRepository.findByChallengeId(challengeId)
                                 .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_SUMMARY_NOT_FOUND,

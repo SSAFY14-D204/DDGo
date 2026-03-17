@@ -1,12 +1,7 @@
 package com.ssafy.DDGo.gyms.api;
 
 import com.ssafy.DDGo.global.common.ApiResponse;
-import com.ssafy.DDGo.global.exception.CustomException;
-import com.ssafy.DDGo.global.exception.ErrorCode;
 import com.ssafy.DDGo.gyms.application.GymService;
-import com.ssafy.DDGo.gyms.dao.ClimbingGymRepository;
-import com.ssafy.DDGo.gyms.domain.ClimbingGym;
-import com.ssafy.DDGo.gyms.domain.ClimbingGymGrade;
 import com.ssafy.DDGo.gyms.dto.request.GymResolveRequest;
 import com.ssafy.DDGo.gyms.dto.response.GymGradesResponse;
 import com.ssafy.DDGo.gyms.dto.response.GymResolveResponse;
@@ -18,8 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/v1/gyms")
 @RequiredArgsConstructor
@@ -27,7 +20,6 @@ import java.util.List;
 public class GymController {
 
     private final GymService gymService;
-    private final ClimbingGymRepository gymRepository;
 
     @PostMapping("/resolve")
     @Operation(summary = "암장 매칭 및 생성 (Resolve)", description = "지도에서 선택한 장소를 서버 DB의 암장과 매칭하거나, 없을 경우 새로 생성합니다.")
@@ -43,14 +35,7 @@ public class GymController {
     public ResponseEntity<ApiResponse<GymGradesResponse>> getGymGrades(
             @Parameter(description = "암장 ID") @PathVariable("gymId") Long gymId) {
 
-        ClimbingGym gym = gymRepository.findById(gymId)
-                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_INPUT_VALUE));
-
-        if (Boolean.FALSE.equals(gym.getIsActive())) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
-        }
-
-        List<ClimbingGymGrade> grades = gymService.getGymGradesOptimized(gymId);
-        return ResponseEntity.ok(ApiResponse.success(GymGradesResponse.of(gym, grades)));
+        GymGradesResponse response = gymService.getGymGrades(gymId);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
