@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import wseemann.media.FFmpegMediaMetadataRetriever
 import javax.inject.Inject
+import kotlin.math.sqrt
 
 /**
  * flow
@@ -86,8 +87,20 @@ class UploadViewModel @Inject constructor(
     var bestFrameBitmap by mutableStateOf<Bitmap?>(null)
         private set
 
-    /** HoldDetector가 탐지한 홀드 목록 */
+    /** YOLO가 탐지한 전체 홀드 (색상 필터링 전). 수동 추가 후보 풀로 사용 */
+    var allRawHolds by mutableStateOf<List<Hold>>(emptyList())
+        private set
+
+    /** 색상 필터링 + 수동 추가된 홀드 목록 (화면에 표시) */
     var detectedHolds by mutableStateOf<List<Hold>>(emptyList())
+        private set
+
+    /** 수동 추가 팝업에 표시할 후보 홀드 목록 */
+    var candidateHolds by mutableStateOf<List<Hold>>(emptyList())
+        private set
+
+    /** 수동 추가 팝업 표시 여부 */
+    var showCandidatePopup by mutableStateOf(false)
         private set
 
     // TODO: 홀드 데이터 형태에 맞춰 타입 변경 (예: 데이터 클래스)
@@ -300,6 +313,80 @@ class UploadViewModel @Inject constructor(
         selectedEndHoldInfo = info
     }
 
+    /**
+     * 터치 지점(정규화 좌표) 근처에서 후보 홀드를 탐색하여 팝업 상태를 업데이트합니다.
+     * Screen에서 화면 좌표 → 정규화 좌표로 변환 후 호출합니다.
+     *
+     * @param tapNormX 터치 x 좌표 (0~1, 이미지 정규화 좌표)
+     * @param tapNormY 터치 y 좌표 (0~1, 이미지 정규화 좌표)
+     */
+    fun findCandidatesNearTap(tapNormX: Float, tapNormY: Float) {
+        val candidates = findNearbyCandidates(tapNormX, tapNormY)
+        if (candidates.isNotEmpty()) {
+            candidateHolds = candidates
+            showCandidatePopup = true
+        }
+    }
+
+    /**
+     * 후보 팝업에서 홀드를 선택하여 detectedHolds에 추가하고 팝업을 닫습니다.
+     */
+    fun selectManualHold(hold: Hold) {
+        addManualHold(hold)
+        dismissCandidatePopup()
+    }
+
+    /** 후보 홀드 팝업을 닫습니다. */
+    fun dismissCandidatePopup() {
+        showCandidatePopup = false
+        candidateHolds = emptyList()
+    }
+
+    /**
+     * 수동으로 홀드를 detectedHolds에 추가합니다.
+     * allRawHolds에는 있지만 색상 필터링으로 누락된 홀드를 복구할 때 사용합니다.
+     */
+    private fun addManualHold(hold: Hold) {
+        val alreadyExists = detectedHolds.any { existing ->
+            existing.boundingBox == hold.boundingBox
+        }
+        if (!alreadyExists) {
+            detectedHolds = detectedHolds + hold
+            Log.d(TAG, "✅ 수동 홀드 추가: bbox=${hold.boundingBox}, color=${hold.colorLabel}")
+        }
+    }
+
+    /**
+     * 터치 지점 근처에서 현재 detectedHolds에 없는 후보 홀드를 필터링합니다.
+     *
+     * @param tapNormX 터치 x 좌표 (0~1)
+     * @param tapNormY 터치 y 좌표 (0~1)
+     * @param searchRadius 탐색 반경 (정규화 좌표 기준)
+     */
+    private fun findNearbyCandidates(
+        tapNormX: Float,
+        tapNormY: Float,
+        searchRadius: Float = 0.12f
+    ): List<Hold> {
+        val existingBoxes = detectedHolds.map { it.boundingBox }.toSet()
+        return allRawHolds
+            .filter { it.boundingBox !in existingBoxes }
+            .filter { hold ->
+                val cx = (hold.boundingBox.left + hold.boundingBox.right) / 2f
+                val cy = (hold.boundingBox.top + hold.boundingBox.bottom) / 2f
+                val dist = sqrt(
+                    (cx - tapNormX) * (cx - tapNormX) + (cy - tapNormY) * (cy - tapNormY)
+                )
+                dist <= searchRadius
+            }
+            .sortedBy { hold ->
+                val cx = (hold.boundingBox.left + hold.boundingBox.right) / 2f
+                val cy = (hold.boundingBox.top + hold.boundingBox.bottom) / 2f
+                sqrt((cx - tapNormX) * (cx - tapNormX) + (cy - tapNormY) * (cy - tapNormY))
+            }
+            .take(8)
+    }
+
     fun updateAnalysisPoints(points: List<AnalysisPoint>) {
         analysisPoints = points
     }
@@ -365,9 +452,12 @@ class UploadViewModel @Inject constructor(
                     val rawHolds = holdDetector.detectFromFrame(bitmap)
                     Log.d(TAG, "✅ [3/4] 홀드 탐지 완료: ${rawHolds.size}개")
 
-                    Log.d(TAG, "▶ [4/4] 색상 분류 시작 (목표 색: '$holdColor')")
+                    // 전체 홀드에 색상 분류 적용 (수동 추가 후보 풀용)
+                    val classifiedAll = rawHolds.map { holdColorClassifier.classifySingle(bitmap, it) }
+
+                    Log.d(TAG, "▶ [4/4] 색상 필터링 시작 (목표 색: '$holdColor')")
                     val holds = if (holdColor.isBlank()) {
-                        rawHolds.map { holdColorClassifier.classifySingle(bitmap, it) }
+                        classifiedAll
                     } else {
                         holdColorClassifier.classifyAndFilter(
                             bitmap          = bitmap,
@@ -378,11 +468,12 @@ class UploadViewModel @Inject constructor(
                     }
                     Log.d(TAG, "✅ [4/4] 색상 필터 완료: ${rawHolds.size}개 → ${holds.size}개")
 
-                    Pair(bitmap, holds)
+                    Triple(bitmap, classifiedAll, holds)
                 }
-            }.onSuccess { (bitmap, holds) ->
+            }.onSuccess { (bitmap, allHolds, filteredHolds) ->
                 bestFrameBitmap = bitmap
-                detectedHolds   = holds
+                allRawHolds     = allHolds
+                detectedHolds   = filteredHolds
                 _uiState.value  = UploadUiState.Success
             }.onFailure { e ->
                 Log.e(TAG, "❌ runHoldDetection 실패", e)
