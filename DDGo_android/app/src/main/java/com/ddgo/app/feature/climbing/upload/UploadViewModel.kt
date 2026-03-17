@@ -63,6 +63,13 @@ class UploadViewModel @Inject constructor(
     // --- 1. AttemptUploadScreen (초기 영상 업로드) ---
     var videoUri by mutableStateOf<String?>(null)
         private set
+        
+    var additionalVideoUris by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    // 전체 시도 영상 (초기 + 추가 영상 리스트)
+    val allAttemptUris: List<String>
+        get() = listOfNotNull(videoUri) + additionalVideoUris
 
     // 썸네일 / 메타데이터 (PersonDetector 방식으로 추출 → 다음 화면에서 활용)
     var thumbnail by mutableStateOf<Bitmap?>(null)
@@ -113,6 +120,16 @@ class UploadViewModel @Inject constructor(
         private set
 
     // --- 4. AttemptResultScreen (포즈 오버레이 + 분석 타임라인) ---
+    
+    // N차 시도를 추적하는 인덱스 (0이 1차 시도)
+    var currentAttemptIndex by mutableStateOf(0)
+        private set
+        
+    fun nextAttempt() {
+        if (currentAttemptIndex < allAttemptUris.size - 1) {
+            currentAttemptIndex++
+        }
+    }
 
     /** 현재 재생 프레임의 MediaPipe 33 랜드마크 (실시간 업데이트) */
     var currentPoseLandmarks by mutableStateOf<List<PoseLandmark>>(emptyList())
@@ -130,10 +147,26 @@ class UploadViewModel @Inject constructor(
         )
     )
         private set
+        
+    // (임시) N차 시도별로 다른 결과를 보여주기 위한 더미 데이터 모델 확장
+    // 백엔드 연동 시 AnalysisResult 등을 리스트 형태로 관리
+    val attemptDummyResults = listOf(
+        Pair(false, listOf(
+            AnalysisPoint(1, 21_000L, "2지점 상태가 길었어요"),
+            AnalysisPoint(2, 48_000L, "오른쪽 팔에 과도한\n무게가 실렸어요"),
+            AnalysisPoint(3, 66_000L, "무게 이동이 늦어졌어요")
+        )),
+        Pair(true, listOf( // 성공 케이스
+            AnalysisPoint(1, 15_000L, "안정적인 스타트 구간입니다"),
+            AnalysisPoint(2, 35_000L, "크럭스 지점을 잘 통과했어요"),
+            AnalysisPoint(3, 50_000L, "완등 지점")
+        ))
+    )
 
     // --- 5. AttemptUploadScreen (추가 영상 업로드) ---
-    var additionalVideoUri by mutableStateOf<String?>(null)
-        private set
+    fun updateAdditionalVideoUris(uris: List<String>) {
+        additionalVideoUris = uris
+    }
 
     // ====== 상태 업데이트 메서드 (이벤트 핸들러) ======
 
@@ -407,9 +440,7 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    fun updateAdditionalVideoUri(uri: String) {
-        additionalVideoUri = uri
-    }
+    // (기존 단일 추가 URI 메서드는 삭제하고 updateAdditionalVideoUris 사용)
 
     // ====== 비즈니스 로직 ======
 

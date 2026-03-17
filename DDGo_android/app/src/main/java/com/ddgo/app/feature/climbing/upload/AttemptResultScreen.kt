@@ -108,19 +108,31 @@ fun AttemptResultScreen(
     val scrollState   = rememberScrollState()
     val cardListState = rememberLazyListState()
 
-    val poseLandmarks  = viewModel.currentPoseLandmarks
-    val analysisPoints = viewModel.analysisPoints
-    val videoUri       = viewModel.videoUri
+    val currentAttemptIndex = viewModel.currentAttemptIndex
+    val allAttemptUris = viewModel.allAttemptUris
+    val currentVideoUri = allAttemptUris.getOrNull(currentAttemptIndex)
 
-    // ── ExoPlayer 초기화 ─────────────────────────────────────────────────────
+    // (임시) 현재 시도의 더미 분석 결과 가져오기
+    // 실제 연동 시에는 서버에서 받아온 List<AttemptAnalysis> 에서 currentAttemptIndex로 조회
+    val dummyResult = viewModel.attemptDummyResults.getOrElse(currentAttemptIndex % viewModel.attemptDummyResults.size) { viewModel.attemptDummyResults.first() }
+    val isSuccess = dummyResult.first
+    val currentAnalysisPoints = dummyResult.second
+    val poseLandmarks = viewModel.currentPoseLandmarks
+
+    // ── ExoPlayer 초기화 (URL 변경 시 재초기화 하거나 setMediaItem 교체) ──────────
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            videoUri?.let { uri ->
-                setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
-                prepare()
-            }
+        ExoPlayer.Builder(context).build()
+    }
+    
+    // URI가 바뀔 때마다 플레이어 아이템 교체
+    LaunchedEffect(currentVideoUri) {
+        currentVideoUri?.let { uri ->
+            exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
         }
     }
+
     val textureViewRef = remember { mutableStateOf<TextureView?>(null) }
 
     DisposableEffect(Unit) { onDispose { exoPlayer.release() } }
@@ -130,7 +142,7 @@ fun AttemptResultScreen(
     var durationMs        by remember { mutableStateOf(1L) }
     var isPlaying         by remember { mutableStateOf(false) }
 
-    LaunchedEffect(exoPlayer) {
+    LaunchedEffect(exoPlayer, currentVideoUri) {
         while (isActive) {
             currentPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
             durationMs        = exoPlayer.duration.coerceAtLeast(1L)
@@ -153,9 +165,9 @@ fun AttemptResultScreen(
     }
 
     // ── 현재 위치에서 활성 분석 포인트 인덱스 (0-based) ─────────────────────
-    val activeIdx by remember {
+    val activeIdx by remember(currentAnalysisPoints, currentPositionMs) {
         derivedStateOf {
-            analysisPoints.indexOfLast { it.timeMs <= currentPositionMs }
+            currentAnalysisPoints.indexOfLast { it.timeMs <= currentPositionMs }
         }
     }
 
@@ -180,6 +192,30 @@ fun AttemptResultScreen(
 
             // 헤더
             HeaderSection(viewModel)
+
+            // N차 시도 및 성공/실패 여부 UI
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${currentAttemptIndex + 1}차 시도",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                val statusText = if (isSuccess) "성공" else "실패"
+                val statusColor = if (isSuccess) Color(0xFF4CAF50) else Color(0xFFE53935)
+                Text(
+                    text = statusText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = statusColor
+                )
+            }
 
             // 비디오 + 포즈 오버레이
             Box(
@@ -230,15 +266,16 @@ fun AttemptResultScreen(
             VideoScrubber(
                 currentPositionMs = currentPositionMs,
                 durationMs        = durationMs,
-                analysisPoints    = analysisPoints,
+                analysisPoints    = currentAnalysisPoints,
                 activeIdx         = activeIdx,
                 onSeek            = { ms -> exoPlayer.seekTo(ms); exoPlayer.play() }
             )
             Spacer(Modifier.height(20.dp))
 
             // 분석 섹션 헤더
+            val resultTitle = if (isSuccess) "성공 분석 및 타임라인" else "실패 원인 분석"
             Text(
-                text       = "실패 원인 분석",
+                text       = resultTitle,
                 fontSize   = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color      = Color.White,
@@ -259,7 +296,7 @@ fun AttemptResultScreen(
                 contentPadding        = PaddingValues(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(analysisPoints) { idx, point ->
+                itemsIndexed(currentAnalysisPoints) { idx, point ->
                     AnimatedVisibility(
                         visible = true,
                         enter   = fadeIn(tween(400, delayMillis = idx * 120)) +
@@ -275,7 +312,7 @@ fun AttemptResultScreen(
             }
         }
 
-        // ── 하단 고정 버튼 ────────────────────────────────────────────────────
+        // ── 하단 고정 버튼 (다음 시도 보기 or 완료) ───────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -287,16 +324,26 @@ fun AttemptResultScreen(
                 )
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
+            val isLastAttempt = currentAttemptIndex >= allAttemptUris.size - 1
             Button(
-                onClick  = onNavigateToCompare,
+                onClick  = {
+                    if (isLastAttempt) {
+                        // TODO: 전체 서머리로 이동하거나 메인으로 이동
+                        onNavigateToCompare()
+                    } else {
+                        viewModel.nextAttempt()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
                 shape  = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = C_ACCENT)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isLastAttempt) Color(0xFF673AB7) else Color(0xFF03A9F4) // 보라색 / 파란색
+                )
             ) {
                 Text(
-                    text       = "다음 시도들과 비교분석 하기",
+                    text       = if (isLastAttempt) "최종 분석 결과 보기" else "다음 시도 보기",
                     fontSize   = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color      = Color.White
