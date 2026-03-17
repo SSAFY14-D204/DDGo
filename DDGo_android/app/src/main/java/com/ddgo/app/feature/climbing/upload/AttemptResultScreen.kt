@@ -51,15 +51,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.PoseLandmark
@@ -69,13 +73,11 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas as FCanvas
 import java.time.LocalDate
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 // ── MediaPipe Pose 연결선 (COCO 33 랜드마크) ─────────────────────────────────
 private val POSE_CONNECTIONS = listOf(
-    // 얼굴
-    0 to 1,  1 to 2,  2 to 3,  3 to 7,
-    0 to 4,  4 to 5,  5 to 6,  6 to 8,
-    9 to 10,
     // 몸통
     11 to 12, 11 to 23, 12 to 24, 23 to 24,
     // 왼팔
@@ -123,6 +125,17 @@ fun AttemptResultScreen(
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build()
     }
+    var playerVideoSize by remember(currentVideoUri) { mutableStateOf(VideoSize.UNKNOWN) }
+    var videoContainerSize by remember { mutableStateOf(IntSize.Zero) }
+    val videoAspectRatio = remember(playerVideoSize) {
+        resolveDisplayedVideoAspectRatio(playerVideoSize)
+    }
+    val videoContentRect = remember(videoContainerSize, playerVideoSize) {
+        calculateVideoContentRect(
+            containerSize = videoContainerSize,
+            videoSize = playerVideoSize
+        )
+    }
     
     // URI가 바뀔 때마다 플레이어 아이템 교체
     LaunchedEffect(currentVideoUri) {
@@ -130,12 +143,25 @@ fun AttemptResultScreen(
             exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
             exoPlayer.prepare()
             exoPlayer.playWhenReady = true
+            playerVideoSize = exoPlayer.videoSize
         }
     }
 
     val textureViewRef = remember { mutableStateOf<TextureView?>(null) }
 
-    DisposableEffect(Unit) { onDispose { exoPlayer.release() } }
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                playerVideoSize = videoSize
+            }
+        }
+
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
+    }
 
     // ── 재생 위치 추적 (200ms 간격) ──────────────────────────────────────────
     var currentPositionMs by remember { mutableStateOf(0L) }
@@ -152,12 +178,12 @@ fun AttemptResultScreen(
     }
 
     // ── 실시간 포즈 추론 (150ms 간격, 재생 중에만) ───────────────────────────
-    LaunchedEffect(exoPlayer) {
+    LaunchedEffect(exoPlayer, videoContentRect) {
         while (isActive) {
             delay(150L)
             if (exoPlayer.isPlaying) {
                 val bmp: Bitmap? = try {
-                    textureViewRef.value?.getBitmap(320, 180)  // 다운샘플 → 빠른 추론
+                    textureViewRef.value?.capturePoseBitmap(videoContentRect)
                 } catch (_: Exception) { null }
                 bmp?.let { viewModel.updatePoseFrame(it) }
             }
@@ -221,7 +247,8 @@ fun AttemptResultScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(9f / 16f)  // 세로 영상 (클라이밍 촬영 기준)
+                    .aspectRatio(videoAspectRatio)
+                    .onSizeChanged { videoContainerSize = it }
             ) {
                 // ExoPlayer → TextureView
                 AndroidView(
@@ -238,7 +265,10 @@ fun AttemptResultScreen(
                 // MediaPipe 포즈 스켈레톤 오버레이
                 FCanvas(modifier = Modifier.fillMaxSize()) {
                     if (poseLandmarks.size == 33) {
-                        drawPoseSkeleton(poseLandmarks)
+                        drawPoseSkeleton(
+                            landmarks = poseLandmarks,
+                            contentRect = videoContentRect
+                        )
                     }
                 }
 
@@ -540,21 +570,49 @@ private fun AnalysisCard(
 
 // ── DrawScope 헬퍼: 포즈 스켈레톤 ────────────────────────────────────────────
 
-private fun DrawScope.drawPoseSkeleton(landmarks: List<PoseLandmark>) {
+private fun DrawScope.drawPoseSkeleton(
+    landmarks: List<PoseLandmark>,
+    contentRect: VideoContentRect
+) {
+    val drawArea = if (contentRect.width > 0f && contentRect.height > 0f) {
+        contentRect
+    } else {
+        VideoContentRect(
+            left = 0f,
+            top = 0f,
+            width = size.width,
+            height = size.height
+        )
+    }
+
     // 연결선 (뼈)
     POSE_CONNECTIONS.forEach { (si, ei) ->
         if (si < landmarks.size && ei < landmarks.size) {
             drawLine(
                 color       = C_BONE,
-                start       = Offset(landmarks[si].x * size.width, landmarks[si].y * size.height),
-                end         = Offset(landmarks[ei].x * size.width, landmarks[ei].y * size.height),
+                start       = Offset(
+                    x = drawArea.left + (landmarks[si].x.coerceIn(0f, 1f) * drawArea.width),
+                    y = drawArea.top + (landmarks[si].y.coerceIn(0f, 1f) * drawArea.height)
+                ),
+                end         = Offset(
+                    x = drawArea.left + (landmarks[ei].x.coerceIn(0f, 1f) * drawArea.width),
+                    y = drawArea.top + (landmarks[ei].y.coerceIn(0f, 1f) * drawArea.height)
+                ),
                 strokeWidth = 2.5.dp.toPx()
             )
         }
     }
     // 관절 점
     landmarks.forEach { lm ->
-        drawCircle(C_JOINT, 3.5.dp.toPx(), Offset(lm.x * size.width, lm.y * size.height))
+        if (lm.index in HIDDEN_FACE_LANDMARK_INDICES) return@forEach
+        drawCircle(
+            color = C_JOINT,
+            radius = 3.5.dp.toPx(),
+            center = Offset(
+                x = drawArea.left + (lm.x.coerceIn(0f, 1f) * drawArea.width),
+                y = drawArea.top + (lm.y.coerceIn(0f, 1f) * drawArea.height)
+            )
+        )
     }
 }
 
@@ -562,3 +620,122 @@ private fun DrawScope.drawPoseSkeleton(landmarks: List<PoseLandmark>) {
 
 private fun Long.toTimeString() =
     "%02d:%02d".format(this / 60_000L, (this / 1_000L) % 60L)
+
+private fun TextureView.capturePoseBitmap(contentRect: VideoContentRect): Bitmap? {
+    if (!isAvailable || width <= 0 || height <= 0) return null
+
+    val longestSide = max(width, height)
+    val scale = (MAX_POSE_CAPTURE_DIMENSION_PX.toFloat() / longestSide.toFloat()).coerceAtMost(1f)
+    val captureWidth = (width * scale).roundToInt().coerceAtLeast(1)
+    val captureHeight = (height * scale).roundToInt().coerceAtLeast(1)
+    val capturedBitmap = getBitmap(captureWidth, captureHeight) ?: return null
+
+    if (contentRect.width <= 0f || contentRect.height <= 0f) {
+        return capturedBitmap
+    }
+
+    val scaleX = captureWidth / width.toFloat()
+    val scaleY = captureHeight / height.toFloat()
+    val cropLeft = (contentRect.left * scaleX).roundToInt().coerceIn(0, captureWidth - 1)
+    val cropTop = (contentRect.top * scaleY).roundToInt().coerceIn(0, captureHeight - 1)
+    val cropWidth = (contentRect.width * scaleX).roundToInt()
+        .coerceAtLeast(1)
+        .coerceAtMost(captureWidth - cropLeft)
+    val cropHeight = (contentRect.height * scaleY).roundToInt()
+        .coerceAtLeast(1)
+        .coerceAtMost(captureHeight - cropTop)
+
+    val shouldCrop = cropLeft > 0 ||
+        cropTop > 0 ||
+        cropWidth < captureWidth ||
+        cropHeight < captureHeight
+    if (!shouldCrop) {
+        return capturedBitmap
+    }
+
+    return Bitmap.createBitmap(
+        capturedBitmap,
+        cropLeft,
+        cropTop,
+        cropWidth,
+        cropHeight
+    ).also {
+        capturedBitmap.recycle()
+    }
+}
+
+private fun resolveDisplayedVideoAspectRatio(videoSize: VideoSize): Float {
+    if (videoSize.width <= 0 || videoSize.height <= 0) {
+        return DEFAULT_VIDEO_ASPECT_RATIO
+    }
+
+    val sourceWidth = videoSize.width * videoSize.pixelWidthHeightRatio
+    val sourceHeight = videoSize.height.toFloat()
+    val isRotated = videoSize.unappliedRotationDegrees % 180 != 0
+    val displayedWidth = if (isRotated) sourceHeight else sourceWidth
+    val displayedHeight = if (isRotated) sourceWidth else sourceHeight
+    if (displayedWidth <= 0f || displayedHeight <= 0f) {
+        return DEFAULT_VIDEO_ASPECT_RATIO
+    }
+
+    return displayedWidth / displayedHeight
+}
+
+private fun calculateVideoContentRect(
+    containerSize: IntSize,
+    videoSize: VideoSize
+): VideoContentRect {
+    val containerWidth = containerSize.width.toFloat()
+    val containerHeight = containerSize.height.toFloat()
+    if (containerWidth <= 0f || containerHeight <= 0f) {
+        return VideoContentRect(0f, 0f, 0f, 0f)
+    }
+
+    if (videoSize.width <= 0 || videoSize.height <= 0) {
+        return VideoContentRect(0f, 0f, containerWidth, containerHeight)
+    }
+
+    val sourceWidth = videoSize.width * videoSize.pixelWidthHeightRatio
+    val sourceHeight = videoSize.height.toFloat()
+    val isRotated = videoSize.unappliedRotationDegrees % 180 != 0
+    val displayedWidth = if (isRotated) sourceHeight else sourceWidth
+    val displayedHeight = if (isRotated) sourceWidth else sourceHeight
+    if (displayedWidth <= 0f || displayedHeight <= 0f) {
+        return VideoContentRect(0f, 0f, containerWidth, containerHeight)
+    }
+
+    val videoAspectRatio = displayedWidth / displayedHeight
+    val containerAspectRatio = containerWidth / containerHeight
+
+    return if (containerAspectRatio > videoAspectRatio) {
+        val fittedHeight = containerHeight
+        val fittedWidth = fittedHeight * videoAspectRatio
+        VideoContentRect(
+            left = (containerWidth - fittedWidth) / 2f,
+            top = 0f,
+            width = fittedWidth,
+            height = fittedHeight
+        )
+    } else {
+        val fittedWidth = containerWidth
+        val fittedHeight = fittedWidth / videoAspectRatio
+        VideoContentRect(
+            left = 0f,
+            top = (containerHeight - fittedHeight) / 2f,
+            width = fittedWidth,
+            height = fittedHeight
+        )
+    }
+}
+
+private data class VideoContentRect(
+    val left: Float,
+    val top: Float,
+    val width: Float,
+    val height: Float
+)
+
+private val HIDDEN_FACE_LANDMARK_INDICES = (1..10).toSet()
+
+private const val DEFAULT_VIDEO_ASPECT_RATIO = 9f / 16f
+private const val MAX_POSE_CAPTURE_DIMENSION_PX = 720

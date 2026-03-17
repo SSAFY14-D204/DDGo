@@ -3,6 +3,7 @@ package com.ddgo.app.feature.debug
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.usecase.LogoutUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.FileNotFoundException
@@ -78,6 +79,18 @@ data class DebugPoseUiState(
     val isAnalyzing: Boolean = false,
     val isLoggingOut: Boolean = false,
     val logoutSuccess: Boolean = false,
-    val poseFrames: List<com.ddgo.app.domain.model.Pose> = emptyList(),
+    val poseFrames: List<DebugPoseFrameResult> = emptyList(),
     val errorMessage: String? = null
+)
+
+data class DebugPoseFrameResult(
+    val pose: Pose,
+    val worldLandmarks: List<DebugPoseWorldLandmark>
+)
+
+data class DebugPoseWorldLandmark(
+    val index: Int,
+    val x: Float,
+    val y: Float,
+    val z: Float
 )

@@ -591,10 +591,16 @@ class UploadViewModel @Inject constructor(
      */
     fun updatePoseFrame(bitmap: Bitmap) {
         viewModelScope.launch(Dispatchers.Default) {
-            val landmarks = poseEstimator.estimateFromFrame(bitmap)
-            if (landmarks.isNotEmpty()) {
-                withContext(Dispatchers.Main) {
-                    currentPoseLandmarks = landmarks
+            try {
+                val landmarks = poseEstimator.estimateFromFrame(bitmap)
+                if (landmarks.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        currentPoseLandmarks = landmarks
+                    }
+                }
+            } finally {
+                if (!bitmap.isRecycled) {
+                    bitmap.recycle()
                 }
             }
         }
