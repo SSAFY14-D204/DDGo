@@ -1,5 +1,7 @@
 package com.ddgo.app.core.network
 
+import android.util.Log
+import com.ddgo.app.BuildConfig
 import com.ddgo.app.core.datastore.TokenDataStore
 import com.ddgo.app.data.remote.auth.AuthApi
 import com.ddgo.app.data.remote.auth.RefreshTokenRequestDto
@@ -11,6 +13,8 @@ import okhttp3.Response
 import okhttp3.Route
 import javax.inject.Inject
 import javax.inject.Named
+
+private const val TAG = "TokenAuthenticator"
 
 /**
  * 401 Unauthorized 응답을 받았을 때 자동으로 토큰을 재발급하는 OkHttp Authenticator.
@@ -33,10 +37,29 @@ class TokenAuthenticator @Inject constructor(
 ) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "authenticate: code=${response.code}, path=${response.request.url.encodedPath}"
+            )
+        }
+
         // 연속 재시도 방지: 이미 한 번 재시도한 경우 포기
-        if (response.priorResponse?.code == 401) return null
+        if (response.priorResponse?.code == 401) {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "authenticate: prior 401 exists, skip retry")
+            }
+            return null
+        }
 
         val refreshToken = runBlocking { tokenDataStore.refreshToken.first() }
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "authenticate: hasRefreshToken=${!refreshToken.isNullOrEmpty()}, " +
+                    "refreshTokenLength=${refreshToken?.length ?: 0}"
+            )
+        }
 
         // RefreshToken 없으면 로그인 화면으로 보내야 함 (재시도 없음)
         if (refreshToken.isNullOrEmpty()) return null
@@ -44,6 +67,13 @@ class TokenAuthenticator @Inject constructor(
         return runBlocking {
             try {
                 val refreshResponse = authApi.refresh(RefreshTokenRequestDto(refreshToken))
+                if (BuildConfig.DEBUG) {
+                    Log.d(
+                        TAG,
+                        "authenticate: refresh success=${refreshResponse.success}, " +
+                            "hasData=${refreshResponse.data != null}"
+                    )
+                }
 
                 if (refreshResponse.success && refreshResponse.data != null) {
                     // 새 토큰 저장
@@ -57,11 +87,17 @@ class TokenAuthenticator @Inject constructor(
                         .build()
                 } else {
                     // 리프레시 실패 → 강제 로그아웃 처리
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "authenticate: refresh failed, clear tokens")
+                    }
                     tokenDataStore.clearTokens()
                     null
                 }
             } catch (e: Exception) {
                 // 네트워크 오류 등 예외 발생 → 강제 로그아웃 처리
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "authenticate: refresh exception", e)
+                }
                 tokenDataStore.clearTokens()
                 null
             }

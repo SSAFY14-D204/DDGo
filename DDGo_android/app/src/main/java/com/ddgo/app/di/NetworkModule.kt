@@ -132,6 +132,43 @@ object NetworkModule {
         return retrofit.create(com.ddgo.app.data.remote.upload.UploadApi::class.java)
     }
 
+    @Provides
+    @Singleton
+    fun provideChallengeApi(
+        retrofit: Retrofit
+    ): com.ddgo.app.data.remote.challenge.ChallengeApi {
+        return retrofit.create(com.ddgo.app.data.remote.challenge.ChallengeApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAttemptApi(
+        retrofit: Retrofit
+    ): com.ddgo.app.data.remote.attempt.AttemptApi {
+        return retrofit.create(com.ddgo.app.data.remote.attempt.AttemptApi::class.java)
+    }
+
+    /**
+     * presigned 직접 업로드 전용 순수 OkHttpClient를 제공합니다.
+     *
+     * 규칙:
+     * - presigned URL 업로드에는 인증 헤더가 섞이면 안 됩니다.
+     * - 그래서 이 클라이언트는 AuthInterceptor와 TokenAuthenticator를 의도적으로 제외합니다.
+     */
+    @Provides
+    @Singleton
+    @Named("DirectUploadOkHttpClient")
+    fun provideDirectUploadOkHttpClient(): OkHttpClient {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC
+            else HttpLoggingInterceptor.Level.NONE
+        }
+
+        return OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .build()
+    }
+
     /**
      * Kakao Local API 전용 OkHttpClient를 제공합니다.
      *

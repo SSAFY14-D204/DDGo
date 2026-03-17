@@ -14,17 +14,24 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.domain.model.ChallengeHoldCoordinate
+import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.PoseLandmark
 import com.ddgo.app.domain.model.ResolvedGym
+import com.ddgo.app.domain.model.SavedChallengeHolds
+import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.data.ml.color.HoldColorClassifier
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
+import com.ddgo.app.domain.usecase.CreateChallengeUseCase
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
+import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
+import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import wseemann.media.FFmpegMediaMetadataRetriever
 import javax.inject.Inject
+import java.time.LocalDateTime
 import kotlin.math.sqrt
 
 /**
@@ -60,7 +68,10 @@ class UploadViewModel @Inject constructor(
     private val poseEstimator: PoseEstimator,
     private val holdColorClassifier: HoldColorClassifier,
     private val searchNearbyClimbingGymsUseCase: SearchNearbyClimbingGymsUseCase,
-    private val resolveGymUseCase: ResolveGymUseCase
+    private val resolveGymUseCase: ResolveGymUseCase,
+    private val createChallengeUseCase: CreateChallengeUseCase,
+    private val saveChallengeHoldsUseCase: SaveChallengeHoldsUseCase,
+    private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase
 ) : ViewModel() {
 
     // UI 레이어에 노출할 상태 (로딩, 성공, 실패 등)
@@ -95,6 +106,26 @@ class UploadViewModel @Inject constructor(
         private set
     var holdColor by mutableStateOf("")
         private set
+    var selectedGymGradeId by mutableStateOf<Long?>(null)
+        private set
+    var selectedGymGrade by mutableStateOf<GymGrade?>(null)
+        private set
+    var createdChallenge by mutableStateOf<ChallengeSession?>(null)
+        private set
+    var challengeId by mutableStateOf<Long?>(null)
+        private set
+    var savedChallengeHolds by mutableStateOf<SavedChallengeHolds?>(null)
+        private set
+    var uploadedAttemptVideos by mutableStateOf<List<UploadedAttemptVideo>>(emptyList())
+        private set
+
+    private val _challengeCreationUiState =
+        MutableStateFlow<ChallengeCreationUiState>(ChallengeCreationUiState.Idle)
+    val challengeCreationUiState = _challengeCreationUiState.asStateFlow()
+
+    private val _uploadSubmissionUiState =
+        MutableStateFlow<UploadSubmissionUiState>(UploadSubmissionUiState.Idle)
+    val uploadSubmissionUiState = _uploadSubmissionUiState.asStateFlow()
 
     /**
      * 주변 암장 검색 UI 상태.
@@ -388,6 +419,34 @@ class UploadViewModel @Inject constructor(
     fun updateGymInfo(id: Int, name: String) {
         gymId = id
         gymName = name
+        clearChallengeFlowState()
+    }
+
+    /**
+     * resolve API가 복구되기 전까지 암장 선택 후 다음 단계로 진행하기 위한 임시 처리입니다.
+     *
+     * 역할:
+     * - 사용자가 고른 장소를 현재 암장으로 저장합니다.
+     * - Step 2가 비어 보이지 않도록 임시 난이도 세트를 채웁니다.
+     *
+     * 주의:
+     * - 서버 resolve 결과가 아니므로 gymId는 임시값을 사용합니다.
+     * - 실제 challenge 생성은 별도 복구가 필요합니다.
+     */
+    fun selectNearbyPlaceForNextStep(place: NearbyPlace) {
+        selectedNearbyPlace = place
+        resolvedGym = null
+        resolvedGymGrades = TEMPORARY_FALLBACK_GYM_GRADES
+        gymId = 0
+        gymName = place.placeName
+        clearChallengeFlowState()
+        _gymResolveUiState.value = GymResolveUiState.Idle
+
+        Log.d(
+            TAG,
+            "selectNearbyPlaceForNextStep: placeName=${place.placeName}, " +
+                "externalPlaceId=${place.externalPlaceId}, gradeCount=${resolvedGymGrades.size}"
+        )
     }
 
     /**
@@ -410,6 +469,7 @@ class UploadViewModel @Inject constructor(
         resolvedGymGrades = emptyList()
         gymId = null
         gymName = ""
+        clearChallengeFlowState()
         _gymResolveUiState.value = GymResolveUiState.Idle
 
         viewModelScope.launch {
@@ -468,6 +528,7 @@ class UploadViewModel @Inject constructor(
                     resolvedGymGrades = resolved.grades
                     gymId = resolved.gymId
                     gymName = resolved.gym.displayName
+                    clearChallengeFlowState()
                     Log.d(
                         TAG,
                         "resolveSelectedPlace: success, gymId=${resolved.gymId}, " +
@@ -482,6 +543,7 @@ class UploadViewModel @Inject constructor(
                     resolvedGymGrades = emptyList()
                     gymId = null
                     gymName = ""
+                    clearChallengeFlowState()
                     Log.e(TAG, "resolveSelectedPlace: failed", throwable)
                     _gymResolveUiState.value = GymResolveUiState.Error(
                         throwable.message ?: "Failed to resolve gym."
@@ -504,6 +566,88 @@ class UploadViewModel @Inject constructor(
 
     fun updateSelectedEndHoldInfo(info: String) {
         selectedEndHoldInfo = info
+    }
+
+    /**
+     * resolve된 암장 난이도 목록에서 사용자가 선택한 gym grade를 저장합니다.
+     *
+     * 규칙:
+     * - 이제 사용자는 하드코딩된 로컬 난이도가 아니라 실제 gymGradeId를 선택합니다.
+     * - 선택된 grade는 홀드 감지 시 사용할 색상 필터에도 반영됩니다.
+     */
+    fun selectGymGrade(grade: GymGrade) {
+        selectedGymGrade = grade
+        selectedGymGradeId = grade.gymGradeId.toLong()
+        difficultyLevel = grade.gradeLabel ?: grade.colorName
+        holdColor = mapGymColorNameToClassifierColor(grade.colorName)
+        clearCreatedChallengeOnly()
+    }
+
+    /** 현재 선택된 암장과 난이도로 챌린지를 생성합니다. */
+    fun createChallengeFromSelection() {
+        val currentGymId = gymId?.toLong()
+        val currentGymGradeId = selectedGymGradeId
+
+        if (currentGymId == null || currentGymId <= 0L) {
+            _challengeCreationUiState.value =
+                ChallengeCreationUiState.Error("암장 선택이 필요합니다.")
+            return
+        }
+
+        if (currentGymGradeId == null || currentGymGradeId <= 0L) {
+            _challengeCreationUiState.value =
+                ChallengeCreationUiState.Error("난이도 선택이 필요합니다.")
+            return
+        }
+
+        val existingChallenge = createdChallenge
+        if (
+            existingChallenge != null &&
+            existingChallenge.gymId == currentGymId &&
+            existingChallenge.gymGradeId == currentGymGradeId
+        ) {
+            challengeId = existingChallenge.challengeId
+            _challengeCreationUiState.value = ChallengeCreationUiState.Success(existingChallenge)
+            return
+        }
+
+        viewModelScope.launch {
+            _challengeCreationUiState.value = ChallengeCreationUiState.Loading
+
+            createChallengeUseCase(
+                gymId = currentGymId,
+                gymGradeId = currentGymGradeId,
+                startedAt = LocalDateTime.now().toString()
+            )
+                .onSuccess { challenge ->
+                    createdChallenge = challenge
+                    challengeId = challenge.challengeId
+                    difficultyLevel = challenge.gradeLabel ?: (selectedGymGrade?.gradeLabel ?: challenge.problemColor)
+                    holdColor = mapGymColorNameToClassifierColor(challenge.problemColor)
+                    _challengeCreationUiState.value = ChallengeCreationUiState.Success(challenge)
+                    Log.d(
+                        TAG,
+                        "createChallengeFromSelection: success, challengeId=${challenge.challengeId}, " +
+                            "gymId=${challenge.gymId}, gymGradeId=${challenge.gymGradeId}, " +
+                            "problemColor=${challenge.problemColor}"
+                    )
+                }
+                .onFailure { throwable ->
+                    createdChallenge = null
+                    challengeId = null
+                    Log.e(TAG, "createChallengeFromSelection: failed", throwable)
+                    _challengeCreationUiState.value = ChallengeCreationUiState.Error(
+                        throwable.message ?: "Failed to create challenge."
+                    )
+                }
+        }
+    }
+
+    /** 화면 이동이 한 번만 일어나도록 챌린지 생성 성공 상태를 소비합니다. */
+    fun consumeChallengeCreationResult() {
+        if (_challengeCreationUiState.value is ChallengeCreationUiState.Success) {
+            _challengeCreationUiState.value = ChallengeCreationUiState.Idle
+        }
     }
 
     /**
@@ -694,19 +838,142 @@ class UploadViewModel @Inject constructor(
      * 최종 챌린지 또는 영상을 서버에 제출합니다.
      */
     fun submitUpload() {
+        if (_uploadSubmissionUiState.value is UploadSubmissionUiState.Loading) {
+            return
+        }
+
+        val currentChallengeId = challengeId
+        if (currentChallengeId == null || currentChallengeId <= 0L) {
+            Log.d(TAG, "submitUpload: challenge가 없어 업로드를 건너뛰고 다음 단계로 진행합니다.")
+            uploadedAttemptVideos = emptyList()
+            currentAttemptIndex = 0
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(emptyList())
+            return
+        }
+
+        val currentBitmap = bestFrameBitmap
+        if (currentBitmap == null) {
+            _uploadSubmissionUiState.value =
+                UploadSubmissionUiState.Error("홀드 기준 이미지가 없습니다.")
+            return
+        }
+
+        if (detectedHolds.isEmpty()) {
+            _uploadSubmissionUiState.value =
+                UploadSubmissionUiState.Error("저장할 홀드가 없습니다.")
+            return
+        }
+
+        if (allAttemptUris.isEmpty()) {
+            _uploadSubmissionUiState.value =
+                UploadSubmissionUiState.Error("업로드할 영상이 없습니다.")
+            return
+        }
+
         viewModelScope.launch {
-            _uiState.value = UploadUiState.Loading
-            try {
-                // TODO: API 호출 등 비즈니스 로직 연동
-                // _uiState.value = UploadUiState.Success
-            } catch (e: Exception) {
-                _uiState.value = UploadUiState.Error(e.message ?: "알 수 없는 에러가 발생했습니다.")
+            val holdCoordinates = buildChallengeHoldCoordinates(
+                imageWidth = currentBitmap.width,
+                imageHeight = currentBitmap.height
+            )
+
+            _uploadSubmissionUiState.value =
+                UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있습니다.")
+
+            saveChallengeHoldsUseCase(
+                challengeId = currentChallengeId,
+                holds = holdCoordinates
+            )
+                .onSuccess { saved ->
+                    savedChallengeHolds = saved
+                    Log.d(
+                        TAG,
+                        "submitUpload: holds saved, challengeId=${saved.challengeId}, holdCount=${saved.holdCount}"
+                    )
+                }
+                .onFailure { throwable ->
+                    Log.e(TAG, "submitUpload: save holds failed", throwable)
+                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                        throwable.message ?: "Failed to save challenge holds."
+                    )
+                    return@launch
+                }
+
+            val uploadedVideos = mutableListOf<UploadedAttemptVideo>()
+            allAttemptUris.forEachIndexed { index, uri ->
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
+                    "영상 업로드 중입니다. (${index + 1}/${allAttemptUris.size})"
+                )
+
+                uploadAttemptVideoUseCase(
+                    challengeId = currentChallengeId,
+                    videoUri = uri
+                )
+                    .onSuccess { uploaded ->
+                        uploadedVideos += uploaded
+                        Log.d(
+                            TAG,
+                            "submitUpload: attempt upload success, attemptId=${uploaded.attemptId}, " +
+                                "attemptNo=${uploaded.attemptNo}, objectKey=${uploaded.objectKey}"
+                        )
+                    }
+                    .onFailure { throwable ->
+                        Log.e(TAG, "submitUpload: attempt upload failed", throwable)
+                        _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                            throwable.message ?: "Failed to upload attempt video."
+                        )
+                        return@launch
+                    }
             }
+
+            uploadedAttemptVideos = uploadedVideos
+            currentAttemptIndex = 0
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedVideos)
         }
     }
 
     fun resetState() {
         _uiState.value = UploadUiState.Idle
+    }
+
+    fun resetUploadSubmissionState() {
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+    }
+
+    private fun clearChallengeFlowState() {
+        selectedGymGradeId = null
+        selectedGymGrade = null
+        difficultyLevel = ""
+        holdColor = ""
+        clearCreatedChallengeOnly()
+    }
+
+    private fun clearCreatedChallengeOnly() {
+        createdChallenge = null
+        challengeId = null
+        savedChallengeHolds = null
+        uploadedAttemptVideos = emptyList()
+        _challengeCreationUiState.value = ChallengeCreationUiState.Idle
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+    }
+
+    private fun buildChallengeHoldCoordinates(
+        imageWidth: Int,
+        imageHeight: Int
+    ): List<ChallengeHoldCoordinate> {
+        return detectedHolds.mapIndexed { index, hold ->
+            ChallengeHoldCoordinate(
+                holdNo = index + 1,
+                x1 = (hold.boundingBox.left * imageWidth).toInt().coerceIn(0, imageWidth),
+                x2 = (hold.boundingBox.right * imageWidth).toInt().coerceIn(0, imageWidth),
+                y1 = (hold.boundingBox.top * imageHeight).toInt().coerceIn(0, imageHeight),
+                y2 = (hold.boundingBox.bottom * imageHeight).toInt().coerceIn(0, imageHeight)
+            )
+        }
+    }
+
+    private fun mapGymColorNameToClassifierColor(colorName: String): String {
+        return GYM_COLOR_NAME_TO_CLASSIFIER_COLOR[colorName.trim().lowercase()]
+            ?: colorName.trim().lowercase()
     }
 }
 
@@ -737,3 +1004,80 @@ sealed class GymResolveUiState {
     data class Success(val resolvedGym: ResolvedGym) : GymResolveUiState()
     data class Error(val message: String) : GymResolveUiState()
 }
+
+/** 챌린지 생성 UI 상태입니다. */
+sealed class ChallengeCreationUiState {
+    object Idle : ChallengeCreationUiState()
+    object Loading : ChallengeCreationUiState()
+    data class Success(val challenge: ChallengeSession) : ChallengeCreationUiState()
+    data class Error(val message: String) : ChallengeCreationUiState()
+}
+
+/**
+ * 업로드 제출 UI 상태입니다.
+ *
+ * 역할:
+ * - 홀드 선택 이후 로딩 화면을 구동합니다.
+ * - 홀드 저장과 시도 영상 업로드 단계를 함께 표현합니다.
+ */
+sealed class UploadSubmissionUiState {
+    object Idle : UploadSubmissionUiState()
+    data class Loading(val message: String) : UploadSubmissionUiState()
+    data class Success(val uploadedAttempts: List<UploadedAttemptVideo>) : UploadSubmissionUiState()
+    data class Error(val message: String) : UploadSubmissionUiState()
+}
+
+private val GYM_COLOR_NAME_TO_CLASSIFIER_COLOR = mapOf(
+    "red" to "red",
+    "orange" to "orange",
+    "yellow" to "yellow",
+    "green" to "green",
+    "blue" to "blue",
+    "navy" to "blue",
+    "purple" to "purple",
+    "brown" to "brown",
+    "pink" to "pink",
+    "white" to "white",
+    "gray" to "gray",
+    "grey" to "gray",
+    "black" to "black",
+    "빨강" to "red",
+    "빨간" to "red",
+    "주황" to "orange",
+    "노랑" to "yellow",
+    "노란" to "yellow",
+    "초록" to "green",
+    "초록색" to "green",
+    "파랑" to "blue",
+    "파란" to "blue",
+    "남색" to "blue",
+    "보라" to "purple",
+    "갈색" to "brown",
+    "핑크" to "pink",
+    "흰색" to "white",
+    "회색" to "gray",
+    "검정" to "black",
+    "검은" to "black"
+)
+
+/**
+ * resolve API 우회 중에만 사용하는 임시 난이도 세트입니다.
+ *
+ * 주의:
+ * - 서버 응답을 대체하는 값입니다.
+ * - resolve API 정상화 후 제거하거나 서버 데이터로 교체해야 합니다.
+ */
+private val TEMPORARY_FALLBACK_GYM_GRADES = listOf(
+    GymGrade(gymGradeId = 1, colorName = "red", sortOrder = 1, colorHex = "#FF3B30", gradeLabel = "V10"),
+    GymGrade(gymGradeId = 2, colorName = "orange", sortOrder = 2, colorHex = "#FF9500", gradeLabel = "V9"),
+    GymGrade(gymGradeId = 3, colorName = "yellow", sortOrder = 3, colorHex = "#FFD60A", gradeLabel = "V8"),
+    GymGrade(gymGradeId = 4, colorName = "green", sortOrder = 4, colorHex = "#34C759", gradeLabel = "V7"),
+    GymGrade(gymGradeId = 5, colorName = "blue", sortOrder = 5, colorHex = "#007AFF", gradeLabel = "V6"),
+    GymGrade(gymGradeId = 6, colorName = "navy", sortOrder = 6, colorHex = "#5856D6", gradeLabel = "V5"),
+    GymGrade(gymGradeId = 7, colorName = "purple", sortOrder = 7, colorHex = "#AF52DE", gradeLabel = "V4"),
+    GymGrade(gymGradeId = 8, colorName = "brown", sortOrder = 8, colorHex = "#A2845E", gradeLabel = "V3"),
+    GymGrade(gymGradeId = 9, colorName = "pink", sortOrder = 9, colorHex = "#FF2D55", gradeLabel = "V2"),
+    GymGrade(gymGradeId = 10, colorName = "white", sortOrder = 10, colorHex = "#FFFFFF", gradeLabel = "V1"),
+    GymGrade(gymGradeId = 11, colorName = "gray", sortOrder = 11, colorHex = "#8E8E93", gradeLabel = "V0"),
+    GymGrade(gymGradeId = 12, colorName = "black", sortOrder = 12, colorHex = "#1C1C1E", gradeLabel = "V11")
+)

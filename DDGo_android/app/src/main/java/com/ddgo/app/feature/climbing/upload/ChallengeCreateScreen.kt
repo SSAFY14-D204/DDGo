@@ -3,6 +3,7 @@ package com.ddgo.app.feature.climbing.upload
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Color as AndroidColor
 import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -48,6 +49,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,13 +75,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.os.CancellationSignal
+import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 
 // ─────────────────────────────────────────────
 // 내부 데이터
 // ─────────────────────────────────────────────
 
-private enum class CreateStep { GYM_NAME, LEVEL, COLOR }
+private enum class CreateStep { GYM_NAME, GRADE }
 
 private data class ClimbingLevel(val label: String, val color: Color)
 
@@ -134,31 +137,20 @@ fun ChallengeCreateScreen(
     BackHandler {
         when (step) {
             CreateStep.GYM_NAME -> onNavigateBack()
-            CreateStep.LEVEL    -> step = CreateStep.GYM_NAME
-            CreateStep.COLOR    -> step = CreateStep.LEVEL
+            CreateStep.GRADE    -> step = CreateStep.GYM_NAME
         }
     }
 
     when (step) {
         CreateStep.GYM_NAME -> GymNameStep(
             viewModel = viewModel,
-            onNext = { step = CreateStep.LEVEL },
+            onNext = { step = CreateStep.GRADE },
             onBack = onNavigateBack
         )
-        CreateStep.LEVEL -> LevelStep(
-            gymName      = viewModel.gymName,
-            initialIndex = LEVELS.indexOfFirst { it.label == viewModel.difficultyLevel }
-                .takeIf { it >= 0 } ?: 5,
-            onConfirm    = { viewModel.updateDifficulty(LEVELS[it].label) },
-            onNext       = { step = CreateStep.COLOR },
-            onBack       = { step = CreateStep.GYM_NAME }
-        )
-        CreateStep.COLOR -> ColorStep(
-            initialColorIndex = HOLD_COLORS.indexOfFirst { it.name == viewModel.holdColor }
-                .takeIf { it >= 0 } ?: 8,
-            onConfirm         = { viewModel.updateHoldColor(HOLD_COLORS[it].name) },
-            onNext            = onNavigateToNext,
-            onBack            = { step = CreateStep.LEVEL }
+        CreateStep.GRADE -> GymGradeStep(
+            viewModel = viewModel,
+            onNext = onNavigateToNext,
+            onBack = { step = CreateStep.GYM_NAME }
         )
     }
 }
@@ -336,7 +328,10 @@ private fun GymNameStep(
                                     place = place,
                                     selected = place.externalPlaceId ==
                                         viewModel.selectedNearbyPlace?.externalPlaceId,
-                                    onClick = { viewModel.resolveSelectedPlace(place) }
+                                    onClick = {
+                                        viewModel.selectNearbyPlaceForNextStep(place)
+                                        onNext()
+                                    }
                                 )
                             }
                         }
@@ -446,6 +441,238 @@ private fun NearbyPlaceItem(
                 fontWeight = FontWeight.SemiBold
             )
         }
+    }
+}
+
+@Composable
+private fun GymGradeStep(
+    viewModel: UploadViewModel,
+    onNext: () -> Unit,
+    onBack: () -> Unit
+) {
+    val grades = viewModel.resolvedGymGrades
+    val selectedGrade = viewModel.selectedGymGrade
+    val challengeCreationUiState by viewModel.challengeCreationUiState.collectAsState()
+
+    LaunchedEffect(challengeCreationUiState) {
+        if (challengeCreationUiState is ChallengeCreationUiState.Success) {
+            viewModel.consumeChallengeCreationResult()
+            onNext()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        CreateAppBar(onBack = onBack)
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = "해당 암장의 난이도를 선택해 주세요",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    lineHeight = 32.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                SuggestionChip(
+                    onClick = {},
+                    label = {
+                        Text(viewModel.gymName, color = Color.White, fontSize = 13.sp)
+                    },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = Color(0xFF1C1C1E)
+                    ),
+                    border = SuggestionChipDefaults.suggestionChipBorder(
+                        enabled = true,
+                        borderColor = Color(0xFF555555)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                if (grades.isEmpty()) {
+                    Text(
+                        text = "선택 가능한 난이도가 없습니다.",
+                        color = Color(0xFFB0B0B0),
+                        fontSize = 14.sp
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(360.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(grades, key = { it.gymGradeId }) { grade ->
+                            GymGradeItem(
+                                grade = grade,
+                                selected = selectedGrade?.gymGradeId == grade.gymGradeId,
+                                onClick = { viewModel.selectGymGrade(grade) }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                when (challengeCreationUiState) {
+                    ChallengeCreationUiState.Idle -> Unit
+                    ChallengeCreationUiState.Loading -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = Color(0xFF4A90E2),
+                                strokeWidth = 2.dp
+                            )
+                            Text(
+                                text = "챌린지를 생성하고 있습니다...",
+                                color = Color(0xFFB0B0B0),
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+
+                    is ChallengeCreationUiState.Error -> {
+                        Text(
+                            text = (challengeCreationUiState as ChallengeCreationUiState.Error).message,
+                            color = Color(0xFFFF8A8A),
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    is ChallengeCreationUiState.Success -> Unit
+                }
+            }
+
+            Button(
+                onClick = {
+                    val currentGymId = viewModel.gymId
+                    if (currentGymId == null || currentGymId <= 0 || selectedGrade == null) {
+                        onNext()
+                    } else {
+                        viewModel.createChallengeFromSelection()
+                    }
+                },
+                enabled = challengeCreationUiState !is ChallengeCreationUiState.Loading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4A90E2),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF333333),
+                    disabledContentColor = Color(0xFF666666)
+                )
+            ) {
+                Text(
+                    text = "챌린지 생성 후 다음",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GymGradeItem(
+    grade: GymGrade,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val accentColor = resolveGymGradeAccentColor(grade)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) Color(0xFF1C3A5E) else Color(0xFF1C1C1E))
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(accentColor)
+                .then(
+                    if (accentColor == Color.White) {
+                        Modifier.border(1.dp, Color(0xFF444444), CircleShape)
+                    } else {
+                        Modifier
+                    }
+                )
+        )
+
+        Spacer(modifier = Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = grade.gradeLabel ?: grade.colorName,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${grade.colorName} · 순서 ${grade.sortOrder}",
+                color = Color(0xFFB0B0B0),
+                fontSize = 13.sp
+            )
+        }
+
+        if (selected) {
+            Text(
+                text = "선택됨",
+                color = Color(0xFF9CCCFF),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+private fun resolveGymGradeAccentColor(grade: GymGrade): Color {
+    val colorHex = grade.colorHex?.takeIf { it.isNotBlank() }
+    if (colorHex != null) {
+        return runCatching { Color(AndroidColor.parseColor(colorHex)) }
+            .getOrElse { fallbackColorByName(grade.colorName) }
+    }
+
+    return fallbackColorByName(grade.colorName)
+}
+
+private fun fallbackColorByName(colorName: String): Color {
+    return when (colorName.trim().lowercase()) {
+        "빨강", "red" -> Color(0xFFFF3B30)
+        "주황", "orange" -> Color(0xFFFF9500)
+        "노랑", "yellow" -> Color(0xFFFFD60A)
+        "초록", "green" -> Color(0xFF34C759)
+        "파랑", "blue" -> Color(0xFF007AFF)
+        "남색", "navy" -> Color(0xFF5856D6)
+        "보라", "purple" -> Color(0xFFAF52DE)
+        "갈색", "brown" -> Color(0xFFA2845E)
+        "핑크", "pink" -> Color(0xFFFF2D55)
+        "흰색", "white" -> Color.White
+        "회색", "gray", "grey" -> Color(0xFF8E8E93)
+        "검정", "black" -> Color(0xFF1C1C1E)
+        else -> Color(0xFF4A90E2)
     }
 }
 

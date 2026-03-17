@@ -1,5 +1,6 @@
 package com.ddgo.app.data.repository
 
+import android.util.Log
 import com.ddgo.app.core.datastore.TokenDataStore
 import com.ddgo.app.data.mapper.AuthMapper.toDomain
 import com.ddgo.app.data.remote.auth.AuthApi
@@ -10,6 +11,8 @@ import com.ddgo.app.domain.model.AuthToken
 import com.ddgo.app.domain.model.User
 import com.ddgo.app.domain.repository.AuthRepository
 import javax.inject.Inject
+
+private const val TAG = "AuthRepository"
 
 /**
  * AuthRepository 인터페이스(domain)의 실제 구현체.
@@ -49,6 +52,11 @@ class AuthRepositoryImpl @Inject constructor(
                     response.data.accessToken,
                     response.data.refreshToken
                 )
+                Log.d(
+                    TAG,
+                    "login: tokens saved, accessTokenLength=${response.data.accessToken.length}, " +
+                        "refreshTokenLength=${response.data.refreshToken.length}"
+                )
                 Result.success(response.data.toDomain())
             } else {
                 Result.failure(Exception(response.message))
@@ -66,6 +74,11 @@ class AuthRepositoryImpl @Inject constructor(
                 tokenDataStore.saveTokens(
                     response.data.accessToken,
                     response.data.refreshToken
+                )
+                Log.d(
+                    TAG,
+                    "refreshToken: tokens saved, accessTokenLength=${response.data.accessToken.length}, " +
+                        "refreshTokenLength=${response.data.refreshToken.length}"
                 )
                 Result.success(response.data.toDomain())
             } else {
