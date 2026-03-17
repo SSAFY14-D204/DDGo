@@ -328,10 +328,7 @@ private fun GymNameStep(
                                     place = place,
                                     selected = place.externalPlaceId ==
                                         viewModel.selectedNearbyPlace?.externalPlaceId,
-                                    onClick = {
-                                        viewModel.selectNearbyPlaceForNextStep(place)
-                                        onNext()
-                                    }
+                                    onClick = { viewModel.resolveSelectedPlace(place) }
                                 )
                             }
                         }
@@ -362,17 +359,9 @@ private fun GymNameStep(
 
                 is GymResolveUiState.Success -> {
                     val resolved = (gymResolveUiState as GymResolveUiState.Success).resolvedGym
-                    Text(
-                        text = "선택된 암장: ${resolved.gym.displayName}",
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "불러온 난이도 수: ${resolved.grades.size}",
-                        color = Color(0xFFB0B0B0),
-                        fontSize = 13.sp
+                    SelectedGymSummaryCard(
+                        gymName = formatGymDisplayName(resolved.gym.displayName),
+                        gradeCount = resolved.grades.size
                     )
                 }
             }
@@ -488,7 +477,11 @@ private fun GymGradeStep(
                 SuggestionChip(
                     onClick = {},
                     label = {
-                        Text(viewModel.gymName, color = Color.White, fontSize = 13.sp)
+                        Text(
+                            text = formatGymDisplayName(viewModel.gymName),
+                            color = Color.White,
+                            fontSize = 13.sp
+                        )
                     },
                     colors = SuggestionChipDefaults.suggestionChipColors(
                         containerColor = Color(0xFF1C1C1E)
@@ -559,15 +552,9 @@ private fun GymGradeStep(
             }
 
             Button(
-                onClick = {
-                    val currentGymId = viewModel.gymId
-                    if (currentGymId == null || currentGymId <= 0 || selectedGrade == null) {
-                        onNext()
-                    } else {
-                        viewModel.createChallengeFromSelection()
-                    }
-                },
-                enabled = challengeCreationUiState !is ChallengeCreationUiState.Loading,
+                onClick = { viewModel.createChallengeFromSelection() },
+                enabled = selectedGrade != null &&
+                    challengeCreationUiState !is ChallengeCreationUiState.Loading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -624,14 +611,14 @@ private fun GymGradeItem(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = grade.gradeLabel ?: grade.colorName,
+                text = grade.colorName.ifBlank { grade.gradeLabel ?: "난이도" },
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "${grade.colorName} · 순서 ${grade.sortOrder}",
+                text = formatGymGradeLevelText(grade),
                 color = Color(0xFFB0B0B0),
                 fontSize = 13.sp
             )
@@ -648,6 +635,74 @@ private fun GymGradeItem(
     }
 }
 
+@Composable
+private fun SelectedGymSummaryCard(
+    gymName: String,
+    gradeCount: Int
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF151517))
+            .border(1.dp, Color(0xFF2B4F77), RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "선택된 암장",
+            color = Color(0xFF9CCCFF),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = gymName,
+            color = Color.White,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 24.sp
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SummaryBadge(label = "난이도 수", value = gradeCount.toString())
+        }
+    }
+}
+
+@Composable
+private fun SummaryBadge(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0xFF1F2630))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = label,
+            color = Color(0xFFB0B0B0),
+            fontSize = 12.sp
+        )
+        Text(
+            text = value,
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
 private fun resolveGymGradeAccentColor(grade: GymGrade): Color {
     val colorHex = grade.colorHex?.takeIf { it.isNotBlank() }
     if (colorHex != null) {
@@ -656,6 +711,16 @@ private fun resolveGymGradeAccentColor(grade: GymGrade): Color {
     }
 
     return fallbackColorByName(grade.colorName)
+}
+
+private fun formatGymDisplayName(displayName: String): String {
+    return displayName.replace(Regex("\\s*\\(\\d+\\)$"), "").trim()
+}
+
+private fun formatGymGradeLevelText(grade: GymGrade): String {
+    return grade.gradeLabel
+        ?.takeIf { it.isNotBlank() }
+        ?: "V-${grade.sortOrder}"
 }
 
 private fun fallbackColorByName(colorName: String): Color {

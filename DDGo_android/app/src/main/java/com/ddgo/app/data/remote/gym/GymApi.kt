@@ -12,14 +12,14 @@ import retrofit2.http.POST
  *   DDGo DB의 climbing_gyms와 매칭/보정된 결과를 받아옵니다.
  *
  * 주의:
- * - baseUrl에 /api/가 이미 포함되어 있다면 여기서는 "gyms/resolve"만 사용합니다.
+ * - baseUrl에 /api/가 이미 포함되어 있으므로 컨트롤러 매핑인 "v1/gyms/resolve"만 적습니다.
  */
 interface GymApi {
 
     /**
      * 선택한 장소 정보를 백엔드에 전달하여 gym resolve를 수행합니다.
      */
-    @POST("gyms/resolve")
+    @POST("v1/gyms/resolve")
     suspend fun resolveGym(
         @Body request: ResolveGymRequestDto
     ): ApiResponse<ResolveGymResponseDto>
