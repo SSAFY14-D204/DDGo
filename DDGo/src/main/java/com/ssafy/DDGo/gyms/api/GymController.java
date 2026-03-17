@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/gyms")
+@RequestMapping("/v1/gyms")
 @RequiredArgsConstructor
 @Tag(name = "Climbing Gym API", description = "클라이밍 암장 및 난이도 관련 API")
 public class GymController {
