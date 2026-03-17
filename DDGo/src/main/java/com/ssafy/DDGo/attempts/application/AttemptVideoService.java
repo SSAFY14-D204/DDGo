@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -93,7 +94,7 @@ public class AttemptVideoService {
                             .object(objectKey)
                             .expiry((int) Duration.ofMinutes(15).getSeconds()) // 15분 유효
                             .build());
-            return replaceInternalWithPublicUrl(url);
+            return toPublicUrl(url);
         } catch (Exception e) {
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR,
                     "Presigned URL 발급 중 오류가 발생했습니다. (MinIO 서버 연결 상태 확인 필요)");
@@ -115,36 +116,40 @@ public class AttemptVideoService {
                             .object(objectKey)
                             .expiry((int) Duration.ofHours(2).getSeconds()) // 조회용은 2시간 유효하게 발급
                             .build());
-            return replaceInternalWithPublicUrl(url);
+            return toPublicUrl(url);
         } catch (Exception e) {
             log.warn("영상 조회용 Presigned URL 발급 실패 (objectKey: {}): {}", objectKey, e.getMessage());
             return null; // 영상 URL 발급 실패 시 null 반환하여 조회 전체가 터지는 것 방지
         }
     }
 
-    private String replaceInternalWithPublicUrl(String internalUrl) {
-        if (internalUrl == null) return null;
-        
-        String configuredInternalUrl = minioProperties.getUrl(); // e.g. http://minio:9000
-        String configuredPublicUrl = minioProperties.getPublicUrl(); // e.g. https://api.ddgo.com/minio
-
-        if (configuredPublicUrl == null || configuredPublicUrl.isBlank()) {
+    private String toPublicUrl(String internalUrl) {
+        String publicBase = minioProperties.getPublicUrl();
+        if (publicBase == null || publicBase.isBlank()) {
             return internalUrl;
         }
-        
-        // internalUrl이 configuredInternalUrl로 시작하는지 확인하고 치환
-        if (internalUrl.startsWith(configuredInternalUrl)) {
-            return internalUrl.replaceFirst(configuredInternalUrl, configuredPublicUrl);
-        }
 
-        // 혹시라도 설정된 URL과 실제 생성된 URL 호스트가 다를 경우를 대비한 폴백 처리
-        // 예를 들어 configuredInternalUrl은 http://172.18.0.2:9000 인데,
-        // 생성된 URL은 http://minio:9000/... 일 수도 있으므로, URL의 scheme+host+port를 통째로 교체
         try {
-            java.net.URL origUrl = new java.net.URL(internalUrl);
-            String origPrefix = origUrl.getProtocol() + "://" + origUrl.getAuthority();
-            return internalUrl.replaceFirst(origPrefix, configuredPublicUrl);
-        } catch (java.net.MalformedURLException e) {
+            URI internalUri = URI.create(internalUrl);
+            URI publicUri = URI.create(publicBase);
+
+            String publicPathPrefix = publicUri.getPath() == null ? "" : publicUri.getPath();
+            if (publicPathPrefix.endsWith("/")) {
+                publicPathPrefix = publicPathPrefix.substring(0, publicPathPrefix.length() - 1);
+            }
+
+            String rewrittenPath = publicPathPrefix + internalUri.getPath();
+
+            return new URI(
+                    publicUri.getScheme(),
+                    publicUri.getUserInfo(),
+                    publicUri.getHost(),
+                    publicUri.getPort(),
+                    rewrittenPath,
+                    internalUri.getRawQuery(),
+                    internalUri.getRawFragment()
+            ).toString();
+        } catch (Exception e) {
             log.warn("URL 파싱 오류, 원본 URL 반환: {}", internalUrl);
             return internalUrl;
         }
