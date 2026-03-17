@@ -98,16 +98,31 @@ internal fun DrawScope.drawConfidenceLabel(
     }
 }
 
-// ── 수동 홀드 추가: 확대 팝업 (다중 선택) ────────────────────────────────────────
+// ── 수동 홀드 추가/취소: 확대 팝업 (다중 선택) ───────────────────────────────────
 @Composable
 internal fun CandidateHoldPopup(
     bitmap: Bitmap,
     candidates: List<Hold>,
+    alreadySelected: List<Hold>,
     accentColor: Color,
-    onSelect: (List<Hold>) -> Unit,
+    onApply: (toAdd: List<Hold>, toRemove: List<Hold>) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var selectedHolds by remember { mutableStateOf(emptySet<Hold>()) }
+    val alreadySelectedBoxes = remember(alreadySelected) {
+        alreadySelected.map { it.boundingBox }.toSet()
+    }
+    // 이미 선택된 홀드를 초기 선택 상태로 설정
+    var selectedHolds by remember(candidates, alreadySelected) {
+        mutableStateOf(candidates.filter { it.boundingBox in alreadySelectedBoxes }.toSet())
+    }
+
+    val candidateBoxes = remember(candidates) { candidates.map { it.boundingBox }.toSet() }
+    val toAdd    = selectedHolds.filter { it.boundingBox !in alreadySelectedBoxes }
+    // 팝업에 표시된 후보(candidates) 중에서만 취소 대상 결정 — 멀리 있는 홀드에 영향 없음
+    val toRemove = alreadySelected.filter { a ->
+        a.boundingBox in candidateBoxes && selectedHolds.none { it.boundingBox == a.boundingBox }
+    }
+    val hasChanges = toAdd.isNotEmpty() || toRemove.isNotEmpty()
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -118,17 +133,25 @@ internal fun CandidateHoldPopup(
                 .padding(20.dp)
         ) {
             Text(
-                text       = "홀드 수동 추가",
+                text       = "홀드 선택/취소",
                 fontSize   = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color      = Color.White
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = if (selectedHolds.isEmpty()) {
-                    "근처에서 ${candidates.size}개의 후보가 감지됐어요\n추가할 홀드를 모두 선택해주세요"
-                } else {
-                    "근처에서 ${candidates.size}개의 후보가 감지됐어요\n${selectedHolds.size}개 선택됨"
+                text = buildString {
+                    append("근처에서 ${candidates.size}개의 홀드가 있어요\n")
+                    when {
+                        toAdd.isNotEmpty() && toRemove.isNotEmpty() ->
+                            append("+${toAdd.size}개 추가, -${toRemove.size}개 취소 예정")
+                        toAdd.isNotEmpty() ->
+                            append("${toAdd.size}개 추가 예정")
+                        toRemove.isNotEmpty() ->
+                            append("${toRemove.size}개 취소 예정")
+                        else ->
+                            append("탭하여 선택하거나 취소하세요")
+                    }
                 },
                 fontSize   = 13.sp,
                 color      = Color.White.copy(alpha = 0.5f),
@@ -141,14 +164,22 @@ internal fun CandidateHoldPopup(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 candidates.forEach { hold ->
+                    val isSelected = selectedHolds.any { it.boundingBox == hold.boundingBox }
+                    val wasSelected = hold.boundingBox in alreadySelectedBoxes
                     CandidateHoldCard(
                         bitmap      = bitmap,
                         hold        = hold,
-                        accentColor = accentColor,
-                        isSelected  = hold in selectedHolds,
+                        accentColor = if (wasSelected && !isSelected) Color(0xFFFF5252) else accentColor,
+                        isSelected  = isSelected,
+                        statusLabel = when {
+                            wasSelected && isSelected  -> "선택됨"
+                            wasSelected && !isSelected -> "취소 예정"
+                            !wasSelected && isSelected -> "추가 예정"
+                            else                       -> "탭하여 선택"
+                        },
                         onToggle    = {
-                            selectedHolds = if (hold in selectedHolds) {
-                                selectedHolds - hold
+                            selectedHolds = if (isSelected) {
+                                selectedHolds.filter { it.boundingBox != hold.boundingBox }.toSet()
                             } else {
                                 selectedHolds + hold
                             }
@@ -161,12 +192,10 @@ internal fun CandidateHoldPopup(
 
             Button(
                 onClick = {
-                    if (selectedHolds.isNotEmpty()) {
-                        onSelect(selectedHolds.toList())
-                        onDismiss()
-                    }
+                    onApply(toAdd.toList(), toRemove)
+                    onDismiss()
                 },
-                enabled  = selectedHolds.isNotEmpty(),
+                enabled  = hasChanges,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape  = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -177,7 +206,7 @@ internal fun CandidateHoldPopup(
                 )
             ) {
                 Text(
-                    text       = if (selectedHolds.isEmpty()) "홀드를 선택해주세요" else "${selectedHolds.size}개 추가하기",
+                    text       = if (hasChanges) "적용하기" else "변경사항 없음",
                     fontSize   = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -194,7 +223,7 @@ internal fun CandidateHoldPopup(
                     contentColor   = Color.White.copy(alpha = 0.6f)
                 )
             ) {
-                Text("취소", fontSize = 13.sp)
+                Text("닫기", fontSize = 13.sp)
             }
         }
     }
@@ -206,6 +235,7 @@ private fun CandidateHoldCard(
     hold: Hold,
     accentColor: Color,
     isSelected: Boolean,
+    statusLabel: String,
     onToggle: () -> Unit
 ) {
     val cropped   = remember(hold.boundingBox) { cropHoldRegion(bitmap, hold) }
@@ -253,7 +283,7 @@ private fun CandidateHoldCard(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text       = if (isSelected) "✓ 선택됨" else "탭하여 선택",
+                text       = if (isSelected) "✓ $statusLabel" else statusLabel,
                 fontSize   = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color      = if (isSelected) accentColor else Color.White.copy(alpha = 0.35f)
