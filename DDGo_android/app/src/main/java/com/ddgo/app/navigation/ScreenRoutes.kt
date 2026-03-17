@@ -36,8 +36,11 @@ sealed class ScreenRoutes(val route: String) {
             const val ATTEMPT_UPLOAD = "attempt_upload"
             const val CHALLENGE_CREATE = "challenge_create"
             const val CHALLENGE_HOLD = "challenge_hold"
+            const val ADDITIONAL_UPLOAD = "additional_upload"
             const val HOLD_SELECT = "hold_select"
+            const val ANALYSIS_LOADING = "analysis_loading"
             const val ATTEMPT_RESULT = "attempt_result"
+            const val FINAL_ANALYSIS = "final_analysis"
         }
 
         /** 실시간 기록 플로우 (카메라 권한 → 기록 → 기록 결과) */

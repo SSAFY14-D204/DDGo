@@ -23,13 +23,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -64,15 +69,54 @@ private val ANIM_HOLDS = listOf(
 
 /**
  * 홀드 탐지 로딩 → 완료 후 누락된 홀드를 추가하는 화면.
- * 탐지 완료 후 [onNavigateToNext]로 시작/끝 홀드 선택 화면(HoldSelectScreen)으로 이동합니다.
+ * 탐지 완료 후 [onNavigateToHoldSelect]로 시작/끝 홀드 선택 화면(HoldSelectScreen)으로 이동합니다.
+ * 이동 전 추가 영상 업로드 여부를 묻는 팝업을 띄웁니다.
  */
 @Composable
 fun ChallengeHoldScreen(
     viewModel: UploadViewModel = hiltViewModel(),
-    onNavigateToNext: () -> Unit = {}
+    onNavigateToAdditional: () -> Unit = {},
+    onNavigateToHoldSelect: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val videoUri = viewModel.videoUri
+
+    var showDialog by remember { mutableStateOf(false) }
+
+    // 다이얼로그 처리 (HEAD 브랜치 로직 유지)
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = {
+                Text(text = "추가 시도 영상 업로드", fontWeight = FontWeight.Bold, color = Color.White)
+            },
+            text = {
+                Text(
+                    text = "이 문제 도전 영상을 더 업로드하시겠습니까?\nN개의 영상을 한 번에 분석해 드릴게요!",
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            },
+            containerColor = Color(0xFF2E2E2E),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            confirmButton = {
+                TextButton(onClick = {
+                    showDialog = false
+                    onNavigateToAdditional()
+                }) {
+                    Text("네, 더 올릴게요", color = Color(0xFF42A5F5), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDialog = false
+                    onNavigateToHoldSelect()
+                }) {
+                    Text("아니오, 여기서 끝", color = Color.White)
+                }
+            }
+        )
+    }
 
     LaunchedEffect(videoUri) {
         if (videoUri != null) viewModel.runHoldDetection()
@@ -93,8 +137,8 @@ fun ChallengeHoldScreen(
         ) { isSuccess ->
             if (isSuccess) {
                 HoldAddContent(
-                    viewModel        = viewModel,
-                    onNavigateToNext = onNavigateToNext
+                    viewModel    = viewModel,
+                    onShowDialog = { showDialog = true }
                 )
             } else {
                 HoldLoadingContent(uiState = uiState)
@@ -103,12 +147,12 @@ fun ChallengeHoldScreen(
     }
 }
 
-// ── 누락된 홀드 추가 화면 ─────────────────────────────────────────────────────────
+// ── 누락된 홀드 추가 화면 (dev 브랜치 AI 로직 우선) ──────────────────────────────────
 
 @Composable
 private fun HoldAddContent(
     viewModel: UploadViewModel,
-    onNavigateToNext: () -> Unit
+    onShowDialog: () -> Unit
 ) {
     val bitmap             = viewModel.bestFrameBitmap
     val holds              = viewModel.detectedHolds
@@ -245,7 +289,7 @@ private fun HoldAddContent(
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             Button(
-                onClick  = onNavigateToNext,
+                onClick  = onShowDialog,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

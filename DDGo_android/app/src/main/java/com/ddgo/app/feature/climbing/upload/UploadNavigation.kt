@@ -66,6 +66,24 @@ fun NavGraphBuilder.uploadGraph(
 
             ChallengeHoldScreen(
                 viewModel        = viewModel,
+                onNavigateToAdditional = {
+                    navController.navigate(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD)
+                },
+                onNavigateToHoldSelect = {
+                    navController.navigate(ScreenRoutes.Climbing.Upload.HOLD_SELECT)
+                }
+            )
+        }
+
+        // 추가 3-1. 추가 영상 다중 업로드 화면
+        composable(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
+            }
+            val viewModel: UploadViewModel = hiltViewModel(parentEntry)
+
+            AdditionalUploadScreen(
+                viewModel = viewModel,
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.HOLD_SELECT)
                 }
@@ -82,7 +100,21 @@ fun NavGraphBuilder.uploadGraph(
             HoldSelectScreen(
                 viewModel        = viewModel,
                 onNavigateToNext = {
-                    navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT)
+                    navController.navigate(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING)
+                }
+            )
+        }
+
+        // 추가 3-2. 로딩 화면
+        composable(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) { backStackEntry ->
+            AnalysisLoadingScreen(
+                onLoadingFinished = {
+                    navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) {
+                        // 결과 화면 진입 시 뒤로 가기 눌렀을 때 업로드 과정 전체를 생략하기 위한 팝업
+                        popUpTo(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD) {
+                            inclusive = true
+                        }
+                    }
                 }
             )
         }
@@ -94,7 +126,43 @@ fun NavGraphBuilder.uploadGraph(
             }
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
 
-            AttemptResultScreen(viewModel = viewModel)
+            AttemptResultScreen(
+                viewModel = viewModel,
+                onNavigateToCompare = {
+                    navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS)
+                }
+            )
+        }
+
+        // 5. 최종 분석 결과 화면
+        composable(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
+            }
+            val viewModel: UploadViewModel = hiltViewModel(parentEntry)
+
+            // ViewModel 상태에서 최종 분석 데이터 구성
+            // 실제 서버 데이터 연동 시 ViewModel에서 FinalAnalysisData 직접 노출 권장
+            val dummyResult = viewModel.attemptDummyResults.lastOrNull()
+            val isSuccess   = dummyResult?.first ?: true
+
+            FinalAnalysisScreen(
+                data = FinalAnalysisData(
+                    isSuccess      = isSuccess,
+                    reachedHolds   = 9,
+                    totalHolds     = 14,
+                    balanceRatio   = 68,
+                    // stabilityTimeline 이 비어있으면 데모 곡선을 사용
+                    attemptCount   = viewModel.allAttemptUris.size.coerceAtLeast(1),
+                    currentAttempt = viewModel.allAttemptUris.size.coerceAtLeast(1)
+                ),
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToMain = { 
+                    navController.navigate(ScreenRoutes.Main.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }
