@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
         log.warn("CustomException : {}", e.getMessage());
         ErrorCode errorCode = e.getErrorCode();
         return ResponseEntity.status(errorCode.getStatus())
-                .body(ApiResponse.error(errorCode.getMessage()));
+                .body(ApiResponse.error(errorCode.getCode(), e.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

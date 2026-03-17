@@ -14,12 +14,14 @@ import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AttemptVideoService {
@@ -113,6 +115,7 @@ public class AttemptVideoService {
                             .expiry((int) Duration.ofHours(2).getSeconds()) // 조회용은 2시간 유효하게 발급
                             .build());
         } catch (Exception e) {
+            log.warn("영상 조회용 Presigned URL 발급 실패 (objectKey: {}): {}", objectKey, e.getMessage());
             return null; // 영상 URL 발급 실패 시 null 반환하여 조회 전체가 터지는 것 방지
         }
     }
