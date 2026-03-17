@@ -47,9 +47,11 @@ object VisionMapper {
         top: Float,
         right: Float,
         bottom: Float,
-        confidence: Float
+        confidence: Float,
+        polygon: List<Hold.Point> = emptyList()
     ): Hold = Hold(
         boundingBox = Hold.BoundingBox(left, top, right, bottom),
-        confidence = confidence
+        confidence = confidence,
+        polygon = polygon
     )
 }

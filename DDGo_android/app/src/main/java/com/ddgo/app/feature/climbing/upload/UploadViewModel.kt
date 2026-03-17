@@ -488,7 +488,7 @@ class UploadViewModel @Inject constructor(
 
                     Log.d(TAG, "▶ [4/4] 색상 필터링 시작 (목표 색: '$holdColor')")
                     val holds = if (holdColor.isBlank()) {
-                        classifiedAll
+                        holdColorClassifier.classifyAll(bitmap, rawHolds)
                     } else {
                         holdColorClassifier.classifyAndFilter(
                             bitmap          = bitmap,

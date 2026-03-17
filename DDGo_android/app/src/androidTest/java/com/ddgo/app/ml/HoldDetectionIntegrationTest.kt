@@ -55,7 +55,7 @@ class HoldDetectionIntegrationTest {
     @Test
     fun tflite_hold_모델_로드_성공() {
         val interpreter = com.ddgo.app.data.ml.common.TFLiteInferenceUtils
-            .createInterpreter(context, "models/best_float32_v8_640.tflite")
+            .createInterpreter(context, "models/hold_detect_seg_v11n_640_float32.tflite")
         assertNotNull(interpreter)
         interpreter.close()
     }

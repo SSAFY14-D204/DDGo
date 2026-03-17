@@ -41,6 +41,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -154,11 +156,78 @@ private fun HoldAddContent(
     viewModel: UploadViewModel,
     onShowDialog: () -> Unit
 ) {
-    val bitmap             = viewModel.bestFrameBitmap
-    val holds              = viewModel.detectedHolds
-    val allRawHolds        = viewModel.allRawHolds
-    val candidateHolds     = viewModel.candidateHolds
-    val showCandidatePopup = viewModel.showCandidatePopup
+    var phase              by remember { mutableStateOf(SelectionPhase.START) }
+    var selectedStartIndex by remember { mutableIntStateOf(-1) }
+    var selectedEndIndex   by remember { mutableIntStateOf(-1) }
+
+    // START → END 슬라이드 인, END → START 슬라이드 아웃
+    AnimatedContent(
+        targetState    = phase,
+        transitionSpec = {
+            val forward = targetState == SelectionPhase.END
+            val enter   = slideInHorizontally(tween(380)) { if (forward)  it else -it } +
+                          fadeIn(tween(300))
+            val exit    = slideOutHorizontally(tween(300)) { if (forward) -it else  it } +
+                          fadeOut(tween(200))
+            enter togetherWith exit
+        },
+        label = "phase_transition"
+    ) { currentPhase ->
+        HoldSelectionContent(
+            viewModel     = viewModel,
+            phase         = currentPhase,
+            startIndex    = selectedStartIndex,
+            endIndex      = selectedEndIndex,
+            onStartSelect = { selectedStartIndex = it },
+            onEndSelect   = { selectedEndIndex   = it },
+            onConfirm     = {
+                when (currentPhase) {
+                    SelectionPhase.START -> {
+                        viewModel.updateSelectedHoldInfo(
+                            viewModel.detectedHolds[selectedStartIndex].toSelectionSummary()
+                        )
+                        phase = SelectionPhase.END
+                    }
+                    SelectionPhase.END -> {
+                        viewModel.updateSelectedEndHoldInfo(
+                            viewModel.detectedHolds[selectedEndIndex].toSelectionSummary()
+                        )
+                        viewModel.resetState()
+                        onNavigateToNext()
+                    }
+                }
+            },
+            onBack = {
+                // END 단계에서 뒤로가기 시 START 단계로 복귀
+                if (currentPhase == SelectionPhase.END) {
+                    selectedEndIndex = -1
+                    phase = SelectionPhase.START
+                }
+            }
+        )
+    }
+}
+
+// ── 단일 단계 홀드 선택 UI ───────────────────────────────────────────────────────
+
+@Composable
+private fun HoldSelectionContent(
+    viewModel: UploadViewModel,
+    phase: SelectionPhase,
+    startIndex: Int,
+    endIndex: Int,
+    onStartSelect: (Int) -> Unit,
+    onEndSelect: (Int) -> Unit,
+    onConfirm: () -> Unit,
+    onBack: () -> Unit
+) {
+    val bitmap = viewModel.bestFrameBitmap
+    val holds  = viewModel.detectedHolds
+
+    val isStart       = phase == SelectionPhase.START
+    val accentColor   = if (isStart) COLOR_START else COLOR_END
+    val selectedIndex = if (isStart) startIndex  else endIndex
+    val onSelect: (Int) -> Unit = if (isStart) onStartSelect else onEndSelect
 
     if (bitmap == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -201,7 +270,7 @@ private fun HoldAddContent(
             }
         }
 
-        // ── 이미지 + 바운딩박스 오버레이 ──────────────────────────────────────
+        // ── 이미지 + 홀드 경계 오버레이 ───────────────────────────────────────
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
@@ -230,46 +299,88 @@ private fun HoldAddContent(
                             var tappedExisting = false
                             holds.forEach { hold ->
                                 val r = hold.toScreenRect(offX, offY, scaledW, scaledH)
-                                if (tap.x in r.l..r.r && tap.y in r.t..r.b) {
-                                    tappedExisting = true
+                                val polygon = hold.toScreenPolygon(offX, offY, scaledW, scaledH)
+                                val hit = if (polygon.size >= 3) {
+                                    pointInPolygon(tap, polygon)
+                                } else {
+                                    tap.x in r.l..r.r && tap.y in r.t..r.b
                                 }
-                            }
-                            if (!tappedExisting) {
-                                val normX = (tap.x - offX) / scaledW
-                                val normY = (tap.y - offY) / scaledH
-                                if (normX in 0f..1f && normY in 0f..1f) {
-                                    viewModel.findCandidatesNearTap(normX, normY)
+
+                                if (hit) {
+                                    // 이미 다른 단계에서 확정된 홀드는 재선택 불가
+                                    val otherIndex = if (isStart) endIndex else startIndex
+                                    if (idx != otherIndex) onSelect(
+                                        if (selectedIndex == idx) -1 else idx
+                                    )
                                 }
                             }
                         }
                     }
             ) {
-                holds.forEach { hold ->
-                    val r        = hold.toScreenRect(offX, offY, scaledW, scaledH)
-                    val strokePx = 2f * density
+                holds.forEachIndexed { idx, hold ->
+                    val r = hold.toScreenRect(offX, offY, scaledW, scaledH)
+                    val polygon = hold.toScreenPolygon(offX, offY, scaledW, scaledH)
+                    val polygonPath = polygon.toPath()
+                    val hasPolygon = polygon.size >= 3
 
-                    drawRect(
-                        color   = COLOR_INACTIVE.copy(alpha = 0.07f),
-                        topLeft = Offset(r.l, r.t),
-                        size    = Size(r.r - r.l, r.b - r.t)
-                    )
-                    drawRect(
-                        color   = COLOR_INACTIVE.copy(alpha = 0.7f),
-                        topLeft = Offset(r.l, r.t),
-                        size    = Size(r.r - r.l, r.b - r.t),
-                        style   = Stroke(width = strokePx)
-                    )
-                    val cr  = minOf(r.r - r.l, r.b - r.t) * 0.18f
-                    val cPx = strokePx * 2f
-                    listOf(
-                        listOf(Offset(r.l, r.t + cr), Offset(r.l, r.t), Offset(r.l + cr, r.t)),
-                        listOf(Offset(r.r - cr, r.t), Offset(r.r, r.t), Offset(r.r, r.t + cr)),
-                        listOf(Offset(r.l, r.b - cr), Offset(r.l, r.b), Offset(r.l + cr, r.b)),
-                        listOf(Offset(r.r - cr, r.b), Offset(r.r, r.b), Offset(r.r, r.b - cr))
-                    ).forEach { pts ->
-                        drawLine(COLOR_INACTIVE.copy(alpha = 0.7f), pts[0], pts[1], strokeWidth = cPx)
-                        drawLine(COLOR_INACTIVE.copy(alpha = 0.7f), pts[1], pts[2], strokeWidth = cPx)
+                    // 이미 확정된 반대쪽 홀드는 흐릿하게 표시
+                    val isOtherSelected = if (isStart) idx == endIndex else idx == startIndex
+                    val isThisSelected  = idx == selectedIndex
+
+                    val color = when {
+                        isThisSelected  -> accentColor
+                        isOtherSelected -> if (isStart) COLOR_END else COLOR_START
+                        else            -> COLOR_INACTIVE
                     }
+                    val alpha = when {
+                        isThisSelected  -> 1.0f
+                        isOtherSelected -> 0.5f
+                        else            -> 0.7f
+                    }
+                    val strokePx = (if (isThisSelected) 4f else 2f) * density
+                    val fillAlpha = if (isThisSelected) 0.22f else 0.07f
+
+                    if (hasPolygon) {
+                        drawPath(
+                            path = polygonPath,
+                            color = color.copy(alpha = fillAlpha)
+                        )
+                        drawPath(
+                            path = polygonPath,
+                            color = color.copy(alpha = alpha),
+                            style = Stroke(
+                                width = strokePx,
+                                cap = StrokeCap.Round,
+                                join = StrokeJoin.Round
+                            )
+                        )
+                    } else {
+                        drawRect(
+                            color = color.copy(alpha = fillAlpha),
+                            topLeft = Offset(r.l, r.t),
+                            size = Size(r.r - r.l, r.b - r.t)
+                        )
+                        drawRect(
+                            color = color.copy(alpha = alpha),
+                            topLeft = Offset(r.l, r.t),
+                            size = Size(r.r - r.l, r.b - r.t),
+                            style = Stroke(width = strokePx)
+                        )
+
+                        val cr  = minOf(r.r - r.l, r.b - r.t) * 0.18f
+                        val cPx = strokePx * 2f
+                        listOf(
+                            listOf(Offset(r.l, r.t + cr), Offset(r.l, r.t), Offset(r.l + cr, r.t)),
+                            listOf(Offset(r.r - cr, r.t), Offset(r.r, r.t), Offset(r.r, r.t + cr)),
+                            listOf(Offset(r.l, r.b - cr), Offset(r.l, r.b), Offset(r.l + cr, r.b)),
+                            listOf(Offset(r.r - cr, r.b), Offset(r.r, r.b), Offset(r.r, r.b - cr))
+                        ).forEach { pts ->
+                            drawLine(color.copy(alpha = alpha), pts[0], pts[1], strokeWidth = cPx)
+                            drawLine(color.copy(alpha = alpha), pts[1], pts[2], strokeWidth = cPx)
+                        }
+                    }
+
+                    // confidence 라벨
                     drawConfidenceLabel(
                         label      = "${(hold.confidence * 100).toInt()}%",
                         boxLeft    = r.l,
@@ -389,28 +500,60 @@ private fun DrawScope.drawHoldShape(
     val w = holdSize * 1.4f
     val h = holdSize
 
-    rotate(degrees = rotation, pivot = center) {
-        val left = center.x - w / 2f
-        val top  = center.y - h / 2f
+private fun Hold.toScreenRect(
+    offX: Float, offY: Float, scaledW: Float, scaledH: Float
+) = ScreenRect(
+    l = offX + boundingBox.left   * scaledW,
+    t = offY + boundingBox.top    * scaledH,
+    r = offX + boundingBox.right  * scaledW,
+    b = offY + boundingBox.bottom * scaledH
+)
 
-        val path = Path().apply {
-            moveTo(left + w * 0.50f, top + h * 0.05f)
-            cubicTo(left + w * 0.85f, top + h * 0.00f, left + w * 1.00f, top + h * 0.38f, left + w * 0.88f, top + h * 0.68f)
-            cubicTo(left + w * 0.75f, top + h * 0.97f, left + w * 0.40f, top + h * 1.00f, left + w * 0.22f, top + h * 0.86f)
-            cubicTo(left + w * 0.00f, top + h * 0.68f, left + w * 0.02f, top + h * 0.38f, left + w * 0.14f, top + h * 0.22f)
-            cubicTo(left + w * 0.24f, top + h * 0.05f, left + w * 0.36f, top + h * 0.08f, left + w * 0.50f, top + h * 0.05f)
-            close()
-        }
-        drawPath(path = path, color = color)
-
-        val hlPath = Path().apply {
-            val hx = center.x - w * 0.05f
-            val hy = center.y - h * 0.20f
-            moveTo(hx, hy)
-            cubicTo(hx + w * 0.15f, hy - h * 0.10f, hx + w * 0.25f, hy + h * 0.05f, hx + w * 0.10f, hy + h * 0.12f)
-            cubicTo(hx - w * 0.05f, hy + h * 0.12f, hx - w * 0.10f, hy + h * 0.00f, hx, hy)
-            close()
-        }
-        drawPath(path = hlPath, color = Color.White.copy(alpha = 0.25f))
-    }
+private fun Hold.toScreenPolygon(
+    offX: Float,
+    offY: Float,
+    scaledW: Float,
+    scaledH: Float
+): List<Offset> = polygon.map { point ->
+    Offset(
+        x = offX + point.x * scaledW,
+        y = offY + point.y * scaledH
+    )
 }
+
+private fun List<Offset>.toPath(): Path = Path().apply {
+    if (size < 3) return@apply
+    moveTo(this@toPath[0].x, this@toPath[0].y)
+    for (index in 1 until size) {
+        lineTo(this@toPath[index].x, this@toPath[index].y)
+    }
+    close()
+}
+
+private fun pointInPolygon(point: Offset, polygon: List<Offset>): Boolean {
+    if (polygon.size < 3) return false
+
+    var inside = false
+    var previous = polygon.last()
+    polygon.forEach { current ->
+        val intersects = ((current.y > point.y) != (previous.y > point.y)) &&
+            (point.x < ((previous.x - current.x) * (point.y - current.y)) /
+            ((previous.y - current.y).takeIf { it != 0f } ?: 1e-6f) + current.x)
+        if (intersects) inside = !inside
+        previous = current
+    }
+    return inside
+}
+
+private fun Hold.toSelectionSummary(): String =
+    buildString {
+        append("bbox=(")
+        append(String.format("%.3f, %.3f, %.3f, %.3f", boundingBox.left, boundingBox.top, boundingBox.right, boundingBox.bottom))
+        append("), conf=")
+        append(String.format("%.3f", confidence))
+        if (polygon.isNotEmpty()) {
+            append(", polygon=")
+            append(polygon.size)
+            append("pts")
+        }
+    }
