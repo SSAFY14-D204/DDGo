@@ -190,7 +190,63 @@ class PersonDetectorImpl @Inject constructor(
 
     // ── VideoMetadata 수집 ────────────────────────────────────────────────────
 
+<<<<<<< DDGo_android/app/src/main/java/com/ddgo/app/data/ml/persondetect/PersonDetectorImpl.kt
+        // targetUs를 가장 가까운 프레임 경계에 정렬
+        fun snapToFrame(targetUs: Long): Long {
+            val frameIdx = (targetUs + frameIntervalUs / 2) / frameIntervalUs
+            return (frameIdx * frameIntervalUs).coerceIn(0L, durationUs)
+        }
+
+        fun addIfNew(targetUs: Long) {
+            val aligned = snapToFrame(targetUs)
+            if (result.isEmpty() || aligned > result.last()) {
+                result.add(aligned)
+            }
+        }
+
+        // 시작 edge: 0 ~ EDGE_WINDOW_US (EDGE_STEP_US 간격)
+        var ts = 0L
+        while (ts <= EDGE_WINDOW_US.coerceAtMost(durationUs)) {
+            addIfNew(ts)
+            ts += EDGE_STEP_US
+        }
+
+        // 중간: EDGE_WINDOW_US+MIDDLE_STEP_US ~ durationUs-EDGE_WINDOW_US
+        if (durationUs > 2 * EDGE_WINDOW_US) {
+            ts = EDGE_WINDOW_US + MIDDLE_STEP_US
+            val middleEnd = durationUs - EDGE_WINDOW_US
+            while (ts <= middleEnd) {
+                addIfNew(ts)
+                ts += MIDDLE_STEP_US
+            }
+        }
+
+        // 끝 edge: durationUs-EDGE_WINDOW_US ~ durationUs (EDGE_STEP_US 간격)
+        if (durationUs > EDGE_WINDOW_US) {
+            ts = maxOf(
+                durationUs - EDGE_WINDOW_US,
+                (result.lastOrNull() ?: -EDGE_STEP_US) + EDGE_STEP_US
+            )
+            while (ts <= durationUs) {
+                addIfNew(ts)
+                ts += EDGE_STEP_US
+            }
+        }
+
+        Log.d(TAG, "   FPS 기반 계산: ${result.size}개 타임스탬프" +
+                " (fps=${String.format(Locale.US, "%.2f", fps)}, frameInterval=${frameIntervalUs}μs)")
+        return result
+    }
+
+    /**
+     * MediaExtractor로 비디오 트랙의 첫 PTS(μs)와 FPS를 한 번에 추출.
+     * 기존 getFirstVideoPts()를 대체하며 MediaExtractor 오픈 횟수를 1회로 줄입니다.
+     * FPS를 읽을 수 없는 경우 fps=0f 반환.
+     */
     private fun getVideoMetadata(uri: Uri, durationUs: Long): VideoMetadata {
+=======
+    private fun getVideoMetadata(uri: Uri, durationUs: Long): VideoMetadata {
+>>>>>>> DDGo_android/app/src/main/java/com/ddgo/app/data/ml/persondetect/PersonDetectorImpl.kt
         val extractor = MediaExtractor()
         return try {
             if (!setupExtractor(extractor, uri)) {
@@ -206,10 +262,18 @@ class PersonDetectorImpl @Inject constructor(
                 val mime   = format.getString(MediaFormat.KEY_MIME)
                 if (mime?.startsWith("video/") == true) {
                     extractor.selectTrack(i)
+<<<<<<< DDGo_android/app/src/main/java/com/ddgo/app/data/ml/persondetect/PersonDetectorImpl.kt
+                    val firstPts = extractor.sampleTime.takeIf { it >= 0L } ?: -1L
+                    val fps = getFpsFromFormat(format)
+                    Log.d(TAG, "   [메타] firstPts=${firstPts / 1000}ms," +
+                            " fps=${String.format(Locale.US, "%.2f", fps)}")
+                    return VideoMetadata(firstPts, fps)
+=======
                     firstPts        = extractor.sampleTime.takeIf { it >= 0L } ?: -1L
                     trackDurationUs = try { format.getLong(MediaFormat.KEY_DURATION) } catch (e: Exception) { -1L }
                     videoTrack      = i
                     break
+>>>>>>> DDGo_android/app/src/main/java/com/ddgo/app/data/ml/persondetect/PersonDetectorImpl.kt
                 }
             }
 
