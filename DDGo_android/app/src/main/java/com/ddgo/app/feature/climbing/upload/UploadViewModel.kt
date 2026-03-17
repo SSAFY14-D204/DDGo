@@ -423,33 +423,6 @@ class UploadViewModel @Inject constructor(
     }
 
     /**
-     * resolve API가 복구되기 전까지 암장 선택 후 다음 단계로 진행하기 위한 임시 처리입니다.
-     *
-     * 역할:
-     * - 사용자가 고른 장소를 현재 암장으로 저장합니다.
-     * - Step 2가 비어 보이지 않도록 임시 난이도 세트를 채웁니다.
-     *
-     * 주의:
-     * - 서버 resolve 결과가 아니므로 gymId는 임시값을 사용합니다.
-     * - 실제 challenge 생성은 별도 복구가 필요합니다.
-     */
-    fun selectNearbyPlaceForNextStep(place: NearbyPlace) {
-        selectedNearbyPlace = place
-        resolvedGym = null
-        resolvedGymGrades = TEMPORARY_FALLBACK_GYM_GRADES
-        gymId = 0
-        gymName = place.placeName
-        clearChallengeFlowState()
-        _gymResolveUiState.value = GymResolveUiState.Idle
-
-        Log.d(
-            TAG,
-            "selectNearbyPlaceForNextStep: placeName=${place.placeName}, " +
-                "externalPlaceId=${place.externalPlaceId}, gradeCount=${resolvedGymGrades.size}"
-        )
-    }
-
-    /**
      * 현재 위치 기준으로 주변 암장을 검색합니다.
      *
      * 동작:
@@ -844,10 +817,8 @@ class UploadViewModel @Inject constructor(
 
         val currentChallengeId = challengeId
         if (currentChallengeId == null || currentChallengeId <= 0L) {
-            Log.d(TAG, "submitUpload: challenge가 없어 업로드를 건너뛰고 다음 단계로 진행합니다.")
-            uploadedAttemptVideos = emptyList()
-            currentAttemptIndex = 0
-            _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(emptyList())
+            _uploadSubmissionUiState.value =
+                UploadSubmissionUiState.Error("생성된 challenge가 없습니다.")
             return
         }
 
@@ -1060,24 +1031,3 @@ private val GYM_COLOR_NAME_TO_CLASSIFIER_COLOR = mapOf(
     "검은" to "black"
 )
 
-/**
- * resolve API 우회 중에만 사용하는 임시 난이도 세트입니다.
- *
- * 주의:
- * - 서버 응답을 대체하는 값입니다.
- * - resolve API 정상화 후 제거하거나 서버 데이터로 교체해야 합니다.
- */
-private val TEMPORARY_FALLBACK_GYM_GRADES = listOf(
-    GymGrade(gymGradeId = 1, colorName = "red", sortOrder = 1, colorHex = "#FF3B30", gradeLabel = "V10"),
-    GymGrade(gymGradeId = 2, colorName = "orange", sortOrder = 2, colorHex = "#FF9500", gradeLabel = "V9"),
-    GymGrade(gymGradeId = 3, colorName = "yellow", sortOrder = 3, colorHex = "#FFD60A", gradeLabel = "V8"),
-    GymGrade(gymGradeId = 4, colorName = "green", sortOrder = 4, colorHex = "#34C759", gradeLabel = "V7"),
-    GymGrade(gymGradeId = 5, colorName = "blue", sortOrder = 5, colorHex = "#007AFF", gradeLabel = "V6"),
-    GymGrade(gymGradeId = 6, colorName = "navy", sortOrder = 6, colorHex = "#5856D6", gradeLabel = "V5"),
-    GymGrade(gymGradeId = 7, colorName = "purple", sortOrder = 7, colorHex = "#AF52DE", gradeLabel = "V4"),
-    GymGrade(gymGradeId = 8, colorName = "brown", sortOrder = 8, colorHex = "#A2845E", gradeLabel = "V3"),
-    GymGrade(gymGradeId = 9, colorName = "pink", sortOrder = 9, colorHex = "#FF2D55", gradeLabel = "V2"),
-    GymGrade(gymGradeId = 10, colorName = "white", sortOrder = 10, colorHex = "#FFFFFF", gradeLabel = "V1"),
-    GymGrade(gymGradeId = 11, colorName = "gray", sortOrder = 11, colorHex = "#8E8E93", gradeLabel = "V0"),
-    GymGrade(gymGradeId = 12, colorName = "black", sortOrder = 12, colorHex = "#1C1C1E", gradeLabel = "V11")
-)
