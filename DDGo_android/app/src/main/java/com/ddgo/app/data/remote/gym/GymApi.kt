@@ -1,0 +1,26 @@
+package com.ddgo.app.data.remote.gym
+
+import com.ddgo.app.data.remote.common.ApiResponse
+import retrofit2.http.Body
+import retrofit2.http.POST
+
+/**
+ * DDGo 백엔드의 gym 관련 API 인터페이스.
+ *
+ * 역할:
+ * - 프론트에서 선택한 카카오 장소 정보를 서버로 보내고,
+ *   DDGo DB의 climbing_gyms와 매칭/보정된 결과를 받아옵니다.
+ *
+ * 주의:
+ * - baseUrl에 /api/가 이미 포함되어 있다면 여기서는 "gyms/resolve"만 사용합니다.
+ */
+interface GymApi {
+
+    /**
+     * 선택한 장소 정보를 백엔드에 전달하여 gym resolve를 수행합니다.
+     */
+    @POST("gyms/resolve")
+    suspend fun resolveGym(
+        @Body request: ResolveGymRequestDto
+    ): ApiResponse<ResolveGymResponseDto>
+}

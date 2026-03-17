@@ -2,6 +2,7 @@ package com.ddgo.app.di
 
 import com.ddgo.app.BuildConfig
 import com.ddgo.app.core.network.AuthInterceptor
+import com.ddgo.app.core.network.KakaoLocalAuthInterceptor
 import com.ddgo.app.core.network.TokenAuthenticator
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
@@ -129,5 +130,69 @@ object NetworkModule {
     @Singleton
     fun provideUploadApi(retrofit: Retrofit): com.ddgo.app.data.remote.upload.UploadApi {
         return retrofit.create(com.ddgo.app.data.remote.upload.UploadApi::class.java)
+    }
+
+    /**
+     * Kakao Local API 전용 OkHttpClient를 제공합니다.
+     *
+     * 역할:
+     * - Kakao 인증 헤더 추가
+     * - 디버그 환경에서 HTTP 로그 출력
+     */
+    @Provides
+    @Singleton
+    @Named("KakaoLocalOkHttpClient")
+    fun provideKakaoLocalOkHttpClient(
+        kakaoLocalAuthInterceptor: KakaoLocalAuthInterceptor
+    ): OkHttpClient {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
+            else HttpLoggingInterceptor.Level.NONE
+        }
+
+        return OkHttpClient.Builder()
+            .addInterceptor(kakaoLocalAuthInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .build()
+    }
+
+    /**
+     * Kakao Local API 전용 Retrofit을 제공합니다.
+     *
+     * 주의:
+     * - DDGo backend Retrofit과 baseUrl이 다르므로 별도 Named Retrofit을 사용합니다.
+     */
+    @Provides
+    @Singleton
+    @Named("KakaoLocalRetrofit")
+    fun provideKakaoLocalRetrofit(
+        @Named("KakaoLocalOkHttpClient") okHttpClient: OkHttpClient,
+        json: Json
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.KAKAO_LOCAL_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+    }
+
+    /**
+     * KakaoLocalApi 구현체를 제공합니다.
+     */
+    @Provides
+    @Singleton
+    fun provideKakaoLocalApi(
+        @Named("KakaoLocalRetrofit") retrofit: Retrofit
+    ): com.ddgo.app.data.remote.kakao.KakaoLocalApi {
+        return retrofit.create(com.ddgo.app.data.remote.kakao.KakaoLocalApi::class.java)
+    }
+
+    /**
+     * DDGo backend의 GymApi 구현체를 제공합니다.
+     */
+    @Provides
+    @Singleton
+    fun provideGymApi(retrofit: Retrofit): com.ddgo.app.data.remote.gym.GymApi {
+        return retrofit.create(com.ddgo.app.data.remote.gym.GymApi::class.java)
     }
 }

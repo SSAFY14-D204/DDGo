@@ -14,12 +14,17 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.Hold
+import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.domain.model.ResolvedGym
 import com.ddgo.app.data.ml.color.HoldColorClassifier
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
+import com.ddgo.app.domain.usecase.ResolveGymUseCase
+import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +58,9 @@ class UploadViewModel @Inject constructor(
     private val personDetector: PersonDetector,
     private val holdDetector: HoldDetector,
     private val poseEstimator: PoseEstimator,
-    private val holdColorClassifier: HoldColorClassifier
+    private val holdColorClassifier: HoldColorClassifier,
+    private val searchNearbyClimbingGymsUseCase: SearchNearbyClimbingGymsUseCase,
+    private val resolveGymUseCase: ResolveGymUseCase
 ) : ViewModel() {
 
     // UI 레이어에 노출할 상태 (로딩, 성공, 실패 등)
@@ -87,6 +94,59 @@ class UploadViewModel @Inject constructor(
     var difficultyLevel by mutableStateOf("")
         private set
     var holdColor by mutableStateOf("")
+        private set
+
+    /**
+     * 주변 암장 검색 UI 상태.
+     *
+     * 역할:
+     * - 검색 전/로딩/성공/실패 상태를 화면에 전달합니다.
+     */
+    private val _gymSearchUiState = MutableStateFlow<GymSearchUiState>(GymSearchUiState.Idle)
+    val gymSearchUiState = _gymSearchUiState.asStateFlow()
+
+    /**
+     * 선택한 장소의 gym resolve UI 상태.
+     *
+     * 역할:
+     * - 사용자가 장소를 선택한 뒤 서버 resolve 진행 상태를 화면에 전달합니다.
+     */
+    private val _gymResolveUiState = MutableStateFlow<GymResolveUiState>(GymResolveUiState.Idle)
+    val gymResolveUiState = _gymResolveUiState.asStateFlow()
+
+    /**
+     * Kakao Local API에서 가져온 주변 장소 목록.
+     */
+    var nearbyPlaces by mutableStateOf<List<NearbyPlace>>(emptyList())
+        private set
+
+    /**
+     * 사용자가 선택한 장소.
+     */
+    var selectedNearbyPlace by mutableStateOf<NearbyPlace?>(null)
+        private set
+
+    /**
+     * 서버 resolve 결과.
+     */
+    var resolvedGym by mutableStateOf<ResolvedGym?>(null)
+        private set
+
+    /**
+     * resolve 결과로 내려온 gym grade 목록.
+     *
+     * 다음 단계에서 gymGradeId 기반 선택 UI로 바꿀 때 사용합니다.
+     */
+    var resolvedGymGrades by mutableStateOf<List<GymGrade>>(emptyList())
+        private set
+
+    /**
+     * 마지막 검색 위치.
+     */
+    var lastSearchLatitude by mutableStateOf<Double?>(null)
+        private set
+
+    var lastSearchLongitude by mutableStateOf<Double?>(null)
         private set
 
     // --- 3. ChallengeHoldScreen (홀드 탐지 결과) ---
@@ -330,6 +390,106 @@ class UploadViewModel @Inject constructor(
         gymName = name
     }
 
+    /**
+     * 현재 위치 기준으로 주변 암장을 검색합니다.
+     *
+     * 동작:
+     * 1. 마지막 검색 좌표 저장
+     * 2. 이전 선택/resolve 상태 초기화
+     * 3. UseCase를 통해 Kakao Local API 검색
+     * 4. 결과를 UI 상태로 반영
+     */
+    fun searchNearbyPlaces(latitude: Double, longitude: Double) {
+        lastSearchLatitude = latitude
+        lastSearchLongitude = longitude
+
+        Log.d(TAG, "searchNearbyPlaces: latitude=$latitude, longitude=$longitude")
+
+        selectedNearbyPlace = null
+        resolvedGym = null
+        resolvedGymGrades = emptyList()
+        gymId = null
+        gymName = ""
+        _gymResolveUiState.value = GymResolveUiState.Idle
+
+        viewModelScope.launch {
+            _gymSearchUiState.value = GymSearchUiState.Loading
+
+            searchNearbyClimbingGymsUseCase(latitude, longitude)
+                .onSuccess { places ->
+                    nearbyPlaces = places
+                    Log.d(TAG, "searchNearbyPlaces: success, placeCount=${places.size}")
+                    places.forEachIndexed { index, place ->
+                        Log.d(
+                            TAG,
+                            "searchNearbyPlaces[$index]: name=${place.placeName}, " +
+                                "address=${place.roadAddressName ?: place.addressName}, " +
+                                "distance=${place.distanceMeters}, " +
+                                "lat=${place.latitude}, lng=${place.longitude}, " +
+                                "externalPlaceId=${place.externalPlaceId}"
+                        )
+                    }
+                    _gymSearchUiState.value = GymSearchUiState.Success(places)
+                }
+                .onFailure { throwable ->
+                    nearbyPlaces = emptyList()
+                    Log.e(TAG, "searchNearbyPlaces: failed", throwable)
+                    _gymSearchUiState.value = GymSearchUiState.Error(
+                        throwable.message ?: "Failed to search nearby gyms."
+                    )
+                }
+        }
+    }
+
+    /**
+     * 사용자가 선택한 장소를 DDGo backend에 resolve 요청합니다.
+     *
+     * 동작:
+     * 1. 선택한 장소 저장
+     * 2. resolve API 호출
+     * 3. gymId, gymName, resolved grades 반영
+     */
+    fun resolveSelectedPlace(place: NearbyPlace) {
+        selectedNearbyPlace = place
+        Log.d(
+            TAG,
+            "resolveSelectedPlace: name=${place.placeName}, " +
+                "address=${place.roadAddressName ?: place.addressName}, " +
+                "lat=${place.latitude}, lng=${place.longitude}, " +
+                "externalPlaceId=${place.externalPlaceId}"
+        )
+
+        viewModelScope.launch {
+            _gymResolveUiState.value = GymResolveUiState.Loading
+
+            resolveGymUseCase(place)
+                .onSuccess { resolved ->
+                    resolvedGym = resolved
+                    resolvedGymGrades = resolved.grades
+                    gymId = resolved.gymId
+                    gymName = resolved.gym.displayName
+                    Log.d(
+                        TAG,
+                        "resolveSelectedPlace: success, gymId=${resolved.gymId}, " +
+                            "displayName=${resolved.gym.displayName}, gradeCount=${resolved.grades.size}, " +
+                            "matched=${resolved.matched}, matchStatus=${resolved.matchStatus}, " +
+                            "gradeSource=${resolved.gradeSource}"
+                    )
+                    _gymResolveUiState.value = GymResolveUiState.Success(resolved)
+                }
+                .onFailure { throwable ->
+                    resolvedGym = null
+                    resolvedGymGrades = emptyList()
+                    gymId = null
+                    gymName = ""
+                    Log.e(TAG, "resolveSelectedPlace: failed", throwable)
+                    _gymResolveUiState.value = GymResolveUiState.Error(
+                        throwable.message ?: "Failed to resolve gym."
+                    )
+                }
+        }
+    }
+
     fun updateDifficulty(level: String) {
         difficultyLevel = level
     }
@@ -539,4 +699,24 @@ sealed class UploadUiState {
     // TODO: 결과 화면 (AttemptResultScreen)에서 보여줄 분석 결과를 파라미터로 넣을 수도 있습니다.
     object Success : UploadUiState()
     data class Error(val message: String) : UploadUiState()
+}
+
+/**
+ * 주변 암장 검색 UI 상태.
+ */
+sealed class GymSearchUiState {
+    object Idle : GymSearchUiState()
+    object Loading : GymSearchUiState()
+    data class Success(val places: List<NearbyPlace>) : GymSearchUiState()
+    data class Error(val message: String) : GymSearchUiState()
+}
+
+/**
+ * gym resolve UI 상태.
+ */
+sealed class GymResolveUiState {
+    object Idle : GymResolveUiState()
+    object Loading : GymResolveUiState()
+    data class Success(val resolvedGym: ResolvedGym) : GymResolveUiState()
+    data class Error(val message: String) : GymResolveUiState()
 }

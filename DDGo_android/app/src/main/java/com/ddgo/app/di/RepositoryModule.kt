@@ -1,8 +1,10 @@
 package com.ddgo.app.di
 
 import com.ddgo.app.data.repository.AuthRepositoryImpl
+import com.ddgo.app.data.repository.GymRepositoryImpl
 import com.ddgo.app.data.repository.UploadRepositoryImpl
 import com.ddgo.app.domain.repository.AuthRepository
+import com.ddgo.app.domain.repository.GymRepository
 import com.ddgo.app.domain.repository.UploadRepository
 import dagger.Binds
 import dagger.Module
@@ -33,4 +35,16 @@ abstract class RepositoryModule {
     abstract fun bindUploadRepository(
         impl: UploadRepositoryImpl
     ): UploadRepository
+
+    /**
+     * GymRepository 인터페이스를 GymRepositoryImpl 구현체에 바인딩합니다.
+     *
+     * 규칙:
+     * - feature/domain은 구현체를 몰라야 하므로 interface 기준으로 주입합니다.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindGymRepository(
+        impl: GymRepositoryImpl
+    ): GymRepository
 }
