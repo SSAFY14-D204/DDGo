@@ -31,11 +31,12 @@ sealed class ScreenRoutes(val route: String) {
      */
     object Climbing : ScreenRoutes("climbing_graph") {
 
-        /** 영상 업로드 플로우 (갤러리 선택 → 챌린지 생성 → 홀드 선택 → 결과 확인) */
+        /** 영상 업로드 플로우 (갤러리 선택 → 챌린지 생성 → 누락 홀드 추가 → 시작/끝 홀드 선택 → 결과 확인) */
         object Upload : ScreenRoutes("upload_graph") {
             const val ATTEMPT_UPLOAD = "attempt_upload"
             const val CHALLENGE_CREATE = "challenge_create"
             const val CHALLENGE_HOLD = "challenge_hold"
+            const val HOLD_SELECT = "hold_select"
             const val ATTEMPT_RESULT = "attempt_result"
         }
 
