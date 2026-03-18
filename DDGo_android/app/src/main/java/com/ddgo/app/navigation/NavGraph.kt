@@ -1,10 +1,14 @@
 package com.ddgo.app.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.ddgo.app.core.ui.components.DevNavigationOverlay
 import com.ddgo.app.feature.auth.authGraph
 import com.ddgo.app.feature.debug.debugGraph
 import com.ddgo.app.feature.main.mainGraph
@@ -22,6 +26,7 @@ import com.ddgo.app.feature.splash.SplashScreen
 fun NavGraph() {
     val navController: NavHostController = rememberNavController()
 
+    Box(modifier = Modifier.fillMaxSize()) {
     NavHost(
         navController = navController,
         startDestination = ScreenRoutes.Splash.route
@@ -63,5 +68,9 @@ fun NavGraph() {
 
         // 디버그 플로우
         debugGraph(navController = navController)
+    }
+
+    // 개발용 네비게이션 오버레이 (모든 화면 위에 표시)
+    DevNavigationOverlay(navController = navController)
     }
 }

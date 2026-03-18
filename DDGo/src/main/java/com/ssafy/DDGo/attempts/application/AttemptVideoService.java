@@ -87,14 +87,14 @@ public class AttemptVideoService {
 
     private String getPresignedUrl(String objectKey) {
         try {
-            String url = minioClient.getPresignedObjectUrl(
+            String internalUrl = minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.PUT)
                             .bucket(minioProperties.getBucket())
                             .object(objectKey)
                             .expiry((int) Duration.ofMinutes(15).getSeconds()) // 15분 유효
                             .build());
-            return toPublicUrl(url);
+            return toPublicUrl(internalUrl);
         } catch (Exception e) {
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR,
                     "Presigned URL 발급 중 오류가 발생했습니다. (MinIO 서버 연결 상태 확인 필요)");
@@ -109,14 +109,14 @@ public class AttemptVideoService {
 
     private String getPresignedGetUrl(String objectKey) {
         try {
-            String url = minioClient.getPresignedObjectUrl(
+            String internalUrl = minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(minioProperties.getBucket())
                             .object(objectKey)
                             .expiry((int) Duration.ofHours(2).getSeconds()) // 조회용은 2시간 유효하게 발급
                             .build());
-            return toPublicUrl(url);
+            return toPublicUrl(internalUrl);
         } catch (Exception e) {
             log.warn("영상 조회용 Presigned URL 발급 실패 (objectKey: {}): {}", objectKey, e.getMessage());
             return null; // 영상 URL 발급 실패 시 null 반환하여 조회 전체가 터지는 것 방지
@@ -133,22 +133,29 @@ public class AttemptVideoService {
             URI internalUri = URI.create(internalUrl);
             URI publicUri = URI.create(publicBase);
 
-            String publicPathPrefix = publicUri.getPath() == null ? "" : publicUri.getPath();
-            if (publicPathPrefix.endsWith("/")) {
-                publicPathPrefix = publicPathPrefix.substring(0, publicPathPrefix.length() - 1);
+            String publicPath = publicUri.getRawPath();
+            if (publicPath == null) {
+                publicPath = "";
+            }
+            if (publicPath.endsWith("/")) {
+                publicPath = publicPath.substring(0, publicPath.length() - 1);
             }
 
-            String rewrittenPath = publicPathPrefix + internalUri.getPath();
+            String rawPath = internalUri.getRawPath();
+            String rawQuery = internalUri.getRawQuery();
 
-            return new URI(
-                    publicUri.getScheme(),
-                    publicUri.getUserInfo(),
-                    publicUri.getHost(),
-                    publicUri.getPort(),
-                    rewrittenPath,
-                    internalUri.getRawQuery(),
-                    internalUri.getRawFragment()
-            ).toString();
+            StringBuilder rewritten = new StringBuilder();
+            rewritten.append(publicUri.getScheme())
+                    .append("://")
+                    .append(publicUri.getRawAuthority())
+                    .append(publicPath)
+                    .append(rawPath);
+
+            if (rawQuery != null && !rawQuery.isBlank()) {
+                rewritten.append("?").append(rawQuery);
+            }
+
+            return rewritten.toString();
         } catch (Exception e) {
             log.warn("URL 파싱 오류, 원본 URL 반환: {}", internalUrl);
             return internalUrl;

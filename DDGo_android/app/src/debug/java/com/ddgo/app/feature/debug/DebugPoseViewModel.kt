@@ -1,5 +1,7 @@
+// [DEBUG ONLY] 이 뷰모델은 포즈 랜드마크 데이터 디버깅 화면용입니다.
 package com.ddgo.app.feature.debug
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -85,7 +87,8 @@ data class DebugPoseUiState(
 
 data class DebugPoseFrameResult(
     val pose: Pose,
-    val worldLandmarks: List<DebugPoseWorldLandmark>
+    val worldLandmarks: List<DebugPoseWorldLandmark>,
+    val capturedBitmap: Bitmap? = null
 )
 
 data class DebugPoseWorldLandmark(
