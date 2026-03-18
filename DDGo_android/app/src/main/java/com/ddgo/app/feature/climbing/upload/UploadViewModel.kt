@@ -98,6 +98,7 @@ class UploadViewModel @Inject constructor(
         private set
 
     private var uploadFlowMode by mutableStateOf(UploadFlowMode.FullChallenge)
+    private var allowLocalAnalysisWithoutChallenge by mutableStateOf(false)
 
     // 전체 시도 영상 (초기 + 추가 영상 리스트)
     val allAttemptUris: List<String>
@@ -118,6 +119,9 @@ class UploadViewModel @Inject constructor(
 
     val isAttemptOnlyUploadMode: Boolean
         get() = uploadFlowMode == UploadFlowMode.AttemptOnly
+
+    val canBypassChallengeCreationForDev: Boolean
+        get() = allowLocalAnalysisWithoutChallenge
 
     // 썸네일 / 메타데이터 (PersonDetector 방식으로 추출 → 다음 화면에서 활용)
     var thumbnail by mutableStateOf<Bitmap?>(null)
@@ -330,6 +334,7 @@ class UploadViewModel @Inject constructor(
      */
     fun beginNewChallengeUploadFlow() {
         uploadFlowMode = UploadFlowMode.FullChallenge
+        allowLocalAnalysisWithoutChallenge = false
         attemptOnlyVideoUris = emptyList()
         additionalVideoUris = emptyList()
         resultPlaybackUris = emptyList()
@@ -364,6 +369,7 @@ class UploadViewModel @Inject constructor(
         }
 
         uploadFlowMode = UploadFlowMode.AttemptOnly
+        allowLocalAnalysisWithoutChallenge = false
         attemptOnlyVideoUris = emptyList()
         resultPlaybackUris = emptyList()
         uploadedAttemptVideos = emptyList()
@@ -396,6 +402,7 @@ class UploadViewModel @Inject constructor(
             colorHex = null
         )
         uploadFlowMode = UploadFlowMode.AttemptOnly
+        allowLocalAnalysisWithoutChallenge = false
         attemptOnlyVideoUris = emptyList()
         resultPlaybackUris = emptyList()
         uploadedAttemptVideos = emptyList()
@@ -410,10 +417,20 @@ class UploadViewModel @Inject constructor(
      */
     fun cancelAttemptOnlyUploadMode() {
         uploadFlowMode = UploadFlowMode.FullChallenge
+        allowLocalAnalysisWithoutChallenge = false
         attemptOnlyVideoUris = emptyList()
         resultPlaybackUris = emptyList()
         clearHoldReachAnalysis()
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+    }
+
+    fun setLocalAnalysisWithoutChallengeEnabled(enabled: Boolean) {
+        allowLocalAnalysisWithoutChallenge = enabled
+        if (enabled) {
+            uploadFlowMode = UploadFlowMode.FullChallenge
+            _challengeCreationUiState.value = ChallengeCreationUiState.Idle
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+        }
     }
 
     // ====== 상태 업데이트 메서드 (이벤트 핸들러) ======
@@ -783,6 +800,7 @@ class UploadViewModel @Inject constructor(
                 .onSuccess { challenge ->
                     createdChallenge = challenge
                     challengeId = challenge.challengeId
+                    allowLocalAnalysisWithoutChallenge = false
                     difficultyLevel = challenge.gradeLabel ?: (selectedGymGrade?.gradeLabel ?: challenge.problemColor)
                     if (selectedHoldColorKey == null) {
                         mapGymColorToClassifierColor(challenge.problemColor)
@@ -1011,7 +1029,11 @@ class UploadViewModel @Inject constructor(
         }
 
         val currentChallengeId = challengeId
-        if (currentChallengeId == null || currentChallengeId <= 0L) {
+        val useLocalAnalysisOnly = allowLocalAnalysisWithoutChallenge &&
+            !isAttemptOnlyUploadMode &&
+            (currentChallengeId == null || currentChallengeId <= 0L)
+
+        if (!useLocalAnalysisOnly && (currentChallengeId == null || currentChallengeId <= 0L)) {
             _uploadSubmissionUiState.value =
                 UploadSubmissionUiState.Error("생성된 challenge가 없습니다.")
             return
@@ -1048,7 +1070,7 @@ class UploadViewModel @Inject constructor(
 
         viewModelScope.launch {
             val attemptUris = allAttemptUris
-            if (!isAttemptOnlyUploadMode) {
+            if (!isAttemptOnlyUploadMode && !useLocalAnalysisOnly) {
                 val bitmapForHoldSave = currentBitmap ?: run {
                     _uploadSubmissionUiState.value =
                         UploadSubmissionUiState.Error("홀드 기준 이미지가 없습니다.")
@@ -1070,7 +1092,7 @@ class UploadViewModel @Inject constructor(
                     UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있습니다.")
 
                 saveChallengeHoldsUseCase(
-                    challengeId = currentChallengeId,
+                    challengeId = currentChallengeId!!,
                     holds = holdCoordinates
                 )
                     .onSuccess { saved ->
@@ -1090,42 +1112,46 @@ class UploadViewModel @Inject constructor(
             }
 
             val uploadedVideos = mutableListOf<UploadedAttemptVideo>()
-            attemptUris.forEachIndexed { index, uri ->
-                _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
-                    "영상 업로드 중입니다. (${index + 1}/${attemptUris.size})"
-                )
+            if (useLocalAnalysisOnly) {
+                Log.d(TAG, "submitUpload: dev local analysis mode, skipping challenge save and video upload")
+            } else {
+                attemptUris.forEachIndexed { index, uri ->
+                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
+                        "영상 업로드 중입니다. (${index + 1}/${attemptUris.size})"
+                    )
 
-                uploadAttemptVideoUseCase(
-                    challengeId = currentChallengeId,
-                    videoUri = uri
-                )
-                    .onSuccess { uploaded ->
-                        endAttemptUseCase(
-                            challengeId = currentChallengeId,
-                            attemptId = uploaded.attemptId,
-                            attemptResult = null
-                        )
-                            .onFailure { throwable ->
-                                Log.e(TAG, "submitUpload: end attempt failed", throwable)
-                                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
-                                    throwable.message ?: "Failed to end attempt."
-                                )
-                                return@launch
-                            }
+                    uploadAttemptVideoUseCase(
+                        challengeId = currentChallengeId!!,
+                        videoUri = uri
+                    )
+                        .onSuccess { uploaded ->
+                            endAttemptUseCase(
+                                challengeId = currentChallengeId,
+                                attemptId = uploaded.attemptId,
+                                attemptResult = null
+                            )
+                                .onFailure { throwable ->
+                                    Log.e(TAG, "submitUpload: end attempt failed", throwable)
+                                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                                        throwable.message ?: "Failed to end attempt."
+                                    )
+                                    return@launch
+                                }
 
-                        uploadedVideos += uploaded
-                        Log.d(
-                            TAG,
-                            "submitUpload: attempt upload success, attemptId=${uploaded.attemptId}, " +
-                                "attemptNo=${uploaded.attemptNo}, objectKey=${uploaded.objectKey}"
-                        )
-                    }
-                    .onFailure { throwable ->
-                        Log.e(TAG, "submitUpload: attempt upload failed", throwable)
-                        _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
-                            throwable.message ?: "Failed to upload attempt video."
-                        )
-                    return@launch
+                            uploadedVideos += uploaded
+                            Log.d(
+                                TAG,
+                                "submitUpload: attempt upload success, attemptId=${uploaded.attemptId}, " +
+                                    "attemptNo=${uploaded.attemptNo}, objectKey=${uploaded.objectKey}"
+                            )
+                        }
+                        .onFailure { throwable ->
+                            Log.e(TAG, "submitUpload: attempt upload failed", throwable)
+                            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                                throwable.message ?: "Failed to upload attempt video."
+                            )
+                            return@launch
+                        }
                 }
             }
 
