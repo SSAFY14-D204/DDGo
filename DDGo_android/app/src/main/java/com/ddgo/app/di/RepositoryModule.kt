@@ -2,11 +2,13 @@ package com.ddgo.app.di
 
 import com.ddgo.app.data.repository.AuthRepositoryImpl
 import com.ddgo.app.data.repository.AttemptRepositoryImpl
+import com.ddgo.app.data.repository.CalendarRepositoryImpl
 import com.ddgo.app.data.repository.ChallengeRepositoryImpl
 import com.ddgo.app.data.repository.GymRepositoryImpl
 import com.ddgo.app.data.repository.UploadRepositoryImpl
 import com.ddgo.app.domain.repository.AttemptRepository
 import com.ddgo.app.domain.repository.AuthRepository
+import com.ddgo.app.domain.repository.CalendarRepository
 import com.ddgo.app.domain.repository.ChallengeRepository
 import com.ddgo.app.domain.repository.GymRepository
 import com.ddgo.app.domain.repository.UploadRepository
@@ -63,4 +65,10 @@ abstract class RepositoryModule {
     abstract fun bindAttemptRepository(
         impl: AttemptRepositoryImpl
     ): AttemptRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindCalendarRepository(
+        impl: CalendarRepositoryImpl
+    ): CalendarRepository
 }
