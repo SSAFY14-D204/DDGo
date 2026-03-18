@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
@@ -48,12 +49,37 @@ fun NavGraphBuilder.uploadGraph(
             }
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
 
+            LaunchedEffect(Unit) {
+                viewModel.setLocalAnalysisWithoutChallengeEnabled(false)
+            }
+
             ChallengeCreateScreen(
                 viewModel        = viewModel,
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD)
                 },
                 onNavigateBack   = { navController.popBackStack() }
+            )
+        }
+
+        // 2-1. 색상 선택 바로 진입 (dev navigation 용)
+        composable(ScreenRoutes.Climbing.Upload.CHALLENGE_COLOR) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
+            }
+            val viewModel: UploadViewModel = hiltViewModel(parentEntry)
+
+            LaunchedEffect(Unit) {
+                viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+            }
+
+            ChallengeCreateScreen(
+                viewModel = viewModel,
+                initialStep = ChallengeCreateEntryStep.COLOR,
+                onNavigateToNext = {
+                    navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD)
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

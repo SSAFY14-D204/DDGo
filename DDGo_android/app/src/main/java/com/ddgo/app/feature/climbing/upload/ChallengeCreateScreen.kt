@@ -85,41 +85,67 @@ private enum class CreateStep {
     COLOR
 }
 
+enum class ChallengeCreateEntryStep {
+    GYM_NAME,
+    LEVEL,
+    COLOR
+}
+
 @Composable
 fun ChallengeCreateScreen(
     viewModel: UploadViewModel = hiltViewModel(),
+    initialStep: ChallengeCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME,
+    minimumStep: ChallengeCreateEntryStep = initialStep,
     onNavigateToNext: () -> Unit = {},
     onNavigateBack: () -> Unit = {}
 ) {
-    var step by rememberSaveable { mutableStateOf(CreateStep.GYM_NAME) }
+    var step by rememberSaveable(initialStep) { mutableStateOf(initialStep.toCreateStep()) }
+    val minimumAllowedStep = minimumStep.toCreateStep()
+
+    val handleBack = {
+        val previousStep = step.previousStep()
+        if (previousStep == null || previousStep.ordinal < minimumAllowedStep.ordinal) {
+            onNavigateBack()
+        } else {
+            step = previousStep
+        }
+    }
 
     BackHandler {
-        when (step) {
-            CreateStep.GYM_NAME -> onNavigateBack()
-            CreateStep.LEVEL -> step = CreateStep.GYM_NAME
-            CreateStep.COLOR -> step = CreateStep.LEVEL
-        }
+        handleBack()
     }
 
     when (step) {
         CreateStep.GYM_NAME -> GymNameStep(
             viewModel = viewModel,
             onNext = { step = CreateStep.LEVEL },
-            onBack = onNavigateBack
+            onBack = handleBack
         )
 
         CreateStep.LEVEL -> GymLevelStep(
             viewModel = viewModel,
             onNext = { step = CreateStep.COLOR },
-            onBack = { step = CreateStep.GYM_NAME }
+            onBack = handleBack
         )
 
         CreateStep.COLOR -> GymColorStep(
             viewModel = viewModel,
             onNext = onNavigateToNext,
-            onBack = { step = CreateStep.LEVEL }
+            onBack = handleBack
         )
     }
+}
+
+private fun ChallengeCreateEntryStep.toCreateStep(): CreateStep = when (this) {
+    ChallengeCreateEntryStep.GYM_NAME -> CreateStep.GYM_NAME
+    ChallengeCreateEntryStep.LEVEL -> CreateStep.LEVEL
+    ChallengeCreateEntryStep.COLOR -> CreateStep.COLOR
+}
+
+private fun CreateStep.previousStep(): CreateStep? = when (this) {
+    CreateStep.GYM_NAME -> null
+    CreateStep.LEVEL -> CreateStep.GYM_NAME
+    CreateStep.COLOR -> CreateStep.LEVEL
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -529,6 +555,7 @@ private fun GymColorStep(
     onBack: () -> Unit
 ) {
     val challengeCreationUiState by viewModel.challengeCreationUiState.collectAsState()
+    val canBypassChallengeCreationForDev = viewModel.canBypassChallengeCreationForDev
     val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
     val selectedPaletteKey = viewModel.selectedHoldColorKey
     val selectedHoldSlot = remember(selectedPaletteKey) {
@@ -542,8 +569,8 @@ private fun GymColorStep(
         }
     }
 
-    LaunchedEffect(challengeCreationUiState) {
-        if (challengeCreationUiState is ChallengeCreationUiState.Success) {
+    LaunchedEffect(challengeCreationUiState, canBypassChallengeCreationForDev) {
+        if (!canBypassChallengeCreationForDev && challengeCreationUiState is ChallengeCreationUiState.Success) {
             viewModel.consumeChallengeCreationResult()
             onNext()
         }
@@ -588,7 +615,7 @@ private fun GymColorStep(
             )
 
             when {
-                selectedLevelSortOrder == null -> {
+                selectedLevelSortOrder == null && !canBypassChallengeCreationForDev -> {
                     Text(
                         text = "\uBA3C\uC800 \uB808\uBCA8\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694.",
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
@@ -627,10 +654,16 @@ private fun GymColorStep(
 
             GradientActionButton(
                 text = "\uD640\uB4DC \uCC3E\uAE30",
-                enabled = selectedLevelSortOrder != null &&
+                enabled = (canBypassChallengeCreationForDev || selectedLevelSortOrder != null) &&
                     selectedPaletteKey != null &&
                     challengeCreationUiState !is ChallengeCreationUiState.Loading,
-                onClick = { viewModel.createChallengeFromSelection() },
+                onClick = {
+                    if (canBypassChallengeCreationForDev) {
+                        onNext()
+                    } else {
+                        viewModel.createChallengeFromSelection()
+                    }
+                },
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
