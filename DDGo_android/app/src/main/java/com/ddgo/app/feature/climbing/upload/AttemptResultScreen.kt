@@ -466,7 +466,7 @@ private fun InfoChip(text: String, bg: Color) {
     }
 }
 
-private fun holdColorToUiColor(name: String) = when (name) {
+internal fun holdColorToUiColor(name: String) = when (name) {
     "빨강" -> Color(0xFFEF5350); "주황" -> Color(0xFFFF7043)
     "노랑" -> Color(0xFFFFCA28); "초록" -> Color(0xFF66BB6A)
     "파랑" -> Color(0xFF42A5F5); "남색" -> Color(0xFF3949AB)
