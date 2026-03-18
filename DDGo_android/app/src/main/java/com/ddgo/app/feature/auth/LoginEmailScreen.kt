@@ -59,15 +59,7 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
                     )
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "DDgo",
-                    style = TextStyle(
-                        fontFamily = PretendardFamily,
-                        fontSize = 64.sp,
-                        fontWeight = FontWeight(900),
-                        color = Color(0xFF0D1013)
-                    )
-                )
+                DdgoKoreanWordmark(fontSize = 60.sp)
             }
 
             Spacer(modifier = Modifier.height(60.dp))
