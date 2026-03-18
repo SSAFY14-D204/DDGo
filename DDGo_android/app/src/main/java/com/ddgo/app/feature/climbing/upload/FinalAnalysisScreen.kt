@@ -1,9 +1,8 @@
 package com.ddgo.app.feature.climbing.upload
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,526 +11,596 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.sin
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlin.math.roundToInt
 
-// ── 색상 상수 ─────────────────────────────────────────────────────────────────
-private val FA_BG         = Color(0xFF0D0D0D)
-private val FA_CARD       = Color(0xFF1A1A2E)
-private val FA_ACCENT1    = Color(0xFF7B2FFF)  // 보라
-private val FA_ACCENT2    = Color(0xFF00C2FF)  // 파랑
-private val FA_SUCCESS    = Color(0xFF7B2FFF)  // 성공: 보라
-private val FA_FAIL       = Color(0xFFFF4C61)  // 실패: 빨강
-private val FA_TEXT_MUTED = Color(0xFF9E9E9E)
-private val FA_DIVIDER    = Color(0xFF2A2A2A)
+private enum class ProblemAnalysisTab(val label: String) {
+    Stats("문제 통계"),
+    Stability("안정도"),
+    Failure("실패 원인")
+}
 
-/**
- * 최종 분석 결과 데이터 모델.
- * 외부(ViewModel 또는 서버 응답)에서 주입받습니다.
- *
- * @param isSuccess         문제 풀이 성공 여부
- * @param reachedHolds      평균 도달 홀드 수 (예: 9)
- * @param totalHolds        전체 홀드 수 (예: 14)
- * @param balanceRatio      무게중심 안정 비율 (0~100, 예: 68)
- * @param stabilityTimeline 무게중심 안정 시계열 값 (연속 float 값, 범위 0~1)
- *                          예) [0.3f, 0.5f, 0.6f, 0.4f, 0.8f, ...]
- * @param attemptCount      현재 시도 수 (그래프 X축 라벨링용)
- * @param currentAttempt    현재 강조할 시도 번호 (1-based)
- */
-data class FinalAnalysisData(
-    val isSuccess: Boolean = true,
-    val reachedHolds: Int = 9,
-    val totalHolds: Int = 14,
-    val balanceRatio: Int = 68,
-    val stabilityTimeline: List<Float> = emptyList(),
-    val attemptCount: Int = 4,
-    val currentAttempt: Int = 4
-)
-
-/**
- * 최종 분석 결과 화면.
- *
- * @param data              분석 결과 데이터 (외부 주입)
- * @param onNavigateBack    뒤로가기 콜백
- * @param onNavigateCompare "다음 시도와 비교분석 하기" 버튼 콜백
- */
 @Composable
 fun FinalAnalysisScreen(
-    data: FinalAnalysisData = FinalAnalysisData(),
+    viewModel: UploadViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
     onNavigateToMain: () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
+    val totalAttempts = viewModel.allAttemptUris.size.coerceAtLeast(1)
+    val totalHolds = viewModel.detectedHolds.size.takeIf { it > 0 } ?: 14
+    val attemptSummaries = remember(
+        viewModel.allAttemptUris,
+        viewModel.analysisPoints,
+        viewModel.attemptDummyResults,
+        totalHolds
+    ) {
+        buildAttemptSummaries(
+            totalAttempts = viewModel.allAttemptUris.size,
+            fallbackPoints = viewModel.analysisPoints,
+            dummyResults = viewModel.attemptDummyResults,
+            totalHolds = totalHolds
+        )
+    }
+    var selectedAttempt by rememberSaveable {
+        mutableIntStateOf(totalAttempts.coerceIn(1, attemptSummaries.size))
+    }
+    var selectedTab by rememberSaveable { mutableStateOf(ProblemAnalysisTab.Stats) }
 
-    Box(
+    val currentSummary = attemptSummaries[(selectedAttempt - 1).coerceIn(0, attemptSummaries.lastIndex)]
+    val averageReachedHolds = remember(attemptSummaries) {
+        attemptSummaries.map { it.reachedHolds }.average().roundToInt()
+    }
+    val averageBalanceRatio = remember(attemptSummaries) {
+        attemptSummaries.map { it.balanceRatio }.average().roundToInt()
+    }
+    val overallSuccess = remember(attemptSummaries) { attemptSummaries.any { it.isSuccess } }
+    val combinedTimeline = remember(attemptSummaries) {
+        val maxLength = attemptSummaries.maxOfOrNull { it.stabilityTimeline.size } ?: 0
+        List(maxLength) { index ->
+            attemptSummaries.map { summary ->
+                summary.stabilityTimeline.getOrElse(index) {
+                    summary.stabilityTimeline.lastOrNull() ?: 0.5f
+                }
+            }.average().toFloat()
+        }
+    }
+    val focusFraction = remember(selectedAttempt, totalAttempts) {
+        if (totalAttempts <= 1) null else (selectedAttempt - 1).toFloat() / (totalAttempts - 1).toFloat()
+    }
+    val displayDate = remember(viewModel.createdChallenge?.startedAt) {
+        formatAnalysisDate(viewModel.createdChallenge?.startedAt)
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FA_BG)
+            .background(AnalysisBgColor)
+            .statusBarsPadding()
+            .verticalScroll(scrollState)
     ) {
-        Column(
+        ProblemAnalysisTopBar(onNavigateBack = onNavigateBack)
+
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(bottom = 96.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 상단 앱바
-            FinalAnalysisTopBar(onNavigateBack = onNavigateBack)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = viewModel.gymName.ifBlank { "클라이밍장" },
+                    color = AnalysisText,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = displayDate,
+                    color = AnalysisMuted,
+                    fontSize = 13.sp
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (viewModel.difficultyLevel.isNotBlank()) {
+                        HeaderChip(
+                            text = viewModel.difficultyLevel,
+                            background = Color.White,
+                            contentColor = Color.Black
+                        )
+                    }
+                    if (viewModel.holdColor.isNotBlank()) {
+                        HeaderChip(
+                            text = viewModel.holdColor,
+                            background = holdColorToUiColor(viewModel.holdColor),
+                            contentColor = if (viewModel.holdColor == "흰색") Color.Black else Color.White
+                        )
+                    }
+                }
+            }
 
-            Spacer(Modifier.height(16.dp))
-
-            // 문제 풀이 여부
-            SolvedStatusSection(isSuccess = data.isSuccess)
-
-            FaDivider()
-
-            // 평균 도달 홀드
-            ReachedHoldsSection(
-                reachedHolds = data.reachedHolds,
-                totalHolds = data.totalHolds
+            HoldOverviewPreview(
+                bitmap = viewModel.bestFrameBitmap,
+                holds = viewModel.detectedHolds,
+                modifier = Modifier.size(width = 116.dp, height = 96.dp)
             )
-
-            FaDivider()
-
-            // 무게중심 안정 비율
-            BalanceRatioSection(balanceRatio = data.balanceRatio)
-
-            Spacer(Modifier.height(8.dp))
-
-            // 안정성 그래프
-            StabilityGraphSection(
-                timeline = data.stabilityTimeline,
-                attemptCount = data.attemptCount,
-                currentAttempt = data.currentAttempt
-            )
-
-            Spacer(Modifier.height(16.dp))
         }
 
-        // 하단 고정 버튼
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, FA_BG.copy(alpha = 0.95f), FA_BG)
-                    )
-                )
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(horizontal = 22.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0xFF101114))
         ) {
-            Button(
-                onClick = onNavigateToMain,
+            HoldOverviewPreview(
+                bitmap = viewModel.bestFrameBitmap,
+                holds = viewModel.detectedHolds,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FA_ACCENT1
+                    .height(242.dp)
+            )
+
+            Text(
+                text = "${selectedAttempt}차 시도 ${if (currentSummary.isSuccess) "성공" else "실패"}",
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp),
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        AnalysisSectionTabs(
+            labels = ProblemAnalysisTab.entries.map { it.label },
+            selectedIndex = selectedTab.ordinal,
+            onSelected = { selectedTab = ProblemAnalysisTab.entries[it] }
+        )
+
+        when (selectedTab) {
+            ProblemAnalysisTab.Stats -> {
+                ProblemStatsSection(
+                    overallSuccess = overallSuccess,
+                    averageReachedHolds = averageReachedHolds,
+                    totalHolds = totalHolds,
+                    averageBalanceRatio = averageBalanceRatio,
+                    timeline = combinedTimeline,
+                    focusFraction = focusFraction
                 )
-            ) {
-                Text(
-                    text = "분석 완료",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+            }
+
+            ProblemAnalysisTab.Stability -> {
+                StabilityDetailSection(
+                    currentSummary = currentSummary,
+                    timeline = combinedTimeline,
+                    focusFraction = focusFraction
+                )
+            }
+
+            ProblemAnalysisTab.Failure -> {
+                FailureSummarySection(
+                    summary = currentSummary
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        AttemptChipRow(
+            attemptCount = totalAttempts,
+            selectedAttempt = selectedAttempt,
+            onSelect = { selectedAttempt = it.coerceIn(1, totalAttempts) },
+            modifier = Modifier.padding(horizontal = 22.dp)
+        )
+
+        Spacer(modifier = Modifier.height(22.dp))
+
+        val actionText = if (totalAttempts > 1 && selectedAttempt < totalAttempts) {
+            "다음 시도들과 비교분석 하기"
+        } else {
+            "분석 완료"
+        }
+
+        AnalysisGradientButton(
+            text = actionText,
+            onClick = {
+                if (totalAttempts > 1 && selectedAttempt < totalAttempts) {
+                    selectedAttempt += 1
+                } else {
+                    onNavigateToMain()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+        )
+
+        Spacer(
+            modifier = Modifier
+                .height(24.dp)
+                .navigationBarsPadding()
+        )
     }
 }
 
-// ── 상단 앱바 ────────────────────────────────────────────────────────────────
-
 @Composable
-private fun FinalAnalysisTopBar(onNavigateBack: () -> Unit) {
+private fun ProblemAnalysisTopBar(
+    onNavigateBack: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .padding(horizontal = 8.dp, vertical = 10.dp)
     ) {
-        IconButton(
-            onClick = onNavigateBack,
-            modifier = Modifier.align(Alignment.CenterStart)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .align(Alignment.CenterStart)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onNavigateBack
+                ),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "뒤로가기",
                 tint = Color.White
             )
         }
+
         Text(
             text = "문제 분석",
+            modifier = Modifier.align(Alignment.Center),
+            color = AnalysisText,
             fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.align(Alignment.Center)
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
 
-// ── 구분선 ────────────────────────────────────────────────────────────────────
-
 @Composable
-private fun FaDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(FA_DIVIDER)
-    )
-}
-
-// ── 문제 풀이 여부 섹션 ───────────────────────────────────────────────────────
-
-@Composable
-private fun SolvedStatusSection(isSuccess: Boolean) {
+private fun ProblemStatsSection(
+    overallSuccess: Boolean,
+    averageReachedHolds: Int,
+    totalHolds: Int,
+    averageBalanceRatio: Int,
+    timeline: List<Float>,
+    focusFraction: Float?
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 28.dp),
+            .padding(horizontal = 22.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "문제 풀이 여부",
-            fontSize = 16.sp,
-            color = FA_TEXT_MUTED,
-            fontWeight = FontWeight.Medium
+        MetricHeadline(
+            title = "문제 풀이 여부",
+            value = if (overallSuccess) "성공" else "실패",
+            valueColor = if (overallSuccess) AnalysisSuccess else AnalysisFailure
         )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = if (isSuccess) "성공" else "실패",
-            fontSize = 48.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = if (isSuccess) FA_SUCCESS else FA_FAIL
-        )
-    }
-}
 
-// ── 평균 도달 홀드 섹션 ───────────────────────────────────────────────────────
+        Spacer(modifier = Modifier.height(34.dp))
 
-@Composable
-private fun ReachedHoldsSection(reachedHolds: Int, totalHolds: Int) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "평균 도달 홀드",
-            fontSize = 16.sp,
-            color = FA_TEXT_MUTED,
-            fontWeight = FontWeight.Medium
+        MetricHeadline(
+            title = "평균 도달 홀드",
+            value = "$averageReachedHolds",
+            suffix = "/${totalHolds}번"
         )
-        Spacer(Modifier.height(12.dp))
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.Center
+
+        Spacer(modifier = Modifier.height(34.dp))
+
+        MetricHeadline(
+            caption = "평균 안정도",
+            title = "무게중심 안정 비율",
+            value = "$averageBalanceRatio%"
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(AnalysisPanelColor)
+                .padding(horizontal = 16.dp, vertical = 20.dp)
         ) {
-            Text(
-                text = "${reachedHolds}번",
-                fontSize = 52.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = FA_ACCENT1
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = "/${totalHolds}번",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = FA_TEXT_MUTED,
-                modifier = Modifier.padding(bottom = 8.dp)
+            StabilityLineChart(
+                data = timeline,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(184.dp),
+                focusFraction = focusFraction
             )
         }
     }
 }
 
-// ── 무게중심 안정 비율 섹션 ──────────────────────────────────────────────────
-
 @Composable
-private fun BalanceRatioSection(balanceRatio: Int) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // 소제목 줄
-        Text(
-            text = "최근 인접도",
-            fontSize = 13.sp,
-            color = FA_TEXT_MUTED,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = "무게중심 안정 비율",
-            fontSize = 16.sp,
-            color = FA_TEXT_MUTED,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(Modifier.height(12.dp))
-
-        // 애니메이션 퍼센트
-        var targetRatio by remember { mutableIntStateOf(0) }
-        val animatedRatio by animateFloatAsState(
-            targetValue = targetRatio.toFloat(),
-            animationSpec = tween(durationMillis = 800),
-            label = "balanceRatio"
-        )
-        LaunchedEffect(balanceRatio) { targetRatio = balanceRatio }
-
-        Text(
-            text = "${animatedRatio.toInt()}%",
-            fontSize = 52.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = FA_ACCENT1
-        )
-    }
-}
-
-// ── 안정성 그래프 섹션 ───────────────────────────────────────────────────────
-
-/**
- * 연속 float 값 배열을 받아 두 개의 곡선(파랑/보라)으로 그래프를 그립니다.
- *
- * [timeline] 이 비어 있는 경우 사인 함수 기반 데모 데이터를 사용합니다.
- */
-@Composable
-private fun StabilityGraphSection(
+private fun StabilityDetailSection(
+    currentSummary: AnalysisAttemptSummary,
     timeline: List<Float>,
-    attemptCount: Int,
-    currentAttempt: Int
+    focusFraction: Float?
 ) {
-    // 실제 데이터가 없으면 데모 곡선 생성
-    val displayData = remember(timeline) {
-        if (timeline.isNotEmpty()) timeline
-        else generateDemoData()
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 0.dp)
+            .padding(horizontal = 22.dp, vertical = 26.dp)
     ) {
-        // 그래프 캔버스
-        StabilityLineChart(
-            data = displayData,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .padding(horizontal = 16.dp)
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        // X축 라벨 (1차 ~ N차, 현재 강조)
         Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            DetailStatCard(
+                title = "현재 시도 안정도",
+                value = "${currentSummary.balanceRatio}%",
+                modifier = Modifier.weight(1f)
+            )
+            DetailStatCard(
+                title = "분석 포인트",
+                value = "${currentSummary.analysisPoints.size}개",
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .clip(RoundedCornerShape(24.dp))
+                .background(AnalysisPanelColor)
+                .padding(horizontal = 16.dp, vertical = 20.dp)
         ) {
-            for (i in 1..attemptCount) {
-                AttemptLabel(
-                    number = i,
-                    isHighlighted = i == currentAttempt
+            Column {
+                Text(
+                    text = "시도 흐름",
+                    color = AnalysisText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                StabilityLineChart(
+                    data = timeline,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(208.dp),
+                    focusFraction = focusFraction
                 )
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Text(
+            text = if (currentSummary.isSuccess) {
+                "선택한 시도는 후반 안정도가 평균보다 높고 마지막 동작의 흔들림이 적었습니다."
+            } else {
+                "선택한 시도는 중반 이후 급격한 흔들림이 커졌습니다. 실패 원인 탭에서 해당 포인트를 확인해보세요."
+            },
+            color = AnalysisMuted,
+            fontSize = 14.sp,
+            lineHeight = 22.sp
+        )
     }
 }
 
-/**
- * 실제 연속 데이터를 매끄러운 베지어 곡선으로 렌더링하는 캔버스 컴포넌트.
- *
- * - 파란 선: 입력 데이터 (원본 값)
- * - 보라 선: 이동평균 스무딩 값 (5-point)
- * - 끝부분에 원형 마커 + 세모 포인터 표시
- */
 @Composable
-private fun StabilityLineChart(
-    data: List<Float>,
-    modifier: Modifier = Modifier
+private fun FailureSummarySection(
+    summary: AnalysisAttemptSummary
 ) {
-    // 애니메이션: 그래프가 서서히 나타남
-    var progress by remember { mutableFloatStateOf(0f) }
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 1000),
-        label = "chartProgress"
-    )
-    LaunchedEffect(Unit) { progress = 1f }
-
-    Canvas(modifier = modifier) {
-        if (data.size < 2) return@Canvas
-
-        val w = size.width
-        val h = size.height
-        val padTop    = 16.dp.toPx()
-        val padBottom = 20.dp.toPx()
-        val chartH = h - padTop - padBottom
-
-        // 표시할 데이터 포인트 수 (애니메이션)
-        val visibleCount = (data.size * animatedProgress).coerceAtLeast(2f).toInt()
-            .coerceAtMost(data.size)
-
-        // 시각화할 min/max
-        val minV = data.min()
-        val maxV = data.max()
-        val range = (maxV - minV).coerceAtLeast(0.001f)
-
-        fun xAt(i: Int): Float = if (visibleCount <= 1) w / 2f
-            else i.toFloat() / (data.size - 1) * w
-
-        fun yAt(v: Float): Float = padTop + chartH * (1f - (v - minV) / range)
-
-        // 이동평균 (보라 선)
-        val smoothed = data.movingAverage(5)
-
-        // ── 파란 선 (원본) ─────────────────────────────────────────────────
-        val bluePath = Path().apply {
-            moveTo(xAt(0), yAt(data[0]))
-            for (i in 1 until visibleCount) {
-                val x0 = xAt(i - 1); val y0 = yAt(data[i - 1])
-                val x1 = xAt(i);     val y1 = yAt(data[i])
-                val cpX = (x0 + x1) / 2f
-                cubicTo(cpX, y0, cpX, y1, x1, y1)
-            }
-        }
-        drawPath(
-            path = bluePath,
-            color = FA_ACCENT2,
-            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
-        )
-
-        // ── 보라 선 (스무딩) ──────────────────────────────────────────────
-        val purplePath = Path().apply {
-            moveTo(xAt(0), yAt(smoothed[0]))
-            for (i in 1 until visibleCount) {
-                val x0 = xAt(i - 1); val y0 = yAt(smoothed[i - 1])
-                val x1 = xAt(i);     val y1 = yAt(smoothed[i])
-                val cpX = (x0 + x1) / 2f
-                cubicTo(cpX, y0, cpX, y1, x1, y1)
-            }
-        }
-        drawPath(
-            path = purplePath,
-            color = FA_ACCENT1,
-            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
-        )
-
-        // ── 끝 마커 (보라 선 끝) ─────────────────────────────────────────
-        val lastIdx = visibleCount - 1
-        val endX = xAt(lastIdx)
-        val endY = yAt(smoothed[lastIdx])
-
-        // 흰 원형 마커
-        drawCircle(
-            color = Color.White,
-            radius = 5.dp.toPx(),
-            center = Offset(endX, endY)
-        )
-        drawCircle(
-            color = FA_ACCENT1,
-            radius = 3.dp.toPx(),
-            center = Offset(endX, endY)
-        )
-
-        // 세모 포인터 (오른쪽 방향)
-        val triSize = 8.dp.toPx()
-        val triPath = Path().apply {
-            moveTo(endX + triSize, endY)
-            lineTo(endX - triSize / 2f, endY - triSize * 0.75f)
-            lineTo(endX - triSize / 2f, endY + triSize * 0.75f)
-            close()
-        }
-        drawPath(triPath, color = FA_ACCENT1)
-    }
-}
-
-// ── X축 라벨 ─────────────────────────────────────────────────────────────────
-
-@Composable
-private fun AttemptLabel(number: Int, isHighlighted: Boolean) {
-    if (isHighlighted) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFFFFD600))
-                .padding(horizontal = 12.dp, vertical = 4.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp, vertical = 26.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "${number}차",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black
+                text = "${summary.attemptNo}차 시도",
+                color = AnalysisText,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = if (summary.isSuccess) "성공" else "실패",
+                color = if (summary.isSuccess) AnalysisSuccess else AnalysisFailure,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
             )
         }
-    } else {
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(AnalysisPanelColor)
+                .padding(horizontal = 18.dp, vertical = 18.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (summary.analysisPoints.isEmpty()) {
+                    Text(
+                        text = "현재 시도에는 분석 포인트가 아직 없어요.",
+                        color = AnalysisMuted,
+                        fontSize = 14.sp
+                    )
+                } else {
+                    summary.analysisPoints.forEach { point ->
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(
+                                    SpanStyle(
+                                        color = AnalysisPrimary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                ) {
+                                    append("%02d:%02d ".format(point.timeMs / 60_000L, (point.timeMs / 1_000L) % 60L))
+                                }
+                                append(point.description.replace("\n", " "))
+                            },
+                            color = AnalysisText,
+                            fontSize = 15.sp,
+                            lineHeight = 23.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Text(
-            text = "${number}차",
-            fontSize = 13.sp,
-            color = FA_TEXT_MUTED
+            text = if (summary.isSuccess) {
+                "완등한 시도이지만 반복해서 잘 먹힌 리듬을 다음 시도에도 유지해보세요."
+            } else {
+                "같은 포인트에서 반복해서 흔들리면 미션 탭의 교정 포인트를 먼저 적용하는 편이 좋습니다."
+            },
+            color = AnalysisMuted,
+            fontSize = 14.sp,
+            lineHeight = 22.sp
         )
     }
 }
 
-// ── 데모 데이터 생성 ──────────────────────────────────────────────────────────
+@Composable
+private fun MetricHeadline(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    caption: String? = null,
+    suffix: String? = null,
+    valueColor: Color = AnalysisText
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        caption?.let {
+            Text(
+                text = it,
+                color = AnalysisMuted,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
 
-private fun generateDemoData(): List<Float> {
-    return (0 until 80).map { i ->
-        val t = i / 80f
-        // 두 사인 파형의 합산 + 약한 노이즈
-        (0.5f + 0.25f * sin(t * Math.PI.toFloat() * 4f) +
-                0.15f * sin(t * Math.PI.toFloat() * 9f + 1f))
-            .coerceIn(0f, 1f)
+        Text(
+            text = title,
+            color = AnalysisText,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = value,
+                color = valueColor,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Bold
+            )
+            suffix?.let {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = it,
+                    color = AnalysisMuted,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 7.dp)
+                )
+            }
+        }
     }
 }
 
-// ── List<Float> 이동 평균 확장 함수 ──────────────────────────────────────────
+@Composable
+private fun DetailStatCard(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(AnalysisPanelColor)
+            .padding(horizontal = 16.dp, vertical = 18.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = title,
+                color = AnalysisMuted,
+                fontSize = 13.sp
+            )
+            Text(
+                text = value,
+                color = AnalysisText,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
 
-private fun List<Float>.movingAverage(windowSize: Int): List<Float> {
-    if (isEmpty()) return emptyList()
-    return mapIndexed { i, _ ->
-        val from = maxOf(0, i - windowSize / 2)
-        val to   = minOf(size - 1, i + windowSize / 2)
-        subList(from, to + 1).average().toFloat()
+@Composable
+private fun HeaderChip(
+    text: String,
+    background: Color,
+    contentColor: Color
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(background)
+            .padding(horizontal = 9.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = text,
+            color = contentColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }

@@ -147,21 +147,8 @@ fun NavGraphBuilder.uploadGraph(
             }
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
 
-            // ViewModel 상태에서 최종 분석 데이터 구성
-            // 실제 서버 데이터 연동 시 ViewModel에서 FinalAnalysisData 직접 노출 권장
-            val dummyResult = viewModel.attemptDummyResults.lastOrNull()
-            val isSuccess   = dummyResult?.first ?: true
-
             FinalAnalysisScreen(
-                data = FinalAnalysisData(
-                    isSuccess      = isSuccess,
-                    reachedHolds   = 9,
-                    totalHolds     = 14,
-                    balanceRatio   = 68,
-                    // stabilityTimeline 이 비어있으면 데모 곡선을 사용
-                    attemptCount   = viewModel.allAttemptUris.size.coerceAtLeast(1),
-                    currentAttempt = viewModel.allAttemptUris.size.coerceAtLeast(1)
-                ),
+                viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToMain = { 
                     navController.navigate(ScreenRoutes.Main.route) {
