@@ -47,6 +47,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,7 +72,8 @@ import com.ddgo.app.domain.model.NearbyPlace
 
 private enum class CreateStep {
     GYM_NAME,
-    GRADE
+    LEVEL,
+    COLOR
 }
 
 @Composable
@@ -80,26 +82,33 @@ fun ChallengeCreateScreen(
     onNavigateToNext: () -> Unit = {},
     onNavigateBack: () -> Unit = {}
 ) {
-    var step by remember { mutableStateOf(CreateStep.GYM_NAME) }
+    var step by rememberSaveable { mutableStateOf(CreateStep.GYM_NAME) }
 
     BackHandler {
         when (step) {
             CreateStep.GYM_NAME -> onNavigateBack()
-            CreateStep.GRADE -> step = CreateStep.GYM_NAME
+            CreateStep.LEVEL -> step = CreateStep.GYM_NAME
+            CreateStep.COLOR -> step = CreateStep.LEVEL
         }
     }
 
     when (step) {
         CreateStep.GYM_NAME -> GymNameStep(
             viewModel = viewModel,
-            onNext = { step = CreateStep.GRADE },
+            onNext = { step = CreateStep.LEVEL },
             onBack = onNavigateBack
         )
 
-        CreateStep.GRADE -> GymGradeStep(
+        CreateStep.LEVEL -> GymLevelStep(
+            viewModel = viewModel,
+            onNext = { step = CreateStep.COLOR },
+            onBack = { step = CreateStep.GYM_NAME }
+        )
+
+        CreateStep.COLOR -> GymColorStep(
             viewModel = viewModel,
             onNext = onNavigateToNext,
-            onBack = { step = CreateStep.GYM_NAME }
+            onBack = { step = CreateStep.LEVEL }
         )
     }
 }
@@ -375,42 +384,38 @@ private fun NearbyPlaceItem(
     }
 }
 
+private data class LevelChoice(
+    val sortOrder: Int,
+    val label: String,
+    val accentColor: Color
+)
+
 @Composable
-private fun GymGradeStep(
+private fun GymLevelStep(
     viewModel: UploadViewModel,
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
     val grades = viewModel.resolvedGymGrades
-    val selectedGrade = viewModel.selectedGymGrade
-    val challengeCreationUiState by viewModel.challengeCreationUiState.collectAsState()
-    val availableGradesByKey = remember(grades) { buildAvailableGymGradeMap(grades) }
-    val selectedPaletteKey = selectedGrade?.let {
-        normalizeHoldColorKey(
-            colorName = it.colorName,
-            colorHex = it.colorHex
-        )
-    }
-
-    LaunchedEffect(challengeCreationUiState) {
-        if (challengeCreationUiState is ChallengeCreationUiState.Success) {
-            viewModel.consumeChallengeCreationResult()
-            onNext()
-        }
-    }
+    val levelChoices = remember(grades) { buildAvailableLevelChoices(grades) }
+    val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
+    val selectedLevel = levelChoices.firstOrNull { it.sortOrder == selectedLevelSortOrder }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0B0B0E))
     ) {
-        LevelSelectionHeader(onBack = onBack)
+        SelectionStepHeader(
+            progressFraction = 0.5f,
+            onBack = onBack
+        )
 
         Column(modifier = Modifier.fillMaxSize()) {
             Spacer(modifier = Modifier.height(27.dp))
 
             Text(
-                text = "\uBCFC\uB354\uB9C1 \uBB38\uC81C\uC758\n\uB808\uBCA8\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694",
+                text = "볼더링 문제의\n레벨을 선택해주세요",
                 modifier = Modifier.padding(start = 25.dp),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -438,6 +443,148 @@ private fun GymGradeStep(
                         .offset(x = 22.dp)
                 )
 
+                LevelSelectionPanel(
+                    levels = levelChoices,
+                    selectedSortOrder = selectedLevelSortOrder,
+                    onSelect = { level -> viewModel.selectGymLevel(level.sortOrder) },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = 191.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            when {
+                grades.isEmpty() -> {
+                    Text(
+                        text = "선택 가능한 난이도 정보가 없습니다.",
+                        modifier = Modifier.padding(horizontal = 22.dp),
+                        color = Color(0xFF999999),
+                        fontSize = 14.sp
+                    )
+                }
+
+                selectedLevel != null -> {
+                    LevelSummaryCard(
+                        title = "선택한 레벨",
+                        level = selectedLevel,
+                        modifier = Modifier.padding(horizontal = 22.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = onNext,
+                enabled = selectedLevel != null,
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF505050),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF505050).copy(alpha = 0.55f),
+                    disabledContentColor = Color.White.copy(alpha = 0.6f)
+                )
+            ) {
+                Text(
+                    text = "다음",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GymColorStep(
+    viewModel: UploadViewModel,
+    onNext: () -> Unit,
+    onBack: () -> Unit
+) {
+    val grades = viewModel.resolvedGymGrades
+    val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
+    val selectedGrade = viewModel.selectedGymGrade
+    val challengeCreationUiState by viewModel.challengeCreationUiState.collectAsState()
+    val levelChoices = remember(grades) { buildAvailableLevelChoices(grades) }
+    val selectedLevel = levelChoices.firstOrNull { it.sortOrder == selectedLevelSortOrder }
+    val levelMatchedGrades = remember(grades, selectedLevelSortOrder) {
+        grades.filter { it.sortOrder == selectedLevelSortOrder }
+    }
+    val availableGradesByKey = remember(levelMatchedGrades) {
+        buildAvailableGymGradeMap(levelMatchedGrades)
+    }
+    val selectedPaletteKey = selectedGrade?.let {
+        normalizeHoldColorKey(
+            colorName = it.colorName,
+            colorHex = it.colorHex
+        )
+    }
+
+    LaunchedEffect(challengeCreationUiState) {
+        if (challengeCreationUiState is ChallengeCreationUiState.Success) {
+            viewModel.consumeChallengeCreationResult()
+            onNext()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0B0B0E))
+    ) {
+        SelectionStepHeader(
+            progressFraction = 1f,
+            onBack = onBack
+        )
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            Spacer(modifier = Modifier.height(27.dp))
+
+            Text(
+                text = "문제 홀드의\n컬러를 선택해주세요",
+                modifier = Modifier.padding(start = 25.dp),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                lineHeight = 28.sp
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            GymReferenceSubtitle(
+                gymName = formatGymDisplayName(viewModel.gymName),
+                modifier = Modifier.padding(start = 25.dp)
+            )
+
+            selectedLevel?.let { level ->
+                Spacer(modifier = Modifier.height(16.dp))
+                LevelSummaryCard(
+                    title = "선택한 레벨",
+                    level = level,
+                    modifier = Modifier.padding(horizontal = 25.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(21.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(415.dp)
+            ) {
+                DifficultyReferenceBar(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = 22.dp)
+                )
+
                 HoldColorSelectionPanel(
                     availableGradesByKey = availableGradesByKey,
                     selectedPaletteKey = selectedPaletteKey,
@@ -450,28 +597,35 @@ private fun GymGradeStep(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            when (challengeCreationUiState) {
-                ChallengeCreationUiState.Idle -> {
-                    if (grades.isEmpty()) {
-                        Text(
-                            text = "\uC120\uD0DD \uAC00\uB2A5\uD55C \uB09C\uC774\uB3C4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
-                            modifier = Modifier.padding(horizontal = 22.dp),
-                            color = Color(0xFF999999),
-                            fontSize = 14.sp
-                        )
-                    }
+            when {
+                selectedLevel == null -> {
+                    Text(
+                        text = "먼저 레벨을 선택해주세요.",
+                        modifier = Modifier.padding(horizontal = 22.dp),
+                        color = Color(0xFFFF8A8A),
+                        fontSize = 14.sp
+                    )
                 }
 
-                ChallengeCreationUiState.Loading -> {
+                levelMatchedGrades.isEmpty() -> {
                     Text(
-                        text = "\uCC4C\uB9B0\uC9C0\uB97C \uC0DD\uC131\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...",
+                        text = "선택한 레벨에 연결된 홀드 컬러가 없습니다.",
+                        modifier = Modifier.padding(horizontal = 22.dp),
+                        color = Color(0xFFFF8A8A),
+                        fontSize = 14.sp
+                    )
+                }
+
+                challengeCreationUiState is ChallengeCreationUiState.Loading -> {
+                    Text(
+                        text = "챌린지를 생성하고 있습니다...",
                         modifier = Modifier.padding(horizontal = 22.dp),
                         color = Color(0xFF999999),
                         fontSize = 14.sp
                     )
                 }
 
-                is ChallengeCreationUiState.Error -> {
+                challengeCreationUiState is ChallengeCreationUiState.Error -> {
                     Text(
                         text = (challengeCreationUiState as ChallengeCreationUiState.Error).message,
                         modifier = Modifier.padding(horizontal = 22.dp),
@@ -479,8 +633,14 @@ private fun GymGradeStep(
                         fontSize = 14.sp
                     )
                 }
+            }
 
-                is ChallengeCreationUiState.Success -> Unit
+            if (selectedGrade != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                SelectedHoldPreviewCard(
+                    grade = selectedGrade,
+                    modifier = Modifier.padding(horizontal = 22.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -503,7 +663,7 @@ private fun GymGradeStep(
                 )
             ) {
                 Text(
-                    text = "\uB2E4\uC74C",
+                    text = "다음",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -513,7 +673,8 @@ private fun GymGradeStep(
 }
 
 @Composable
-private fun LevelSelectionHeader(
+private fun SelectionStepHeader(
+    progressFraction: Float,
     onBack: () -> Unit
 ) {
     Column(
@@ -534,13 +695,13 @@ private fun LevelSelectionHeader(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "\uB4A4\uB85C",
+                    contentDescription = "뒤로",
                     tint = Color.White
                 )
             }
 
             Text(
-                text = "\uD074\uB77C\uC774\uBC0D \uAE30\uB85D",
+                text = "클라이밍 기록",
                 modifier = Modifier.align(Alignment.Center),
                 color = Color.White,
                 fontSize = 16.sp,
@@ -556,7 +717,7 @@ private fun LevelSelectionHeader(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.5f)
+                    .fillMaxWidth(progressFraction)
                     .height(2.dp)
                     .background(Color(0xFF4396FB))
             )
@@ -573,7 +734,7 @@ private fun GymReferenceSubtitle(
         text = buildAnnotatedString {
             if (gymName.isBlank()) {
                 withStyle(SpanStyle(color = Color(0xFF999999))) {
-                    append("\uAE30\uC900\u0020\uB09C\uC774\uB3C4\uD45C")
+                    append("기준 난이도표")
                 }
             } else {
                 withStyle(
@@ -585,7 +746,7 @@ private fun GymReferenceSubtitle(
                     append(gymName)
                 }
                 withStyle(SpanStyle(color = Color(0xFF999999))) {
-                    append("\u0020\uAE30\uC900\u0020\uB09C\uC774\uB3C4\uD45C")
+                    append(" 기준 난이도표")
                 }
             }
         },
@@ -610,13 +771,13 @@ private fun DifficultyReferenceBar(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "\uC5B4\uB824\uC6C0",
+                text = "어려움",
                 color = Color(0xFF999999),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "\uC26C\uC6C0",
+                text = "쉬움",
                 color = Color(0xFF999999),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
@@ -636,6 +797,149 @@ private fun DifficultyReferenceBar(
                         .background(slot.color)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LevelSelectionPanel(
+    levels: List<LevelChoice>,
+    selectedSortOrder: Int?,
+    onSelect: (LevelChoice) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(width = 244.dp, height = 415.dp)
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(16.dp),
+                ambientColor = Color(0x1A6A707C),
+                spotColor = Color(0x1A6A707C)
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White)
+            .padding(horizontal = 16.dp, vertical = 18.dp)
+    ) {
+        if (levels.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "난이도 정보가 없습니다.",
+                    color = Color(0xFF767676),
+                    fontSize = 14.sp
+                )
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(levels, key = { it.sortOrder }) { level ->
+                    LevelChoiceCard(
+                        level = level,
+                        selected = level.sortOrder == selectedSortOrder,
+                        onClick = { onSelect(level) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LevelChoiceCard(
+    level: LevelChoice,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(14.dp)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (selected) Color(0xFFF3F7FF) else Color(0xFFF7F7F8))
+            .border(
+                width = 1.dp,
+                color = if (selected) Color(0xFF4396FB) else Color(0xFFE4E8EF),
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        HoldAssetThumbnail(
+            color = level.accentColor,
+            modifier = Modifier.size(34.dp),
+            shape = RoundedCornerShape(10.dp)
+        )
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = level.label,
+                color = Color(0xFF16181D),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "문제 레벨",
+                color = Color(0xFF767676),
+                fontSize = 12.sp
+            )
+        }
+
+        if (selected) {
+            Text(
+                text = "선택됨",
+                color = Color(0xFF4396FB),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun LevelSummaryCard(
+    title: String,
+    level: LevelChoice,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF151517))
+            .border(1.dp, Color(0xFF2A3C56), RoundedCornerShape(18.dp))
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        HoldAssetThumbnail(
+            color = level.accentColor,
+            modifier = Modifier.size(56.dp),
+            shape = RoundedCornerShape(14.dp)
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = title,
+                color = Color(0xFF9CCCFF),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = level.label,
+                color = Color.White,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "다음 단계에서 홀드 컬러를 선택할 수 있어요",
+                color = Color(0xFFB0B0B0),
+                fontSize = 13.sp
+            )
         }
     }
 }
@@ -768,6 +1072,19 @@ private fun buildAvailableGymGradeMap(grades: List<GymGrade>): Map<String, GymGr
     }
 }
 
+private fun buildAvailableLevelChoices(grades: List<GymGrade>): List<LevelChoice> {
+    return grades
+        .sortedBy { it.sortOrder }
+        .distinctBy { it.sortOrder }
+        .map { grade ->
+            LevelChoice(
+                sortOrder = grade.sortOrder,
+                label = formatGymGradeLevelText(grade),
+                accentColor = resolveGymGradeAccentColor(grade)
+            )
+        }
+}
+
 private fun normalizeHoldColorKey(
     colorName: String,
     colorHex: String?
@@ -861,12 +1178,15 @@ private fun GymGradeItem(
 }
 
 @Composable
-private fun SelectedHoldPreviewCard(grade: GymGrade) {
+private fun SelectedHoldPreviewCard(
+    grade: GymGrade,
+    modifier: Modifier = Modifier
+) {
     val accentColor = resolveGymGradeAccentColor(grade)
     val title = grade.colorName.ifBlank { grade.gradeLabel ?: "\uBB38\uC81C \uC0C9\uC0C1" }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(Color(0xFF151517))
@@ -1011,7 +1331,7 @@ private fun formatGymDisplayName(displayName: String): String {
 private fun formatGymGradeLevelText(grade: GymGrade): String {
     return grade.gradeLabel
         ?.takeIf { it.isNotBlank() }
-        ?: "V-${grade.sortOrder}"
+        ?: "V${grade.sortOrder}"
 }
 
 private fun fallbackColorByName(colorName: String): Color {

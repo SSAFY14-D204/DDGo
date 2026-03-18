@@ -106,6 +106,8 @@ class UploadViewModel @Inject constructor(
         private set
     var holdColor by mutableStateOf("")
         private set
+    var selectedLevelSortOrder by mutableStateOf<Int?>(null)
+        private set
     var selectedGymGradeId by mutableStateOf<Long?>(null)
         private set
     var selectedGymGrade by mutableStateOf<GymGrade?>(null)
@@ -525,12 +527,29 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    fun updateDifficulty(level: String) {
-        difficultyLevel = level
-    }
+    fun selectGymLevel(sortOrder: Int) {
+        selectedLevelSortOrder = sortOrder
 
-    fun updateHoldColor(color: String) {
-        holdColor = color
+        val matchingGrades = resolvedGymGrades.filter { it.sortOrder == sortOrder }
+        difficultyLevel = matchingGrades.firstOrNull()
+            ?.let(::formatSelectedLevelLabel)
+            ?: "V$sortOrder"
+
+        val nextSelectedGrade = selectedGymGrade
+            ?.takeIf { it.sortOrder == sortOrder }
+            ?: matchingGrades.singleOrNull()
+
+        if (nextSelectedGrade != null) {
+            selectedGymGrade = nextSelectedGrade
+            selectedGymGradeId = nextSelectedGrade.gymGradeId.toLong()
+            holdColor = mapGymColorNameToClassifierColor(nextSelectedGrade.colorName)
+        } else {
+            selectedGymGrade = null
+            selectedGymGradeId = null
+            holdColor = ""
+        }
+
+        clearCreatedChallengeOnly()
     }
 
     fun updateSelectedHoldInfo(info: String) {
@@ -549,9 +568,10 @@ class UploadViewModel @Inject constructor(
      * - 선택된 grade는 홀드 감지 시 사용할 색상 필터에도 반영됩니다.
      */
     fun selectGymGrade(grade: GymGrade) {
+        selectedLevelSortOrder = grade.sortOrder
         selectedGymGrade = grade
         selectedGymGradeId = grade.gymGradeId.toLong()
-        difficultyLevel = grade.gradeLabel ?: grade.colorName
+        difficultyLevel = formatSelectedLevelLabel(grade)
         holdColor = mapGymColorNameToClassifierColor(grade.colorName)
         clearCreatedChallengeOnly()
     }
@@ -911,6 +931,7 @@ class UploadViewModel @Inject constructor(
     }
 
     private fun clearChallengeFlowState() {
+        selectedLevelSortOrder = null
         selectedGymGradeId = null
         selectedGymGrade = null
         difficultyLevel = ""
@@ -945,6 +966,12 @@ class UploadViewModel @Inject constructor(
     private fun mapGymColorNameToClassifierColor(colorName: String): String {
         return GYM_COLOR_NAME_TO_CLASSIFIER_COLOR[colorName.trim().lowercase()]
             ?: colorName.trim().lowercase()
+    }
+
+    private fun formatSelectedLevelLabel(grade: GymGrade): String {
+        return grade.gradeLabel
+            ?.takeIf { it.isNotBlank() }
+            ?: "V${grade.sortOrder}"
     }
 }
 
