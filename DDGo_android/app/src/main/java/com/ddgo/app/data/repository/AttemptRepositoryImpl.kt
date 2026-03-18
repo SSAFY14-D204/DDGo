@@ -3,14 +3,19 @@ package com.ddgo.app.data.repository
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import com.ddgo.app.data.mapper.AttemptMapper.toDomain
 import com.ddgo.app.data.mapper.AttemptMapper.toUploadedAttemptVideo
 import com.ddgo.app.data.remote.attempt.AttemptApi
+import com.ddgo.app.data.remote.attempt.AttemptEndBaseDataDto
+import com.ddgo.app.data.remote.attempt.AttemptEndRequestDto
 import com.ddgo.app.data.remote.attempt.GenerateVideoUrlRequestDto
 import com.ddgo.app.domain.model.AttemptUploadTicket
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.domain.repository.AttemptRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,6 +28,9 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.net.URLConnection
+import retrofit2.HttpException
+
+private const val TAG = "AttemptRepository"
 
 /**
  * AttemptRepository 구현체입니다.
@@ -42,56 +50,96 @@ class AttemptRepositoryImpl @Inject constructor(
         challengeId: Long,
         videoUri: String
     ): Result<UploadedAttemptVideo> {
-        return try {
-            val startResponse = attemptApi.startAttempt(challengeId)
-            val startedAttempt = startResponse.data
-                ?: return Result.failure(
-                    Exception(startResponse.message.ifBlank { "Failed to start attempt." })
+        return withContext(Dispatchers.IO) {
+            try {
+                val startResponse = attemptApi.startAttempt(challengeId)
+                val startedAttempt = startResponse.data
+                    ?: return@withContext Result.failure(
+                        Exception(startResponse.message.ifBlank { "Failed to start attempt." })
+                    )
+
+                if (!startResponse.success) {
+                    return@withContext Result.failure(
+                        Exception(startResponse.message.ifBlank { "Failed to start attempt." })
+                    )
+                }
+
+                val metadata = extractVideoMetadata(videoUri)
+                val presignedUrlResponse = attemptApi.generateVideoUploadUrl(
+                    attemptId = startedAttempt.attemptId,
+                    request = GenerateVideoUrlRequestDto(
+                        originalFileName = metadata.originalFileName,
+                        contentType = metadata.contentType,
+                        fileSize = metadata.fileSize
+                    )
                 )
 
-            if (!startResponse.success) {
-                return Result.failure(
-                    Exception(startResponse.message.ifBlank { "Failed to start attempt." })
-                )
-            }
+                val presignedUrl = presignedUrlResponse.data
+                val uploadTicket = presignedUrl?.toDomain(startedAttempt.attemptId)
+                    ?: return@withContext Result.failure(
+                        Exception(presignedUrlResponse.message.ifBlank { "Failed to issue upload URL." })
+                    )
 
-            val metadata = extractVideoMetadata(videoUri)
-            val presignedUrlResponse = attemptApi.generateVideoUploadUrl(
-                attemptId = startedAttempt.attemptId,
-                request = GenerateVideoUrlRequestDto(
-                    originalFileName = metadata.originalFileName,
+                if (!presignedUrlResponse.success) {
+                    return@withContext Result.failure(
+                        Exception(presignedUrlResponse.message.ifBlank { "Failed to issue upload URL." })
+                    )
+                }
+
+                uploadToPresignedUrl(
+                    uploadTicket = uploadTicket,
+                    videoUri = videoUri,
                     contentType = metadata.contentType,
                     fileSize = metadata.fileSize
                 )
+
+                Result.success(
+                    com.ddgo.app.data.mapper.AttemptMapper.toUploadedAttemptVideo(
+                        challengeId = challengeId,
+                        videoUri = videoUri,
+                        startResponse = startedAttempt,
+                        uploadResponse = presignedUrl
+                    )
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    override suspend fun endAttempt(
+        challengeId: Long,
+        attemptId: Long,
+        attemptResult: String?
+    ): Result<Unit> {
+        return try {
+            val response = attemptApi.endAttempt(
+                challengeId = challengeId,
+                attemptId = attemptId,
+                request = AttemptEndRequestDto(
+                    baseData = AttemptEndBaseDataDto(
+                        attemptResult = attemptResult
+                    )
+                )
             )
 
-            val presignedUrl = presignedUrlResponse.data
-            val uploadTicket = presignedUrl?.toDomain(startedAttempt.attemptId)
-                ?: return Result.failure(
-                    Exception(presignedUrlResponse.message.ifBlank { "Failed to issue upload URL." })
-                )
-
-            if (!presignedUrlResponse.success) {
-                return Result.failure(
-                    Exception(presignedUrlResponse.message.ifBlank { "Failed to issue upload URL." })
+            if (response.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(
+                    Exception(response.message.ifBlank { "Failed to end attempt." })
                 )
             }
-
-            uploadToPresignedUrl(
-                uploadTicket = uploadTicket,
-                videoUri = videoUri,
-                contentType = metadata.contentType,
-                fileSize = metadata.fileSize
-            )
-
-            Result.success(
-                com.ddgo.app.data.mapper.AttemptMapper.toUploadedAttemptVideo(
-                    challengeId = challengeId,
-                    videoUri = videoUri,
-                    startResponse = startedAttempt,
-                    uploadResponse = presignedUrl
+        } catch (e: HttpException) {
+            if (e.code() in setOf(404, 405, 501)) {
+                Log.w(
+                    TAG,
+                    "endAttempt: endpoint is not ready yet (HTTP ${e.code()}). Skip finalization for now."
                 )
-            )
+                Result.success(Unit)
+            } else {
+                Result.failure(e)
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -103,6 +151,14 @@ class AttemptRepositoryImpl @Inject constructor(
         contentType: String,
         fileSize: Long
     ) {
+        val uploadUri = Uri.parse(uploadTicket.uploadUrl)
+        if (uploadUri.host.equals("minio", ignoreCase = true)) {
+            throw IllegalStateException(
+                "Presigned upload URL host 'minio' is not reachable from the app. " +
+                    "Backend must return a public upload URL."
+            )
+        }
+
         val uri = Uri.parse(videoUri)
         val requestBody = object : RequestBody() {
             override fun contentType() = contentType.toMediaTypeOrNull()

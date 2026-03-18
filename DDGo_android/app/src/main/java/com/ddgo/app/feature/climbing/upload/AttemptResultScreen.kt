@@ -103,7 +103,8 @@ private val C_TRACK_BG    = Color.White.copy(alpha = 0.18f)
 @Composable
 fun AttemptResultScreen(
     viewModel: UploadViewModel = hiltViewModel(),
-    onNavigateToCompare: () -> Unit = {}
+    onNavigateToCompare: () -> Unit = {},
+    onNavigateToAddAttempt: () -> Unit = {}
 ) {
     val context       = LocalContext.current
     val scope         = rememberCoroutineScope()
@@ -111,8 +112,9 @@ fun AttemptResultScreen(
     val cardListState = rememberLazyListState()
 
     val currentAttemptIndex = viewModel.currentAttemptIndex
-    val allAttemptUris = viewModel.allAttemptUris
-    val currentVideoUri = allAttemptUris.getOrNull(currentAttemptIndex)
+    val playbackAttemptUris = viewModel.playbackAttemptUris
+    val currentVideoUri = playbackAttemptUris.getOrNull(currentAttemptIndex)
+    val hasChallenge = (viewModel.challengeId ?: 0L) > 0L
 
     // (임시) 현재 시도의 더미 분석 결과 가져오기
     // 실제 연동 시에는 서버에서 받아온 List<AttemptAnalysis> 에서 currentAttemptIndex로 조회
@@ -354,30 +356,51 @@ fun AttemptResultScreen(
                 )
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            val isLastAttempt = currentAttemptIndex >= allAttemptUris.size - 1
-            Button(
-                onClick  = {
-                    if (isLastAttempt) {
-                        // TODO: 전체 서머리로 이동하거나 메인으로 이동
-                        onNavigateToCompare()
-                    } else {
-                        viewModel.nextAttempt()
+            val isLastAttempt = currentAttemptIndex >= playbackAttemptUris.size - 1
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick  = {
+                        if (isLastAttempt) {
+                            onNavigateToCompare()
+                        } else {
+                            viewModel.nextAttempt()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape  = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isLastAttempt) Color(0xFF673AB7) else Color(0xFF03A9F4)
+                    )
+                ) {
+                    Text(
+                        text       = if (isLastAttempt) "최종 분석 결과 보기" else "다음 시도 보기",
+                        fontSize   = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color      = Color.White
+                    )
+                }
+
+                if (hasChallenge) {
+                    Button(
+                        onClick = onNavigateToAddAttempt,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2B2B2E),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "같은 문제에 시도 더 업로드",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape  = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isLastAttempt) Color(0xFF673AB7) else Color(0xFF03A9F4) // 보라색 / 파란색
-                )
-            ) {
-                Text(
-                    text       = if (isLastAttempt) "최종 분석 결과 보기" else "다음 시도 보기",
-                    fontSize   = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = Color.White
-                )
+                }
             }
         }
     }

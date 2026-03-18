@@ -15,4 +15,11 @@ interface AttemptRepository {
         challengeId: Long,
         videoUri: String
     ): Result<UploadedAttemptVideo>
+
+    /** 업로드가 끝난 시도를 종료 상태로 변경합니다. */
+    suspend fun endAttempt(
+        challengeId: Long,
+        attemptId: Long,
+        attemptResult: String? = null
+    ): Result<Unit>
 }
