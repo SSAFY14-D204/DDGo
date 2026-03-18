@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,7 +60,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -71,6 +72,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.os.CancellationSignal
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
+import com.ddgo.app.R
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 
@@ -536,6 +541,10 @@ private fun GymColorStep(
             colorHex = it.colorHex
         )
     }
+    val selectedHoldSlot = remember(selectedPaletteKey) {
+        findHoldPaletteSlot(selectedPaletteKey)
+            ?: holdPickerRows.flatten().first { it.key == "pink" }
+    }
 
     LaunchedEffect(challengeCreationUiState) {
         if (challengeCreationUiState is ChallengeCreationUiState.Success) {
@@ -558,7 +567,7 @@ private fun GymColorStep(
             Spacer(modifier = Modifier.height(27.dp))
 
             Text(
-                text = "문제 홀드의\n컬러를 선택해주세요",
+                text = "문제 홀드의 컬러를 골라주세요",
                 modifier = Modifier.padding(start = 25.dp),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -569,7 +578,7 @@ private fun GymColorStep(
             Spacer(modifier = Modifier.height(22.dp))
 
             HoldColorHero(
-                previewColor = selectedGrade?.let(::resolveGymGradeAccentColor) ?: Color(0xFFFF56A8),
+                previewSlot = selectedHoldSlot,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -925,7 +934,7 @@ private fun LevelSummaryCard(
 
 @Composable
 private fun HoldColorHero(
-    previewColor: Color,
+    previewSlot: HoldPaletteSlot,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -935,28 +944,28 @@ private fun HoldColorHero(
         Canvas(
             modifier = Modifier
                 .offset(y = 54.dp)
-                .size(width = 174.dp, height = 48.dp)
+                .size(width = 214.dp, height = 48.dp)
         ) {
             drawOval(
-                color = previewColor.copy(alpha = 0.35f),
+                color = previewSlot.color.copy(alpha = 0.4f),
                 topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.08f, size.height * 0.18f),
                 size = androidx.compose.ui.geometry.Size(size.width * 0.84f, size.height * 0.58f)
             )
         }
 
-        Canvas(modifier = Modifier.size(width = 244.dp, height = 190.dp)) {
-            val width = size.width
-            val height = size.height
-            val path = Path().apply {
-                moveTo(width * 0.46f, height * 0.10f)
-                cubicTo(width * 0.68f, height * 0.02f, width * 0.94f, height * 0.10f, width * 0.94f, height * 0.40f)
-                cubicTo(width * 0.95f, height * 0.72f, width * 0.73f, height * 0.94f, width * 0.45f, height * 0.94f)
-                cubicTo(width * 0.19f, height * 0.93f, width * 0.03f, height * 0.70f, width * 0.03f, height * 0.45f)
-                cubicTo(width * 0.03f, height * 0.22f, width * 0.21f, height * 0.10f, width * 0.46f, height * 0.10f)
-                close()
-            }
-            drawPath(path = path, color = previewColor)
-            drawPath(path = path, color = Color.White.copy(alpha = 0.06f))
+        Box(
+            modifier = Modifier
+                .size(width = 274.dp, height = 196.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            HoldAssetGraphic(
+                slot = previewSlot,
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .aspectRatio(HOLD_ASSET_ASPECT_RATIO)
+                    .rotate(-8f),
+                contentScale = ContentScale.Fit
+            )
         }
     }
 }
@@ -1214,6 +1223,80 @@ private val holdPickerRows = listOf(
         HoldPaletteSlot(key = "black", color = Color(0xFF0A0A12))
     )
 )
+
+private const val HOLD_ASSET_ASPECT_RATIO = 247f / 163f
+
+private fun findHoldPaletteSlot(key: String?): HoldPaletteSlot? {
+    if (key == null) {
+        return null
+    }
+
+    return sequenceOf(
+        holdPickerRows.flatten(),
+        holdPaletteRows.flatten(),
+        difficultyReferenceSlots
+    ).flatMap { it.asSequence() }
+        .firstOrNull { it.key == key }
+}
+
+private fun holdAssetResIdForKey(key: String): Int? {
+    return when (key) {
+        "black" -> R.drawable.hold_black
+        "brown" -> R.drawable.hold_brown
+        "gray" -> R.drawable.hold_gray
+        "green" -> R.drawable.hold_green
+        "white" -> R.drawable.hold_ivory
+        "navy" -> R.drawable.hold_navy
+        "orange" -> R.drawable.hold_orange
+        "pink" -> R.drawable.hold_pink
+        "purple" -> R.drawable.hold_purple
+        "red" -> R.drawable.hold_red
+        "blue" -> R.drawable.hold_sky
+        "yellow" -> R.drawable.hold_yellow
+        else -> null
+    }
+}
+
+@Composable
+private fun HoldAssetGraphic(
+    slot: HoldPaletteSlot,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Fit
+) {
+    val context = LocalContext.current
+    val drawableRes = holdAssetResIdForKey(slot.key)
+
+    if (drawableRes == null) {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(18.dp))
+                .background(slot.color)
+                .then(
+                    if (slot.borderColor != null) {
+                        Modifier.border(1.dp, slot.borderColor, RoundedCornerShape(18.dp))
+                    } else {
+                        Modifier
+                    }
+                )
+        )
+        return
+    }
+
+    val request = remember(drawableRes) {
+        ImageRequest.Builder(context)
+            .data(drawableRes)
+            .decoderFactory(SvgDecoder.Factory())
+            .crossfade(false)
+            .build()
+    }
+
+    AsyncImage(
+        model = request,
+        contentDescription = "${formatHoldColorDisplayName(slot.key)} 홀드",
+        modifier = modifier,
+        contentScale = contentScale
+    )
+}
 
 private fun buildAvailableGymGradeMap(grades: List<GymGrade>): Map<String, GymGrade> {
     return buildMap {
@@ -1530,6 +1613,43 @@ private fun HoldAssetThumbnail(
     modifier: Modifier = Modifier,
     shape: RoundedCornerShape = RoundedCornerShape(8.dp)
 ) {
+    val slot = remember(color) {
+        holdPaletteRows.flatten().firstOrNull { it.color == color }
+            ?: holdPickerRows.flatten().firstOrNull { it.color == color }
+            ?: when (color) {
+                Color(0xFF4396FB) -> findHoldPaletteSlot("blue")
+                Color(0xFF65B969) -> findHoldPaletteSlot("green")
+                Color(0xFFFF7700) -> findHoldPaletteSlot("orange")
+                Color(0xFFFF0000) -> findHoldPaletteSlot("red")
+                Color(0xFFFED500) -> findHoldPaletteSlot("yellow")
+                Color(0xFFFF56A8) -> findHoldPaletteSlot("pink")
+                Color(0xFF876FFF) -> findHoldPaletteSlot("purple")
+                Color(0xFF373FD7) -> findHoldPaletteSlot("navy")
+                Color(0xFF6B3E1C) -> findHoldPaletteSlot("brown")
+                Color.White -> findHoldPaletteSlot("white")
+                Color(0xFF505050) -> findHoldPaletteSlot("gray")
+                Color(0xFF292929) -> findHoldPaletteSlot("black")
+                else -> null
+            }
+    }
+
+    if (slot != null) {
+        Box(
+            modifier = modifier
+                .clip(shape),
+            contentAlignment = Alignment.Center
+        ) {
+            HoldAssetGraphic(
+                slot = slot,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(HOLD_ASSET_ASPECT_RATIO),
+                contentScale = ContentScale.Fit
+            )
+        }
+        return
+    }
+
     Box(
         modifier = modifier
             .rotate(90f)

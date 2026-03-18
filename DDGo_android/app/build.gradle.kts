@@ -147,6 +147,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.coil.compose)
+    implementation("io.coil-kt:coil-svg:2.6.0")
     implementation(libs.coil.video)
     implementation("com.github.wseemann:FFmpegMediaMetadataRetriever-core:1.0.19")
     implementation("com.github.wseemann:FFmpegMediaMetadataRetriever-native:1.0.19")
