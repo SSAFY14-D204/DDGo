@@ -114,14 +114,14 @@ private fun TwoPhaseHoldSelection(
             onConfirm     = {
                 when (currentPhase) {
                     SelectionPhase.START -> {
-                        viewModel.updateSelectedHoldInfo(
-                            viewModel.detectedHolds[selectedStartIndex].toString()
+                        viewModel.updateSelectedStartHold(
+                            viewModel.detectedHolds[selectedStartIndex]
                         )
                         phase = SelectionPhase.END
                     }
                     SelectionPhase.END -> {
-                        viewModel.updateSelectedEndHoldInfo(
-                            viewModel.detectedHolds[selectedEndIndex].toString()
+                        viewModel.updateSelectedEndHold(
+                            viewModel.detectedHolds[selectedEndIndex]
                         )
                         viewModel.resetState()
                         onNavigateToNext()

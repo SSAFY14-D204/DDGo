@@ -51,8 +51,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +70,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.domain.usecase.HoldNumbered
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -122,6 +126,7 @@ fun AttemptResultScreen(
     val isSuccess = dummyResult.first
     val currentAnalysisPoints = dummyResult.second
     val poseLandmarks = viewModel.currentPoseLandmarks
+    val numberedHolds = viewModel.numberedHolds
 
     // ── ExoPlayer 초기화 (URL 변경 시 재초기화 하거나 setMediaItem 교체) ──────────
     val exoPlayer = remember {
@@ -269,6 +274,12 @@ fun AttemptResultScreen(
                     if (poseLandmarks.size == 33) {
                         drawPoseSkeleton(
                             landmarks = poseLandmarks,
+                            contentRect = videoContentRect
+                        )
+                    }
+                    if (numberedHolds.isNotEmpty()) {
+                        drawHoldNumbers(
+                            holds = numberedHolds,
                             contentRect = videoContentRect
                         )
                     }
@@ -636,6 +647,83 @@ private fun DrawScope.drawPoseSkeleton(
                 y = drawArea.top + (lm.y.coerceIn(0f, 1f) * drawArea.height)
             )
         )
+    }
+}
+
+private fun DrawScope.drawHoldNumbers(
+    holds: List<HoldNumbered>,
+    contentRect: VideoContentRect
+) {
+    val drawArea = if (contentRect.width > 0f && contentRect.height > 0f) {
+        contentRect
+    } else {
+        VideoContentRect(
+            left = 0f,
+            top = 0f,
+            width = size.width,
+            height = size.height
+        )
+    }
+
+    holds.forEach { numbered ->
+        val rect = numbered.hold.toScreenRect(
+            offX = drawArea.left,
+            offY = drawArea.top,
+            scaledW = drawArea.width,
+            scaledH = drawArea.height
+        )
+        val center = Offset(
+            x = (rect.l + rect.r) / 2f,
+            y = (rect.t + rect.b) / 2f
+        )
+        val badgeRadius = minOf(rect.r - rect.l, rect.b - rect.t)
+            .times(0.22f)
+            .coerceIn(12.dp.toPx(), 20.dp.toPx())
+        val fillColor = when {
+            numbered.isStart -> COLOR_START
+            numbered.isEnd -> COLOR_END
+            else -> holdLabelToComposeColor(numbered.hold.colorLabel)
+        }.copy(alpha = 0.92f)
+        val textColor = if (fillColor.luminance() < 0.45f) {
+            Color.White
+        } else {
+            Color.Black
+        }
+
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.45f),
+            radius = badgeRadius + 3.dp.toPx(),
+            center = center
+        )
+        drawCircle(
+            color = fillColor,
+            radius = badgeRadius,
+            center = center
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = 0.95f),
+            radius = badgeRadius,
+            center = center,
+            style = Stroke(width = 1.5.dp.toPx())
+        )
+
+        drawIntoCanvas { canvas ->
+            val paint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                color = textColor.toArgb()
+                textAlign = android.graphics.Paint.Align.CENTER
+                textSize = (badgeRadius * 1.05f).coerceAtLeast(12.sp.toPx())
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            }
+
+            val baseline = center.y - ((paint.descent() + paint.ascent()) / 2f)
+            canvas.nativeCanvas.drawText(
+                numbered.holdNo.toString(),
+                center.x,
+                baseline,
+                paint
+            )
+        }
     }
 }
 

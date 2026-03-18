@@ -63,8 +63,8 @@ private val FA_DIVIDER    = Color(0xFF2A2A2A)
  * 외부(ViewModel 또는 서버 응답)에서 주입받습니다.
  *
  * @param isSuccess         문제 풀이 성공 여부
- * @param reachedHolds      평균 도달 홀드 수 (예: 9)
- * @param totalHolds        전체 홀드 수 (예: 14)
+ * @param reachedHolds      시도별 최고 도달 홀드 번호의 평균값(반올림)
+ * @param totalHolds        사용자가 선택한 홀드 개수
  * @param balanceRatio      무게중심 안정 비율 (0~100, 예: 68)
  * @param stabilityTimeline 무게중심 안정 시계열 값 (연속 float 값, 범위 0~1)
  *                          예) [0.3f, 0.5f, 0.6f, 0.4f, 0.8f, ...]
