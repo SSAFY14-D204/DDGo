@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,8 +29,18 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun AdditionalUploadScreen(
     viewModel: UploadViewModel = hiltViewModel(),
-    onNavigateToNext: () -> Unit = {}
+    onNavigateToNext: () -> Unit = {},
+    onNavigateBack: () -> Unit = {}
 ) {
+    val isAttemptOnlyMode = viewModel.isAttemptOnlyUploadMode
+
+    if (isAttemptOnlyMode) {
+        BackHandler {
+            viewModel.cancelAttemptOnlyUploadMode()
+            onNavigateBack()
+        }
+    }
+
     // 다중 동영상 선택기
     val multipleVideoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia()
@@ -37,9 +48,8 @@ fun AdditionalUploadScreen(
         if (uris.isNotEmpty()) {
             val validUris = uris.map { it.toString() }
             viewModel.updateAdditionalVideoUris(validUris)
+            onNavigateToNext()
         }
-        // 선택을 취소했든 완료했든 다음 로딩 화면으로 무조건 이동 (스킵의 효과)
-        onNavigateToNext()
     }
 
     Box(
@@ -55,7 +65,11 @@ fun AdditionalUploadScreen(
         ) {
             Column {
                 Text(
-                    text = "이 문제의 추가 시도 영상을\n모두 선택해주세요",
+                    text = if (isAttemptOnlyMode) {
+                        "이 챌린지에 추가할 시도 영상을\n모두 선택해주세요"
+                    } else {
+                        "이 문제의 추가 시도 영상을\n모두 선택해주세요"
+                    },
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -94,7 +108,12 @@ fun AdditionalUploadScreen(
                 Button(
                     onClick = {
                         viewModel.updateAdditionalVideoUris(emptyList())
-                        onNavigateToNext()
+                        if (isAttemptOnlyMode) {
+                            viewModel.cancelAttemptOnlyUploadMode()
+                            onNavigateBack()
+                        } else {
+                            onNavigateToNext()
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -106,7 +125,7 @@ fun AdditionalUploadScreen(
                     )
                 ) {
                     Text(
-                        text = "건너뛰기",
+                        text = if (isAttemptOnlyMode) "돌아가기" else "건너뛰기",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )

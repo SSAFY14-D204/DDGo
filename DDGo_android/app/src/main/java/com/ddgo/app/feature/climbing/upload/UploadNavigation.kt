@@ -85,8 +85,14 @@ fun NavGraphBuilder.uploadGraph(
             AdditionalUploadScreen(
                 viewModel = viewModel,
                 onNavigateToNext = {
-                    navController.navigate(ScreenRoutes.Climbing.Upload.HOLD_SELECT)
-                }
+                    val nextRoute = if (viewModel.isAttemptOnlyUploadMode) {
+                        ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING
+                    } else {
+                        ScreenRoutes.Climbing.Upload.HOLD_SELECT
+                    }
+                    navController.navigate(nextRoute)
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -115,9 +121,15 @@ fun NavGraphBuilder.uploadGraph(
             AnalysisLoadingScreen(
                 viewModel = viewModel,
                 onLoadingFinished = {
+                    val popUpRoute = if (viewModel.isAttemptOnlyUploadMode) {
+                        ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD
+                    } else {
+                        ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD
+                    }
+
                     navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) {
-                        // 결과 화면 진입 시 뒤로 가기 눌렀을 때 업로드 과정 전체를 생략하기 위한 팝업
-                        popUpTo(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD) {
+                        // 결과 화면 진입 시 직전 업로드 스택을 정리해 뒤로 가기 동선을 단순하게 유지합니다.
+                        popUpTo(popUpRoute) {
                             inclusive = true
                         }
                     }
@@ -136,6 +148,11 @@ fun NavGraphBuilder.uploadGraph(
                 viewModel = viewModel,
                 onNavigateToCompare = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS)
+                },
+                onNavigateToAddAttempt = {
+                    if (viewModel.enterAttemptOnlyUploadMode()) {
+                        navController.navigate(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD)
+                    }
                 }
             )
         }

@@ -1,7 +1,9 @@
 package com.ddgo.app.data.remote.attempt
 
+import com.ddgo.app.data.remote.auth.EmptyDto
 import com.ddgo.app.data.remote.common.ApiResponse
 import retrofit2.http.Body
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 
@@ -26,4 +28,12 @@ interface AttemptApi {
         @Path("attemptId") attemptId: Long,
         @Body request: GenerateVideoUrlRequestDto
     ): ApiResponse<GenerateVideoUrlResponseDto>
+
+    /** 업로드가 끝난 시도를 종료 처리합니다. */
+    @PATCH("v1/challenges/{challengeId}/attempts/{attemptId}")
+    suspend fun endAttempt(
+        @Path("challengeId") challengeId: Long,
+        @Path("attemptId") attemptId: Long,
+        @Body request: AttemptEndRequestDto
+    ): ApiResponse<EmptyDto>
 }

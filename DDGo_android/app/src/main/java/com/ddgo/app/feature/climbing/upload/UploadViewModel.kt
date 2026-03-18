@@ -27,10 +27,18 @@ import com.ddgo.app.data.ml.color.HoldColorClassifier
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
+import com.ddgo.app.domain.usecase.AttemptHoldReachResult
+import com.ddgo.app.domain.usecase.HoldNumbered
+import com.ddgo.app.domain.usecase.OverallHoldReachSummary
+import com.ddgo.app.domain.usecase.analyzeAttemptHoldReach
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
+import com.ddgo.app.domain.usecase.EndAttemptUseCase
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
+import com.ddgo.app.domain.usecase.assignHoldNumbers
+import com.ddgo.app.domain.usecase.summarizeHoldReachResults
+import com.ddgo.app.domain.usecase.toHolds
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -71,7 +79,8 @@ class UploadViewModel @Inject constructor(
     private val resolveGymUseCase: ResolveGymUseCase,
     private val createChallengeUseCase: CreateChallengeUseCase,
     private val saveChallengeHoldsUseCase: SaveChallengeHoldsUseCase,
-    private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase
+    private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase,
+    private val endAttemptUseCase: EndAttemptUseCase
 ) : ViewModel() {
 
     // UI 레이어에 노출할 상태 (로딩, 성공, 실패 등)
@@ -85,9 +94,30 @@ class UploadViewModel @Inject constructor(
     var additionalVideoUris by mutableStateOf<List<String>>(emptyList())
         private set
 
+    var attemptOnlyVideoUris by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    private var uploadFlowMode by mutableStateOf(UploadFlowMode.FullChallenge)
+
     // 전체 시도 영상 (초기 + 추가 영상 리스트)
     val allAttemptUris: List<String>
-        get() = listOfNotNull(videoUri) + additionalVideoUris
+        get() = when (uploadFlowMode) {
+            UploadFlowMode.FullChallenge -> listOfNotNull(videoUri) + additionalVideoUris
+            UploadFlowMode.AttemptOnly -> attemptOnlyVideoUris
+        }
+
+    /**
+     * Result screen playback should stay on the original local files used for upload.
+     * This avoids switching playback to any backend/object-storage URL after upload succeeds.
+     */
+    var resultPlaybackUris by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    val playbackAttemptUris: List<String>
+        get() = resultPlaybackUris.ifEmpty { allAttemptUris }
+
+    val isAttemptOnlyUploadMode: Boolean
+        get() = uploadFlowMode == UploadFlowMode.AttemptOnly
 
     // 썸네일 / 메타데이터 (PersonDetector 방식으로 추출 → 다음 화면에서 활용)
     var thumbnail by mutableStateOf<Bitmap?>(null)
@@ -205,13 +235,24 @@ class UploadViewModel @Inject constructor(
     var showCandidatePopup by mutableStateOf(false)
         private set
 
-    // TODO: 홀드 데이터 형태에 맞춰 타입 변경 (예: 데이터 클래스)
     /** 사용자가 선택한 시작 홀드 */
-    var selectedHoldInfo by mutableStateOf<String?>(null)
+    var selectedStartHold by mutableStateOf<Hold?>(null)
         private set
 
     /** 사용자가 선택한 끝 홀드 */
-    var selectedEndHoldInfo by mutableStateOf<String?>(null)
+    var selectedEndHold by mutableStateOf<Hold?>(null)
+        private set
+
+    /** 시작/끝 홀드 기준으로 번호가 부여된 홀드 목록 */
+    var numberedHolds by mutableStateOf<List<HoldNumbered>>(emptyList())
+        private set
+
+    /** 시도별 최고 도달 홀드 분석 결과 */
+    var attemptHoldReachResults by mutableStateOf<List<AttemptHoldReachResult>>(emptyList())
+        private set
+
+    /** 여러 시도의 평균 도달 홀드 요약 */
+    var overallHoldReachSummary by mutableStateOf<OverallHoldReachSummary?>(null)
         private set
 
     // --- 4. AttemptResultScreen (포즈 오버레이 + 분석 타임라인) ---
@@ -221,7 +262,7 @@ class UploadViewModel @Inject constructor(
         private set
         
     fun nextAttempt() {
-        if (currentAttemptIndex < allAttemptUris.size - 1) {
+        if (currentAttemptIndex < playbackAttemptUris.size - 1) {
             currentAttemptIndex++
         }
     }
@@ -229,6 +270,18 @@ class UploadViewModel @Inject constructor(
     /** 현재 재생 프레임의 MediaPipe 33 랜드마크 (실시간 업데이트) */
     var currentPoseLandmarks by mutableStateOf<List<PoseLandmark>>(emptyList())
         private set
+
+    /** 현재 선택된 시도의 최고 도달 홀드 결과 */
+    val currentAttemptHoldReachResult: AttemptHoldReachResult?
+        get() = attemptHoldReachResults.getOrNull(currentAttemptIndex)
+
+    /** 최종 분석 화면에 표시할 평균 도달 홀드 번호(반올림) */
+    val averageReachedHoldNo: Int
+        get() = overallHoldReachSummary?.roundedAverageHighestReachedHoldNo ?: 0
+
+    /** 최종 분석 화면 분모로 사용할 전체 선택 홀드 수 */
+    val totalSelectedHoldCount: Int
+        get() = overallHoldReachSummary?.totalHoldCount ?: numberedHolds.size
 
     /**
      * 분석 피드백 포인트 목록.
@@ -260,7 +313,107 @@ class UploadViewModel @Inject constructor(
 
     // --- 5. AttemptUploadScreen (추가 영상 업로드) ---
     fun updateAdditionalVideoUris(uris: List<String>) {
-        additionalVideoUris = uris
+        if (isAttemptOnlyUploadMode) {
+            attemptOnlyVideoUris = uris
+        } else {
+            additionalVideoUris = uris
+        }
+        clearHoldReachAnalysis()
+    }
+
+    /**
+     * 새 챌린지 생성 흐름으로 진입합니다.
+     *
+     * 역할:
+     * - 기존 추가 시도 업로드 모드가 켜져 있었다면 기본 업로드 모드로 되돌립니다.
+     * - 새 업로드 배치를 시작할 때 이전 attempt-only 선택값을 비웁니다.
+     */
+    fun beginNewChallengeUploadFlow() {
+        uploadFlowMode = UploadFlowMode.FullChallenge
+        attemptOnlyVideoUris = emptyList()
+        additionalVideoUris = emptyList()
+        resultPlaybackUris = emptyList()
+        nearbyPlaces = emptyList()
+        selectedNearbyPlace = null
+        resolvedGym = null
+        resolvedGymGrades = emptyList()
+        gymId = null
+        gymName = ""
+        lastSearchLatitude = null
+        lastSearchLongitude = null
+        uploadedAttemptVideos = emptyList()
+        currentAttemptIndex = 0
+        clearChallengeFlowState()
+        clearHoldReachAnalysis()
+        _gymSearchUiState.value = GymSearchUiState.Idle
+        _gymResolveUiState.value = GymResolveUiState.Idle
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+    }
+
+    /**
+     * 이미 생성된 challenge에 추가 시도만 업로드하는 모드로 전환합니다.
+     *
+     * 규칙:
+     * - challenge가 이미 있어야 합니다.
+     * - 기존 홀드/챌린지 정보는 유지하고, 추가 시도 영상 선택 상태만 초기화합니다.
+     */
+    fun enterAttemptOnlyUploadMode(): Boolean {
+        val currentChallengeId = challengeId
+        if (currentChallengeId == null || currentChallengeId <= 0L) {
+            return false
+        }
+
+        uploadFlowMode = UploadFlowMode.AttemptOnly
+        attemptOnlyVideoUris = emptyList()
+        resultPlaybackUris = emptyList()
+        uploadedAttemptVideos = emptyList()
+        currentAttemptIndex = 0
+        clearHoldReachAnalysis()
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+        return true
+    }
+
+    /**
+     * 기존 challenge 상세 화면에서 추가 시도 업로드 플로우를 시작할 때 사용할 진입점입니다.
+     *
+     * 역할:
+     * - 서버에 이미 생성된 challenge 정보를 현재 업로드 ViewModel에 주입합니다.
+     * - 이후 바로 추가 시도 업로드 모드로 진입할 수 있는 상태를 만듭니다.
+     */
+    fun prepareExistingChallengeAttemptUpload(challenge: ChallengeSession) {
+        createdChallenge = challenge
+        challengeId = challenge.challengeId
+        gymId = challenge.gymId.toInt()
+        gymName = challenge.gymName
+        selectedGymGradeId = challenge.gymGradeId
+        difficultyLevel = challenge.gradeLabel ?: challenge.problemColor
+        selectedHoldColorKey = resolveHoldColorKey(
+            colorName = challenge.problemColor,
+            colorHex = null
+        )
+        holdColor = resolveHoldColorDisplayName(
+            colorName = challenge.problemColor,
+            colorHex = null
+        )
+        uploadFlowMode = UploadFlowMode.AttemptOnly
+        attemptOnlyVideoUris = emptyList()
+        resultPlaybackUris = emptyList()
+        uploadedAttemptVideos = emptyList()
+        currentAttemptIndex = 0
+        clearHoldReachAnalysis()
+        _challengeCreationUiState.value = ChallengeCreationUiState.Success(challenge)
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+    }
+
+    /**
+     * 추가 시도 업로드 모드를 취소하고 원래 챌린지 흐름 모드로 돌아갑니다.
+     */
+    fun cancelAttemptOnlyUploadMode() {
+        uploadFlowMode = UploadFlowMode.FullChallenge
+        attemptOnlyVideoUris = emptyList()
+        resultPlaybackUris = emptyList()
+        clearHoldReachAnalysis()
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
     }
 
     // ====== 상태 업데이트 메서드 (이벤트 핸들러) ======
@@ -279,10 +432,14 @@ class UploadViewModel @Inject constructor(
      *   2. 수집한 PTS를 FFmpegMediaMetadataRetriever.OPTION_CLOSEST 에 전달
      */
     fun updateVideoUri(uri: String) {
+        uploadFlowMode = UploadFlowMode.FullChallenge
+        attemptOnlyVideoUris = emptyList()
+
         viewModelScope.launch(Dispatchers.IO) {
             val fileUri = copyToTempFileIfNeeded(Uri.parse(uri))
             withContext(Dispatchers.Main) {
                 videoUri = fileUri
+                clearHoldReachAnalysis()
             }
             extractVideoMetadata(Uri.parse(fileUri))
         }
@@ -560,12 +717,16 @@ class UploadViewModel @Inject constructor(
         )
     }
 
-    fun updateSelectedHoldInfo(info: String) {
-        selectedHoldInfo = info
+    fun updateSelectedStartHold(hold: Hold) {
+        selectedStartHold = hold
+        selectedEndHold = null
+        numberedHolds = emptyList()
+        clearHoldReachAnalysis()
     }
 
-    fun updateSelectedEndHoldInfo(info: String) {
-        selectedEndHoldInfo = info
+    fun updateSelectedEndHold(hold: Hold) {
+        selectedEndHold = hold
+        recomputeHoldNumbers()
     }
 
     /**
@@ -691,6 +852,7 @@ class UploadViewModel @Inject constructor(
         detectedHolds = detectedHolds.filter { existing ->
             existing.boundingBox != hold.boundingBox
         }
+        clearSelectedHoldSelection()
         Log.d(TAG, "❌ 홀드 제거: bbox=${hold.boundingBox}, color=${hold.colorLabel}")
     }
 
@@ -704,6 +866,7 @@ class UploadViewModel @Inject constructor(
         }
         if (!alreadyExists) {
             detectedHolds = detectedHolds + hold
+            clearSelectedHoldSelection()
             Log.d(TAG, "✅ 수동 홀드 추가: bbox=${hold.boundingBox}, color=${hold.colorLabel}")
         }
     }
@@ -830,6 +993,7 @@ class UploadViewModel @Inject constructor(
                 bestFrameBitmap = bitmap
                 allRawHolds     = allHolds
                 detectedHolds   = filteredHolds
+                clearSelectedHoldSelection()
                 _uiState.value  = UploadUiState.Success
             }.onFailure { e ->
                 Log.e(TAG, "❌ runHoldDetection 실패", e)
@@ -854,16 +1018,26 @@ class UploadViewModel @Inject constructor(
         }
 
         val currentBitmap = bestFrameBitmap
-        if (currentBitmap == null) {
-            _uploadSubmissionUiState.value =
-                UploadSubmissionUiState.Error("홀드 기준 이미지가 없습니다.")
-            return
-        }
+        val numberedHoldsForAnalysis = numberedHolds.takeIf { it.isNotEmpty() }
 
-        if (detectedHolds.isEmpty()) {
-            _uploadSubmissionUiState.value =
-                UploadSubmissionUiState.Error("저장할 홀드가 없습니다.")
-            return
+        if (!isAttemptOnlyUploadMode) {
+            if (currentBitmap == null) {
+                _uploadSubmissionUiState.value =
+                    UploadSubmissionUiState.Error("홀드 기준 이미지가 없습니다.")
+                return
+            }
+
+            if (detectedHolds.isEmpty()) {
+                _uploadSubmissionUiState.value =
+                    UploadSubmissionUiState.Error("저장할 홀드가 없습니다.")
+                return
+            }
+
+            if (numberedHoldsForAnalysis == null) {
+                _uploadSubmissionUiState.value =
+                    UploadSubmissionUiState.Error("시작 홀드와 끝 홀드를 먼저 선택해주세요.")
+                return
+            }
         }
 
         if (allAttemptUris.isEmpty()) {
@@ -873,37 +1047,52 @@ class UploadViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val holdCoordinates = buildChallengeHoldCoordinates(
-                imageWidth = currentBitmap.width,
-                imageHeight = currentBitmap.height
-            )
-
-            _uploadSubmissionUiState.value =
-                UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있습니다.")
-
-            saveChallengeHoldsUseCase(
-                challengeId = currentChallengeId,
-                holds = holdCoordinates
-            )
-                .onSuccess { saved ->
-                    savedChallengeHolds = saved
-                    Log.d(
-                        TAG,
-                        "submitUpload: holds saved, challengeId=${saved.challengeId}, holdCount=${saved.holdCount}"
-                    )
-                }
-                .onFailure { throwable ->
-                    Log.e(TAG, "submitUpload: save holds failed", throwable)
-                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
-                        throwable.message ?: "Failed to save challenge holds."
-                    )
+            val attemptUris = allAttemptUris
+            if (!isAttemptOnlyUploadMode) {
+                val bitmapForHoldSave = currentBitmap ?: run {
+                    _uploadSubmissionUiState.value =
+                        UploadSubmissionUiState.Error("홀드 기준 이미지가 없습니다.")
                     return@launch
                 }
 
+                if (detectedHolds.isEmpty()) {
+                    _uploadSubmissionUiState.value =
+                        UploadSubmissionUiState.Error("저장할 홀드가 없습니다.")
+                    return@launch
+                }
+
+                val holdCoordinates = buildChallengeHoldCoordinates(
+                    imageWidth = bitmapForHoldSave.width,
+                    imageHeight = bitmapForHoldSave.height
+                )
+
+                _uploadSubmissionUiState.value =
+                    UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있습니다.")
+
+                saveChallengeHoldsUseCase(
+                    challengeId = currentChallengeId,
+                    holds = holdCoordinates
+                )
+                    .onSuccess { saved ->
+                        savedChallengeHolds = saved
+                        Log.d(
+                            TAG,
+                            "submitUpload: holds saved, challengeId=${saved.challengeId}, holdCount=${saved.holdCount}"
+                        )
+                    }
+                    .onFailure { throwable ->
+                        Log.e(TAG, "submitUpload: save holds failed", throwable)
+                        _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                            throwable.message ?: "Failed to save challenge holds."
+                        )
+                        return@launch
+                }
+            }
+
             val uploadedVideos = mutableListOf<UploadedAttemptVideo>()
-            allAttemptUris.forEachIndexed { index, uri ->
+            attemptUris.forEachIndexed { index, uri ->
                 _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
-                    "영상 업로드 중입니다. (${index + 1}/${allAttemptUris.size})"
+                    "영상 업로드 중입니다. (${index + 1}/${attemptUris.size})"
                 )
 
                 uploadAttemptVideoUseCase(
@@ -911,6 +1100,19 @@ class UploadViewModel @Inject constructor(
                     videoUri = uri
                 )
                     .onSuccess { uploaded ->
+                        endAttemptUseCase(
+                            challengeId = currentChallengeId,
+                            attemptId = uploaded.attemptId,
+                            attemptResult = null
+                        )
+                            .onFailure { throwable ->
+                                Log.e(TAG, "submitUpload: end attempt failed", throwable)
+                                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                                    throwable.message ?: "Failed to end attempt."
+                                )
+                                return@launch
+                            }
+
                         uploadedVideos += uploaded
                         Log.d(
                             TAG,
@@ -923,11 +1125,24 @@ class UploadViewModel @Inject constructor(
                         _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
                             throwable.message ?: "Failed to upload attempt video."
                         )
-                        return@launch
-                    }
+                    return@launch
+                }
+            }
+
+            if (numberedHoldsForAnalysis != null) {
+                _uploadSubmissionUiState.value =
+                    UploadSubmissionUiState.Loading("최고 도달 홀드를 분석하고 있습니다.")
+
+                analyzeAllAttemptHoldReach(
+                    attemptUris = attemptUris,
+                    holds = numberedHoldsForAnalysis
+                )
+            } else {
+                clearHoldReachAnalysis()
             }
 
             uploadedAttemptVideos = uploadedVideos
+            resultPlaybackUris = attemptUris
             currentAttemptIndex = 0
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedVideos)
         }
@@ -935,6 +1150,36 @@ class UploadViewModel @Inject constructor(
 
     fun resetState() {
         _uiState.value = UploadUiState.Idle
+    }
+
+    private fun recomputeHoldNumbers() {
+        val startHold = selectedStartHold ?: return
+        val endHold = selectedEndHold ?: return
+        clearHoldReachAnalysis()
+
+        runCatching {
+            assignHoldNumbers(
+                holds = detectedHolds,
+                startHold = startHold,
+                endHold = endHold
+            )
+        }.onSuccess { numbered ->
+            numberedHolds = numbered
+            detectedHolds = numbered.toHolds()
+            selectedStartHold = numbered.firstOrNull { it.isStart }?.hold
+            selectedEndHold = numbered.firstOrNull { it.isEnd }?.hold
+            Log.d(TAG, "✅ 홀드 번호 부여 완료: ${numbered.size}개")
+        }.onFailure { throwable ->
+            Log.e(TAG, "❌ 홀드 번호 부여 실패", throwable)
+            numberedHolds = emptyList()
+        }
+    }
+
+    private fun clearSelectedHoldSelection() {
+        selectedStartHold = null
+        selectedEndHold = null
+        numberedHolds = emptyList()
+        clearHoldReachAnalysis()
     }
 
     fun resetUploadSubmissionState() {
@@ -948,6 +1193,7 @@ class UploadViewModel @Inject constructor(
         difficultyLevel = ""
         selectedHoldColorKey = null
         holdColor = ""
+        clearSelectedHoldSelection()
         clearCreatedChallengeOnly()
     }
 
@@ -956,8 +1202,67 @@ class UploadViewModel @Inject constructor(
         challengeId = null
         savedChallengeHolds = null
         uploadedAttemptVideos = emptyList()
+        clearHoldReachAnalysis()
+        resultPlaybackUris = emptyList()
         _challengeCreationUiState.value = ChallengeCreationUiState.Idle
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+    }
+
+    private suspend fun analyzeAllAttemptHoldReach(
+        attemptUris: List<String>,
+        holds: List<HoldNumbered>
+    ) {
+        if (attemptUris.isEmpty() || holds.isEmpty()) {
+            clearHoldReachAnalysis()
+            return
+        }
+
+        val results = attemptUris.mapIndexed { index, uri ->
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
+                "최고 도달 홀드를 분석하고 있습니다. (${index + 1}/${attemptUris.size})"
+            )
+
+            analyzeSingleAttemptHoldReach(
+                videoUri = uri,
+                holds = holds
+            )
+        }
+
+        attemptHoldReachResults = results
+        overallHoldReachSummary = summarizeHoldReachResults(
+            results = results,
+            totalHoldCount = holds.size
+        )
+    }
+
+    private suspend fun analyzeSingleAttemptHoldReach(
+        videoUri: String,
+        holds: List<HoldNumbered>
+    ): AttemptHoldReachResult {
+        val poses = runCatching {
+            poseEstimator.estimateFromVideo(videoUri)
+        }.onFailure { throwable ->
+            Log.e(TAG, "❌ 최고 도달 홀드 분석용 pose 추출 실패: uri=$videoUri", throwable)
+        }.getOrElse {
+            emptyList()
+        }
+
+        return analyzeAttemptHoldReach(
+            poses = poses,
+            holds = holds
+        ).also { result ->
+            Log.d(
+                TAG,
+                "✅ 최고 도달 홀드 분석 완료: uri=$videoUri, " +
+                    "highestHoldNo=${result.highestReachedHoldNo}, " +
+                    "contacted=${result.contactedHoldNos}"
+            )
+        }
+    }
+
+    private fun clearHoldReachAnalysis() {
+        attemptHoldReachResults = emptyList()
+        overallHoldReachSummary = null
     }
 
     private fun buildChallengeHoldCoordinates(
@@ -966,7 +1271,7 @@ class UploadViewModel @Inject constructor(
     ): List<ChallengeHoldCoordinate> {
         return detectedHolds.mapIndexed { index, hold ->
             ChallengeHoldCoordinate(
-                holdNo = index + 1,
+                holdNo = hold.holdNo.takeIf { it > 0 } ?: (index + 1),
                 x1 = (hold.boundingBox.left * imageWidth).toInt().coerceIn(0, imageWidth),
                 x2 = (hold.boundingBox.right * imageWidth).toInt().coerceIn(0, imageWidth),
                 y1 = (hold.boundingBox.top * imageHeight).toInt().coerceIn(0, imageHeight),
@@ -1057,4 +1362,8 @@ sealed class UploadSubmissionUiState {
     data class Error(val message: String) : UploadSubmissionUiState()
 }
 
+private enum class UploadFlowMode {
+    FullChallenge,
+    AttemptOnly
+}
 

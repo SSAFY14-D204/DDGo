@@ -51,8 +51,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +70,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.domain.usecase.HoldNumbered
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -103,7 +107,8 @@ private val C_TRACK_BG    = Color.White.copy(alpha = 0.18f)
 @Composable
 fun AttemptResultScreen(
     viewModel: UploadViewModel = hiltViewModel(),
-    onNavigateToCompare: () -> Unit = {}
+    onNavigateToCompare: () -> Unit = {},
+    onNavigateToAddAttempt: () -> Unit = {}
 ) {
     val context       = LocalContext.current
     val scope         = rememberCoroutineScope()
@@ -111,8 +116,9 @@ fun AttemptResultScreen(
     val cardListState = rememberLazyListState()
 
     val currentAttemptIndex = viewModel.currentAttemptIndex
-    val allAttemptUris = viewModel.allAttemptUris
-    val currentVideoUri = allAttemptUris.getOrNull(currentAttemptIndex)
+    val playbackAttemptUris = viewModel.playbackAttemptUris
+    val currentVideoUri = playbackAttemptUris.getOrNull(currentAttemptIndex)
+    val hasChallenge = (viewModel.challengeId ?: 0L) > 0L
 
     // (임시) 현재 시도의 더미 분석 결과 가져오기
     // 실제 연동 시에는 서버에서 받아온 List<AttemptAnalysis> 에서 currentAttemptIndex로 조회
@@ -120,6 +126,7 @@ fun AttemptResultScreen(
     val isSuccess = dummyResult.first
     val currentAnalysisPoints = dummyResult.second
     val poseLandmarks = viewModel.currentPoseLandmarks
+    val numberedHolds = viewModel.numberedHolds
 
     // ── ExoPlayer 초기화 (URL 변경 시 재초기화 하거나 setMediaItem 교체) ──────────
     val exoPlayer = remember {
@@ -270,6 +277,12 @@ fun AttemptResultScreen(
                             contentRect = videoContentRect
                         )
                     }
+                    if (numberedHolds.isNotEmpty()) {
+                        drawHoldNumbers(
+                            holds = numberedHolds,
+                            contentRect = videoContentRect
+                        )
+                    }
                 }
 
                 // 재생/일시정지 토글 (화면 탭)
@@ -354,30 +367,51 @@ fun AttemptResultScreen(
                 )
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            val isLastAttempt = currentAttemptIndex >= allAttemptUris.size - 1
-            Button(
-                onClick  = {
-                    if (isLastAttempt) {
-                        // TODO: 전체 서머리로 이동하거나 메인으로 이동
-                        onNavigateToCompare()
-                    } else {
-                        viewModel.nextAttempt()
+            val isLastAttempt = currentAttemptIndex >= playbackAttemptUris.size - 1
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick  = {
+                        if (isLastAttempt) {
+                            onNavigateToCompare()
+                        } else {
+                            viewModel.nextAttempt()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape  = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isLastAttempt) Color(0xFF673AB7) else Color(0xFF03A9F4)
+                    )
+                ) {
+                    Text(
+                        text       = if (isLastAttempt) "최종 분석 결과 보기" else "다음 시도 보기",
+                        fontSize   = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color      = Color.White
+                    )
+                }
+
+                if (hasChallenge) {
+                    Button(
+                        onClick = onNavigateToAddAttempt,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF2B2B2E),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "같은 문제에 시도 더 업로드",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape  = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isLastAttempt) Color(0xFF673AB7) else Color(0xFF03A9F4) // 보라색 / 파란색
-                )
-            ) {
-                Text(
-                    text       = if (isLastAttempt) "최종 분석 결과 보기" else "다음 시도 보기",
-                    fontSize   = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = Color.White
-                )
+                }
             }
         }
     }
@@ -613,6 +647,83 @@ private fun DrawScope.drawPoseSkeleton(
                 y = drawArea.top + (lm.y.coerceIn(0f, 1f) * drawArea.height)
             )
         )
+    }
+}
+
+private fun DrawScope.drawHoldNumbers(
+    holds: List<HoldNumbered>,
+    contentRect: VideoContentRect
+) {
+    val drawArea = if (contentRect.width > 0f && contentRect.height > 0f) {
+        contentRect
+    } else {
+        VideoContentRect(
+            left = 0f,
+            top = 0f,
+            width = size.width,
+            height = size.height
+        )
+    }
+
+    holds.forEach { numbered ->
+        val rect = numbered.hold.toScreenRect(
+            offX = drawArea.left,
+            offY = drawArea.top,
+            scaledW = drawArea.width,
+            scaledH = drawArea.height
+        )
+        val center = Offset(
+            x = (rect.l + rect.r) / 2f,
+            y = (rect.t + rect.b) / 2f
+        )
+        val badgeRadius = minOf(rect.r - rect.l, rect.b - rect.t)
+            .times(0.22f)
+            .coerceIn(12.dp.toPx(), 20.dp.toPx())
+        val fillColor = when {
+            numbered.isStart -> COLOR_START
+            numbered.isEnd -> COLOR_END
+            else -> holdLabelToComposeColor(numbered.hold.colorLabel)
+        }.copy(alpha = 0.92f)
+        val textColor = if (fillColor.luminance() < 0.45f) {
+            Color.White
+        } else {
+            Color.Black
+        }
+
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.45f),
+            radius = badgeRadius + 3.dp.toPx(),
+            center = center
+        )
+        drawCircle(
+            color = fillColor,
+            radius = badgeRadius,
+            center = center
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = 0.95f),
+            radius = badgeRadius,
+            center = center,
+            style = Stroke(width = 1.5.dp.toPx())
+        )
+
+        drawIntoCanvas { canvas ->
+            val paint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                color = textColor.toArgb()
+                textAlign = android.graphics.Paint.Align.CENTER
+                textSize = (badgeRadius * 1.05f).coerceAtLeast(12.sp.toPx())
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            }
+
+            val baseline = center.y - ((paint.descent() + paint.ascent()) / 2f)
+            canvas.nativeCanvas.drawText(
+                numbered.holdNo.toString(),
+                center.x,
+                baseline,
+                paint
+            )
+        }
     }
 }
 

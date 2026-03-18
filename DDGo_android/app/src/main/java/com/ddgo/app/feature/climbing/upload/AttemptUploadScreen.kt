@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +30,10 @@ fun AttemptUploadScreen(
     viewModel: UploadViewModel = hiltViewModel(),
     onNavigateToNext: () -> Unit = {}
 ) {
+    LaunchedEffect(Unit) {
+        viewModel.beginNewChallengeUploadFlow()
+    }
+
     // 선택 완료 즉시 → ViewModel에 URI 저장 + 다음 화면 이동
     val videoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
