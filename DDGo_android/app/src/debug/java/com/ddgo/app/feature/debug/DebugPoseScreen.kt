@@ -87,7 +87,8 @@ import kotlin.math.abs
 @Composable
 fun DebugPoseScreen(
     viewModel: DebugPoseViewModel = hiltViewModel(),
-    onNavigateToSplash: () -> Unit = {}
+    onNavigateToSplash: () -> Unit = {},
+    onNavigateToPrePose: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -288,6 +289,17 @@ fun DebugPoseScreen(
                         exportJsonLauncher.launch(buildPoseExportFileName(selectedVideoName))
                     }
                 )
+            }
+
+            // pre-pose-landmarker 버튼 추가
+            Button(
+                onClick = onNavigateToPrePose,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("pre-pose-landmarker")
             }
         }
     }
@@ -498,7 +510,7 @@ private fun CurrentPoseJsonCard(frameResult: DebugPoseFrameResult?) {
 @Composable
 private fun PoseOverlay(
     pose: Pose,
-    contentRect: VideoContentRect,
+    contentRect: DebugVideoContentRect,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier) {
@@ -624,15 +636,15 @@ private fun Context.resolveDisplayName(uri: Uri): String {
 private fun calculateVideoContentRect(
     containerSize: IntSize,
     videoSize: VideoSize
-): VideoContentRect {
+): DebugVideoContentRect {
     val containerWidth = containerSize.width.toFloat()
     val containerHeight = containerSize.height.toFloat()
     if (containerWidth <= 0f || containerHeight <= 0f) {
-        return VideoContentRect(0f, 0f, 0f, 0f)
+        return DebugVideoContentRect(0f, 0f, 0f, 0f)
     }
 
     if (videoSize.width <= 0 || videoSize.height <= 0) {
-        return VideoContentRect(0f, 0f, containerWidth, containerHeight)
+        return DebugVideoContentRect(0f, 0f, containerWidth, containerHeight)
     }
 
     val sourceWidth = videoSize.width * videoSize.pixelWidthHeightRatio
@@ -641,7 +653,7 @@ private fun calculateVideoContentRect(
     val displayedWidth = if (isRotated) sourceHeight else sourceWidth
     val displayedHeight = if (isRotated) sourceWidth else sourceHeight
     if (displayedWidth <= 0f || displayedHeight <= 0f) {
-        return VideoContentRect(0f, 0f, containerWidth, containerHeight)
+        return DebugVideoContentRect(0f, 0f, containerWidth, containerHeight)
     }
 
     val videoAspectRatio = displayedWidth / displayedHeight
@@ -650,7 +662,7 @@ private fun calculateVideoContentRect(
     return if (containerAspectRatio > videoAspectRatio) {
         val fittedHeight = containerHeight
         val fittedWidth = fittedHeight * videoAspectRatio
-        VideoContentRect(
+        DebugVideoContentRect(
             left = (containerWidth - fittedWidth) / 2f,
             top = 0f,
             width = fittedWidth,
@@ -659,7 +671,7 @@ private fun calculateVideoContentRect(
     } else {
         val fittedWidth = containerWidth
         val fittedHeight = fittedWidth / videoAspectRatio
-        VideoContentRect(
+        DebugVideoContentRect(
             left = 0f,
             top = (containerHeight - fittedHeight) / 2f,
             width = fittedWidth,
@@ -668,7 +680,7 @@ private fun calculateVideoContentRect(
     }
 }
 
-private data class VideoContentRect(
+private data class DebugVideoContentRect(
     val left: Float,
     val top: Float,
     val width: Float,

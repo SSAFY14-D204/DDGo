@@ -11,6 +11,17 @@ fun NavGraphBuilder.debugGraph(navController: NavController) {
                 navController.navigate(com.ddgo.app.navigation.ScreenRoutes.Splash.route) {
                     popUpTo(0) { inclusive = true }
                 }
+            },
+            onNavigateToPrePose = {
+                navController.navigate("pre_pose_landmarker")
+            }
+        )
+    }
+
+    composable("pre_pose_landmarker") {
+        PrePoseLandmarkerScreen(
+            onNavigateBack = {
+                navController.popBackStack()
             }
         )
     }
