@@ -1,8 +1,9 @@
-package com.ddgo.app.feature.climbing.upload
+﻿package com.ddgo.app.feature.climbing.upload
 
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.graphics.Color as AndroidColor
 import android.location.LocationManager
 import androidx.activity.compose.BackHandler
@@ -12,6 +13,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +60,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -72,9 +75,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.os.CancellationSignal
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
 import com.ddgo.app.R
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
@@ -407,17 +407,15 @@ private fun GymLevelStep(
 ) {
     val grades = viewModel.resolvedGymGrades
     val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
-    val levelChoices = remember(grades) { buildAvailableLevelChoices(grades) }
-    val selectedReferenceKey = remember(grades, selectedLevelSortOrder) {
-        grades.firstOrNull { it.sortOrder == selectedLevelSortOrder }?.let {
-            normalizeHoldColorKey(
-                colorName = it.colorName,
-                colorHex = it.colorHex
-            )
-        }
+    val availableGradesByKey = remember(grades) { buildAvailableLevelGradeMap(grades) }
+    val selectedLevelGrade = remember(grades, selectedLevelSortOrder) {
+        grades.firstOrNull { it.sortOrder == selectedLevelSortOrder }
     }
-    val selectedLevel = remember(levelChoices, selectedLevelSortOrder) {
-        levelChoices.firstOrNull { it.sortOrder == selectedLevelSortOrder }
+    val selectedPaletteKey = selectedLevelGrade?.let {
+        resolveHoldColorKey(
+            colorName = it.colorName,
+            colorHex = it.colorHex
+        )
     }
 
     Column(
@@ -434,7 +432,7 @@ private fun GymLevelStep(
             Spacer(modifier = Modifier.height(27.dp))
 
             Text(
-                text = "볼더링 문제의\n레벨을 선택해주세요",
+                text = "\uBCFC\uB354\uB9C1 \uBB38\uC81C\uC758\n\uB808\uBCA8\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694",
                 modifier = Modifier.padding(start = 25.dp),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -457,15 +455,15 @@ private fun GymLevelStep(
                     .height(415.dp)
             ) {
                 DifficultyReferenceBar(
-                    selectedPaletteKey = selectedReferenceKey,
+                    selectedPaletteKey = selectedPaletteKey,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .offset(x = 22.dp)
                 )
 
-                LevelSelectionPanel(
-                    levels = levelChoices,
-                    selectedSortOrder = selectedLevelSortOrder,
+                HoldColorSelectionPanel(
+                    availableGradesByKey = availableGradesByKey,
+                    selectedPaletteKey = selectedPaletteKey,
                     onSelect = { viewModel.selectGymLevel(it.sortOrder) },
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -478,18 +476,20 @@ private fun GymLevelStep(
             when {
                 grades.isEmpty() -> {
                     Text(
-                        text = "선택 가능한 난이도 정보가 없습니다.",
+                        text = "\uC120\uD0DD \uAC00\uB2A5\uD55C \uB09C\uC774\uB3C4 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
                         modifier = Modifier.padding(horizontal = 22.dp),
                         color = Color(0xFF999999),
                         fontSize = 14.sp
                     )
                 }
 
-                selectedLevel != null -> {
-                    LevelSummaryCard(
-                        title = "선택한 레벨",
-                        level = selectedLevel,
-                        modifier = Modifier.padding(horizontal = 22.dp)
+                selectedLevelGrade != null -> {
+                    Text(
+                        text = "${resolveHoldColorDisplayName(selectedLevelGrade.colorName, selectedLevelGrade.colorHex)} 난이도로 기록할게요",
+                        modifier = Modifier.padding(horizontal = 22.dp),
+                        color = resolveGymGradeAccentColor(selectedLevelGrade),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -513,7 +513,7 @@ private fun GymLevelStep(
                 )
             ) {
                 Text(
-                    text = "다음",
+                    text = "\uB2E4\uC74C",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -528,25 +528,18 @@ private fun GymColorStep(
     onNext: () -> Unit,
     onBack: () -> Unit
 ) {
-    val grades = viewModel.resolvedGymGrades
-    val selectedGrade = viewModel.selectedGymGrade
     val challengeCreationUiState by viewModel.challengeCreationUiState.collectAsState()
     val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
-    val levelMatchedGrades = remember(grades, selectedLevelSortOrder) {
-        grades.filter { it.sortOrder == selectedLevelSortOrder }
-    }
-    val availableGradesByKey = remember(levelMatchedGrades) {
-        buildAvailableGymGradeMap(levelMatchedGrades)
-    }
-    val selectedPaletteKey = selectedGrade?.let {
-        normalizeHoldColorKey(
-            colorName = it.colorName,
-            colorHex = it.colorHex
-        )
-    }
+    val selectedPaletteKey = viewModel.selectedHoldColorKey
     val selectedHoldSlot = remember(selectedPaletteKey) {
-        findHoldPaletteSlot(selectedPaletteKey)
+        findHoldPaletteSlot(selectedPaletteKey ?: DEFAULT_HOLD_COLOR_KEY)
             ?: holdPickerRows.flatten().first { it.key == "pink" }
+    }
+
+    LaunchedEffect(selectedPaletteKey) {
+        if (selectedPaletteKey == null) {
+            viewModel.updateHoldColor(DEFAULT_HOLD_COLOR_KEY)
+        }
     }
 
     LaunchedEffect(challengeCreationUiState) {
@@ -588,9 +581,8 @@ private fun GymColorStep(
             )
 
             ColorSelectionSheet(
-                availableGradesByKey = availableGradesByKey,
                 selectedPaletteKey = selectedPaletteKey,
-                onSelect = viewModel::selectGymGrade,
+                onSelect = viewModel::updateHoldColor,
                 modifier = Modifier
                     .fillMaxWidth()
             )
@@ -598,16 +590,16 @@ private fun GymColorStep(
             when {
                 selectedLevelSortOrder == null -> {
                     Text(
-                        text = "먼저 레벨을 선택해주세요.",
+                        text = "\uBA3C\uC800 \uB808\uBCA8\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694.",
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFFFF8A8A),
                         fontSize = 14.sp
                     )
                 }
 
-                levelMatchedGrades.isEmpty() -> {
+                false -> {
                     Text(
-                        text = "선택한 레벨에 연결된 홀드 컬러가 없습니다.",
+                        text = "\uC120\uD0DD\uD55C \uB808\uBCA8\uC5D0 \uC5F0\uACB0\uB41C \uD640\uB4DC \uCEEC\uB7EC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFFFF8A8A),
                         fontSize = 14.sp
@@ -616,7 +608,7 @@ private fun GymColorStep(
 
                 challengeCreationUiState is ChallengeCreationUiState.Loading -> {
                     Text(
-                        text = "챌린지를 생성하고 있습니다...",
+                        text = "\uCC4C\uB9B0\uC9C0\uB97C \uC0DD\uC131\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...",
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFF999999),
                         fontSize = 14.sp
@@ -634,8 +626,9 @@ private fun GymColorStep(
             }
 
             GradientActionButton(
-                text = "홀드 찾기",
-                enabled = selectedGrade != null &&
+                text = "\uD640\uB4DC \uCC3E\uAE30",
+                enabled = selectedLevelSortOrder != null &&
+                    selectedPaletteKey != null &&
                     challengeCreationUiState !is ChallengeCreationUiState.Loading,
                 onClick = { viewModel.createChallengeFromSelection() },
                 modifier = Modifier
@@ -671,13 +664,13 @@ private fun SelectionStepHeader(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "뒤로",
+                    contentDescription = "\uB4A4\uB85C",
                     tint = Color.White
                 )
             }
 
             Text(
-                text = "클라이밍 기록",
+                text = "\uD074\uB77C\uC774\uBC0D \uAE30\uB85D",
                 modifier = Modifier.align(Alignment.Center),
                 color = Color.White,
                 fontSize = 16.sp,
@@ -710,7 +703,7 @@ private fun GymReferenceSubtitle(
         text = buildAnnotatedString {
             if (gymName.isBlank()) {
                 withStyle(SpanStyle(color = Color(0xFF999999))) {
-                    append("기준 난이도표")
+                    append("\uAE30\uC900 \uB09C\uC774\uB3C4\uD45C")
                 }
             } else {
                 withStyle(
@@ -722,7 +715,7 @@ private fun GymReferenceSubtitle(
                     append(gymName)
                 }
                 withStyle(SpanStyle(color = Color(0xFF999999))) {
-                    append(" 기준 난이도표")
+                    append(" \uAE30\uC900 \uB09C\uC774\uB3C4\uD45C")
                 }
             }
         },
@@ -748,13 +741,13 @@ private fun DifficultyReferenceBar(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "어려움",
+                text = "\uC5B4\uB824\uC6C0",
                 color = Color(0xFF999999),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "쉬움",
+                text = "\uC26C\uC6C0",
                 color = Color(0xFF999999),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
@@ -818,7 +811,7 @@ private fun LevelSelectionPanel(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "난이도 정보가 없습니다.",
+                    text = "\uB09C\uC774\uB3C4 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
                     color = Color(0xFF767676),
                     fontSize = 14.sp
                 )
@@ -874,7 +867,7 @@ private fun LevelChoiceCard(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "문제 레벨",
+                text = "\uBB38\uC81C \uB808\uBCA8",
                 color = Color(0xFF767676),
                 fontSize = 12.sp
             )
@@ -944,40 +937,19 @@ private fun HoldColorHero(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        Canvas(
+        HoldAssetGraphic(
+            slot = previewSlot,
             modifier = Modifier
-                .offset(y = 54.dp)
-                .size(width = 214.dp, height = 48.dp)
-        ) {
-            drawOval(
-                color = previewSlot.color.copy(alpha = 0.4f),
-                topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.08f, size.height * 0.18f),
-                size = androidx.compose.ui.geometry.Size(size.width * 0.84f, size.height * 0.58f)
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .size(width = 274.dp, height = 196.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            HoldAssetGraphic(
-                slot = previewSlot,
-                modifier = Modifier
-                    .fillMaxWidth(0.88f)
-                    .aspectRatio(HOLD_ASSET_ASPECT_RATIO)
-                    .rotate(-8f),
-                contentScale = ContentScale.Fit
-            )
-        }
+                .fillMaxWidth(0.72f)
+                .aspectRatio(HOLD_ASSET_ASPECT_RATIO)
+        )
     }
 }
 
 @Composable
 private fun ColorSelectionSheet(
-    availableGradesByKey: Map<String, GymGrade>,
     selectedPaletteKey: String?,
-    onSelect: (GymGrade) -> Unit,
+    onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -993,12 +965,11 @@ private fun ColorSelectionSheet(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     row.forEach { slot ->
-                        val grade = availableGradesByKey[slot.key]
                         ColorCircleButton(
                             slot = slot,
                             selected = slot.key == selectedPaletteKey,
-                            enabled = grade != null,
-                            onClick = { grade?.let(onSelect) }
+                            enabled = true,
+                            onClick = { onSelect(slot.key) }
                         )
                     }
                 }
@@ -1016,7 +987,7 @@ private fun ColorCircleButton(
 ) {
     Box(
         modifier = Modifier
-            .size(74.dp)
+            .size(60.dp)
             .alpha(if (enabled) 1f else 0.28f)
             .clip(CircleShape)
             .then(
@@ -1026,7 +997,7 @@ private fun ColorCircleButton(
                     Modifier
                 }
             )
-            .padding(5.dp)
+            .padding(4.dp)
             .clip(CircleShape)
             .then(
                 if (selected) {
@@ -1035,7 +1006,7 @@ private fun ColorCircleButton(
                     Modifier
                 }
             )
-            .padding(5.dp)
+            .padding(4.dp)
             .clip(CircleShape)
             .background(slot.color)
             .then(
@@ -1227,7 +1198,8 @@ private val holdPickerRows = listOf(
     )
 )
 
-private const val HOLD_ASSET_ASPECT_RATIO = 247f / 163f
+private const val DEFAULT_HOLD_COLOR_KEY = "pink"
+private const val HOLD_ASSET_ASPECT_RATIO = 247f / 256f
 
 private fun findHoldPaletteSlot(key: String?): HoldPaletteSlot? {
     if (key == null) {
@@ -1242,20 +1214,20 @@ private fun findHoldPaletteSlot(key: String?): HoldPaletteSlot? {
         .firstOrNull { it.key == key }
 }
 
-private fun holdAssetResIdForKey(key: String): Int? {
+private fun holdAssetPathForKey(key: String): String? {
     return when (key) {
-        "black" -> R.drawable.hold_black
-        "brown" -> R.drawable.hold_brown
-        "gray" -> R.drawable.hold_gray
-        "green" -> R.drawable.hold_green
-        "white" -> R.drawable.hold_ivory
-        "navy" -> R.drawable.hold_navy
-        "orange" -> R.drawable.hold_orange
-        "pink" -> R.drawable.hold_pink
-        "purple" -> R.drawable.hold_purple
-        "red" -> R.drawable.hold_red
-        "blue" -> R.drawable.hold_sky
-        "yellow" -> R.drawable.hold_yellow
+        "black" -> "holds/hold_black.png"
+        "brown" -> "holds/hold_brown.png"
+        "gray" -> "holds/hold_gray.png"
+        "green" -> "holds/hold_green.png"
+        "white" -> "holds/hold_white.png"
+        "navy" -> "holds/hold_blue.png"
+        "orange" -> "holds/hold_orange.png"
+        "pink" -> "holds/hold_pink.png"
+        "purple" -> "holds/hold_purple.png"
+        "red" -> "holds/hold_red.png"
+        "blue" -> "holds/hold_sky.png"
+        "yellow" -> "holds/hold_yellow.png"
         else -> null
     }
 }
@@ -1263,13 +1235,12 @@ private fun holdAssetResIdForKey(key: String): Int? {
 @Composable
 private fun HoldAssetGraphic(
     slot: HoldPaletteSlot,
-    modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Fit
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val drawableRes = holdAssetResIdForKey(slot.key)
+    val assetPath = holdAssetPathForKey(slot.key)
 
-    if (drawableRes == null) {
+    if (assetPath == null) {
         Box(
             modifier = modifier
                 .clip(RoundedCornerShape(18.dp))
@@ -1285,31 +1256,53 @@ private fun HoldAssetGraphic(
         return
     }
 
-    val request = remember(drawableRes) {
-        ImageRequest.Builder(context)
-            .data(drawableRes)
-            .decoderFactory(SvgDecoder.Factory())
-            .crossfade(false)
-            .build()
+    val holdBitmap = remember(assetPath) {
+        runCatching {
+            context.assets.open(assetPath).use { input ->
+                BitmapFactory.decodeStream(input)?.asImageBitmap()
+            }
+        }.getOrNull()
     }
 
-    AsyncImage(
-        model = request,
-        contentDescription = "${formatHoldColorDisplayName(slot.key)} 홀드",
-        modifier = modifier,
-        contentScale = contentScale
+    if (holdBitmap == null) {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(18.dp))
+                .background(slot.color)
+        )
+        return
+    }
+
+    Image(
+        bitmap = holdBitmap,
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = modifier
     )
 }
 
 private fun buildAvailableGymGradeMap(grades: List<GymGrade>): Map<String, GymGrade> {
     return buildMap {
         grades.forEach { grade ->
-            normalizeHoldColorKey(
+            resolveHoldColorKey(
                 colorName = grade.colorName,
                 colorHex = grade.colorHex
             )?.let { put(it, grade) }
         }
     }
+}
+
+private fun buildAvailableLevelGradeMap(grades: List<GymGrade>): Map<String, GymGrade> {
+    return grades
+        .sortedBy { it.sortOrder }
+        .distinctBy { it.sortOrder }
+        .fold(linkedMapOf()) { acc, grade ->
+            resolveHoldColorKey(
+                colorName = grade.colorName,
+                colorHex = grade.colorHex
+            )?.let { acc[it] = grade }
+            acc
+        }
 }
 
 private fun buildAvailableLevelChoices(grades: List<GymGrade>): List<LevelChoice> {
@@ -1323,48 +1316,6 @@ private fun buildAvailableLevelChoices(grades: List<GymGrade>): List<LevelChoice
                 accentColor = resolveGymGradeAccentColor(grade)
             )
         }
-}
-
-private fun normalizeHoldColorKey(
-    colorName: String,
-    colorHex: String?
-): String? {
-    val normalizedHex = colorHex
-        ?.trim()
-        ?.removePrefix("#")
-        ?.uppercase()
-
-    when (normalizedHex) {
-        "20272D" -> return "slate"
-        "292929" -> return "black"
-        "505050" -> return "gray"
-        "FFFFFF" -> return "white"
-        "6B3E1C" -> return "brown"
-        "876FFF" -> return "purple"
-        "373FD7" -> return "navy"
-        "4396FB" -> return "blue"
-        "65B969" -> return "green"
-        "FF7700" -> return "orange"
-        "FF0000" -> return "red"
-        "FED500" -> return "yellow"
-        "FF56A8" -> return "pink"
-    }
-
-    return when (colorName.trim().lowercase()) {
-        "\uAC80\uC815", "black" -> "black"
-        "\uD68C\uC0C9", "gray", "grey" -> "gray"
-        "\uD770\uC0C9", "white" -> "white"
-        "\uAC08\uC0C9", "brown" -> "brown"
-        "\uBCF4\uB77C", "purple" -> "purple"
-        "\uB0A8\uC0C9", "navy", "indigo" -> "navy"
-        "\uD30C\uB791", "blue", "cyan", "skyblue" -> "blue"
-        "\uCD08\uB85D", "green" -> "green"
-        "\uC8FC\uD669", "orange" -> "orange"
-        "\uBE68\uAC15", "red" -> "red"
-        "\uB178\uB791", "yellow" -> "yellow"
-        "\uD551\uD06C", "pink" -> "pink"
-        else -> null
-    }
 }
 
 @Composable
@@ -1575,37 +1526,23 @@ private fun formatGymGradeLevelText(grade: GymGrade): String {
 }
 
 private fun formatHoldColorDisplayName(colorName: String): String {
-    return when (colorName.trim().lowercase()) {
-        "black", "검정" -> "검정"
-        "gray", "grey", "회색" -> "회색"
-        "white", "흰색" -> "흰색"
-        "brown", "갈색" -> "갈색"
-        "purple", "보라" -> "보라"
-        "navy", "indigo", "남색" -> "남색"
-        "blue", "cyan", "skyblue", "파랑" -> "파랑"
-        "green", "초록" -> "초록"
-        "orange", "주황" -> "주황"
-        "red", "빨강" -> "빨강"
-        "yellow", "노랑" -> "노랑"
-        "pink", "핑크" -> "핑크"
-        else -> colorName
-    }
+    return resolveHoldColorDisplayName(colorName = colorName, colorHex = null)
 }
 
 private fun fallbackColorByName(colorName: String): Color {
-    return when (colorName.trim().lowercase()) {
-        "\uBE68\uAC15", "red" -> Color(0xFFFF0000)
-        "\uC8FC\uD669", "orange" -> Color(0xFFFF7700)
-        "\uB178\uB791", "yellow" -> Color(0xFFFED500)
-        "\uCD08\uB85D", "green" -> Color(0xFF65B969)
-        "\uD30C\uB791", "blue", "cyan" -> Color(0xFF4396FB)
-        "\uB0A8\uC0C9", "navy" -> Color(0xFF373FD7)
-        "\uBCF4\uB77C", "purple" -> Color(0xFF876FFF)
-        "\uAC08\uC0C9", "brown" -> Color(0xFF6B3E1C)
-        "\uD551\uD06C", "pink" -> Color(0xFFFF56A8)
-        "\uD770\uC0C9", "white" -> Color.White
-        "\uD68C\uC0C9", "gray", "grey" -> Color(0xFF505050)
-        "\uAC80\uC815", "black" -> Color(0xFF292929)
+    return when (resolveHoldColorKey(colorName = colorName, colorHex = null)) {
+        "red" -> Color(0xFFFF0000)
+        "orange" -> Color(0xFFFF7700)
+        "yellow" -> Color(0xFFFED500)
+        "green" -> Color(0xFF65B969)
+        "blue" -> Color(0xFF4396FB)
+        "navy" -> Color(0xFF373FD7)
+        "purple" -> Color(0xFF876FFF)
+        "brown" -> Color(0xFF6B3E1C)
+        "pink" -> Color(0xFFFF56A8)
+        "white" -> Color.White
+        "gray" -> Color(0xFF505050)
+        "black" -> Color(0xFF292929)
         else -> Color(0xFF4A90E2)
     }
 }
@@ -1646,8 +1583,7 @@ private fun HoldAssetThumbnail(
                 slot = slot,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(HOLD_ASSET_ASPECT_RATIO),
-                contentScale = ContentScale.Fit
+                    .aspectRatio(HOLD_ASSET_ASPECT_RATIO)
             )
         }
         return

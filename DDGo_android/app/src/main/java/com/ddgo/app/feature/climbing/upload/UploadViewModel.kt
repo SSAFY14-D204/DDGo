@@ -106,6 +106,8 @@ class UploadViewModel @Inject constructor(
         private set
     var holdColor by mutableStateOf("")
         private set
+    var selectedHoldColorKey by mutableStateOf<String?>(null)
+        private set
     var selectedLevelSortOrder by mutableStateOf<Int?>(null)
         private set
     var selectedGymGradeId by mutableStateOf<Long?>(null)
@@ -537,19 +539,25 @@ class UploadViewModel @Inject constructor(
 
         val nextSelectedGrade = selectedGymGrade
             ?.takeIf { it.sortOrder == sortOrder }
-            ?: matchingGrades.singleOrNull()
+            ?: matchingGrades.firstOrNull()
 
         if (nextSelectedGrade != null) {
             selectedGymGrade = nextSelectedGrade
             selectedGymGradeId = nextSelectedGrade.gymGradeId.toLong()
-            holdColor = mapGymColorNameToClassifierColor(nextSelectedGrade.colorName)
         } else {
             selectedGymGrade = null
             selectedGymGradeId = null
-            holdColor = ""
         }
 
         clearCreatedChallengeOnly()
+    }
+
+    fun updateHoldColor(colorKey: String) {
+        selectedHoldColorKey = colorKey.takeIf { it.isNotBlank() }
+        holdColor = resolveHoldColorDisplayName(
+            colorName = colorKey,
+            colorHex = null
+        )
     }
 
     fun updateSelectedHoldInfo(info: String) {
@@ -572,7 +580,6 @@ class UploadViewModel @Inject constructor(
         selectedGymGrade = grade
         selectedGymGradeId = grade.gymGradeId.toLong()
         difficultyLevel = formatSelectedLevelLabel(grade)
-        holdColor = mapGymColorNameToClassifierColor(grade.colorName)
         clearCreatedChallengeOnly()
     }
 
@@ -616,7 +623,10 @@ class UploadViewModel @Inject constructor(
                     createdChallenge = challenge
                     challengeId = challenge.challengeId
                     difficultyLevel = challenge.gradeLabel ?: (selectedGymGrade?.gradeLabel ?: challenge.problemColor)
-                    holdColor = mapGymColorNameToClassifierColor(challenge.problemColor)
+                    if (selectedHoldColorKey == null) {
+                        mapGymColorToClassifierColor(challenge.problemColor)
+                            ?.let(::updateHoldColor)
+                    }
                     _challengeCreationUiState.value = ChallengeCreationUiState.Success(challenge)
                     Log.d(
                         TAG,
@@ -800,14 +810,15 @@ class UploadViewModel @Inject constructor(
                     // 전체 홀드에 색상 분류 적용 (수동 추가 후보 풀용)
                     val classifiedAll = rawHolds.map { holdColorClassifier.classifySingle(bitmap, it) }
 
-                    Log.d(TAG, "▶ [4/4] 색상 필터링 시작 (목표 색: '$holdColor')")
-                    val holds = if (holdColor.isBlank()) {
+                    val detectionTargetColor = resolveDetectionTargetHoldColor()
+                    Log.d(TAG, "▶ [4/4] 색상 필터링 시작 (목표 색: '$detectionTargetColor')")
+                    val holds = if (detectionTargetColor.isBlank()) {
                         holdColorClassifier.classifyAll(bitmap, rawHolds)
                     } else {
                         holdColorClassifier.classifyAndFilter(
                             bitmap          = bitmap,
                             holds           = rawHolds,
-                            targetColorName = holdColor,
+                            targetColorName = detectionTargetColor,
                             scoreThreshold  = 0.25f
                         )
                     }
@@ -935,6 +946,7 @@ class UploadViewModel @Inject constructor(
         selectedGymGradeId = null
         selectedGymGrade = null
         difficultyLevel = ""
+        selectedHoldColorKey = null
         holdColor = ""
         clearCreatedChallengeOnly()
     }
@@ -963,9 +975,29 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    private fun mapGymColorNameToClassifierColor(colorName: String): String {
-        return GYM_COLOR_NAME_TO_CLASSIFIER_COLOR[colorName.trim().lowercase()]
-            ?: colorName.trim().lowercase()
+    private fun resolveDetectionTargetHoldColor(): String {
+        return selectedHoldColorKey
+            ?.let { resolveClassifierHoldColor(colorName = it, colorHex = null) ?: it }
+            ?: holdColor.takeIf { it.isNotBlank() }?.let(::mapGymColorToClassifierColor)
+            ?: createdChallenge?.let { mapGymColorToClassifierColor(it.problemColor) }
+            ?: ""
+    }
+
+    private fun mapGymGradeToClassifierColor(grade: GymGrade): String {
+        return mapGymColorToClassifierColor(
+            colorName = grade.colorName,
+            colorHex = grade.colorHex
+        ) ?: ""
+    }
+
+    private fun mapGymColorToClassifierColor(
+        colorName: String,
+        colorHex: String? = null
+    ): String? {
+        return resolveClassifierHoldColor(
+            colorName = colorName,
+            colorHex = colorHex
+        ) ?: colorName.trim().lowercase().takeIf { it.isNotBlank() }
     }
 
     private fun formatSelectedLevelLabel(grade: GymGrade): String {
@@ -1025,36 +1057,4 @@ sealed class UploadSubmissionUiState {
     data class Error(val message: String) : UploadSubmissionUiState()
 }
 
-private val GYM_COLOR_NAME_TO_CLASSIFIER_COLOR = mapOf(
-    "red" to "red",
-    "orange" to "orange",
-    "yellow" to "yellow",
-    "green" to "green",
-    "blue" to "blue",
-    "navy" to "blue",
-    "purple" to "purple",
-    "brown" to "brown",
-    "pink" to "pink",
-    "white" to "white",
-    "gray" to "gray",
-    "grey" to "gray",
-    "black" to "black",
-    "빨강" to "red",
-    "빨간" to "red",
-    "주황" to "orange",
-    "노랑" to "yellow",
-    "노란" to "yellow",
-    "초록" to "green",
-    "초록색" to "green",
-    "파랑" to "blue",
-    "파란" to "blue",
-    "남색" to "blue",
-    "보라" to "purple",
-    "갈색" to "brown",
-    "핑크" to "pink",
-    "흰색" to "white",
-    "회색" to "gray",
-    "검정" to "black",
-    "검은" to "black"
-)
 
