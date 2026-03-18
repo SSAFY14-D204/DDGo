@@ -8,6 +8,7 @@ import android.location.LocationManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -55,7 +57,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -397,9 +401,14 @@ private fun GymLevelStep(
     onBack: () -> Unit
 ) {
     val grades = viewModel.resolvedGymGrades
-    val levelChoices = remember(grades) { buildAvailableLevelChoices(grades) }
-    val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
-    val selectedLevel = levelChoices.firstOrNull { it.sortOrder == selectedLevelSortOrder }
+    val selectedGrade = viewModel.selectedGymGrade
+    val availableGradesByKey = remember(grades) { buildAvailableGymGradeMap(grades) }
+    val selectedPaletteKey = selectedGrade?.let {
+        normalizeHoldColorKey(
+            colorName = it.colorName,
+            colorHex = it.colorHex
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -438,15 +447,16 @@ private fun GymLevelStep(
                     .height(415.dp)
             ) {
                 DifficultyReferenceBar(
+                    selectedPaletteKey = selectedPaletteKey,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .offset(x = 22.dp)
                 )
 
-                LevelSelectionPanel(
-                    levels = levelChoices,
-                    selectedSortOrder = selectedLevelSortOrder,
-                    onSelect = { level -> viewModel.selectGymLevel(level.sortOrder) },
+                HoldColorSelectionPanel(
+                    availableGradesByKey = availableGradesByKey,
+                    selectedPaletteKey = selectedPaletteKey,
+                    onSelect = viewModel::selectGymGrade,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .offset(x = 191.dp)
@@ -465,11 +475,13 @@ private fun GymLevelStep(
                     )
                 }
 
-                selectedLevel != null -> {
-                    LevelSummaryCard(
-                        title = "선택한 레벨",
-                        level = selectedLevel,
-                        modifier = Modifier.padding(horizontal = 22.dp)
+                selectedGrade != null -> {
+                    Text(
+                        text = "${formatHoldColorDisplayName(selectedGrade.colorName)} 난이도로 기록할게요",
+                        modifier = Modifier.padding(horizontal = 22.dp),
+                        color = resolveGymGradeAccentColor(selectedGrade),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -478,7 +490,7 @@ private fun GymLevelStep(
 
             Button(
                 onClick = onNext,
-                enabled = selectedLevel != null,
+                enabled = selectedGrade != null,
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
@@ -486,7 +498,7 @@ private fun GymLevelStep(
                     .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF505050),
+                    containerColor = if (selectedGrade != null) Color(0xFF1D9BF0) else Color(0xFF505050),
                     contentColor = Color.White,
                     disabledContainerColor = Color(0xFF505050).copy(alpha = 0.55f),
                     disabledContentColor = Color.White.copy(alpha = 0.6f)
@@ -509,11 +521,9 @@ private fun GymColorStep(
     onBack: () -> Unit
 ) {
     val grades = viewModel.resolvedGymGrades
-    val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
     val selectedGrade = viewModel.selectedGymGrade
     val challengeCreationUiState by viewModel.challengeCreationUiState.collectAsState()
-    val levelChoices = remember(grades) { buildAvailableLevelChoices(grades) }
-    val selectedLevel = levelChoices.firstOrNull { it.sortOrder == selectedLevelSortOrder }
+    val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
     val levelMatchedGrades = remember(grades, selectedLevelSortOrder) {
         grades.filter { it.sortOrder == selectedLevelSortOrder }
     }
@@ -556,52 +566,28 @@ private fun GymColorStep(
                 lineHeight = 28.sp
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
-            GymReferenceSubtitle(
-                gymName = formatGymDisplayName(viewModel.gymName),
-                modifier = Modifier.padding(start = 25.dp)
-            )
-
-            selectedLevel?.let { level ->
-                Spacer(modifier = Modifier.height(16.dp))
-                LevelSummaryCard(
-                    title = "선택한 레벨",
-                    level = level,
-                    modifier = Modifier.padding(horizontal = 25.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(21.dp))
-
-            Box(
+            HoldColorHero(
+                previewColor = selectedGrade?.let(::resolveGymGradeAccentColor) ?: Color(0xFFFF56A8),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(415.dp)
-            ) {
-                DifficultyReferenceBar(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(x = 22.dp)
-                )
+                    .weight(1f)
+            )
 
-                HoldColorSelectionPanel(
-                    availableGradesByKey = availableGradesByKey,
-                    selectedPaletteKey = selectedPaletteKey,
-                    onSelect = viewModel::selectGymGrade,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(x = 191.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
+            ColorSelectionSheet(
+                availableGradesByKey = availableGradesByKey,
+                selectedPaletteKey = selectedPaletteKey,
+                onSelect = viewModel::selectGymGrade,
+                modifier = Modifier
+                    .fillMaxWidth()
+            )
 
             when {
-                selectedLevel == null -> {
+                selectedLevelSortOrder == null -> {
                     Text(
                         text = "먼저 레벨을 선택해주세요.",
-                        modifier = Modifier.padding(horizontal = 22.dp),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFFFF8A8A),
                         fontSize = 14.sp
                     )
@@ -610,7 +596,7 @@ private fun GymColorStep(
                 levelMatchedGrades.isEmpty() -> {
                     Text(
                         text = "선택한 레벨에 연결된 홀드 컬러가 없습니다.",
-                        modifier = Modifier.padding(horizontal = 22.dp),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFFFF8A8A),
                         fontSize = 14.sp
                     )
@@ -619,7 +605,7 @@ private fun GymColorStep(
                 challengeCreationUiState is ChallengeCreationUiState.Loading -> {
                     Text(
                         text = "챌린지를 생성하고 있습니다...",
-                        modifier = Modifier.padding(horizontal = 22.dp),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFF999999),
                         fontSize = 14.sp
                     )
@@ -628,46 +614,24 @@ private fun GymColorStep(
                 challengeCreationUiState is ChallengeCreationUiState.Error -> {
                     Text(
                         text = (challengeCreationUiState as ChallengeCreationUiState.Error).message,
-                        modifier = Modifier.padding(horizontal = 22.dp),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFFFF8A8A),
                         fontSize = 14.sp
                     )
                 }
             }
 
-            if (selectedGrade != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                SelectedHoldPreviewCard(
-                    grade = selectedGrade,
-                    modifier = Modifier.padding(horizontal = 22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = { viewModel.createChallengeFromSelection() },
+            GradientActionButton(
+                text = "홀드 찾기",
                 enabled = selectedGrade != null &&
                     challengeCreationUiState !is ChallengeCreationUiState.Loading,
+                onClick = { viewModel.createChallengeFromSelection() },
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF505050),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color(0xFF505050).copy(alpha = 0.55f),
-                    disabledContentColor = Color.White.copy(alpha = 0.6f)
-                )
-            ) {
-                Text(
-                    text = "다음",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+                    .height(58.dp)
+            )
         }
     }
 }
@@ -758,6 +722,7 @@ private fun GymReferenceSubtitle(
 
 @Composable
 private fun DifficultyReferenceBar(
+    selectedPaletteKey: String? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -794,8 +759,22 @@ private fun DifficultyReferenceBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .background(slot.color)
+                        .padding(vertical = 1.dp)
                 )
+                {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(slot.color)
+                            .then(
+                                if (slot.key == selectedPaletteKey) {
+                                    Modifier.border(2.dp, Color.White)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    )
+                }
             }
         }
     }
@@ -945,6 +924,160 @@ private fun LevelSummaryCard(
 }
 
 @Composable
+private fun HoldColorHero(
+    previewColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(
+            modifier = Modifier
+                .offset(y = 54.dp)
+                .size(width = 174.dp, height = 48.dp)
+        ) {
+            drawOval(
+                color = previewColor.copy(alpha = 0.35f),
+                topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.08f, size.height * 0.18f),
+                size = androidx.compose.ui.geometry.Size(size.width * 0.84f, size.height * 0.58f)
+            )
+        }
+
+        Canvas(modifier = Modifier.size(width = 244.dp, height = 190.dp)) {
+            val width = size.width
+            val height = size.height
+            val path = Path().apply {
+                moveTo(width * 0.46f, height * 0.10f)
+                cubicTo(width * 0.68f, height * 0.02f, width * 0.94f, height * 0.10f, width * 0.94f, height * 0.40f)
+                cubicTo(width * 0.95f, height * 0.72f, width * 0.73f, height * 0.94f, width * 0.45f, height * 0.94f)
+                cubicTo(width * 0.19f, height * 0.93f, width * 0.03f, height * 0.70f, width * 0.03f, height * 0.45f)
+                cubicTo(width * 0.03f, height * 0.22f, width * 0.21f, height * 0.10f, width * 0.46f, height * 0.10f)
+                close()
+            }
+            drawPath(path = path, color = previewColor)
+            drawPath(path = path, color = Color.White.copy(alpha = 0.06f))
+        }
+    }
+}
+
+@Composable
+private fun ColorSelectionSheet(
+    availableGradesByKey: Map<String, GymGrade>,
+    selectedPaletteKey: String?,
+    onSelect: (GymGrade) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .background(Color.White)
+            .padding(horizontal = 28.dp, vertical = 26.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            holdPickerRows.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    row.forEach { slot ->
+                        val grade = availableGradesByKey[slot.key]
+                        ColorCircleButton(
+                            slot = slot,
+                            selected = slot.key == selectedPaletteKey,
+                            enabled = grade != null,
+                            onClick = { grade?.let(onSelect) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorCircleButton(
+    slot: HoldPaletteSlot,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(74.dp)
+            .alpha(if (enabled) 1f else 0.28f)
+            .clip(CircleShape)
+            .then(
+                if (selected) {
+                    Modifier.border(3.dp, Color(0xFF66B6FF), CircleShape)
+                } else {
+                    Modifier
+                }
+            )
+            .padding(5.dp)
+            .clip(CircleShape)
+            .then(
+                if (selected) {
+                    Modifier.border(2.dp, Color.White, CircleShape)
+                } else {
+                    Modifier
+                }
+            )
+            .padding(5.dp)
+            .clip(CircleShape)
+            .background(slot.color)
+            .then(
+                if (slot.borderColor != null) {
+                    Modifier.border(1.dp, slot.borderColor, CircleShape)
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+    )
+}
+
+@Composable
+private fun GradientActionButton(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                if (enabled) {
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF1D9BF0),
+                            Color(0xFF855AF7)
+                        )
+                    )
+                } else {
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF505050),
+                            Color(0xFF505050)
+                        )
+                    )
+                }
+            )
+            .alpha(if (enabled) 1f else 0.65f)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
 private fun HoldColorSelectionPanel(
     availableGradesByKey: Map<String, GymGrade>,
     selectedPaletteKey: String?,
@@ -1058,6 +1191,27 @@ private val holdPaletteRows = listOf(
     listOf(
         HoldPaletteSlot(key = "yellow", color = Color(0xFFFED500)),
         HoldPaletteSlot(key = "pink", color = Color(0xFFFF56A8))
+    )
+)
+
+private val holdPickerRows = listOf(
+    listOf(
+        HoldPaletteSlot(key = "red", color = Color(0xFFFF1208)),
+        HoldPaletteSlot(key = "orange", color = Color(0xFFFF7A00)),
+        HoldPaletteSlot(key = "yellow", color = Color(0xFFFFCB12)),
+        HoldPaletteSlot(key = "green", color = Color(0xFF48BE5C))
+    ),
+    listOf(
+        HoldPaletteSlot(key = "blue", color = Color(0xFF1FC4E2)),
+        HoldPaletteSlot(key = "navy", color = Color(0xFF3F43DB)),
+        HoldPaletteSlot(key = "purple", color = Color(0xFF8265EE)),
+        HoldPaletteSlot(key = "brown", color = Color(0xFF8A4B16))
+    ),
+    listOf(
+        HoldPaletteSlot(key = "pink", color = Color(0xFFFF43AC)),
+        HoldPaletteSlot(key = "white", color = Color(0xFFF5F1F1), borderColor = Color(0xFFE0D9D9)),
+        HoldPaletteSlot(key = "gray", color = Color(0xFF5C5C5C)),
+        HoldPaletteSlot(key = "black", color = Color(0xFF0A0A12))
     )
 )
 
@@ -1332,6 +1486,24 @@ private fun formatGymGradeLevelText(grade: GymGrade): String {
     return grade.gradeLabel
         ?.takeIf { it.isNotBlank() }
         ?: "V${grade.sortOrder}"
+}
+
+private fun formatHoldColorDisplayName(colorName: String): String {
+    return when (colorName.trim().lowercase()) {
+        "black", "검정" -> "검정"
+        "gray", "grey", "회색" -> "회색"
+        "white", "흰색" -> "흰색"
+        "brown", "갈색" -> "갈색"
+        "purple", "보라" -> "보라"
+        "navy", "indigo", "남색" -> "남색"
+        "blue", "cyan", "skyblue", "파랑" -> "파랑"
+        "green", "초록" -> "초록"
+        "orange", "주황" -> "주황"
+        "red", "빨강" -> "빨강"
+        "yellow", "노랑" -> "노랑"
+        "pink", "핑크" -> "핑크"
+        else -> colorName
+    }
 }
 
 private fun fallbackColorByName(colorName: String): Color {
