@@ -4,6 +4,7 @@ package com.ddgo.app.domain.model
  * 클라이밍 홀드 도메인 모델.
  * YOLO 검출 결과를 VisionMapper를 통해 변환한 순수 Kotlin 모델입니다.
  *
+ * @param holdNo      진행축 기준으로 부여되는 홀드 번호 (기본값 0 = 미할당)
  * @param boundingBox 이미지 내 홀드 위치 (정규화 좌표 0~1)
  * @param confidence  검출 신뢰도 (0~1)
  * @param polygon     세그멘테이션 경계점 목록 (정규화 좌표 0~1)
@@ -11,6 +12,7 @@ package com.ddgo.app.domain.model
  * @param colorScore  색상 분류 신뢰도 (0~1, 기본값 0)
  */
 data class Hold(
+    val holdNo: Int = 0,
     val boundingBox: BoundingBox,
     val confidence: Float,
     val polygon: List<Point> = emptyList(),

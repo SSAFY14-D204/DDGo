@@ -168,12 +168,14 @@ fun NavGraphBuilder.uploadGraph(
             // 실제 서버 데이터 연동 시 ViewModel에서 FinalAnalysisData 직접 노출 권장
             val dummyResult = viewModel.attemptDummyResults.lastOrNull()
             val isSuccess   = dummyResult?.first ?: true
+            val averageReachedHoldNo = viewModel.averageReachedHoldNo
+            val totalSelectedHoldCount = viewModel.totalSelectedHoldCount
 
             FinalAnalysisScreen(
                 data = FinalAnalysisData(
                     isSuccess      = isSuccess,
-                    reachedHolds   = 9,
-                    totalHolds     = 14,
+                    reachedHolds   = averageReachedHoldNo,
+                    totalHolds     = totalSelectedHoldCount,
                     balanceRatio   = 68,
                     // stabilityTimeline 이 비어있으면 데모 곡선을 사용
                     attemptCount   = viewModel.allAttemptUris.size.coerceAtLeast(1),
