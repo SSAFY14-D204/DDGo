@@ -42,7 +42,12 @@ class AuthViewModel @Inject constructor(
             // 개발 단계 편의를 위해 @ 검증/파싱 없이 그대로 닉네임으로 사용
             val nickname = username
             registerUseCase(username, password, nickname).onSuccess {
-                _uiState.value = AuthUiState.Success
+                // 회원가입 성공 후 즉시 로그인 시도
+                loginUseCase(username, password).onSuccess {
+                    _uiState.value = AuthUiState.Success
+                }.onFailure {
+                    _uiState.value = AuthUiState.Error(it.message ?: "회원가입은 성공했으나 로그인에 실패했습니다.")
+                }
             }.onFailure {
                 _uiState.value = AuthUiState.Error(it.message ?: "회원가입 실패")
             }
