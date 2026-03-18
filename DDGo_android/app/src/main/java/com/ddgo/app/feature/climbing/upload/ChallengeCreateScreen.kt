@@ -406,13 +406,18 @@ private fun GymLevelStep(
     onBack: () -> Unit
 ) {
     val grades = viewModel.resolvedGymGrades
-    val selectedGrade = viewModel.selectedGymGrade
-    val availableGradesByKey = remember(grades) { buildAvailableGymGradeMap(grades) }
-    val selectedPaletteKey = selectedGrade?.let {
-        normalizeHoldColorKey(
-            colorName = it.colorName,
-            colorHex = it.colorHex
-        )
+    val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
+    val levelChoices = remember(grades) { buildAvailableLevelChoices(grades) }
+    val selectedReferenceKey = remember(grades, selectedLevelSortOrder) {
+        grades.firstOrNull { it.sortOrder == selectedLevelSortOrder }?.let {
+            normalizeHoldColorKey(
+                colorName = it.colorName,
+                colorHex = it.colorHex
+            )
+        }
+    }
+    val selectedLevel = remember(levelChoices, selectedLevelSortOrder) {
+        levelChoices.firstOrNull { it.sortOrder == selectedLevelSortOrder }
     }
 
     Column(
@@ -452,16 +457,16 @@ private fun GymLevelStep(
                     .height(415.dp)
             ) {
                 DifficultyReferenceBar(
-                    selectedPaletteKey = selectedPaletteKey,
+                    selectedPaletteKey = selectedReferenceKey,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .offset(x = 22.dp)
                 )
 
-                HoldColorSelectionPanel(
-                    availableGradesByKey = availableGradesByKey,
-                    selectedPaletteKey = selectedPaletteKey,
-                    onSelect = viewModel::selectGymGrade,
+                LevelSelectionPanel(
+                    levels = levelChoices,
+                    selectedSortOrder = selectedLevelSortOrder,
+                    onSelect = { viewModel.selectGymLevel(it.sortOrder) },
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .offset(x = 191.dp)
@@ -480,13 +485,11 @@ private fun GymLevelStep(
                     )
                 }
 
-                selectedGrade != null -> {
-                    Text(
-                        text = "${formatHoldColorDisplayName(selectedGrade.colorName)} 난이도로 기록할게요",
-                        modifier = Modifier.padding(horizontal = 22.dp),
-                        color = resolveGymGradeAccentColor(selectedGrade),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                selectedLevel != null -> {
+                    LevelSummaryCard(
+                        title = "선택한 레벨",
+                        level = selectedLevel,
+                        modifier = Modifier.padding(horizontal = 22.dp)
                     )
                 }
             }
@@ -495,7 +498,7 @@ private fun GymLevelStep(
 
             Button(
                 onClick = onNext,
-                enabled = selectedGrade != null,
+                enabled = selectedLevelSortOrder != null,
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
@@ -503,7 +506,7 @@ private fun GymLevelStep(
                     .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (selectedGrade != null) Color(0xFF1D9BF0) else Color(0xFF505050),
+                    containerColor = if (selectedLevelSortOrder != null) Color(0xFF1D9BF0) else Color(0xFF505050),
                     contentColor = Color.White,
                     disabledContainerColor = Color(0xFF505050).copy(alpha = 0.55f),
                     disabledContentColor = Color.White.copy(alpha = 0.6f)

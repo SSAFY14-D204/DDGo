@@ -11,6 +11,8 @@ import com.ddgo.app.domain.model.AttemptUploadTicket
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.domain.repository.AttemptRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -41,16 +43,16 @@ class AttemptRepositoryImpl @Inject constructor(
     override suspend fun uploadAttemptVideo(
         challengeId: Long,
         videoUri: String
-    ): Result<UploadedAttemptVideo> {
-        return try {
+    ): Result<UploadedAttemptVideo> = withContext(Dispatchers.IO) {
+        try {
             val startResponse = attemptApi.startAttempt(challengeId)
             val startedAttempt = startResponse.data
-                ?: return Result.failure(
+                ?: return@withContext Result.failure(
                     Exception(startResponse.message.ifBlank { "Failed to start attempt." })
                 )
 
             if (!startResponse.success) {
-                return Result.failure(
+                return@withContext Result.failure(
                     Exception(startResponse.message.ifBlank { "Failed to start attempt." })
                 )
             }
@@ -67,12 +69,12 @@ class AttemptRepositoryImpl @Inject constructor(
 
             val presignedUrl = presignedUrlResponse.data
             val uploadTicket = presignedUrl?.toDomain(startedAttempt.attemptId)
-                ?: return Result.failure(
+                ?: return@withContext Result.failure(
                     Exception(presignedUrlResponse.message.ifBlank { "Failed to issue upload URL." })
                 )
 
             if (!presignedUrlResponse.success) {
-                return Result.failure(
+                return@withContext Result.failure(
                     Exception(presignedUrlResponse.message.ifBlank { "Failed to issue upload URL." })
                 )
             }
@@ -85,7 +87,7 @@ class AttemptRepositoryImpl @Inject constructor(
             )
 
             Result.success(
-                com.ddgo.app.data.mapper.AttemptMapper.toUploadedAttemptVideo(
+                toUploadedAttemptVideo(
                     challengeId = challengeId,
                     videoUri = videoUri,
                     startResponse = startedAttempt,
