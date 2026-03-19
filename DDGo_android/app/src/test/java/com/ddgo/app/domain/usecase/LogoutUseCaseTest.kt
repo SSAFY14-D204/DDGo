@@ -1,5 +1,6 @@
 package com.ddgo.app.domain.usecase
 
+import com.ddgo.app.domain.model.LogoutResult
 import com.ddgo.app.domain.repository.AuthRepository
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -20,14 +21,14 @@ class LogoutUseCaseTest {
     @Test
     fun `로그아웃 성공 시 Success를 반환해야 한다`() = runBlocking {
         // Given
-        coEvery { repository.logout() } returns Result.success(Unit)
+        coEvery { repository.logout() } returns Result.success(LogoutResult.ServerConfirmed)
 
         // When
         val result = logoutUseCase()
 
         // Then
         assert(result.isSuccess)
-        assertEquals(Unit, result.getOrNull())
+        assertEquals(LogoutResult.ServerConfirmed, result.getOrNull())
     }
 
     @Test

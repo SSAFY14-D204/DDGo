@@ -86,6 +86,10 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     // 💡 AI 모델 파일(.tflite, .task)은 압축하지 않아야 mmap으로 빠르게 로드됨
     androidResources {
         noCompress += listOf("tflite", "task")
@@ -157,6 +161,7 @@ dependencies {
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
