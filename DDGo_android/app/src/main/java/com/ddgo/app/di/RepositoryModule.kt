@@ -1,11 +1,13 @@
 package com.ddgo.app.di
 
 import com.ddgo.app.data.repository.AuthRepositoryImpl
+import com.ddgo.app.data.repository.AnalysisRepositoryImpl
 import com.ddgo.app.data.repository.AttemptRepositoryImpl
 import com.ddgo.app.data.repository.CalendarRepositoryImpl
 import com.ddgo.app.data.repository.ChallengeRepositoryImpl
 import com.ddgo.app.data.repository.GymRepositoryImpl
 import com.ddgo.app.data.repository.UploadRepositoryImpl
+import com.ddgo.app.domain.repository.AnalysisRepository
 import com.ddgo.app.domain.repository.AttemptRepository
 import com.ddgo.app.domain.repository.AuthRepository
 import com.ddgo.app.domain.repository.CalendarRepository
@@ -29,6 +31,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindAnalysisRepository(
+        impl: AnalysisRepositoryImpl
+    ): AnalysisRepository
 
     @Binds
     @Singleton
