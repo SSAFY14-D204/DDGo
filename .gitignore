@@ -481,3 +481,10 @@ obj/
 !/gradle/wrapper/gradle-wrapper.jar
 
 # End of https://www.toptal.com/developers/gitignore/api/android,androidstudio,intellij,java,kotlin,python
+
+# Workspace-local tooling and caches
+/.claude/
+**/.claude/
+**/.gradle-home/
+**/.android/
+/DDGo_android/META-INF/

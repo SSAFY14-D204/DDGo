@@ -71,6 +71,7 @@ DISTAL_INDICES = {
     LEFT_THUMB,
     RIGHT_THUMB,
 }
+MIN_POSE_LANDMARK_COUNT = RIGHT_FOOT_INDEX + 1
 
 WORLD_LENGTH_KEYS = {
     LEFT_ELBOW: "left_upper_arm_m",
@@ -173,6 +174,14 @@ def landmarks_to_arrays(landmarks: list[dict[str, Any]]) -> tuple[np.ndarray, np
     return coords, reliability, extras
 
 
+def normalize_landmarks_input(landmarks: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+    if landmarks is None:
+        return None
+    if len(landmarks) < MIN_POSE_LANDMARK_COUNT:
+        return None
+    return landmarks
+
+
 def arrays_to_landmarks(coords: np.ndarray, extras: list[dict[str, float]]) -> list[dict[str, float]]:
     output: list[dict[str, float]] = []
     for idx in range(coords.shape[0]):
@@ -247,7 +256,8 @@ def _correct_domain_frame(
     calibration: dict[str, float] | None,
     config: CorrectionConfig,
 ) -> tuple[list[dict[str, float]] | None, dict[str, Any]]:
-    if landmarks is None:
+    normalized_landmarks = normalize_landmarks_input(landmarks)
+    if normalized_landmarks is None:
         if state.prev_coords is None:
             return None, {
                 "filled_from_previous": False,
@@ -266,7 +276,7 @@ def _correct_domain_frame(
             "reconstructed_joint_count": 0,
         }
 
-    coords, reliability, extras = landmarks_to_arrays(landmarks)
+    coords, reliability, extras = landmarks_to_arrays(normalized_landmarks)
     if state.low_streak is None or state.low_streak.shape[0] != coords.shape[0]:
         state.low_streak = np.zeros(coords.shape[0], dtype=np.int32)
 

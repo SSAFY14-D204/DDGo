@@ -59,6 +59,23 @@ object NetworkModule {
     }
 
     // ──────────────────────────────────────────────────────────────
+    // [1-1] AI 서버 전용 순수 OkHttpClient
+    //     FastAPI AI 서버는 인증 인터셉터 없이 호출합니다.
+    // ──────────────────────────────────────────────────────────────
+    @Provides
+    @Singleton
+    @Named("AiServerOkHttpClient")
+    fun provideAiServerOkHttpClient(): OkHttpClient {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
+            else HttpLoggingInterceptor.Level.NONE
+        }
+        return OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .build()
+    }
+
+    // ──────────────────────────────────────────────────────────────
     // [2] 순환 의존성 방지용: AuthOkHttpClient를 사용하는 별도 Retrofit
     // ──────────────────────────────────────────────────────────────
     @Provides
@@ -82,6 +99,23 @@ object NetworkModule {
         @Named("AuthOkHttpClient") retrofit: Retrofit
     ): com.ddgo.app.data.remote.auth.AuthApi {
         return retrofit.create(com.ddgo.app.data.remote.auth.AuthApi::class.java)
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // [2-1] AI 서버 전용 Retrofit
+    // ──────────────────────────────────────────────────────────────
+    @Provides
+    @Singleton
+    @Named("AiServerRetrofit")
+    fun provideAiServerRetrofit(
+        @Named("AiServerOkHttpClient") okHttpClient: OkHttpClient,
+        json: Json
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.AI_SERVER_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -146,6 +180,17 @@ object NetworkModule {
         retrofit: Retrofit
     ): com.ddgo.app.data.remote.attempt.AttemptApi {
         return retrofit.create(com.ddgo.app.data.remote.attempt.AttemptApi::class.java)
+    }
+
+    /**
+     * AI 분석 API 구현체를 제공합니다.
+     */
+    @Provides
+    @Singleton
+    fun provideAiAnalysisApi(
+        @Named("AiServerRetrofit") retrofit: Retrofit
+    ): com.ddgo.app.data.remote.ai.AiAnalysisApi {
+        return retrofit.create(com.ddgo.app.data.remote.ai.AiAnalysisApi::class.java)
     }
 
     /**

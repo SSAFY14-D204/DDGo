@@ -15,14 +15,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.core.dev.DevOptions
 import com.ddgo.app.data.mapper.toPoseSequenceDto
+import com.ddgo.app.domain.model.AiAnalysisMode
+import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
-import com.ddgo.app.domain.model.HoldBoundingBox
 import com.ddgo.app.domain.model.HoldPoint
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.Hold
+import com.ddgo.app.domain.model.HoldBoundingBox
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
@@ -35,22 +38,28 @@ import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
+import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
 import com.ddgo.app.domain.usecase.analyzePolygonHoldContacts
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
+import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
+import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
+import com.ddgo.app.domain.usecase.analyzeAttemptHoldReach
 import com.ddgo.app.domain.usecase.assignHoldNumbers
 import com.ddgo.app.domain.usecase.summarizeHoldReachResults
 import com.ddgo.app.domain.usecase.toAttemptHoldReachResult
 import com.ddgo.app.domain.usecase.toHolds
-import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.LocalDateTime
+import javax.inject.Inject
+import kotlin.math.sqrt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -58,10 +67,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import wseemann.media.FFmpegMediaMetadataRetriever
-import javax.inject.Inject
-import java.time.LocalDateTime
-import kotlin.math.sqrt
 
 /**
  * flow
@@ -100,7 +107,9 @@ class UploadViewModel @Inject constructor(
     private val createChallengeUseCase: CreateChallengeUseCase,
     private val saveChallengeHoldsUseCase: SaveChallengeHoldsUseCase,
     private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase,
-    private val endAttemptUseCase: EndAttemptUseCase
+    private val endAttemptUseCase: EndAttemptUseCase,
+    private val getMyInfoUseCase: GetMyInfoUseCase,
+    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase
 ) : ViewModel() {
 
     // UI 레이어에 노출할 상태 (로딩, 성공, 실패 등)
@@ -341,6 +350,7 @@ class UploadViewModel @Inject constructor(
             maximumValue = (playbackAttemptUris.size - 1).coerceAtLeast(0)
         )
         currentPoseLandmarks = emptyList()
+        syncDisplayedAnalysisPoints()
     }
 
     /** 현재 재생 프레임의 MediaPipe 33 랜드마크 (실시간 업데이트) */
@@ -362,6 +372,44 @@ class UploadViewModel @Inject constructor(
     /** 현재 선택된 시도의 최고 도달 홀드 결과 */
     val currentAttemptHoldReachResult: AttemptHoldReachResult?
         get() = attemptHoldReachResults.getOrNull(currentAttemptIndex)
+
+    var attemptAiAnalysisResults by mutableStateOf<List<AiAnalysisResult?>>(emptyList())
+        private set
+
+    val selectedAiAnalysisMode: AiAnalysisMode
+        get() = DevOptions.aiAnalysisMode
+
+    val currentAttemptAiAnalysisResult: AiAnalysisResult?
+        get() = attemptAiAnalysisResults.getOrNull(currentAttemptIndex)
+
+    val attemptPresentationResults: List<Pair<Boolean, List<AnalysisPoint>>>
+        get() {
+            val attemptCount = playbackAttemptUris.ifEmpty { allAttemptUris }.size
+            val fallbackResults = attemptDummyResults.ifEmpty {
+                listOf(false to defaultUploadAnalysisPoints())
+            }
+
+            if (attemptCount <= 0) {
+                return fallbackResults
+            }
+
+            return List(attemptCount) { index ->
+                val fallback = fallbackResults[index % fallbackResults.size]
+                val aiPoints = attemptAiAnalysisResults
+                    .getOrNull(index)
+                    ?.toAnalysisPoints()
+                    .orEmpty()
+
+                resolveAttemptSuccess(
+                    index = index,
+                    fallback = fallback.first
+                ) to if (aiPoints.isNotEmpty()) {
+                    aiPoints
+                } else {
+                    fallback.second.ifEmpty { defaultUploadAnalysisPoints() }
+                }
+            }
+        }
 
     /** 현재 선택된 시도의 MediaPipe Pose DTO */
     val currentAttemptPoseDto: PoseSequenceDto?
@@ -387,23 +435,13 @@ class UploadViewModel @Inject constructor(
      * 분석 피드백 포인트 목록.
      * MVP에서는 플레이스홀더 데이터를 사용하며, 서버 연동 시 updateAnalysisPoints()로 교체합니다.
      */
-    var analysisPoints by mutableStateOf<List<AnalysisPoint>>(
-        listOf(
-            AnalysisPoint(1, 21_000L, "2지점 상태가 길었어요"),
-            AnalysisPoint(2, 48_000L, "오른쪽 팔에 과도한\n무게가 실렸어요"),
-            AnalysisPoint(3, 66_000L, "무게 이동이 늦어졌어요")
-        )
-    )
+    var analysisPoints by mutableStateOf<List<AnalysisPoint>>(defaultUploadAnalysisPoints())
         private set
         
     // (임시) N차 시도별로 다른 결과를 보여주기 위한 더미 데이터 모델 확장
     // 백엔드 연동 시 AnalysisResult 등을 리스트 형태로 관리
     val attemptDummyResults = listOf(
-        Pair(false, listOf(
-            AnalysisPoint(1, 21_000L, "2지점 상태가 길었어요"),
-            AnalysisPoint(2, 48_000L, "오른쪽 팔에 과도한\n무게가 실렸어요"),
-            AnalysisPoint(3, 66_000L, "무게 이동이 늦어졌어요")
-        )),
+        Pair(false, defaultUploadAnalysisPoints()),
         Pair(true, listOf( // 성공 케이스
             AnalysisPoint(1, 15_000L, "안정적인 스타트 구간입니다"),
             AnalysisPoint(2, 35_000L, "크럭스 지점을 잘 통과했어요"),
@@ -507,6 +545,7 @@ class UploadViewModel @Inject constructor(
         publishedAttemptResultSession = null
         clearChallengeFlowState()
         clearHoldReachAnalysis()
+        clearAiAnalysisState()
         clearPosePrecomputeState()
         _gymSearchUiState.value = GymSearchUiState.Idle
         _gymResolveUiState.value = GymResolveUiState.Idle
@@ -575,6 +614,7 @@ class UploadViewModel @Inject constructor(
         currentAttemptIndex = 0
         publishedAttemptResultSession = null
         clearHoldReachAnalysis()
+        clearAiAnalysisState()
         clearPosePrecomputeState()
         _challengeCreationUiState.value = ChallengeCreationUiState.Success(challenge)
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
@@ -768,6 +808,8 @@ class UploadViewModel @Inject constructor(
         selectionGeneration += 1
         if (preservePublishedResult) {
             currentAttemptIndex = publishedAttemptResultSession?.currentAttemptIndex ?: currentAttemptIndex
+            currentPoseLandmarks = emptyList()
+            syncDisplayedAnalysisPoints()
         } else {
             clearAttemptResultState(clearPublishedSession = true)
         }
@@ -1626,6 +1668,28 @@ class UploadViewModel @Inject constructor(
                 return@launch
             }
 
+            val aiMode = selectedAiAnalysisMode
+            val shouldRunAiAnalysis =
+                !isAttemptOnlyUploadMode &&
+                    numberedHoldsForAnalysis != null &&
+                    currentBitmap != null
+
+            val aiProfile = if (shouldRunAiAnalysis) {
+                resolveAiProfile(aiMode)
+                    .onFailure { throwable ->
+                        _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                            throwable.message ?: "AI 분석용 사용자 프로필을 확인할 수 없습니다."
+                        )
+                    }
+                    .getOrNull()
+            } else {
+                null
+            }
+
+            if (shouldRunAiAnalysis && aiProfile == null) {
+                return@launch
+            }
+
             if (!isAttemptOnlyUploadMode && !useLocalAnalysisOnly) {
                 val bitmapForHoldSave = currentBitmap ?: run {
                     _uploadSubmissionUiState.value =
@@ -1721,11 +1785,54 @@ class UploadViewModel @Inject constructor(
                 clearHoldReachAnalysis()
             }
 
+            if (shouldRunAiAnalysis) {
+                val bitmapForAi = currentBitmap ?: run {
+                    _uploadSubmissionUiState.value =
+                        UploadSubmissionUiState.Error("AI 분석용 홀드 기준 이미지가 없습니다.")
+                    return@launch
+                }
+                val holdsForAi = numberedHoldsForAnalysis ?: run {
+                    _uploadSubmissionUiState.value =
+                        UploadSubmissionUiState.Error("AI 분석용 홀드 번호가 없습니다.")
+                    return@launch
+                }
+                val profileForAi = aiProfile ?: run {
+                    _uploadSubmissionUiState.value =
+                        UploadSubmissionUiState.Error("AI 분석용 사용자 프로필을 확인할 수 없습니다.")
+                    return@launch
+                }
+
+                analyzeAllAttemptsWithAi(
+                    attemptUris = attemptUris,
+                    holds = holdsForAi,
+                    frameBitmap = bitmapForAi,
+                    mode = aiMode,
+                    profile = profileForAi
+                ).onFailure { throwable ->
+                    val serverDetail = throwable.extractHttpErrorDetail()
+                    Log.e(
+                        TAG,
+                        "submitUpload: AI analysis failed" +
+                            serverDetail?.let { " detail=$it" }.orEmpty(),
+                        throwable
+                    )
+                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                        serverDetail ?: throwable.message ?: "AI 분석에 실패했습니다."
+                    )
+                    return@launch
+                }
+            } else {
+                clearAiAnalysisState()
+            }
+
             publishAttemptResultSession(
                 playbackUris = attemptUris,
                 uploadedVideos = uploadedVideos,
                 currentAttemptIndex = 0,
                 holdReachResults = attemptHoldReachResults,
+                poseDtos = attemptPoseDtos,
+                analyzedPoses = attemptAnalyzedPoses,
+                polygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
                 overallSummary = overallHoldReachSummary
             )
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedVideos)
@@ -1787,6 +1894,7 @@ class UploadViewModel @Inject constructor(
         savedChallengeHolds = null
         uploadedAttemptVideos = emptyList()
         clearHoldReachAnalysis()
+        clearAiAnalysisState()
         resultPlaybackUris = emptyList()
         publishedAttemptResultSession = null
         _challengeCreationUiState.value = ChallengeCreationUiState.Idle
@@ -1868,6 +1976,128 @@ class UploadViewModel @Inject constructor(
         )
     }
 
+    private suspend fun analyzeAllAttemptsWithAi(
+        attemptUris: List<String>,
+        holds: List<HoldNumbered>,
+        frameBitmap: Bitmap,
+        mode: AiAnalysisMode,
+        profile: ResolvedAiProfile
+    ): Result<List<AiAnalysisResult>> {
+        if (attemptUris.isEmpty()) {
+            clearAiAnalysisState()
+            return Result.success(emptyList())
+        }
+
+        val results = mutableListOf<AiAnalysisResult>()
+        val analysisHolds = holds.toHolds()
+
+        attemptUris.forEachIndexed { index, uri ->
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
+                "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${attemptUris.size})"
+            )
+
+            val result = analyzeAttemptWithAiUseCase(
+                mode = mode,
+                videoUri = uri,
+                holds = analysisHolds,
+                frameWidthPx = frameBitmap.width,
+                frameHeightPx = frameBitmap.height,
+                heightCm = profile.heightCm,
+                weightKg = profile.weightKg,
+                wingspanCm = profile.wingspanCm
+            )
+
+            if (result.isFailure) {
+                return Result.failure(
+                    result.exceptionOrNull()
+                        ?: IllegalStateException("AI 분석 결과를 가져오지 못했습니다.")
+                )
+            }
+
+            results += result.getOrThrow()
+            attemptAiAnalysisResults = results + List(attemptUris.size - results.size) { null }
+            syncDisplayedAnalysisPoints()
+        }
+
+        attemptAiAnalysisResults = results
+        syncDisplayedAnalysisPoints()
+        return Result.success(results)
+    }
+
+    private suspend fun resolveAiProfile(
+        mode: AiAnalysisMode
+    ): Result<ResolvedAiProfile> {
+        val user = getMyInfoUseCase()
+            .getOrElse { throwable ->
+                return Result.failure(throwable)
+            }
+
+        val heightCm = user.heightCm?.takeIf { it > 0f }
+        val wingspanCm = user.wingspanCm?.takeIf { it > 0f }
+        val weightKg = user.weightKg?.takeIf { it > 0f }
+        val resolvedHeightCm = heightCm ?: wingspanCm
+
+        if (resolvedHeightCm == null) {
+            return Result.failure(
+                IllegalStateException("AI 분석을 위해 프로필에 키 또는 윙스팬이 필요합니다.")
+            )
+        }
+
+        if (mode == AiAnalysisMode.PHYSICS && weightKg == null) {
+            return Result.failure(
+                IllegalStateException("Physics 분석을 위해 프로필에 몸무게가 필요합니다.")
+            )
+        }
+
+        return Result.success(
+            ResolvedAiProfile(
+                heightCm = resolvedHeightCm,
+                weightKg = weightKg,
+                wingspanCm = wingspanCm
+            )
+        )
+    }
+
+    private fun resolveAttemptSuccess(
+        index: Int,
+        fallback: Boolean
+    ): Boolean {
+        val totalHoldCount = totalSelectedHoldCount.takeIf { it > 0 } ?: numberedHolds.size
+        val highestReachedHoldNo = attemptHoldReachResults
+            .getOrNull(index)
+            ?.highestReachedHoldNo
+
+        return if (totalHoldCount > 0 && highestReachedHoldNo != null) {
+            highestReachedHoldNo >= totalHoldCount
+        } else {
+            fallback
+        }
+    }
+
+    private fun Throwable.extractHttpErrorDetail(): String? {
+        val httpException = this as? HttpException ?: return null
+        return runCatching {
+            httpException.response()
+                ?.errorBody()
+                ?.string()
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
+    private fun clearAiAnalysisState() {
+        attemptAiAnalysisResults = emptyList()
+        analysisPoints = defaultUploadAnalysisPoints()
+    }
+
+    private fun syncDisplayedAnalysisPoints() {
+        analysisPoints = attemptPresentationResults
+            .getOrNull(currentAttemptIndex)
+            ?.second
+            .orEmpty()
+            .ifEmpty { defaultUploadAnalysisPoints() }
+    }
+
     private fun clearHoldReachAnalysis() {
         attemptHoldReachResults = emptyList()
         attemptPoseDtos = emptyList()
@@ -1882,6 +2112,7 @@ class UploadViewModel @Inject constructor(
         resultPlaybackUris = emptyList()
         uploadedAttemptVideos = emptyList()
         clearHoldReachAnalysis()
+        clearAiAnalysisState()
         if (clearPublishedSession) {
             publishedAttemptResultSession = null
         }
@@ -1908,6 +2139,7 @@ class UploadViewModel @Inject constructor(
         attemptAnalyzedPoses = analyzedPoses
         attemptPolygonHoldContactDebugResults = polygonHoldContactDebugResults
         overallHoldReachSummary = overallSummary
+        syncDisplayedAnalysisPoints()
         publishedAttemptResultSession = PublishedAttemptResultSession(
             resultPlaybackUris = playbackUris,
             uploadedAttemptVideos = uploadedVideos,
@@ -1955,6 +2187,7 @@ class UploadViewModel @Inject constructor(
         attemptPolygonHoldContactDebugResults = session.attemptPolygonHoldContactDebugResults
         overallHoldReachSummary = session.overallHoldReachSummary
         currentPoseLandmarks = emptyList()
+        syncDisplayedAnalysisPoints()
     }
 
     private fun publishedResultPlaybackUris(): Set<String> =
@@ -2009,6 +2242,11 @@ class UploadViewModel @Inject constructor(
     }
 }
 
+private data class ResolvedAiProfile(
+    val heightCm: Float,
+    val weightKg: Float?,
+    val wingspanCm: Float?
+)
 data class ManagedAttemptVideo(
     val sourceUri: String,
     val playbackUri: String,
@@ -2133,5 +2371,42 @@ sealed class UploadSubmissionUiState {
 private enum class UploadFlowMode {
     FullChallenge,
     AttemptOnly
+}
+
+private fun defaultUploadAnalysisPoints(): List<AnalysisPoint> = listOf(
+    AnalysisPoint(1, 21_000L, "2지점 상태가 길었어요"),
+    AnalysisPoint(2, 48_000L, "오른쪽 팔에 과도한\n무게가 실렸어요"),
+    AnalysisPoint(3, 66_000L, "무게 이동이 늦어졌어요")
+)
+
+private fun AiAnalysisResult.toAnalysisPoints(): List<AnalysisPoint> {
+    val candidates = cruxResult.topCandidates.ifEmpty {
+        cruxResult.allCandidates.take(3)
+    }
+
+    return candidates.take(3).mapIndexed { index, candidate ->
+        val reasonText = candidate.reasonTags
+            .firstOrNull()
+            ?.replace('_', ' ')
+            ?.replace('-', ' ')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+        val description = buildString {
+            append("홀드 ${candidate.holdId}")
+            append(": ")
+            append(
+                reasonText ?: when (mode) {
+                    AiAnalysisMode.FAST -> "머무는 시간이 길었어요"
+                    AiAnalysisMode.PHYSICS -> "부하가 크게 걸렸어요"
+                }
+            )
+        }
+
+        AnalysisPoint(
+            index = index + 1,
+            timeMs = candidate.bestSegment?.startTimeMs ?: ((index + 1) * 15_000L),
+            description = description
+        )
+    }
 }
 
