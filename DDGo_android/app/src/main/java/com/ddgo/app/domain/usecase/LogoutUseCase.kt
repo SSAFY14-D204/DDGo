@@ -1,5 +1,6 @@
 package com.ddgo.app.domain.usecase
 
+import com.ddgo.app.domain.model.LogoutResult
 import com.ddgo.app.domain.repository.AuthRepository
 import javax.inject.Inject
 
@@ -11,7 +12,7 @@ import javax.inject.Inject
 class LogoutUseCase @Inject constructor(
     private val repository: AuthRepository
 ) {
-    suspend operator fun invoke(): Result<Unit> {
+    suspend operator fun invoke(): Result<LogoutResult> {
         return repository.logout()
     }
 }
