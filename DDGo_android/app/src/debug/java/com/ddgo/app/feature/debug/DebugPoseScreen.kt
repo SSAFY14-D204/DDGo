@@ -67,7 +67,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.ddgo.app.core.ui.components.DdgoPrimaryButton
+import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
 import kotlinx.coroutines.delay
