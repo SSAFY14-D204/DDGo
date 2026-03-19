@@ -48,17 +48,17 @@ private val holdColorFamilies = listOf(
     ),
     HoldColorFamily(
         key = "navy",
-        classifierKey = "blue",
+        classifierKey = "navy",
         displayName = "남색",
-        aliases = setOf("navy", "남색", "indigo"),
-        referenceHexes = setOf("373FD7", "3F43DB")
+        aliases = setOf("navy", "남색", "indigo", "blue", "파랑", "파란"),
+        referenceHexes = setOf("373FD7", "3F43DB", "0000FF", "1A1AFF")
     ),
     HoldColorFamily(
-        key = "blue",
-        classifierKey = "blue",
-        displayName = "파랑",
-        aliases = setOf("blue", "파랑", "파란", "cyan", "sky", "skyblue", "sky blue", "하늘색", "하늘"),
-        referenceHexes = setOf("4396FB", "1FC4E2")
+        key = "skyblue",
+        classifierKey = "skyblue",
+        displayName = "하늘색",
+        aliases = setOf("skyblue", "sky blue", "sky", "하늘색", "하늘", "cyan", "하늘빛", "연파랑"),
+        referenceHexes = setOf("4396FB", "1FC4E2", "87CEEB", "00BFFF")
     ),
     HoldColorFamily(
         key = "green",
