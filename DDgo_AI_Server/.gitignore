@@ -1,0 +1,7 @@
+cache/
+app/**/__pycache__/
+*.pyc
+service_fast_result.json
+service_physics_result.json
+benchmark_service_comparison.json
+fastapi_live_validation.json
