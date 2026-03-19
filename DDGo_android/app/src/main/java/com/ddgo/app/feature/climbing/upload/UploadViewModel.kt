@@ -15,6 +15,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
+import com.ddgo.app.domain.model.HoldBoundingBox
+import com.ddgo.app.domain.model.HoldPoint
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.Hold
@@ -1083,10 +1085,7 @@ class UploadViewModel @Inject constructor(
                     return@launch
                 }
 
-                val holdCoordinates = buildChallengeHoldCoordinates(
-                    imageWidth = bitmapForHoldSave.width,
-                    imageHeight = bitmapForHoldSave.height
-                )
+                val holdCoordinates = buildChallengeHoldCoordinates()
 
                 _uploadSubmissionUiState.value =
                     UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있습니다.")
@@ -1291,17 +1290,19 @@ class UploadViewModel @Inject constructor(
         overallHoldReachSummary = null
     }
 
-    private fun buildChallengeHoldCoordinates(
-        imageWidth: Int,
-        imageHeight: Int
-    ): List<ChallengeHoldCoordinate> {
+    private fun buildChallengeHoldCoordinates(): List<ChallengeHoldCoordinate> {
         return detectedHolds.mapIndexed { index, hold ->
             ChallengeHoldCoordinate(
                 holdNo = hold.holdNo.takeIf { it > 0 } ?: (index + 1),
-                x1 = (hold.boundingBox.left * imageWidth).toInt().coerceIn(0, imageWidth),
-                x2 = (hold.boundingBox.right * imageWidth).toInt().coerceIn(0, imageWidth),
-                y1 = (hold.boundingBox.top * imageHeight).toInt().coerceIn(0, imageHeight),
-                y2 = (hold.boundingBox.bottom * imageHeight).toInt().coerceIn(0, imageHeight)
+                boundingBox = HoldBoundingBox(
+                    x1 = hold.boundingBox.left,
+                    x2 = hold.boundingBox.right,
+                    y1 = hold.boundingBox.top,
+                    y2 = hold.boundingBox.bottom
+                ),
+                polygon = hold.polygon.map { point ->
+                    HoldPoint(x = point.x, y = point.y)
+                }
             )
         }
     }

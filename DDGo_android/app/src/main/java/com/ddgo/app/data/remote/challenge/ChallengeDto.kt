@@ -28,14 +28,28 @@ data class ChallengeCreateResponseDto(
     val createdAt: String
 )
 
-/** 홀드 좌표 1건에 대한 요청/응답 DTO입니다. */
+/** 폴리곤 좌표 점 DTO입니다. (정규화 0~1) */
+@Serializable
+data class PointItemDto(
+    val x: Float,
+    val y: Float
+)
+
+/** 바운딩 박스 DTO입니다. (정규화 0~1) */
+@Serializable
+data class BoundingBoxDto(
+    val x1: Float,
+    val x2: Float,
+    val y1: Float,
+    val y2: Float
+)
+
+/** 홀드 좌표 1건에 대한 요청/응답 DTO입니다. (바운딩 박스 + 세그멘테이션 폴리곤) */
 @Serializable
 data class HoldItemDto(
     val holdNo: Int,
-    val x1: Int,
-    val x2: Int,
-    val y1: Int,
-    val y2: Int
+    val boundingBox: BoundingBoxDto,
+    val polygon: List<PointItemDto>
 )
 
 /** 홀드 저장 요청 DTO입니다. */
