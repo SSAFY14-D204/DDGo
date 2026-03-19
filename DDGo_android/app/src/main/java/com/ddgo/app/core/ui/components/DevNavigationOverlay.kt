@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.dev.DevOptions
+import com.ddgo.app.domain.model.AiAnalysisMode
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import com.ddgo.app.navigation.ScreenRoutes
@@ -200,6 +202,8 @@ private fun DevPanel(
                 )
             }
 
+            AiAnalysisModeSection()
+
             // 라우트 목록
             LazyColumn(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -242,6 +246,67 @@ private fun DevPanel(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AiAnalysisModeSection() {
+    val selectedMode = DevOptions.aiAnalysisMode
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = "AI Analysis",
+            color = Color(0xFFFF6B35),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AiModeButton(
+                label = "FAST",
+                selected = selectedMode == AiAnalysisMode.FAST,
+                onClick = { DevOptions.aiAnalysisMode = AiAnalysisMode.FAST },
+                modifier = Modifier.weight(1f)
+            )
+            AiModeButton(
+                label = "PHYSICS",
+                selected = selectedMode == AiAnalysisMode.PHYSICS,
+                onClick = { DevOptions.aiAnalysisMode = AiAnalysisMode.PHYSICS },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AiModeButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(38.dp),
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) Color(0xFFFF6B35) else Color(0xFF2D2D2D),
+            contentColor = Color.White
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 

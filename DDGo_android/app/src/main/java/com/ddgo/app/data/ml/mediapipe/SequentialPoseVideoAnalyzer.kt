@@ -14,7 +14,13 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.util.Log
+import com.ddgo.app.domain.model.AiPayloadSource
+import com.ddgo.app.domain.model.AiLandmark3D
+import com.ddgo.app.domain.model.AiPoseFrame
+import com.ddgo.app.domain.model.AiPoseSequence
+import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.repository.AiPoseSequenceProvider
 import com.ddgo.app.domain.model.PoseLandmark
 import com.ddgo.app.domain.model.PosePixelPoint
 import com.ddgo.app.domain.model.PoseWorldPoint
@@ -26,40 +32,58 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
+import java.time.Instant
 import java.util.Optional
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.coroutineContext
 
+/**
+ * MediaPipe Tasks Vision을 사용하는 비디오 포즈 분석기.
+ *
+ * - `estimateFromVideo()`는 기존처럼 [Pose] 목록만 반환합니다.
+ * - `analyzePoseSequence()`는 AI 서버 전송용 리치 시퀀스를 생성합니다.
+ */
 class SequentialPoseVideoAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context
-) {
+) : AiPoseSequenceProvider {
 
     suspend operator fun invoke(
         videoUri: String,
         analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
     ): List<Pose> = withContext(Dispatchers.IO) {
-        val cancellationCheckpoint = {
-            coroutineContext.ensureActive()
-        }
-
         analyzeInternal(
             videoUri = videoUri,
             analysisFpsLimit = analysisFpsLimit,
-            cancellationCheckpoint = cancellationCheckpoint
-        )
+            cancellationCheckpoint = {
+                coroutineContext.ensureActive()
+            }
+        ).poses
+    }
+
+    override suspend fun analyzePoseSequence(
+        videoUri: String,
+        analysisFpsLimit: Int
+    ): AiPoseSequence = withContext(Dispatchers.IO) {
+        analyzeInternal(
+            videoUri = videoUri,
+            analysisFpsLimit = analysisFpsLimit,
+            cancellationCheckpoint = {
+                coroutineContext.ensureActive()
+            }
+        ).sequence
     }
 
     private fun analyzeInternal(
         videoUri: String,
         analysisFpsLimit: Int,
         cancellationCheckpoint: () -> Unit
-    ): List<Pose> {
-        val poseLandmarker = createPoseLandmarker() ?: return emptyList()
+    ): PoseSequenceAnalysisResult {
+        val poseLandmarker = createPoseLandmarker() ?: return emptyAnalysisResult(videoUri, analysisFpsLimit)
 
         try {
             return analyzeSequentialFrames(
@@ -78,7 +102,7 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         poseLandmarker: PoseLandmarker,
         analysisFpsLimit: Int,
         cancellationCheckpoint: () -> Unit
-    ): List<Pose> {
+    ): PoseSequenceAnalysisResult {
         val extractor = MediaExtractor()
 
         try {
@@ -89,7 +113,7 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             val videoTrackIndex = findVideoTrackIndex(extractor)
             if (videoTrackIndex == -1) {
                 Log.w(TAG, "No video track found.")
-                return emptyList()
+                return emptyAnalysisResult(uri.toString(), analysisFpsLimit)
             }
 
             extractor.selectTrack(videoTrackIndex)
@@ -98,6 +122,8 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
                 ?: throw IllegalStateException("Missing video mime type.")
             val rotationDegrees = trackFormat.readRotationDegrees()
             val frameRate = trackFormat.readFrameRateOrNull()
+            val frameWidth = trackFormat.readVideoSize(MediaFormat.KEY_WIDTH)
+            val frameHeight = trackFormat.readVideoSize(MediaFormat.KEY_HEIGHT)
             val decoder = createVideoDecoder(
                 mimeType = mimeType,
                 trackFormat = trackFormat
@@ -110,7 +136,11 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
                     poseLandmarker = poseLandmarker,
                     analysisFpsLimit = analysisFpsLimit,
                     rotationDegrees = rotationDegrees,
+                    frameWidth = frameWidth,
+                    frameHeight = frameHeight,
                     frameRate = frameRate,
+                    mimeType = mimeType,
+                    sourceUri = uri,
                     cancellationCheckpoint = cancellationCheckpoint
                 )
             } finally {
@@ -129,11 +159,16 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         poseLandmarker: PoseLandmarker,
         analysisFpsLimit: Int,
         rotationDegrees: Int,
+        frameWidth: Int,
+        frameHeight: Int,
         frameRate: Int?,
+        mimeType: String,
+        sourceUri: Uri,
         cancellationCheckpoint: () -> Unit
-    ): List<Pose> {
+    ): PoseSequenceAnalysisResult {
         val bufferInfo = MediaCodec.BufferInfo()
         val poses = ArrayList<Pose>()
+        val aiFrames = ArrayList<AiPoseFrame>()
         val normalizedAnalysisFpsLimit = analysisFpsLimit.coerceAtLeast(1)
         val minProcessFrameGapUs = 1_000_000L / normalizedAnalysisFpsLimit
         var inputEnded = false
@@ -207,6 +242,7 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
                             skippedFrameCount++
                         } else {
                             lastProcessedPresentationTimeUs = presentationTimeUs
+                            val currentFrameIndex = processedFrameCount
                             processedFrameCount++
 
                             runCatching {
@@ -215,11 +251,15 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
                                     outputBufferIndex = outputBufferIndex,
                                     poseLandmarker = poseLandmarker,
                                     presentationTimeUs = presentationTimeUs,
-                                    rotationDegrees = rotationDegrees
+                                    rotationDegrees = rotationDegrees,
+                                    frameIndex = currentFrameIndex
                                 )
                             }.onFailure { error ->
                                 Log.e(TAG, "Pose inference failed at ptsUs=$presentationTimeUs", error)
-                            }.getOrNull()?.let(poses::add)
+                            }.getOrNull()?.let { capture ->
+                                aiFrames.add(capture.frame)
+                                capture.pose?.let(poses::add)
+                            }
                         }
                     }
 
@@ -237,7 +277,35 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             "Sequential pose decode completed: decoded=$decodedFrameCount, processed=$processedFrameCount, skipped=$skippedFrameCount, poses=${poses.size}"
         )
 
-        return poses
+        return PoseSequenceAnalysisResult(
+            sequence = AiPoseSequence(
+                source = AiPayloadSource(
+                    videoUri = sourceUri.toString(),
+                    generator = TAG,
+                    exportedAtIso = Instant.now().toString(),
+                    uri = sourceUri.toString(),
+                    displayName = sourceUri.lastPathSegment,
+                    mimeType = mimeType,
+                    path = if (sourceUri.scheme == "file") sourceUri.path else null,
+                    legacySourceFile = sourceUri.toString()
+                ),
+                videoMetadata = AiVideoMetadata(
+                    frameWidth = frameWidth,
+                    frameHeight = frameHeight,
+                    fps = frameRate?.toFloat(),
+                    totalFrames = decodedFrameCount,
+                    processedFrames = processedFrameCount,
+                    frameStep = normalizedAnalysisFpsLimit,
+                    rotationDegrees = rotationDegrees,
+                    mimeType = mimeType,
+                    analysisFpsLimit = normalizedAnalysisFpsLimit,
+                    decodedFrameCount = decodedFrameCount,
+                    skippedFrameCount = skippedFrameCount
+                ),
+                frames = aiFrames
+            ),
+            poses = poses
+        )
     }
 
     private fun inferPoseFromDecodedFrame(
@@ -245,8 +313,9 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         outputBufferIndex: Int,
         poseLandmarker: PoseLandmarker,
         presentationTimeUs: Long,
-        rotationDegrees: Int
-    ): Pose? {
+        rotationDegrees: Int,
+        frameIndex: Int
+    ): PoseCapture? {
         val image = decoder.getOutputImage(outputBufferIndex) ?: return null
 
         try {
@@ -258,6 +327,7 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
                     poseLandmarker = poseLandmarker,
                     frameBitmap = preparedFrame.bitmap,
                     frameTimeMs = presentationTimeUs / 1_000L,
+                    frameIndex = frameIndex,
                     frameWidthPx = preparedFrame.referenceWidthPx,
                     frameHeightPx = preparedFrame.referenceHeightPx
                 )
@@ -276,21 +346,55 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         poseLandmarker: PoseLandmarker,
         frameBitmap: Bitmap,
         frameTimeMs: Long,
+        frameIndex: Int,
         frameWidthPx: Int,
         frameHeightPx: Int
-    ): Pose? {
+    ): PoseCapture {
         val mpImage = BitmapImageBuilder(frameBitmap).build()
 
         try {
             val result = poseLandmarker.detectForVideo(mpImage, frameTimeMs)
             val landmarks = result.landmarks().firstOrNull().orEmpty()
-            if (landmarks.isEmpty()) return null
+            val worldLandmarks = result.worldLandmarks().firstOrNull().orEmpty()
 
-            return landmarks.toPose(
+            val pose = if (landmarks.isEmpty()) {
+                null
+            } else {
+                landmarks.toPose(
                 frameTimeMs = result.timestampMs(),
                 frameWidthPx = frameWidthPx,
                 frameHeightPx = frameHeightPx,
-                worldLandmarks = result.worldLandmarks().firstOrNull().orEmpty()
+                    worldLandmarks = worldLandmarks
+                )
+            }
+
+            return PoseCapture(
+                frame = AiPoseFrame(
+                    frameIndex = frameIndex,
+                    timestampMs = result.timestampMs(),
+                    poseDetected = pose != null,
+                    poseLandmarks = landmarks.mapIndexed { index, landmark ->
+                        landmark.toAiLandmark(
+                            index = index,
+                            xSelector = { x() },
+                            ySelector = { y() },
+                            zSelector = { z() },
+                            visibilitySelector = { visibility().toNullable() },
+                            presenceSelector = { presence().toNullable() }
+                        )
+                    },
+                    poseWorldLandmarks = worldLandmarks.mapIndexed { index, landmark ->
+                        landmark.toAiLandmark(
+                            index = index,
+                            xSelector = { x() },
+                            ySelector = { y() },
+                            zSelector = { z() },
+                            visibilitySelector = { visibility().toNullable() },
+                            presenceSelector = { presence().toNullable() }
+                        )
+                    }
+                ),
+                pose = pose
             )
         } finally {
             mpImage.close()
@@ -384,6 +488,14 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             getInteger(MediaFormat.KEY_FRAME_RATE)
         } else {
             null
+        }
+    }
+
+    private fun MediaFormat.readVideoSize(key: String): Int {
+        return if (containsKey(key)) {
+            getInteger(key)
+        } else {
+            0
         }
     }
 
@@ -544,6 +656,24 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
 
     private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
 
+    private inline fun <T> T.toAiLandmark(
+        index: Int,
+        xSelector: T.() -> Float,
+        ySelector: T.() -> Float,
+        zSelector: T.() -> Float,
+        visibilitySelector: T.() -> Float? = { null },
+        presenceSelector: T.() -> Float? = { null }
+    ): AiLandmark3D {
+        return AiLandmark3D(
+            index = index,
+            x = xSelector(),
+            y = ySelector(),
+            z = zSelector(),
+            visibility = visibilitySelector(),
+            presence = presenceSelector()
+        )
+    }
+
     private data class PreparedInferenceBitmap(
         val bitmap: Bitmap,
         val referenceWidthPx: Int,
@@ -573,4 +703,46 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             28 to "right_ankle"
         )
     }
+}
+
+private data class PoseCapture(
+    val frame: AiPoseFrame,
+    val pose: Pose?
+)
+
+private data class PoseSequenceAnalysisResult(
+    val sequence: AiPoseSequence,
+    val poses: List<Pose>
+)
+
+private fun emptyAnalysisResult(
+    videoUri: String,
+    analysisFpsLimit: Int
+): PoseSequenceAnalysisResult {
+    return PoseSequenceAnalysisResult(
+        sequence = AiPoseSequence(
+            source = AiPayloadSource(
+                videoUri = videoUri,
+                generator = "SequentialPoseVideoAnalyzer",
+                exportedAtIso = Instant.now().toString(),
+                uri = videoUri,
+                legacySourceFile = videoUri
+            ),
+            videoMetadata = AiVideoMetadata(
+                frameWidth = 0,
+                frameHeight = 0,
+                fps = null,
+                totalFrames = 0,
+                processedFrames = 0,
+                frameStep = analysisFpsLimit.coerceAtLeast(1),
+                rotationDegrees = 0,
+                mimeType = null,
+                analysisFpsLimit = analysisFpsLimit.coerceAtLeast(1),
+                decodedFrameCount = 0,
+                skippedFrameCount = 0
+            ),
+            frames = emptyList()
+        ),
+        poses = emptyList()
+    )
 }

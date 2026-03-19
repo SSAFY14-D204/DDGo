@@ -35,6 +35,13 @@ android {
             "\"${localProperties.getProperty("api.base.url") ?: "https://j14d204.p.ssafy.io/api/"}\""
         )
 
+        // AI FastAPI 서버 주소 환경 변수 주입
+        buildConfigField(
+            "String",
+            "AI_SERVER_BASE_URL",
+            "\"${localProperties.getProperty("ai.server.base.url") ?: "http://10.0.2.2:8000/"}\""
+        )
+
         // 카카오맵 API 환경변수 주입
         buildConfigField(
             "String",

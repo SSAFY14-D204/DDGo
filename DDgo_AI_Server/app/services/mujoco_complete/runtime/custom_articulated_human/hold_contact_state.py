@@ -47,6 +47,7 @@ LIMB_LABELS = {
     "left_foot": "STEP",
     "right_foot": "STEP",
 }
+MIN_POSE_LANDMARK_COUNT = RIGHT_FOOT_INDEX + 1
 
 
 def normalize(v: np.ndarray, eps: float = 1e-8) -> np.ndarray:
@@ -308,7 +309,7 @@ def compute_contact_points_px(
         "left_foot": None,
         "right_foot": None,
     }
-    if not pose_landmarks:
+    if not pose_landmarks or len(pose_landmarks) < MIN_POSE_LANDMARK_COUNT:
         return result
 
     px = landmarks_to_pixels(pose_landmarks, frame_width, frame_height)

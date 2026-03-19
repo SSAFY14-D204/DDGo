@@ -25,7 +25,7 @@ sys.path.insert(0, str(CUSTOM_SKELETON_ROOT))
 import run_dynamic_sequence_analysis as dyn  # noqa: E402
 from contact_force_distribution import estimate_contact_forces, summarize_contact_force_history  # noqa: E402
 from evaluate_static_fit import AUX_SITE_TARGETS, POLE_TARGETS, SITE_TARGETS, fit_static_pose  # noqa: E402
-from hold_contact_state import HoldContactTracker, HoldDetection, compute_contact_points_px  # noqa: E402
+from hold_contact_state import HoldContactTracker, HoldDetection, RIGHT_FOOT_INDEX, compute_contact_points_px  # noqa: E402
 from mediapipe_custom_skeleton_verify import MetricSkeletonMapper  # noqa: E402
 from personalize_articulated_model import (  # noqa: E402
     apply_personalization,
@@ -42,6 +42,7 @@ DEFAULT_USER_BODY_JSON = ROOT / "benchmark_inputs" / "user_body.json"
 DEFAULT_XML = ARTIC_ROOT / "custom_articulated_human.xml"
 DEFAULT_CACHE_DIR = ROOT / "cache"
 DEFAULT_OUTPUT = ROOT / "json_service_benchmark_report.json"
+MIN_POSE_LANDMARK_COUNT = RIGHT_FOOT_INDEX + 1
 
 
 @dataclass(slots=True)
@@ -52,7 +53,7 @@ class JsonLandmark:
 
 
 def landmark_payload_to_objects(payload: list[dict[str, Any]] | None) -> list[JsonLandmark] | None:
-    if payload is None:
+    if payload is None or len(payload) < MIN_POSE_LANDMARK_COUNT:
         return None
     return [
         JsonLandmark(

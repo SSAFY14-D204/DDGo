@@ -25,17 +25,14 @@ fun FinalAnalysisRoute(
     onNavigateToMain: () -> Unit = {}
 ) {
     val totalHolds = viewModel.totalSelectedHoldCount.takeIf { it > 0 } ?: 14
+    val attemptResults = viewModel.attemptPresentationResults
     val attemptSummaries = remember(
-        viewModel.allAttemptUris,
-        viewModel.analysisPoints,
-        viewModel.attemptDummyResults,
+        attemptResults,
         totalHolds,
         viewModel.attemptHoldReachResults
     ) {
         buildAttemptSummaries(
-            totalAttempts = viewModel.allAttemptUris.size,
-            fallbackPoints = viewModel.analysisPoints,
-            dummyResults = viewModel.attemptDummyResults,
+            attemptResults = attemptResults,
             totalHolds = totalHolds,
             holdReachResults = viewModel.attemptHoldReachResults
         )

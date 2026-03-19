@@ -100,17 +100,18 @@ fun AttemptResultScreen(
     val currentVideoUri = playbackAttemptUris.getOrNull(currentAttemptIndex)
     val hasChallenge = (viewModel.challengeId ?: 0L) > 0L
 
-    val dummyResult = viewModel.attemptDummyResults.getOrElse(
-        currentAttemptIndex % viewModel.attemptDummyResults.size
+    val presentationResults = viewModel.attemptPresentationResults
+    val currentAttemptResult = presentationResults.getOrElse(
+        currentAttemptIndex.coerceAtLeast(0)
     ) {
-        viewModel.attemptDummyResults.first()
+        presentationResults.firstOrNull() ?: (false to viewModel.analysisPoints)
     }
     val currentAttemptHoldReachResult = viewModel.currentAttemptHoldReachResult
     val totalSelectedHoldCount = viewModel.totalSelectedHoldCount
     val isSuccess = currentAttemptHoldReachResult?.let { result ->
         totalSelectedHoldCount > 0 && result.highestReachedHoldNo >= totalSelectedHoldCount
-    } ?: dummyResult.first
-    val currentAnalysisPoints = dummyResult.second
+    } ?: currentAttemptResult.first
+    val currentAnalysisPoints = currentAttemptResult.second
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
     val numberedHolds = viewModel.numberedHolds

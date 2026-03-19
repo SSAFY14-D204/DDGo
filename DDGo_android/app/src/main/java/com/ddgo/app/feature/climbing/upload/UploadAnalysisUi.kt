@@ -85,25 +85,22 @@ internal data class AnalysisAttemptSummary(
 )
 
 internal fun buildAttemptSummaries(
-    totalAttempts: Int,
-    fallbackPoints: List<AnalysisPoint>,
-    dummyResults: List<Pair<Boolean, List<AnalysisPoint>>>,
+    attemptResults: List<Pair<Boolean, List<AnalysisPoint>>>,
     totalHolds: Int,
     holdReachResults: List<AttemptHoldReachResult> = emptyList()
 ): List<AnalysisAttemptSummary> {
-    val attemptSize = max(max(totalAttempts, holdReachResults.size), 1)
+    val attemptSize = max(max(attemptResults.size, holdReachResults.size), 1)
     val safeTotalHolds = totalHolds.coerceAtLeast(1)
-    val safeFallbackPoints = fallbackPoints.ifEmpty { defaultAnalysisPoints() }
-    val safeDummyResults = dummyResults.ifEmpty {
-        listOf(false to safeFallbackPoints)
+    val safeAttemptResults = attemptResults.ifEmpty {
+        listOf(false to defaultAnalysisPoints())
     }
 
     return List(attemptSize) { index ->
-        val seed = safeDummyResults[index % safeDummyResults.size]
-        val points = seed?.second?.takeIf { it.isNotEmpty() } ?: safeFallbackPoints
+        val seed = safeAttemptResults[index % safeAttemptResults.size]
+        val points = seed.second.takeIf { it.isNotEmpty() } ?: defaultAnalysisPoints()
         val holdReachResult = holdReachResults.getOrNull(index)
         val isSuccess = holdReachResult?.let { it.highestReachedHoldNo >= safeTotalHolds } ?:
-            (seed?.first ?: index == attemptSize - 1)
+            seed.first
         val progressBase = when {
             isSuccess -> 0.88f
             attemptSize == 1 -> 0.64f
