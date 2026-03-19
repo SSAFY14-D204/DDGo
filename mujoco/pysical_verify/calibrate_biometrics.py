@@ -129,10 +129,16 @@ def serialize_point(point_xy: np.ndarray) -> list[float]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Extract personalized limb calibration from a T-pose image")
-    parser.add_argument("--image", default=str(Path(__file__).with_name("video") / "fullbody_dg.png"))
+    parser.add_argument("--image", default=str(Path(__file__).parents[1] / "video" / "fullbody_dg.png"))
     parser.add_argument("--task-model", default=str(Path(__file__).with_name("pose_landmarker_lite.task")))
     parser.add_argument("--height-m", type=float, required=True, help="User height in meters")
     parser.add_argument("--output", default=str(Path(__file__).with_name("calibration.json")))
+    parser.add_argument(
+        "--wingspan-extra-cm",
+        type=float,
+        default=20.0,
+        help="Heuristic extra length added to wingspan to account for palm-to-fingertip reach (default: 20cm)",
+    )
     return parser.parse_args()
 
 
@@ -158,13 +164,15 @@ def main() -> None:
     wingspan_px = dist2(hand_tip_px(points_px, left=True), hand_tip_px(points_px, left=False))
     body_height_px = full_body_height_px(points_px)
     meters_per_px = float(args.height_m) / body_height_px
+    wingspan_extra_m = max(float(args.wingspan_extra_cm), 0.0) / 100.0
 
     upper_arm_m = 0.5 * (upper_arm_left_px + upper_arm_right_px) * meters_per_px
     forearm_m = 0.5 * (forearm_left_px + forearm_right_px) * meters_per_px
     thigh_m = 0.5 * (thigh_left_px + thigh_right_px) * meters_per_px
     shin_m = 0.5 * (shin_left_px + shin_right_px) * meters_per_px
     shoulder_width_m = shoulder_width_px * meters_per_px
-    wingspan_m = wingspan_px * meters_per_px
+    wingspan_raw_m = wingspan_px * meters_per_px
+    wingspan_m = wingspan_raw_m + wingspan_extra_m
 
     result = {
         "image_path": str(image_path),
@@ -175,6 +183,8 @@ def main() -> None:
         "thigh_m": thigh_m,
         "shin_m": shin_m,
         "shoulder_width_m": shoulder_width_m,
+        "wingspan_raw_m": wingspan_raw_m,
+        "wingspan_extra_m": wingspan_extra_m,
         "wingspan_m": wingspan_m,
         "ratios": {
             "upper_arm": upper_arm_m / float(args.height_m),
@@ -223,7 +233,21 @@ def main() -> None:
 
     output_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print("[OK] Biometrics calibration complete")
-    print(json.dumps({"output": str(output_path), "upper_arm_m": upper_arm_m, "forearm_m": forearm_m, "thigh_m": thigh_m, "shin_m": shin_m}, indent=2))
+    print(
+        json.dumps(
+            {
+                "output": str(output_path),
+                "upper_arm_m": upper_arm_m,
+                "forearm_m": forearm_m,
+                "thigh_m": thigh_m,
+                "shin_m": shin_m,
+                "wingspan_raw_m": wingspan_raw_m,
+                "wingspan_extra_m": wingspan_extra_m,
+                "wingspan_m": wingspan_m,
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

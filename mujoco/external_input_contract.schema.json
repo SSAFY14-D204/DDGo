@@ -1,0 +1,337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddgo.local/schemas/external_input_contract.schema.json",
+  "title": "DDGo 외부 입력 데이터 명세",
+  "description": "데이터 제공자로부터 전달받을 외부 입력 JSON 계약입니다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "user_profile",
+    "static_biometrics",
+    "video_metadata",
+    "holds",
+    "frames"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "명세 버전",
+      "const": "1.0.0"
+    },
+    "user_profile": {
+      "type": "object",
+      "description": "유저 기본 신체 정보",
+      "additionalProperties": false,
+      "required": [
+        "user_id",
+        "height_cm",
+        "weight_kg"
+      ],
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "유저 고유 식별자",
+          "minLength": 1
+        },
+        "height_cm": {
+          "type": "number",
+          "description": "유저 키(cm)",
+          "exclusiveMinimum": 0
+        },
+        "weight_kg": {
+          "type": "number",
+          "description": "유저 몸무게(kg)",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "static_biometrics": {
+      "type": "object",
+      "description": "T자 자세 사진 기반 신체 구간 길이",
+      "additionalProperties": false,
+      "required": [
+        "left_upper_arm_m",
+        "right_upper_arm_m",
+        "left_forearm_m",
+        "right_forearm_m",
+        "left_thigh_m",
+        "right_thigh_m",
+        "left_shin_m",
+        "right_shin_m",
+        "shoulder_width_m",
+        "torso_length_m"
+      ],
+      "properties": {
+        "measurement_method": {
+          "type": "string",
+          "description": "신체 구간 길이 산출 방식"
+        },
+        "left_upper_arm_m": {
+          "type": "number",
+          "description": "왼쪽 상완 길이(m)",
+          "exclusiveMinimum": 0
+        },
+        "right_upper_arm_m": {
+          "type": "number",
+          "description": "오른쪽 상완 길이(m)",
+          "exclusiveMinimum": 0
+        },
+        "left_forearm_m": {
+          "type": "number",
+          "description": "왼쪽 하완 길이(m)",
+          "exclusiveMinimum": 0
+        },
+        "right_forearm_m": {
+          "type": "number",
+          "description": "오른쪽 하완 길이(m)",
+          "exclusiveMinimum": 0
+        },
+        "left_thigh_m": {
+          "type": "number",
+          "description": "왼쪽 허벅지 길이(m)",
+          "exclusiveMinimum": 0
+        },
+        "right_thigh_m": {
+          "type": "number",
+          "description": "오른쪽 허벅지 길이(m)",
+          "exclusiveMinimum": 0
+        },
+        "left_shin_m": {
+          "type": "number",
+          "description": "왼쪽 종아리 길이(m)",
+          "exclusiveMinimum": 0
+        },
+        "right_shin_m": {
+          "type": "number",
+          "description": "오른쪽 종아리 길이(m)",
+          "exclusiveMinimum": 0
+        },
+        "shoulder_width_m": {
+          "type": "number",
+          "description": "양쪽 어깨 너비(m)",
+          "exclusiveMinimum": 0
+        },
+        "torso_length_m": {
+          "type": "number",
+          "description": "상체 길이(m)",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "video_metadata": {
+      "type": "object",
+      "description": "영상 기본 메타데이터",
+      "additionalProperties": false,
+      "required": [
+        "frame_width",
+        "frame_height",
+        "fps",
+        "total_frames",
+        "duration_ms",
+        "is_mirrored"
+      ],
+      "properties": {
+        "video_id": {
+          "type": "string",
+          "description": "제공자 측 영상 식별자"
+        },
+        "frame_width": {
+          "type": "integer",
+          "description": "영상 가로 픽셀 수",
+          "minimum": 1
+        },
+        "frame_height": {
+          "type": "integer",
+          "description": "영상 세로 픽셀 수",
+          "minimum": 1
+        },
+        "fps": {
+          "type": "number",
+          "description": "초당 프레임 수",
+          "exclusiveMinimum": 0
+        },
+        "total_frames": {
+          "type": "integer",
+          "description": "전달된 전체 프레임 수",
+          "minimum": 1
+        },
+        "duration_ms": {
+          "type": "integer",
+          "description": "영상 길이(ms)",
+          "minimum": 0
+        },
+        "is_mirrored": {
+          "type": "boolean",
+          "description": "좌우 반전 여부"
+        }
+      }
+    },
+    "holds": {
+      "type": "array",
+      "description": "홀드 좌표 목록",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "hold_id",
+          "bbox_px"
+        ],
+        "properties": {
+          "hold_id": {
+            "type": "string",
+            "description": "홀드 고유 식별자",
+            "minLength": 1
+          },
+          "hold_no": {
+            "type": "integer",
+            "description": "문제 진행 순서를 위한 홀드 번호",
+            "minimum": 1
+          },
+          "color": {
+            "type": "string",
+            "description": "홀드 또는 문제 색상"
+          },
+          "bbox_px": {
+            "type": "object",
+            "description": "픽셀 기준 바운딩 박스",
+            "additionalProperties": false,
+            "required": ["x1", "y1", "x2", "y2"],
+            "properties": {
+              "x1": { "type": "integer", "minimum": 0 },
+              "y1": { "type": "integer", "minimum": 0 },
+              "x2": { "type": "integer", "minimum": 0 },
+              "y2": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "center_px": {
+            "type": "object",
+            "description": "홀드 중심점",
+            "additionalProperties": false,
+            "required": ["x", "y"],
+            "properties": {
+              "x": { "type": "number", "minimum": 0 },
+              "y": { "type": "number", "minimum": 0 }
+            }
+          },
+          "is_start_hold": {
+            "type": "boolean",
+            "description": "시작 홀드 여부"
+          },
+          "is_top_hold": {
+            "type": "boolean",
+            "description": "종료 홀드 여부"
+          }
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "description": "프레임 단위 포즈 시계열 데이터",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/frame"
+      }
+    }
+  },
+  "$defs": {
+    "landmark3d": {
+      "type": "object",
+      "description": "MediaPipe world landmark 3D 좌표",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "landmark2d": {
+      "type": "object",
+      "description": "MediaPipe image landmark 좌표",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "frame": {
+      "type": "object",
+      "description": "단일 프레임의 포즈 데이터",
+      "additionalProperties": false,
+      "required": [
+        "frame_index",
+        "timestamp_ms",
+        "pose_detected",
+        "pose_world_landmarks"
+      ],
+      "properties": {
+        "frame_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pose_detected": {
+          "type": "boolean"
+        },
+        "pose_world_landmarks": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 33,
+              "maxItems": 33,
+              "items": {
+                "$ref": "#/$defs/landmark3d"
+              }
+            }
+          ]
+        },
+        "pose_landmarks": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 33,
+              "maxItems": 33,
+              "items": {
+                "$ref": "#/$defs/landmark2d"
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pose_detected": {
+                "const": true
+              }
+            },
+            "required": ["pose_detected"]
+          },
+          "then": {
+            "properties": {
+              "pose_world_landmarks": {
+                "type": "array",
+                "minItems": 33,
+                "maxItems": 33
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

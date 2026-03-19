@@ -1,0 +1,70 @@
+{
+  "base_xml": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_articulated_human\\custom_articulated_human.xml",
+  "output_xml": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_articulated_human\\custom_articulated_human_personalized.xml",
+  "input_video": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\주황.mp4",
+  "calibration_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_skeleton_verify\\calibration.json",
+  "applied_metrics_m": {
+    "body_mass_kg": 80.0,
+    "upper_arm_m": 0.24890806836814186,
+    "forearm_m": 0.25979294271722225,
+    "thigh_m": 0.3969162213042889,
+    "shin_m": 0.3528437195756503,
+    "shoulder_width_m": 0.38648157101172714,
+    "torso_length_m": 0.593551888065049,
+    "hip_width_m": 0.2240316035393709,
+    "hand_extension_m": 0.05
+  },
+  "target_metrics_m": {
+    "detected_frames": 22,
+    "torso_length_target_m": 0.593551888065049,
+    "shoulder_width_target_m": 0.3701286179377806,
+    "hip_width_target_m": 0.2240316035393709,
+    "head_offset_local_m": [
+      0.11449099938879637,
+      0.005280575961018776,
+      0.26388772155682005
+    ],
+    "left_shoulder_offset_local_m": [
+      0.010639338238653054,
+      0.1853051167236058,
+      0.0008243920378942207
+    ],
+    "right_shoulder_offset_local_m": [
+      -0.009387590244976731,
+      -0.18371191076498725,
+      -0.002219599055326607
+    ],
+    "left_hip_offset_local_m": [
+      -0.005990324003569841,
+      0.11064816034436939,
+      0.012718809469709005
+    ],
+    "right_hip_offset_local_m": [
+      0.00599777255032905,
+      -0.11064742299542143,
+      -0.012716403639468687
+    ],
+    "left_foot_vector_local_m": [
+      0.020319725371590512,
+      0.01864190914391879,
+      -0.06822508247806472
+    ],
+    "right_foot_vector_local_m": [
+      0.012116807527509908,
+      -0.016983093678431597,
+      -0.082556937249881
+    ],
+    "left_heel_vector_local_m": [
+      0.004978555826899942,
+      0.002876203940191925,
+      -0.054726680484789555
+    ],
+    "right_heel_vector_local_m": [
+      0.0065484876589571184,
+      -0.01308230971907258,
+      -0.045315846270413594
+    ],
+    "hand_reach_target_m": 0.2806713620440954,
+    "foot_reach_target_m": 0.08595606272728543
+  }
+}
