@@ -8,8 +8,8 @@ import javax.inject.Inject
 /**
  * UploadRepository 인터페이스(domain)의 실제 구현체.
  *
- * 실제 업로드는 VideoAnalyzeWorker(data/work)에서 수행합니다.
- * 이 Repository는 업로드 상태를 조회하거나 직접 업로드할 때 사용합니다.
+ * 현재 제품 업로드 플로우는 AttemptRepository/UseCase 경로를 통해 처리됩니다.
+ * 이 Repository의 direct upload 경로는 아직 구현되지 않은 레거시 진입점입니다.
  */
 class UploadRepositoryImpl @Inject constructor(
     private val uploadApi: UploadApi
@@ -24,6 +24,6 @@ class UploadRepositoryImpl @Inject constructor(
         // 2. MultipartBody 생성
         // 3. uploadApi.uploadVideo() 호출
         // 4. UploadMapper.toAttemptReport()로 변환
-        return Result.failure(NotImplementedError("VideoAnalyzeWorker를 통한 업로드를 권장합니다"))
+        return Result.failure(NotImplementedError("직접 업로드 경로는 아직 구현되지 않았습니다."))
     }
 }

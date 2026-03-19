@@ -107,11 +107,11 @@ fun AdditionalUploadScreen(
                 // 건너뛰기 버튼
                 Button(
                     onClick = {
-                        viewModel.updateAdditionalVideoUris(emptyList())
                         if (isAttemptOnlyMode) {
                             viewModel.cancelAttemptOnlyUploadMode()
                             onNavigateBack()
                         } else {
+                            viewModel.updateAdditionalVideoUris(emptyList())
                             onNavigateToNext()
                         }
                     },

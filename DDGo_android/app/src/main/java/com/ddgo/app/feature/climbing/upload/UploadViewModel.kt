@@ -192,6 +192,7 @@ class UploadViewModel @Inject constructor(
     private val managedTempFilePaths = mutableSetOf<String>()
     private val managedVideosByPlaybackUri = mutableMapOf<String, ManagedAttemptVideo>()
     private val activePrePosePlaybackUris = mutableSetOf<String>()
+    private var publishedAttemptResultSession: PublishedAttemptResultSession? = null
 
     /**
      * 주변 암장 검색 UI 상태.
@@ -362,7 +363,7 @@ class UploadViewModel @Inject constructor(
 
     // --- 5. AttemptUploadScreen (추가 영상 업로드) ---
     fun updateAdditionalVideoUris(uris: List<String>) {
-        val generation = beginSelectionUpdate()
+        val generation = beginSelectionUpdate(preservePublishedResult = isAttemptOnlyUploadMode)
 
         if (isAttemptOnlyUploadMode) {
             attemptOnlySelectionJob?.cancel()
@@ -453,6 +454,7 @@ class UploadViewModel @Inject constructor(
         lastSearchLongitude = null
         uploadedAttemptVideos = emptyList()
         currentAttemptIndex = 0
+        publishedAttemptResultSession = null
         clearChallengeFlowState()
         clearHoldReachAnalysis()
         clearPosePrecomputeState()
@@ -475,21 +477,14 @@ class UploadViewModel @Inject constructor(
             return false
         }
 
+        captureCurrentAttemptResultSession()
         uploadFlowMode = UploadFlowMode.AttemptOnly
         allowLocalAnalysisWithoutChallenge = false
         resetAllSelectionPreparationJobs()
-        videoUri = null
-        primaryManagedVideo = null
-        additionalVideoUris = emptyList()
-        additionalManagedVideos = emptyList()
         attemptOnlyVideoUris = emptyList()
         attemptOnlyManagedVideos = emptyList()
-        resultPlaybackUris = emptyList()
-        uploadedAttemptVideos = emptyList()
-        currentAttemptIndex = 0
-        clearHoldReachAnalysis()
-        clearPosePrecomputeState()
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+        refreshCurrentSelectionPrePoseTargets()
         cleanupUnusedManagedTempFiles()
         return true
     }
@@ -528,6 +523,7 @@ class UploadViewModel @Inject constructor(
         resultPlaybackUris = emptyList()
         uploadedAttemptVideos = emptyList()
         currentAttemptIndex = 0
+        publishedAttemptResultSession = null
         clearHoldReachAnalysis()
         clearPosePrecomputeState()
         _challengeCreationUiState.value = ChallengeCreationUiState.Success(challenge)
@@ -542,15 +538,13 @@ class UploadViewModel @Inject constructor(
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
         resetAllSelectionPreparationJobs()
-        videoUri = null
-        primaryManagedVideo = null
-        additionalVideoUris = emptyList()
-        additionalManagedVideos = emptyList()
         attemptOnlyVideoUris = emptyList()
         attemptOnlyManagedVideos = emptyList()
-        resultPlaybackUris = emptyList()
-        clearHoldReachAnalysis()
-        clearPosePrecomputeState()
+        clearPosePrecomputeState(
+            preservePlaybackUris = allAttemptUris.toSet() + publishedResultPlaybackUris()
+        )
+        restorePublishedAttemptResultSession()
+        refreshCurrentSelectionPrePoseTargets(selectionGeneration)
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
         cleanupUnusedManagedTempFiles()
     }
@@ -724,11 +718,15 @@ class UploadViewModel @Inject constructor(
         videos.forEach(::registerManagedVideo)
     }
 
-    private fun beginSelectionUpdate(): Long {
+    private fun beginSelectionUpdate(
+        preservePublishedResult: Boolean = false
+    ): Long {
         selectionGeneration += 1
-        currentAttemptIndex = 0
-        resultPlaybackUris = emptyList()
-        clearHoldReachAnalysis()
+        if (preservePublishedResult) {
+            currentAttemptIndex = publishedAttemptResultSession?.currentAttemptIndex ?: currentAttemptIndex
+        } else {
+            clearAttemptResultState(clearPublishedSession = true)
+        }
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
         updatePrePoseBatchState()
         return selectionGeneration
@@ -864,8 +862,13 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    private suspend fun awaitPrePoseTerminal(playbackUris: List<String>) {
-        if (playbackUris.isEmpty()) return
+    private suspend fun awaitPrePoseTerminal(playbackUris: List<String>): TerminalPrePoseSnapshot {
+        if (playbackUris.isEmpty()) {
+            return TerminalPrePoseSnapshot(
+                generation = selectionGeneration,
+                entriesByPlaybackUri = emptyMap()
+            )
+        }
 
         refreshCurrentSelectionPrePoseTargets(selectionGeneration)
 
@@ -876,7 +879,19 @@ class UploadViewModel @Inject constructor(
             }
             if (entries.size == playbackUris.size && activeCount == 0) {
                 updatePrePoseBatchState()
-                return
+                return TerminalPrePoseSnapshot(
+                    generation = selectionGeneration,
+                    entriesByPlaybackUri = playbackUris.associateWith { playbackUri ->
+                        prePoseCacheEntries[playbackUri]?.toTerminalEntry()
+                            ?: TerminalPrePoseEntry(
+                                playbackUri = playbackUri,
+                                selectionGeneration = selectionGeneration,
+                                status = PrePoseStatus.Failed,
+                                poses = emptyList(),
+                                errorMessage = "Missing pre-pose cache entry."
+                            )
+                    }
+                )
             }
 
             val completedCount = entries.count { entry ->
@@ -907,11 +922,22 @@ class UploadViewModel @Inject constructor(
         )
     }
 
-    private fun clearPosePrecomputeState() {
+    private fun clearPosePrecomputeState(
+        preservePlaybackUris: Set<String> = emptySet()
+    ) {
         selectionGeneration += 1
-        prePoseTaskQueue.clear()
-        prePoseCacheEntries = emptyMap()
-        prePoseBatchState = PrePoseBatchState()
+        if (preservePlaybackUris.isEmpty()) {
+            prePoseTaskQueue.clear()
+            prePoseCacheEntries = emptyMap()
+            prePoseBatchState = PrePoseBatchState()
+            return
+        }
+
+        prePoseTaskQueue.removeAll { task -> task.playbackUri !in preservePlaybackUris }
+        prePoseCacheEntries = prePoseCacheEntries.filterKeys { playbackUri ->
+            playbackUri in preservePlaybackUris
+        }
+        updatePrePoseBatchState()
     }
 
     private fun resetAllSelectionPreparationJobs() {
@@ -930,6 +956,15 @@ class UploadViewModel @Inject constructor(
                     .plus(additionalManagedVideos)
                     .plus(attemptOnlyManagedVideos)
                     .mapNotNullTo(this) { it.tempFilePath }
+
+                resultPlaybackUris.mapNotNullTo(this) { playbackUri ->
+                    managedVideosByPlaybackUri[playbackUri]?.tempFilePath
+                }
+                publishedAttemptResultSession
+                    ?.resultPlaybackUris
+                    ?.mapNotNullTo(this) { playbackUri ->
+                        managedVideosByPlaybackUri[playbackUri]?.tempFilePath
+                    }
             }
 
             activePrePosePlaybackUris.mapNotNullTo(this) { playbackUri ->
@@ -1628,9 +1663,13 @@ class UploadViewModel @Inject constructor(
                 clearHoldReachAnalysis()
             }
 
-            uploadedAttemptVideos = uploadedVideos
-            resultPlaybackUris = attemptUris
-            currentAttemptIndex = 0
+            publishAttemptResultSession(
+                playbackUris = attemptUris,
+                uploadedVideos = uploadedVideos,
+                currentAttemptIndex = 0,
+                holdReachResults = attemptHoldReachResults,
+                overallSummary = overallHoldReachSummary
+            )
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedVideos)
         }
     }
@@ -1691,6 +1730,7 @@ class UploadViewModel @Inject constructor(
         uploadedAttemptVideos = emptyList()
         clearHoldReachAnalysis()
         resultPlaybackUris = emptyList()
+        publishedAttemptResultSession = null
         _challengeCreationUiState.value = ChallengeCreationUiState.Idle
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
     }
@@ -1704,7 +1744,7 @@ class UploadViewModel @Inject constructor(
             return
         }
 
-        awaitPrePoseTerminal(attemptUris)
+        val terminalSnapshot = awaitPrePoseTerminal(attemptUris)
 
         val analyses = attemptUris.mapIndexed { index, uri ->
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
@@ -1712,7 +1752,8 @@ class UploadViewModel @Inject constructor(
             )
 
             analyzeSingleAttemptPoseAnalysis(
-                videoUri = uri,
+                playbackUri = uri,
+                poses = terminalSnapshot.entriesByPlaybackUri[uri]?.poses.orEmpty(),
                 holds = holds
             )
         }
@@ -1725,10 +1766,12 @@ class UploadViewModel @Inject constructor(
         )
     }
 
-    private suspend fun analyzeSingleAttemptPoseAnalysis(
-        videoUri: String,
+    private fun analyzeSingleAttemptPoseAnalysis(
+        playbackUri: String,
+        poses: List<Pose>,
         holds: List<HoldNumbered>
     ): AttemptPoseAnalysis {
+        /*
         val poses = runCatching {
             poseEstimator.estimateFromVideo(videoUri)
         }.onFailure { throwable ->
@@ -1743,6 +1786,10 @@ class UploadViewModel @Inject constructor(
             PrePoseStatus.Failed -> emptyList()
             else -> poses
         }
+
+        */
+        val stablePoses = poses
+        val videoUri = playbackUri
 
         val holdReach = analyzeAttemptHoldReach(
             poses = stablePoses,
@@ -1766,6 +1813,73 @@ class UploadViewModel @Inject constructor(
         attemptHoldReachResults = emptyList()
         overallHoldReachSummary = null
     }
+
+    private fun clearAttemptResultState(clearPublishedSession: Boolean) {
+        currentAttemptIndex = 0
+        resultPlaybackUris = emptyList()
+        uploadedAttemptVideos = emptyList()
+        clearHoldReachAnalysis()
+        if (clearPublishedSession) {
+            publishedAttemptResultSession = null
+        }
+    }
+
+    private fun publishAttemptResultSession(
+        playbackUris: List<String>,
+        uploadedVideos: List<UploadedAttemptVideo>,
+        currentAttemptIndex: Int,
+        holdReachResults: List<AttemptHoldReachResult>,
+        overallSummary: OverallHoldReachSummary?
+    ) {
+        resultPlaybackUris = playbackUris
+        uploadedAttemptVideos = uploadedVideos
+        this.currentAttemptIndex = currentAttemptIndex.coerceIn(
+            minimumValue = 0,
+            maximumValue = playbackUris.lastIndex.coerceAtLeast(0)
+        )
+        attemptHoldReachResults = holdReachResults
+        overallHoldReachSummary = overallSummary
+        publishedAttemptResultSession = PublishedAttemptResultSession(
+            resultPlaybackUris = playbackUris,
+            uploadedAttemptVideos = uploadedVideos,
+            currentAttemptIndex = this.currentAttemptIndex,
+            holdReachResults = holdReachResults,
+            overallHoldReachSummary = overallSummary
+        )
+    }
+
+    private fun captureCurrentAttemptResultSession() {
+        val playbackUris = resultPlaybackUris.takeIf { it.isNotEmpty() } ?: return
+        publishedAttemptResultSession = PublishedAttemptResultSession(
+            resultPlaybackUris = playbackUris,
+            uploadedAttemptVideos = uploadedAttemptVideos,
+            currentAttemptIndex = currentAttemptIndex.coerceIn(
+                minimumValue = 0,
+                maximumValue = playbackUris.lastIndex.coerceAtLeast(0)
+            ),
+            holdReachResults = attemptHoldReachResults,
+            overallHoldReachSummary = overallHoldReachSummary
+        )
+    }
+
+    private fun restorePublishedAttemptResultSession() {
+        val session = publishedAttemptResultSession ?: run {
+            clearAttemptResultState(clearPublishedSession = false)
+            return
+        }
+
+        resultPlaybackUris = session.resultPlaybackUris
+        uploadedAttemptVideos = session.uploadedAttemptVideos
+        currentAttemptIndex = session.currentAttemptIndex.coerceIn(
+            minimumValue = 0,
+            maximumValue = session.resultPlaybackUris.lastIndex.coerceAtLeast(0)
+        )
+        attemptHoldReachResults = session.holdReachResults
+        overallHoldReachSummary = session.overallHoldReachSummary
+    }
+
+    private fun publishedResultPlaybackUris(): Set<String> =
+        publishedAttemptResultSession?.resultPlaybackUris?.toSet().orEmpty()
 
     private fun buildChallengeHoldCoordinates(): List<ChallengeHoldCoordinate> {
         return detectedHolds.mapIndexed { index, hold ->
@@ -1843,6 +1957,27 @@ data class PrePoseCacheEntry(
     val taskId: Long? = null
 )
 
+private fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = TerminalPrePoseEntry(
+    playbackUri = playbackUri,
+    selectionGeneration = selectionGeneration,
+    status = status,
+    poses = poses,
+    errorMessage = errorMessage
+)
+
+data class TerminalPrePoseSnapshot(
+    val generation: Long,
+    val entriesByPlaybackUri: Map<String, TerminalPrePoseEntry>
+)
+
+data class TerminalPrePoseEntry(
+    val playbackUri: String,
+    val selectionGeneration: Long,
+    val status: PrePoseStatus,
+    val poses: List<Pose>,
+    val errorMessage: String?
+)
+
 data class PrePoseBatchState(
     val generation: Long = 0L,
     val totalCount: Int = 0,
@@ -1858,6 +1993,14 @@ data class PrePoseBatchState(
 private data class PrePoseTask(
     val playbackUri: String,
     val taskId: Long
+)
+
+private data class PublishedAttemptResultSession(
+    val resultPlaybackUris: List<String>,
+    val uploadedAttemptVideos: List<UploadedAttemptVideo>,
+    val currentAttemptIndex: Int,
+    val holdReachResults: List<AttemptHoldReachResult>,
+    val overallHoldReachSummary: OverallHoldReachSummary?
 )
 
 sealed class UploadUiState {

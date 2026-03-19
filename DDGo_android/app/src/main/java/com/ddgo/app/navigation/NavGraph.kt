@@ -3,11 +3,15 @@ package com.ddgo.app.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import android.util.Log
+import com.ddgo.app.BuildConfig
 import com.ddgo.app.core.ui.components.DevNavigationOverlay
 import com.ddgo.app.feature.auth.authGraph
 import com.ddgo.app.feature.debug.debugGraph
@@ -25,6 +29,19 @@ import com.ddgo.app.feature.splash.SplashScreen
 @Composable
 fun NavGraph() {
     val navController: NavHostController = rememberNavController()
+
+    if (BuildConfig.DEBUG) {
+        DisposableEffect(navController) {
+            val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
+                Log.d("NavRoute", "currentRoute=${destination.route}")
+            }
+            navController.addOnDestinationChangedListener(listener)
+
+            onDispose {
+                navController.removeOnDestinationChangedListener(listener)
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
     NavHost(
