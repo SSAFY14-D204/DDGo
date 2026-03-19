@@ -25,11 +25,14 @@ import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
+import java.util.Optional
 import javax.inject.Inject
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private const val DEFAULT_ANALYSIS_FPS_LIMIT = 30
 
 /**
  * 모든 프레임을 순차 디코딩해 MediaPipe Pose 결과를 반환하는 분석기입니다.
@@ -42,13 +45,15 @@ class PrePoseVideoAnalyzer @Inject constructor(
 
     suspend operator fun invoke(
         videoUri: String,
+        analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT,
         onProgress: (Float) -> Unit = {}
     ): Result<List<DebugPoseFrameResult>> = withContext(Dispatchers.IO) {
-        runCatching { analyzeInternal(videoUri, onProgress) }
+        runCatching { analyzeInternal(videoUri, analysisFpsLimit, onProgress) }
     }
 
     private fun analyzeInternal(
         videoUri: String,
+        analysisFpsLimit: Int,
         onProgress: (Float) -> Unit
     ): List<DebugPoseFrameResult> {
         lastCaptureTimeMs = -5_000
@@ -59,6 +64,7 @@ class PrePoseVideoAnalyzer @Inject constructor(
             return analyzeSequentialFrames(
                 uri = uri,
                 poseLandmarker = poseLandmarker,
+                analysisFpsLimit = analysisFpsLimit,
                 onProgress = onProgress
             )
         } finally {
@@ -69,6 +75,7 @@ class PrePoseVideoAnalyzer @Inject constructor(
     private fun analyzeSequentialFrames(
         uri: Uri,
         poseLandmarker: PoseLandmarker,
+        analysisFpsLimit: Int,
         onProgress: (Float) -> Unit
     ): List<DebugPoseFrameResult> {
         val extractor = MediaExtractor()
@@ -100,6 +107,7 @@ class PrePoseVideoAnalyzer @Inject constructor(
                     extractor = extractor,
                     decoder = decoder,
                     poseLandmarker = poseLandmarker,
+                    analysisFpsLimit = analysisFpsLimit,
                     rotationDegrees = rotationDegrees,
                     durationUs = durationUs,
                     width = width,
@@ -121,6 +129,7 @@ class PrePoseVideoAnalyzer @Inject constructor(
         extractor: MediaExtractor,
         decoder: MediaCodec,
         poseLandmarker: PoseLandmarker,
+        analysisFpsLimit: Int,
         rotationDegrees: Int,
         durationUs: Long,
         width: Int,
@@ -130,9 +139,14 @@ class PrePoseVideoAnalyzer @Inject constructor(
     ): List<DebugPoseFrameResult> {
         val bufferInfo = MediaCodec.BufferInfo()
         val poses = ArrayList<DebugPoseFrameResult>()
+        val normalizedAnalysisFpsLimit = analysisFpsLimit.coerceAtLeast(1)
+        val minProcessFrameGapUs = 1_000_000L / normalizedAnalysisFpsLimit
         var inputEnded = false
         var outputEnded = false
         var decodedFrameCount = 0
+        var processedFrameCount = 0
+        var skippedFrameCount = 0
+        var lastProcessedPresentationTimeUs = Long.MIN_VALUE
 
         Log.d(
             TAG,
@@ -194,17 +208,27 @@ class PrePoseVideoAnalyzer @Inject constructor(
                             onProgress(presentationTimeUs.toFloat() / durationUs.toFloat())
                         }
 
-                        runCatching {
-                            inferPoseFromDecodedFrame(
-                                decoder = decoder,
-                                outputBufferIndex = outputBufferIndex,
-                                poseLandmarker = poseLandmarker,
-                                presentationTimeUs = presentationTimeUs,
-                                rotationDegrees = rotationDegrees
-                            )
-                        }.onFailure { error ->
-                            Log.e(TAG, "ptsUs=$presentationTimeUs pose=inference_error", error)
-                        }.getOrNull()?.let(poses::add)
+                        if (
+                            lastProcessedPresentationTimeUs != Long.MIN_VALUE &&
+                            presentationTimeUs - lastProcessedPresentationTimeUs < minProcessFrameGapUs
+                        ) {
+                            skippedFrameCount++
+                        } else {
+                            lastProcessedPresentationTimeUs = presentationTimeUs
+                            processedFrameCount++
+
+                            runCatching {
+                                inferPoseFromDecodedFrame(
+                                    decoder = decoder,
+                                    outputBufferIndex = outputBufferIndex,
+                                    poseLandmarker = poseLandmarker,
+                                    presentationTimeUs = presentationTimeUs,
+                                    rotationDegrees = rotationDegrees
+                                )
+                            }.onFailure { error ->
+                                Log.e(TAG, "ptsUs=$presentationTimeUs pose=inference_error", error)
+                            }.getOrNull()?.let(poses::add)
+                        }
                     }
 
                     decoder.releaseOutputBuffer(outputBufferIndex, false)
@@ -271,7 +295,9 @@ class PrePoseVideoAnalyzer @Inject constructor(
                 frameTimeMs = result.timestampMs(),
                 rawLandmarks = landmarks.map { landmark ->
                     Triple(landmark.x(), landmark.y(), landmark.z())
-                }
+                },
+                visibilityValues = landmarks.map { landmark -> landmark.visibility().toNullable() },
+                presenceValues = landmarks.map { landmark -> landmark.presence().toNullable() }
             )
 
             // 5초 간격으로 이미지 캡처 (디버깅용)
@@ -290,7 +316,9 @@ class PrePoseVideoAnalyzer @Inject constructor(
                             index = index,
                             x = landmark.x(),
                             y = landmark.y(),
-                            z = landmark.z()
+                            z = landmark.z(),
+                            visibility = landmark.visibility().toNullable(),
+                            presence = landmark.presence().toNullable()
                         )
                     },
                     capturedBitmap = capturedBitmap
@@ -301,6 +329,8 @@ class PrePoseVideoAnalyzer @Inject constructor(
             mpImage.close()
         }
     }
+
+    private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
 
     private fun createPoseLandmarker(): PoseLandmarker {
         val baseOptions = BaseOptions.builder()

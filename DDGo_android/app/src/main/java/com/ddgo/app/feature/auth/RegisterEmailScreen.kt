@@ -10,11 +10,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
@@ -31,13 +31,13 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
             }
-            
+
             Spacer(modifier = Modifier.height(20.dp))
-            
+
             Text(
-                text = "쉽게 가입하고\n간편하게 로그인하세요.",
+                text = "\uC27D\uAC8C \uAC00\uC785\uD558\uACE0\n\uAC04\uD3B8\uD558\uAC8C \uB85C\uADF8\uC778\uD558\uC138\uC694.",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 24.sp,
@@ -49,7 +49,7 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "이메일",
+                text = "\uC774\uBA54\uC77C",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 16.sp,
@@ -62,8 +62,8 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
 
             TextField(
                 value = viewModel.username,
-                onValueChange = { viewModel.username = it },
-                placeholder = { Text("이메일", color = Color(0xFF8391A1)) },
+                onValueChange = viewModel::updateUsername,
+                placeholder = { Text("\uC774\uBA54\uC77C", color = Color(0xFF8391A1)) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -84,7 +84,7 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00A3FF))
         ) {
             Text(
-                "다음",
+                "\uB2E4\uC74C",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,

@@ -20,7 +20,8 @@ interface GymRepository {
         latitude: Double,
         longitude: Double,
         radiusMeters: Int = 3000,
-        size: Int = 15
+        size: Int = 15,
+        allowGlobalFallback: Boolean = true
     ): Result<List<NearbyPlace>>
 
     /**

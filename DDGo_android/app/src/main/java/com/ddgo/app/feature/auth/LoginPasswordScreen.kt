@@ -14,12 +14,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
@@ -27,11 +27,18 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // ✅ 로그인 성공 시에만 화면 이동 (기존에는 버튼 클릭 즉시 이동해서 버그 있었음)
     LaunchedEffect(uiState) {
         when (val state = uiState) {
-            is AuthUiState.Success -> onLoginComplete()
-            is AuthUiState.Error -> snackbarHostState.showSnackbar(state.message)
+            is AuthUiState.Success -> {
+                viewModel.resetUiState()
+                onLoginComplete()
+            }
+
+            is AuthUiState.Error -> {
+                snackbarHostState.showSnackbar(state.message)
+                viewModel.resetUiState()
+            }
+
             else -> Unit
         }
     }
@@ -53,7 +60,7 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
                 modifier = Modifier.fillMaxWidth()
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -68,7 +75,7 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
                 Spacer(modifier = Modifier.height(60.dp))
 
                 Text(
-                    text = "비밀번호",
+                    text = "\uBE44\uBC00\uBC88\uD638",
                     style = TextStyle(
                         fontFamily = PretendardFamily,
                         fontSize = 16.sp,
@@ -81,8 +88,8 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
 
                 TextField(
                     value = viewModel.password,
-                    onValueChange = { viewModel.password = it },
-                    placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
+                    onValueChange = viewModel::updatePassword,
+                    placeholder = { Text("\uBE44\uBC00\uBC88\uD638", color = Color(0xFF8391A1)) },
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
                     colors = TextFieldDefaults.colors(
@@ -101,7 +108,7 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "비밀번호를 잊으셨나요?",
+                    text = "\uBE44\uBC00\uBC88\uD638\uB97C \uC78A\uC73C\uC168\uB098\uC694?",
                     style = TextStyle(color = Color(0xFF6C7B8A), fontSize = 14.sp, fontFamily = PretendardFamily)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -122,7 +129,7 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
                         )
                     } else {
                         Text(
-                            "로그인",
+                            "\uB85C\uADF8\uC778",
                             color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,

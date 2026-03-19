@@ -7,7 +7,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.exp
 import kotlin.math.floor
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.round
@@ -48,6 +50,7 @@ class HoldColorClassifier @Inject constructor() {
     private data class CalibrationContext(
         val meanV: Float,
         val meanS: Float,
+        val varianceV: Float,
         val sampleStep: Int
     )
 
@@ -128,6 +131,7 @@ class HoldColorClassifier @Inject constructor() {
         val blackCount: Int,
         val whiteCount: Int,
         val grayCount: Int,
+        val brownCount: Int,
         val unknownCount: Int,
         val validChromaticCount: Int,
         val saturationAccumulator: Float,
@@ -194,19 +198,21 @@ class HoldColorClassifier @Inject constructor() {
 
         object Hsv {
             object Base {
-                // IMPORTANT: GRAY_S_MAX < CHROMATIC_S_MIN 이어야 함
+                // IMPORTANT: GRAY_S_MAX = CHROMATIC_S_MIN - 1 이어야 함 (gap 없음)
                 // when 블록에서 gray 체크가 chromatic보다 먼저 실행되므로,
                 // GRAY_S_MAX >= CHROMATIC_S_MIN 이면 chromatic 픽셀이 gray로 분류됨
-                const val CHROMATIC_S_MIN = 35f   // 실내 조명 환경 고려해 낮춤 (원래 45)
-                const val GRAY_S_MAX = 28f         // 반드시 CHROMATIC_S_MIN보다 낮아야 함
+                // 기존 gap(28~34)은 pastel/fluorescent/원거리 홀드에서 unknown 발생 원인이었음
+                const val CHROMATIC_S_MIN = 30f   // 실내 조명 + pastel 홀드 고려해 더 낮춤 (기존 35)
+                const val GRAY_S_MAX = 29f         // CHROMATIC_S_MIN - 1 (gap 제거)
                 const val LOW_VALUE_CUTOFF = 30f   // 어두운 환경 홀드 포함
                 const val HIGH_VALUE_CUTOFF = 245f
                 const val BLACK_VALUE_CUTOFF = 50f
                 const val BLACK_S_MAX = 80f
-                // WHITE_S_MAX를 낮춰야 반사광 보라/파랑 픽셀이 white로 잘못 분류되지 않음
-                // 순수 흰색 홀드는 S=0~15, 반사광은 S=25~60이므로 25로 분리
+                // WHITE_S_MAX: 색상 LED 조명 아래 white 홀드는 S=30~45 가능
+                // 35로 완화해 실제 white 홀드 감지율 향상 (반사광 false positive는
+                // WHITE_VALUE_CUTOFF와 calibration의 whiteSMax 상한(38f)으로 억제)
                 const val WHITE_VALUE_CUTOFF = 215f
-                const val WHITE_S_MAX = 25f
+                const val WHITE_S_MAX = 35f
                 // black/white 분류에 필요한 최소 비율
                 const val BLACK_WHITE_RATIO = 0.50f
                 // gray 분류에 필요한 최소 비율
@@ -222,10 +228,10 @@ class HoldColorClassifier @Inject constructor() {
                 const val GLOBAL_WEIGHT = 0.35f
                 const val LOCAL_WEIGHT = 0.45f
                 const val SURROUNDING_WEIGHT = 0.2f
-                const val BRIGHTNESS_SHIFT_LIMIT = 18f
-                const val SATURATION_SHIFT_LIMIT = 12f
-                const val WHITE_SHIFT_LIMIT = 16f
-                const val BLACK_SHIFT_LIMIT = 12f
+                const val BRIGHTNESS_SHIFT_LIMIT = 28f  // 기존 18 → 28: 어두운 실내 체육관 대응
+                const val SATURATION_SHIFT_LIMIT = 16f  // 기존 12 → 16: 채도 보정 폭 확대
+                const val WHITE_SHIFT_LIMIT = 20f       // 기존 16 → 20: 밝은/어두운 환경 대응
+                const val BLACK_SHIFT_LIMIT = 16f       // 기존 12 → 16: 어두운 환경 대응
             }
         }
 
@@ -242,9 +248,9 @@ class HoldColorClassifier @Inject constructor() {
             const val UNKNOWN_SCORE_CAP = 0.45f
             const val CONTAMINATION_WARN = 0.33f
             const val CONTAMINATION_REJECT = 0.58f
-            // 5개 점수의 곱이라 빠르게 낮아짐: 신뢰도 0.6 × 면적점수 0.56 = 0.34로 이미 미달
-            // → 잘 분류된 홀드도 unknown으로 강제 리셋되는 문제의 원인이었음
-            const val CONFIDENT_RELIABILITY_FLOOR = 0.15f
+            // 가중 기하평균 + floor(0.3) 적용으로 이전보다 값이 높아짐
+            // 0.10으로 낮춰 색상 점수가 좋은 홀드가 불필요하게 리셋되지 않도록 함
+            const val CONFIDENT_RELIABILITY_FLOOR = 0.10f
             const val LOW_RELIABILITY_FLOOR = 0.10f
             // detectionReliability 최소값: YOLO 신뢰도 낮아도 색 점수가 너무 낮아지지 않도록
             const val MIN_RELIABILITY_FOR_SCORE = 0.20f
@@ -259,17 +265,30 @@ class HoldColorClassifier @Inject constructor() {
             // 채도 부스팅 배율: 영상 압축(H.264)으로 낮아진 채도를 복원
             // 1.0 = 비활성화, 1.2~1.4 권장 (너무 높으면 색 경계 왜곡)
             const val SATURATION_BOOST = 1.3f
+            // 적응적 부스트: 어두운/탈채도 홀드는 더 강하게, 밝은 홀드는 약하게
+            const val MIN_ADAPTIVE_BOOST = 1.0f
+            const val MAX_ADAPTIVE_BOOST = 1.8f
+            const val DARKNESS_WEIGHT = 0.6f
+            const val DESATURATION_WEIGHT = 0.4f
+        }
+
+        object ChromaticSoft {
+            // 채도가 chromaticSMin 바로 아래인 픽셀을 부분 멤버십으로 처리
+            // 그림자 속 동일 색상 홀드에서 gray 오분류 방지
+            const val SOFT_MARGIN = 8f
         }
     }
 
     private val chromaticColorProfiles = listOf(
         // red: 360도 경계(0°, 360°)에 걸쳐 있어 두 center 사용
-        // 기본 S/V 범위 사용 (orange와 pink와 구분 필요 → 좁게 유지)
-        ChromaticColorProfile("red", intArrayOf(0, 179), 16f, 1.04f, 0.96f),
+        // hueTolerance 12로 좁혀 orange 영역(hue 10+) 침범 감소
+        // valueBias 1.02로 올려 밝은 red(순색)에 가중치 → brown(어두운)과 분리
+        ChromaticColorProfile("red", intArrayOf(0, 179), 12f, 1.04f, 1.02f),
 
-        // orange: 실제 orange(20-45°) → Hue/2=10-22.5, center=13으로 조정해 yellow와 겹침 감소
-        // 기본 S/V 범위 사용 (red/yellow와 구분 필요)
-        ChromaticColorProfile("orange", intArrayOf(13), 11f, 1.02f, 1f),
+        // orange: center=15로 이동 (실제 orange 중심 30°/2=15)
+        // hueTolerance 15로 확장해 hue 0~30 커버 → 실제 orange 범위 포착
+        // valueBias 1.06으로 높여 밝은 orange에 가중치 → brown(어두운)과 분리
+        ChromaticColorProfile("orange", intArrayOf(15), 15f, 1.02f, 1.06f),
 
         // yellow: 45-70° → Hue/2=22.5-35
         // 비슷한 색이 없어 S/V를 넓게 허용:
@@ -292,19 +311,32 @@ class HoldColorClassifier @Inject constructor() {
             saturationScale = 1.2f, valueScale = 1.1f
         ),
 
-        // blue: 210-260° → Hue/2=105-130
-        // cyan(하늘색)과 구분 필요 → S/V 엄격하게 (기본 scale 사용, saturationScale 낮춤)
-        // saturationScale=0.8f → 채도 factor가 느리게 올라가므로 채도 낮은 픽셀은 weight 낮아짐
+        // blue 계열을 skyblue(하늘색)와 navy(남색)로 분리
+        // skyblue (하늘색/cyan): 170-216° → hue/2 = 85-108
+        // hueTolerance 18로 확대: 그림자/조명 변화에 의한 hue 편차 흡수
+        // saturationMinOverride 22: 그림자 속 탈채도 하늘색(S=22~30)도 포함
+        // saturationScale 1.4: 낮은 채도에서도 factor가 빠르게 올라감
+        // valueScale 1.2: 어두운 하늘색도 높은 factor 반환
         ChromaticColorProfile(
-            label = "blue", centers = intArrayOf(110), hueTolerance = 20f,
-            saturationBias = 1.0f, valueBias = 0.94f,
-            saturationScale = 0.85f
+            label = "skyblue", centers = intArrayOf(95), hueTolerance = 18f,
+            saturationBias = 0.98f, valueBias = 1.04f,
+            saturationMinOverride = 22f, saturationScale = 1.4f,
+            valueScale = 1.2f
         ),
 
-        // purple: 260-290° → Hue/2=130-145
-        // 반사광으로 hue가 약간 벗어나거나 S가 낮아질 수 있어 약간 관대하게
+        // navy (남색): 220-250° → hue/2 = 110-125
+        // valueBias 0.94로 어두운 남색 포용, saturationScale 0.95로 purple과 분리
         ChromaticColorProfile(
-            label = "purple", centers = intArrayOf(143), hueTolerance = 20f,
+            label = "navy", centers = intArrayOf(115), hueTolerance = 14f,
+            saturationBias = 1.0f, valueBias = 0.94f,
+            saturationScale = 0.95f
+        ),
+
+        // purple: 260-300° → Hue/2=130-150
+        // center 138로 하향 → 실제 blue-purple 경계(hue ~128)와 간격 확보
+        // hueTolerance 18로 약간 좁혀 pink 영역 침범 감소
+        ChromaticColorProfile(
+            label = "purple", centers = intArrayOf(138), hueTolerance = 18f,
             saturationBias = 1.02f, valueBias = 0.96f,
             saturationMinOverride = 22f, saturationScale = 1.3f,
             valueScale = 1.2f
@@ -324,8 +356,10 @@ class HoldColorClassifier @Inject constructor() {
         "orange" to "orange",
         "yellow" to "yellow",
         "green" to "green",
-        "cyan" to "blue",
-        "blue" to "blue",
+        "cyan" to "skyblue",
+        "skyblue" to "skyblue",
+        "blue" to "navy",
+        "navy" to "navy",
         "purple" to "purple",
         "pink" to "pink",
         "white" to "white",
@@ -347,8 +381,11 @@ class HoldColorClassifier @Inject constructor() {
         scoreThreshold: Float = 0.38f
     ): List<Hold> {
         val targetLabel = APP_COLOR_TO_LABEL[targetColorName.lowercase()] ?: targetColorName.lowercase()
-        val analyzed = analyzeAll(bitmap, holds)
-        val filtered = if (targetLabel.isBlank() || targetLabel == "all") {
+        // 특정 색상을 필터링할 때는 완화된 rejection 기준 사용
+        val analyzed = analyzeAll(bitmap, holds, relaxedRejection = true)
+
+        // ── 1차 필터: 기존 로직 ──
+        val firstPassFiltered = if (targetLabel.isBlank() || targetLabel == "all") {
             analyzed
         } else {
             analyzed.filter { result ->
@@ -356,11 +393,121 @@ class HoldColorClassifier @Inject constructor() {
             }
         }
 
+        // ── 2차 패스: 근접 동색 홀드 컨텍스트로 unknown 구제 ──
+        // 볼더링 특성: 같은 색 홀드가 가까이 모여 있으므로,
+        // 1차에서 확정된 target 홀드 근처의 unknown 홀드를 소량 가중치로 구제
+        val rescued = if (targetLabel.isNotBlank() && targetLabel != "all") {
+            rescueUnknownByProximity(
+                allAnalyzed = analyzed,
+                confirmedTargetHolds = firstPassFiltered,
+                targetLabel = targetLabel
+            )
+        } else {
+            emptyList()
+        }
+
+        val filtered = firstPassFiltered + rescued
+
+        // 상세 필터링 결과 로깅
+        val classifiedCount = analyzed.count { it.colorStatus == STATUS_CLASSIFIED }
+        val weakCount = analyzed.count { it.colorStatus == STATUS_CLASSIFIED_WEAK }
+        val unknownCount = analyzed.count { it.colorLabel == "unknown" }
+        val unknownWithTarget = analyzed.count {
+            it.colorLabel == "unknown" && it.primaryColor == targetLabel
+        }
+        val statusBreakdown = analyzed
+            .filter { it.colorLabel == "unknown" }
+            .groupBy { it.colorStatus }
+            .mapValues { it.value.size }
+
         Log.d(
             TAG,
-            "색상 필터 결과: target='$targetColorName' -> '$targetLabel', ${analyzed.size}개 분류 -> ${filtered.size}개 매칭"
+            "색상 필터 결과: target='$targetColorName' -> '$targetLabel', " +
+                "${analyzed.size}개 분류 -> ${filtered.size}개 매칭 " +
+                "(1차=${firstPassFiltered.size}, 근접구제=${rescued.size}) " +
+                "(확정=$classifiedCount, 약한=$weakCount, unknown=$unknownCount" +
+                "${if (unknownWithTarget > 0) ", unknown중_target일치=$unknownWithTarget" else ""}" +
+                "${if (statusBreakdown.isNotEmpty()) ", unknown내역=$statusBreakdown" else ""})"
         )
         return filtered.map { it.toHold() }
+    }
+
+    /**
+     * 2차 패스: 근접 동색 홀드 컨텍스트 기반 unknown 구제.
+     *
+     * 볼더링 특성상 같은 색 홀드가 루트를 따라 가까이 배치되므로,
+     * 1차에서 확정된 target 홀드 근처의 unknown 홀드를 구제한다.
+     *
+     * 조건 (모두 충족해야 함):
+     * 1. colorLabel이 "unknown"이고 1차 필터에서 탈락한 홀드
+     * 2. target color가 해당 홀드의 chromatic 분포에서 최소 0.10 이상
+     * 3. 확정된 target 홀드 중 하나 이상이 PROXIMITY_THRESHOLD 이내에 존재
+     * 4. 근접 가중치 반영 후 최소 rawColorScore >= 0.15
+     *
+     * 가중치는 소량(최대 0.12)만 부여하여 오탐을 방지한다.
+     */
+    private fun rescueUnknownByProximity(
+        allAnalyzed: List<AnalyzedHold>,
+        confirmedTargetHolds: List<AnalyzedHold>,
+        targetLabel: String
+    ): List<AnalyzedHold> {
+        if (confirmedTargetHolds.isEmpty()) return emptyList()
+
+        val confirmedSet = confirmedTargetHolds.toSet()
+        val unknowns = allAnalyzed.filter { it !in confirmedSet }
+
+        val rescued = mutableListOf<AnalyzedHold>()
+        for (unknown in unknowns) {
+            // target 색상이 이 홀드의 분포에 최소한으로라도 존재해야 함
+            val targetShare = unknown.colorDistribution[targetLabel] ?: 0f
+            if (targetShare < PROXIMITY_MIN_TARGET_SHARE) continue
+
+            // 이 홀드가 해당 색상의 primary 또는 top chromatic이어야 함
+            val isTargetTopChromatic = unknown.colorDistribution.entries
+                .filter { it.key !in setOf("unknown", "black", "white", "gray", "brown") }
+                .maxByOrNull { it.value }
+                ?.key == targetLabel
+            if (!isTargetTopChromatic) continue
+
+            // 확정 홀드와의 최소 거리 계산
+            val minDistance = confirmedTargetHolds.minOf { confirmed ->
+                bboxCenterDistance(unknown.hold.boundingBox, confirmed.hold.boundingBox)
+            }
+            if (minDistance > PROXIMITY_THRESHOLD) continue
+
+            // 근접 가중치: 가까울수록 높지만 최대 PROXIMITY_MAX_BOOST
+            val proximityFactor = clamp(1f - (minDistance / PROXIMITY_THRESHOLD))
+            val proximityBoost = proximityFactor * PROXIMITY_MAX_BOOST
+
+            // rawColorScore + 근접 가중치가 최소 기준 이상이어야 구제
+            val boostedScore = unknown.rawColorScore + proximityBoost
+            if (boostedScore < PROXIMITY_MIN_RESCUE_SCORE) continue
+
+            Log.d(
+                TAG,
+                "🔗 근접 구제: bbox=${unknown.hold.boundingBox}, " +
+                    "targetShare=$targetShare, dist=${roundTo(minDistance, 3)}, " +
+                    "boost=${roundTo(proximityBoost, 3)}, " +
+                    "rawScore=${unknown.rawColorScore} -> boosted=${roundTo(boostedScore, 3)}, " +
+                    "status=${unknown.colorStatus}"
+            )
+            rescued += unknown
+        }
+        return rescued
+    }
+
+    /**
+     * 두 BoundingBox 중심점 간의 정규화 유클리드 거리.
+     * 좌표가 0~1 정규화이므로 결과도 0~√2 범위.
+     */
+    private fun bboxCenterDistance(a: Hold.BoundingBox, b: Hold.BoundingBox): Float {
+        val acx = (a.left + a.right) / 2f
+        val acy = (a.top + a.bottom) / 2f
+        val bcx = (b.left + b.right) / 2f
+        val bcy = (b.top + b.bottom) / 2f
+        val dx = acx - bcx
+        val dy = acy - bcy
+        return sqrt(dx * dx + dy * dy)
     }
 
     fun classifySingle(bitmap: Bitmap, hold: Hold): Hold {
@@ -368,18 +515,23 @@ class HoldColorClassifier @Inject constructor() {
         return analyzeHold(bitmap, hold, calibration).toHold()
     }
 
-    private fun analyzeAll(bitmap: Bitmap, holds: List<Hold>): List<AnalyzedHold> {
+    private fun analyzeAll(
+        bitmap: Bitmap,
+        holds: List<Hold>,
+        relaxedRejection: Boolean = false
+    ): List<AnalyzedHold> {
         if (holds.isEmpty()) return emptyList()
         val calibration = buildImageCalibrationContext(bitmap)
-        return holds.map { hold -> analyzeHold(bitmap, hold, calibration) }
+        return holds.map { hold -> analyzeHold(bitmap, hold, calibration, relaxedRejection) }
     }
 
     private fun analyzeHold(
         bitmap: Bitmap,
         hold: Hold,
-        calibrationContext: CalibrationContext
+        calibrationContext: CalibrationContext,
+        relaxedRejection: Boolean = false
     ): AnalyzedHold {
-        val prepared = prepareHoldForAnalysis(hold, bitmap.width, bitmap.height)
+        val prepared = prepareHoldForAnalysis(hold, bitmap.width, bitmap.height, relaxedRejection)
         val warnings = prepared.warnings.toMutableSet()
         if (!prepared.shouldAnalyze) {
             return buildUnknownResult(
@@ -437,8 +589,9 @@ class HoldColorClassifier @Inject constructor() {
         )
 
         // 색상 분석은 채도 부스팅된 픽셀 사용:
-        // 영상 압축(H.264)으로 낮아진 채도를 복원해 chromatic 픽셀 비율 상승
-        val colorPixels = boostPixelSaturation(bboxPixels, Config.Preprocessing.SATURATION_BOOST)
+        // 적응적 부스트: 어두운/탈채도 홀드는 더 강하게, 밝은 홀드는 약하게
+        val adaptiveBoost = computeAdaptiveBoostFactor(polygonRawStats, surroundingRawStats, calibrationContext)
+        val colorPixels = boostPixelSaturation(bboxPixels, adaptiveBoost)
         val innerStats = collectRegionColorStats(colorPixels, maskData.innerMask, thresholdProfile)
         val outerStats = collectRegionColorStats(colorPixels, maskData.outerMask, thresholdProfile)
         val innerDistribution = buildColorDistribution(innerStats)
@@ -502,10 +655,8 @@ class HoldColorClassifier @Inject constructor() {
             floor(totalPixels * Config.Scoring.MIN_VALID_RATIO).toInt()
         )
 
-        // brown 판별: orange hue 범위에서 value가 낮고 saturation이 중간인 픽셀 비율
-        val brownRatio = if (totalPixels > 0) {
-            computeBrownRatio(colorPixels, maskData.innerMask, thresholdProfile)
-        } else 0f
+        // brown 판별: collectRegionColorStats에서 이미 인라인 계산된 brownCount 사용
+        val brownRatio = if (totalPixels > 0) innerStats.brownCount.toFloat() / totalPixels.toFloat() else 0f
 
         if (blackRatio >= thresholdProfile.blackWhiteRatio && whiteRatio < 0.3f) {
             colorLabel = "black"
@@ -551,29 +702,36 @@ class HoldColorClassifier @Inject constructor() {
         ) {
             warnings += WARNING_FEW_VALID_PIXELS
             if (grayRatio > 0.55f) warnings += WARNING_GRAY_DOMINANT
-            colorStatus = if (detectionReliability < Config.Scoring.LOW_RELIABILITY_FLOOR) {
-                STATUS_UNKNOWN_LOW_CONF
-            } else {
-                STATUS_UNKNOWN_LOW_CHROMA
-            }
             rawColorScore = clamp(
                 0.4f * labelShare +
                     0.2f * validPixelRatio +
                     0.2f * saturationScore +
                     0.2f * (1f - outerRingContamination)
             )
+            // chromatic 수가 적어도 primaryColor가 존재하고 share가 일정 이상이면
+            // best-effort로 분류 (target-color 필터에서 구제 가능)
+            if (primaryColor != null && labelShare >= 0.20f && !grayRatio.let { it > 0.55f }) {
+                colorLabel = primaryColor
+                colorStatus = STATUS_CLASSIFIED_WEAK
+            } else {
+                colorStatus = if (detectionReliability < Config.Scoring.LOW_RELIABILITY_FLOOR) {
+                    STATUS_UNKNOWN_LOW_CONF
+                } else {
+                    STATUS_UNKNOWN_LOW_CHROMA
+                }
+            }
         } else {
             val dominanceScore = clamp(
                 (topMargin - Config.Scoring.MIXED_COLOR_MARGIN) / 0.25f
             )
             rawColorScore = clamp(
-                0.34f * labelShare +
-                    0.18f * peakShare +
+                0.38f * labelShare +
+                    0.10f * peakShare +
                     0.16f * dominanceScore +
-                    0.12f * validPixelRatio +
-                    0.1f * saturationScore +
-                    0.05f * maskData.innerMaskRatio +
-                    0.05f * (1f - outerRingContamination)
+                    0.14f * validPixelRatio +
+                    0.10f * saturationScore +
+                    0.06f * maskData.innerMaskRatio +
+                    0.06f * (1f - outerRingContamination)
             )
 
             when {
@@ -584,14 +742,35 @@ class HoldColorClassifier @Inject constructor() {
                 labelShare < Config.Scoring.MIN_PRIMARY_SHARE ||
                     peakShare < Config.Scoring.MIN_PEAK_SHARE -> {
                     warnings += WARNING_AMBIGUOUS_HUE
-                    colorStatus = STATUS_UNKNOWN_LOW_CHROMA
+                    // share가 낮아도 primary가 명확하면 weak 분류 (target-color 필터에서 구제)
+                    if (labelShare >= 0.18f && topMargin >= 0.04f) {
+                        colorLabel = primaryColor
+                        colorStatus = STATUS_CLASSIFIED_WEAK
+                    } else {
+                        colorStatus = STATUS_UNKNOWN_LOW_CHROMA
+                    }
                 }
                 topMargin < Config.Scoring.MIN_PRIMARY_MARGIN -> {
                     warnings += WARNING_MIXED_COLOR
-                    colorStatus = STATUS_MIXED_COLOR
+                    // margin이 좁아도 labelShare가 충분히 높으면 primary가 맞을 가능성이 높음
+                    if (labelShare >= 0.30f) {
+                        colorLabel = primaryColor
+                        colorStatus = STATUS_CLASSIFIED
+                    } else if (labelShare >= 0.20f) {
+                        colorLabel = primaryColor
+                        colorStatus = STATUS_CLASSIFIED_WEAK
+                    } else {
+                        colorStatus = STATUS_MIXED_COLOR
+                    }
                 }
                 outerRingContamination >= Config.Scoring.CONTAMINATION_REJECT -> {
-                    colorStatus = STATUS_UNKNOWN_CONTAMINATED
+                    // 오염이 높아도 inner 색 분포가 강하면 weak 분류 (구제 가능)
+                    if (labelShare >= 0.30f && topMargin >= 0.10f) {
+                        colorLabel = primaryColor
+                        colorStatus = STATUS_CLASSIFIED_WEAK
+                    } else {
+                        colorStatus = STATUS_UNKNOWN_CONTAMINATED
+                    }
                 }
                 else -> {
                     colorLabel = primaryColor
@@ -602,14 +781,20 @@ class HoldColorClassifier @Inject constructor() {
 
         if (detectionReliability < Config.Scoring.CONFIDENT_RELIABILITY_FLOOR) {
             warnings += WARNING_LOW_DETECTION_RELIABILITY
-            if (colorStatus == STATUS_CLASSIFIED) {
+            // rawColorScore가 충분히 높으면 색상 분류 결과를 신뢰하고 리셋하지 않음
+            // detection 품질이 낮아도 색상 자체는 명확할 수 있음
+            if (colorStatus == STATUS_CLASSIFIED && rawColorScore < 0.35f) {
                 colorLabel = "unknown"
                 colorStatus = if (hold.confidence < Config.Detection.LOW_CONFIDENCE) {
                     STATUS_UNKNOWN_LOW_CONF
                 } else {
                     STATUS_UNKNOWN_LOW_QUALITY
                 }
+            } else if (colorStatus == STATUS_CLASSIFIED_WEAK && rawColorScore < 0.25f) {
+                colorLabel = "unknown"
+                colorStatus = STATUS_UNKNOWN_LOW_QUALITY
             }
+            // STATUS_CLASSIFIED_WEAK + rawColorScore >= 0.25이면 분류 유지 (구제 가능)
         }
 
         rawColorScore = roundTo(rawColorScore, 3)
@@ -619,6 +804,24 @@ class HoldColorClassifier @Inject constructor() {
             colorScore = min(colorScore, Config.Scoring.UNKNOWN_SCORE_CAP)
         }
         colorScore = roundTo(colorScore, 3)
+
+        // 진단 로깅: unknown이거나 weak 분류인 경우 상세 정보 출력
+        if (colorLabel == "unknown" || colorStatus == STATUS_CLASSIFIED_WEAK) {
+            val topDist = innerDistribution.entries
+                .sortedByDescending { it.value }
+                .take(3)
+                .joinToString { "${it.key}=${it.value}" }
+            Log.d(
+                TAG,
+                "⚠️ [$colorStatus] bbox=${hold.boundingBox}, " +
+                    "label=$colorLabel, primary=$primaryColor, " +
+                    "score=$colorScore(raw=$rawColorScore), " +
+                    "validRatio=$validPixelRatio, reliability=${roundTo(detectionReliability, 3)}, " +
+                    "dist=[$topDist], " +
+                    "innerMaskRatio=${maskData.innerMaskRatio}, " +
+                    "warnings=$warnings"
+            )
+        }
 
         return AnalyzedHold(
             hold = hold,
@@ -656,7 +859,8 @@ class HoldColorClassifier @Inject constructor() {
     private fun prepareHoldForAnalysis(
         hold: Hold,
         imageWidth: Int,
-        imageHeight: Int
+        imageHeight: Int,
+        relaxedRejection: Boolean = false
     ): PreparedHold {
         val fallbackBounds = resolveFallbackBounds(hold, imageWidth, imageHeight)
         if (fallbackBounds == null) {
@@ -714,20 +918,25 @@ class HoldColorClassifier @Inject constructor() {
         if (fillRatio < Config.Detection.MIN_FILL_RATIO) warnings += WARNING_LOW_FILL_RATIO
         if (edgeTouchRatio >= Config.Detection.EDGE_TOUCH_WARN_RATIO) warnings += WARNING_EDGE_TOUCH
 
+        // Target-color 필터링 시 완화된 기준: 작은/얇은/가장자리 홀드도 분석 대상으로 포함
+        val areaThreshold = if (relaxedRejection) 60f else Config.Detection.HARD_REJECT_POLYGON_AREA
+        val fillThreshold = if (relaxedRejection) 0.04f else Config.Detection.HARD_REJECT_FILL_RATIO
+        val edgeThreshold = if (relaxedRejection) 0.65f else Config.Detection.EDGE_TOUCH_REJECT_RATIO
+
         when {
             hold.confidence < Config.Detection.HARD_REJECT_CONFIDENCE -> {
                 shouldAnalyze = false
                 exclusionReason = STATUS_UNKNOWN_LOW_CONF
             }
-            polygonArea < Config.Detection.HARD_REJECT_POLYGON_AREA -> {
+            polygonArea < areaThreshold -> {
                 shouldAnalyze = false
                 exclusionReason = STATUS_UNKNOWN_LOW_QUALITY
             }
-            fillRatio < Config.Detection.HARD_REJECT_FILL_RATIO -> {
+            fillRatio < fillThreshold -> {
                 shouldAnalyze = false
                 exclusionReason = STATUS_UNKNOWN_LOW_QUALITY
             }
-            edgeTouchRatio >= Config.Detection.EDGE_TOUCH_REJECT_RATIO -> {
+            edgeTouchRatio >= edgeThreshold -> {
                 shouldAnalyze = false
                 exclusionReason = STATUS_UNKNOWN_LOW_QUALITY
             }
@@ -904,12 +1113,26 @@ class HoldColorClassifier @Inject constructor() {
             resolvedRadius--
         }
 
+        // Outer ring: dilate the mask outward by the same erosion radius,
+        // then take (dilatedMask && !mask) to sample actual wall pixels
+        // instead of the hold's own edge pixels.
+        // Fallback: if dilation yields nothing (mask fills entire bbox), use inner edge ring.
+        val dilatedMask = createDilatedMask(mask, bbox.width, bbox.height, max(resolvedRadius, 2))
         val outerMask = BooleanArray(mask.size)
         var outerPixels = 0
         for (index in mask.indices) {
-            if (mask[index] && !innerMask[index]) {
+            if (dilatedMask[index] && !mask[index]) {
                 outerMask[index] = true
                 outerPixels++
+            }
+        }
+        // Fallback: if dilation ring is empty (polygon fills bbox), use eroded edge ring
+        if (outerPixels == 0) {
+            for (index in mask.indices) {
+                if (mask[index] && !innerMask[index]) {
+                    outerMask[index] = true
+                    outerPixels++
+                }
             }
         }
 
@@ -930,11 +1153,25 @@ class HoldColorClassifier @Inject constructor() {
         maskPixels: Int
     ): Int {
         val minDimension = max(1, min(bbox.width, bbox.height))
-        val relativeRadius = round(minDimension * Config.Sampling.INNER_ERODE_RATIO).toInt()
-        val areaRadius = round(sqrt(maskPixels.toFloat()) / 18f).toInt()
+        val maxDimension = max(1, max(bbox.width, bbox.height))
+
+        // 종횡비 보정: 초승달/얇은 홀드(aspect > 2.5)는 에로전을 줄여 내부 픽셀 보존
+        val aspectRatio = maxDimension.toFloat() / minDimension.toFloat()
+        val aspectPenalty = if (aspectRatio > 2.5f) {
+            clamp(1f - (aspectRatio - 2.5f) * 0.15f, 0.4f, 1f)
+        } else {
+            1f
+        }
+
+        val relativeRadius = round(minDimension * Config.Sampling.INNER_ERODE_RATIO * aspectPenalty).toInt()
+        val areaRadius = round(sqrt(maskPixels.toFloat()) / 18f * aspectPenalty).toInt()
+
+        // 매우 작은 마스크(<80px)는 에로전 없이 분석 허용
+        val minRadius = if (maskPixels < 80) 0 else Config.Sampling.MIN_INNER_ERODE_PX
+
         return clampInt(
             max(relativeRadius, areaRadius),
-            Config.Sampling.MIN_INNER_ERODE_PX,
+            minRadius,
             Config.Sampling.MAX_INNER_ERODE_PX
         )
     }
@@ -965,6 +1202,34 @@ class HoldColorClassifier @Inject constructor() {
             }
         }
         return eroded
+    }
+
+    /**
+     * Dilation: pixel is set if ANY pixel in its radius neighborhood is set.
+     * Uses integral image: sum > 0 means at least one mask pixel exists in the window.
+     */
+    private fun createDilatedMask(
+        mask: BooleanArray,
+        width: Int,
+        height: Int,
+        radius: Int
+    ): BooleanArray {
+        if (mask.isEmpty()) return BooleanArray(0)
+        if (radius <= 0) return mask.copyOf()
+
+        val integral = buildMaskIntegralImage(mask, width, height)
+        val dilated = BooleanArray(mask.size)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val x1 = max(0, x - radius)
+                val y1 = max(0, y - radius)
+                val x2 = min(width - 1, x + radius)
+                val y2 = min(height - 1, y + radius)
+                val sum = sumIntegralRect(integral, width, x1, y1, x2, y2)
+                if (sum > 0) dilated[y * width + x] = true
+            }
+        }
+        return dilated
     }
 
     private fun buildMaskIntegralImage(
@@ -1009,6 +1274,12 @@ class HoldColorClassifier @Inject constructor() {
         return total
     }
 
+    /**
+     * 이미지 전체에서 밝기/채도 통계를 수집하여 캘리브레이션 컨텍스트 생성.
+     * 중앙 가중치(gaussian-like): 벽은 보통 이미지 중앙에 위치하므로,
+     * 가장자리(천장 조명, 바닥 매트)의 영향을 줄이기 위해 중심 픽셀에 더 높은 가중치 부여.
+     * 분산(varianceV): 고대비 장면(밝은 조명+어두운 그림자)과 균일 조명 구분용.
+     */
     private fun buildImageCalibrationContext(bitmap: Bitmap): CalibrationContext {
         val imageWidth = bitmap.width
         val imageHeight = bitmap.height
@@ -1016,6 +1287,7 @@ class HoldColorClassifier @Inject constructor() {
             return CalibrationContext(
                 meanV = Config.Hsv.Calibration.REFERENCE_MEAN_VALUE,
                 meanS = 96f,
+                varianceV = 0f,
                 sampleStep = 1
             )
         }
@@ -1024,27 +1296,47 @@ class HoldColorClassifier @Inject constructor() {
         bitmap.getPixels(pixels, 0, imageWidth, 0, 0, imageWidth, imageHeight)
         val step = max(4, floor(min(imageWidth, imageHeight) / 160f).toInt())
 
-        var count = 0
-        var valueSum = 0f
-        var saturationSum = 0f
+        val cx = imageWidth / 2f
+        val cy = imageHeight / 2f
+        // sigma = 40% of half-dimension → center 60% gets ~86% of weight
+        val sigmaX = imageWidth * 0.4f
+        val sigmaY = imageHeight * 0.4f
+        val invSigmaX2 = if (sigmaX > 0f) 1f / (2f * sigmaX * sigmaX) else 0f
+        val invSigmaY2 = if (sigmaY > 0f) 1f / (2f * sigmaY * sigmaY) else 0f
+
+        var weightSum = 0f
+        var weightedValueSum = 0f
+        var weightedSatSum = 0f
+        var weightedValueSqSum = 0f
         for (y in 0 until imageHeight step step) {
+            val dy = y.toFloat() - cy
+            val yGauss = exp(-(dy * dy * invSigmaY2))
             val rowOffset = y * imageWidth
             for (x in 0 until imageWidth step step) {
+                val dx = x.toFloat() - cx
+                val w = yGauss * exp(-(dx * dx * invSigmaX2))
                 val pixel = pixels[rowOffset + x]
                 val hsv = rgbToHsv180(
                     r = ((pixel shr 16) and 0xFF).toFloat(),
                     g = ((pixel shr 8) and 0xFF).toFloat(),
                     b = (pixel and 0xFF).toFloat()
                 )
-                valueSum += hsv.v
-                saturationSum += hsv.s
-                count++
+                weightedValueSum += hsv.v * w
+                weightedSatSum += hsv.s * w
+                weightedValueSqSum += hsv.v * hsv.v * w
+                weightSum += w
             }
         }
 
+        val meanV = if (weightSum > 0f) weightedValueSum / weightSum else Config.Hsv.Calibration.REFERENCE_MEAN_VALUE
+        val meanS = if (weightSum > 0f) weightedSatSum / weightSum else 96f
+        // variance = E[V^2] - E[V]^2
+        val varianceV = if (weightSum > 0f) max(0f, (weightedValueSqSum / weightSum) - (meanV * meanV)) else 0f
+
         return CalibrationContext(
-            meanV = if (count > 0) valueSum / count.toFloat() else Config.Hsv.Calibration.REFERENCE_MEAN_VALUE,
-            meanS = if (count > 0) saturationSum / count.toFloat() else 96f,
+            meanV = meanV,
+            meanS = meanS,
+            varianceV = varianceV,
             sampleStep = step
         )
     }
@@ -1097,16 +1389,30 @@ class HoldColorClassifier @Inject constructor() {
             Config.Hsv.Calibration.BRIGHTNESS_SHIFT_LIMIT
         )
 
+        // Variance-based threshold adjustment:
+        // stdDev ~40 = typical uniform lighting, ~65+ = high contrast (bright lights + dark shadows)
+        // varianceSpread: 0.0 = uniform, 1.0 = very high contrast
+        // High variance → widen black/white gap (avoid misclassifying shadows/highlights)
+        // Low variance → tighten thresholds for finer precision
+        val stdDevV = sqrt(max(0f, globalStats.varianceV))
+        val varianceSpread = clamp((stdDevV - 40f) / 40f)  // 0 at stdDev=40, 1 at stdDev=80+
+
         val calibratedChromaticSMin = clamp(
             Config.Hsv.Base.CHROMATIC_S_MIN + (brightnessShift * 0.35f),
             Config.Hsv.Base.CHROMATIC_S_MIN - Config.Hsv.Calibration.SATURATION_SHIFT_LIMIT,
             Config.Hsv.Base.CHROMATIC_S_MIN + Config.Hsv.Calibration.SATURATION_SHIFT_LIMIT
         )
-        // graySMax는 항상 chromaticSMin보다 낮아야 함 (역전 시 gray 체크가 chromatic을 삼킴)
+        // graySMax는 항상 chromaticSMin - 1 이어야 함 (gap=0 유지, 역전 방지)
+        // 기존 -4f gap이 unknown 영역을 만들었으므로 -1f로 변경
         val calibratedGraySMax = min(
             clamp(Config.Hsv.Base.GRAY_S_MAX + (brightnessShift * 0.12f), 15f, 40f),
-            calibratedChromaticSMin - 4f
+            calibratedChromaticSMin - 1f
         )
+
+        // High variance: lower black cutoff (more tolerant of shadows)
+        //                 raise white cutoff (more tolerant of highlights)
+        val varianceBlackAdjust = -varianceSpread * 8f   // up to -8 at max variance
+        val varianceWhiteAdjust = varianceSpread * 8f    // up to +8 at max variance
 
         return ThresholdProfile(
             chromaticSMin = calibratedChromaticSMin,
@@ -1118,17 +1424,17 @@ class HoldColorClassifier @Inject constructor() {
                 250f
             ),
             blackValueCutoff = clamp(
-                Config.Hsv.Base.BLACK_VALUE_CUTOFF + (brightnessShift * 0.26f),
-                Config.Hsv.Base.BLACK_VALUE_CUTOFF - Config.Hsv.Calibration.BLACK_SHIFT_LIMIT,
+                Config.Hsv.Base.BLACK_VALUE_CUTOFF + (brightnessShift * 0.26f) + varianceBlackAdjust,
+                Config.Hsv.Base.BLACK_VALUE_CUTOFF - Config.Hsv.Calibration.BLACK_SHIFT_LIMIT - 8f,
                 Config.Hsv.Base.BLACK_VALUE_CUTOFF + Config.Hsv.Calibration.BLACK_SHIFT_LIMIT
             ),
             blackSMax = Config.Hsv.Base.BLACK_S_MAX,
             whiteValueCutoff = clamp(
-                Config.Hsv.Base.WHITE_VALUE_CUTOFF + (brightnessShift * 0.4f),
+                Config.Hsv.Base.WHITE_VALUE_CUTOFF + (brightnessShift * 0.4f) + varianceWhiteAdjust,
                 Config.Hsv.Base.WHITE_VALUE_CUTOFF - Config.Hsv.Calibration.WHITE_SHIFT_LIMIT,
-                Config.Hsv.Base.WHITE_VALUE_CUTOFF + Config.Hsv.Calibration.WHITE_SHIFT_LIMIT
+                Config.Hsv.Base.WHITE_VALUE_CUTOFF + Config.Hsv.Calibration.WHITE_SHIFT_LIMIT + 8f
             ),
-            whiteSMax = clamp(Config.Hsv.Base.WHITE_S_MAX + (brightnessShift * 0.05f), 18f, 30f),
+            whiteSMax = clamp(Config.Hsv.Base.WHITE_S_MAX + (brightnessShift * 0.08f), 22f, 42f),
             blackWhiteRatio = Config.Hsv.Base.BLACK_WHITE_RATIO,
             calibration = ThresholdCalibration(
                 brightnessShift = brightnessShift,
@@ -1151,6 +1457,7 @@ class HoldColorClassifier @Inject constructor() {
         var blackCount = 0
         var whiteCount = 0
         var grayCount = 0
+        var brownCount = 0
         var unknownCount = 0
         var validChromaticCount = 0
         var saturationAccumulator = 0f
@@ -1171,12 +1478,18 @@ class HoldColorClassifier @Inject constructor() {
             valueAccumulator += hsv.v / 255f
             rawSaturationAccumulator += hsv.s / 255f
 
+            // Brown detection inline: checked BEFORE chromatic classification
+            // to avoid double-counting. Brown pixels have orange/red hue but low value.
+            if (isBrownPixel(hsv, thresholds)) {
+                brownCount++
+                continue
+            }
+
             when {
                 isWhitePixel(hsv, thresholds) -> whiteCount++
                 isBlackPixel(hsv, thresholds) -> blackCount++
-                isGrayPixel(hsv, thresholds) -> grayCount++
-                !isChromaticPixel(hsv, thresholds) -> unknownCount++
-                else -> {
+                isChromaticPixel(hsv, thresholds) -> {
+                    // 완전한 chromatic 픽셀: 가중치 1.0
                     val membership = getChromaticMembership(hsv, thresholds)
                     if (membership == null) {
                         unknownCount++
@@ -1191,6 +1504,28 @@ class HoldColorClassifier @Inject constructor() {
                         familyCounts[membership.topLabel] = (familyCounts[membership.topLabel] ?: 0) + 1
                     }
                 }
+                isSoftChromaticPixel(hsv, thresholds) -> {
+                    // 경계 픽셀 (채도가 chromaticSMin 바로 아래): 부분 멤버십
+                    // 그림자 속 동일 색상 홀드에서 gray 오분류 방지
+                    val membership = getChromaticMembership(hsv, thresholds)
+                    if (membership != null) {
+                        val softWeight = (hsv.s - (thresholds.chromaticSMin - Config.ChromaticSoft.SOFT_MARGIN)) /
+                            Config.ChromaticSoft.SOFT_MARGIN
+                        val clampedWeight = clamp(softWeight, 0.1f, 0.8f)
+                        validChromaticCount++
+                        saturationAccumulator += hsv.s / 255f * clampedWeight
+                        val hueBin = clampInt(floor(hsv.h).toInt(), 0, 179)
+                        hueHistogram[hueBin] += 1
+                        membership.normalizedWeights.forEach { (label, weight) ->
+                            colorWeights[label] = (colorWeights[label] ?: 0f) + weight * clampedWeight
+                        }
+                        familyCounts[membership.topLabel] = (familyCounts[membership.topLabel] ?: 0) + 1
+                    } else {
+                        grayCount++
+                    }
+                }
+                isGrayPixel(hsv, thresholds) -> grayCount++
+                else -> unknownCount++
             }
         }
 
@@ -1202,12 +1537,25 @@ class HoldColorClassifier @Inject constructor() {
             blackCount = blackCount,
             whiteCount = whiteCount,
             grayCount = grayCount,
+            brownCount = brownCount,
             unknownCount = unknownCount,
             validChromaticCount = validChromaticCount,
             saturationAccumulator = saturationAccumulator,
             rawSaturationAccumulator = rawSaturationAccumulator,
             valueAccumulator = valueAccumulator
         )
+    }
+
+    /**
+     * Brown 픽셀 판별: orange/red hue 범위에서 낮은 value + 중간 saturation.
+     * 이 함수는 collectRegionColorStats 루프 내에서 호출되어 별도 pass를 제거함.
+     */
+    private fun isBrownPixel(hsv: Hsv, thresholds: ThresholdProfile): Boolean {
+        val hueInBrownRange = (hsv.h in 5f..25f) || hsv.h >= 170f
+        val valueLow = hsv.v <= Config.Hsv.Base.BROWN_VALUE_MAX
+        val satMid = hsv.s >= Config.Hsv.Base.BROWN_S_MIN && hsv.s <= 180f
+        val notBlack = hsv.v > thresholds.blackValueCutoff
+        return hueInBrownRange && valueLow && satMid && notBlack
     }
 
     private fun isWhitePixel(hsv: Hsv, thresholds: ThresholdProfile): Boolean =
@@ -1225,6 +1573,19 @@ class HoldColorClassifier @Inject constructor() {
         hsv.s >= thresholds.chromaticSMin &&
             hsv.v >= thresholds.lowValueCutoff &&
             hsv.v <= thresholds.highValueCutoff
+
+    /**
+     * Soft chromatic: 채도가 chromaticSMin 바로 아래(margin 범위)인 경계 픽셀.
+     * 그림자 속 동일 색상이 gray로 잘못 분류되는 것을 방지.
+     * isChromaticPixel이 false일 때만 호출됨.
+     */
+    private fun isSoftChromaticPixel(hsv: Hsv, thresholds: ThresholdProfile): Boolean {
+        val softMin = thresholds.chromaticSMin - Config.ChromaticSoft.SOFT_MARGIN
+        return hsv.s >= softMin &&
+            hsv.s < thresholds.chromaticSMin &&
+            hsv.v >= thresholds.lowValueCutoff &&
+            hsv.v <= thresholds.highValueCutoff
+    }
 
     private fun getChromaticMembership(
         hsv: Hsv,
@@ -1266,9 +1627,12 @@ class HoldColorClassifier @Inject constructor() {
                 clamp((hsv.v - thresholds.lowValueCutoff) / vRange)
             }
 
-            val weight = (hueScore * hueScore) *
-                (0.55f + (0.45f * saturationFactor * profile.saturationBias)) *
-                (0.65f + (0.35f * valueFactor * profile.valueBias))
+            // hue 매칭이 강할 때(>0.6) 보너스를 줘서 S/V가 낮아도 정확한 hue가 보상받도록
+            val hueBoost = if (hueScore > 0.6f) 1f + 0.15f * (hueScore - 0.6f) / 0.4f else 1f
+            // 바닥값을 올려(0.55→0.60, 0.65→0.70) S/V 저하로 인한 과도한 패널티 방지
+            val weight = (hueScore * hueScore * hueBoost) *
+                (0.60f + (0.40f * saturationFactor * profile.saturationBias)) *
+                (0.70f + (0.30f * valueFactor * profile.valueBias))
 
             rawWeights[profile.label] = weight
             totalWeight += weight
@@ -1298,7 +1662,9 @@ class HoldColorClassifier @Inject constructor() {
         distribution["black"] = roundTo(stats.blackCount.toFloat() / total, 3)
         // gray를 distribution에 명시적으로 포함
         distribution["gray"] = roundTo(stats.grayCount.toFloat() / total, 3)
-        // unknown은 grayCount를 제외한 순수 unknown만 포함
+        // brown을 distribution에 명시적으로 포함
+        distribution["brown"] = roundTo(stats.brownCount.toFloat() / total, 3)
+        // unknown은 grayCount/brownCount를 제외한 순수 unknown만 포함
         distribution["unknown"] = roundTo(stats.unknownCount.toFloat() / total, 3)
         return distribution
     }
@@ -1327,13 +1693,30 @@ class HoldColorClassifier @Inject constructor() {
             return clamp(outerDistribution["unknown"] ?: 1f)
         }
 
+        // 벽 색상(gray/black/white)은 오염이 아니라 배경이므로 제외하고 계산
+        // 클라이밍 벽은 대부분 gray/dark → achromatic이 높다고 오염으로 판정하면 안 됨
+        val achromaticLabels = setOf("black", "gray", "white")
+        val achromaticShare = achromaticLabels.sumOf { (outerDistribution[it] ?: 0f).toDouble() }.toFloat()
         val primaryShare = outerDistribution[primaryColor] ?: 0f
-        val competitorShare = getTopDistributionEntries(outerDistribution, 2, setOf("unknown"))
-            .firstOrNull { it.label != primaryColor }
+
+        // 인접 동색 홀드 보정: outer ring에 primary color가 많으면 인접 동색 홀드 존재
+        // 오염이 아니라 확인(confirmation)이므로 effective share에 보너스 부여
+        val adjacencyBonus = when {
+            primaryShare >= 0.20f -> primaryShare * 0.4f
+            primaryShare >= 0.10f -> primaryShare * 0.2f
+            else -> 0f
+        }
+
+        // primary + achromatic을 제외한 나머지가 실제 오염 후보
+        val excludedLabels = achromaticLabels + setOf("unknown", primaryColor)
+        val competitorShare = getTopDistributionEntries(outerDistribution, 2, excludedLabels)
+            .firstOrNull()
             ?.share ?: 0f
+        // achromatic을 배경으로 간주해 primaryShare에 합산 + adjacency bonus
+        val effectivePrimaryShare = min(1f, primaryShare + achromaticShare + adjacencyBonus)
 
         return clamp(
-            (0.55f * (1f - primaryShare)) +
+            (0.55f * (1f - effectivePrimaryShare)) +
                 (0.25f * (outerDistribution["unknown"] ?: 0f)) +
                 (0.2f * max(0f, competitorShare - primaryShare))
         )
@@ -1367,7 +1750,22 @@ class HoldColorClassifier @Inject constructor() {
             0.08f,
             Config.Sampling.THIN_INNER_MASK_RATIO + 0.18f
         )
-        return clamp(confidenceScore * areaScore * fillScore * edgeScore * innerScore)
+        // 개별 점수에 floor(0.3)를 적용해 단일 요소가 전체 신뢰도를 붕괴시키지 않도록 함.
+        // 가중 기하평균: confidence(40%) + area(20%) + fill(15%) + edge(15%) + inner(10%)
+        val scores = floatArrayOf(
+            max(confidenceScore, 0.3f),
+            max(areaScore, 0.3f),
+            max(fillScore, 0.3f),
+            max(edgeScore, 0.3f),
+            max(innerScore, 0.3f)
+        )
+        val weights = floatArrayOf(0.40f, 0.20f, 0.15f, 0.15f, 0.10f)
+        // weighted geometric mean: product(score_i ^ weight_i)
+        var logSum = 0f
+        for (i in scores.indices) {
+            logSum += weights[i] * ln(scores[i])
+        }
+        return clamp(exp(logSum))
     }
 
     private fun passesStrictColorFilter(
@@ -1375,66 +1773,118 @@ class HoldColorClassifier @Inject constructor() {
         selectedColor: String,
         minColorScore: Float
     ): Boolean {
-        if (result.colorLabel != selectedColor) return false
-        if (result.colorStatus != STATUS_CLASSIFIED) return false
-        if (result.colorScore < minColorScore) return false
-
-        // distribution 체크와 primaryColor 체크를 OR 조건으로 완화:
-        // colorWeights는 chromatic 픽셀의 normalized 합산이라 단일 색도 52% 초과가 어렵기 때문
-        val distributionOk = (result.colorDistribution[selectedColor] ?: 0f) >= Config.Filtering.STRICT_DISTRIBUTION_FLOOR
-        val primaryOk = result.primaryColor == selectedColor
-        if (!distributionOk && !primaryOk) return false
-
         val achromaticColors = setOf("black", "white", "gray", "brown")
-        if (selectedColor !in achromaticColors && result.validPixelRatio < Config.Scoring.MIN_FILTER_VALID_RATIO) {
+
+        // ── Tier 1: 확정 분류 (STATUS_CLASSIFIED) ──
+        if (result.colorLabel == selectedColor && result.colorStatus == STATUS_CLASSIFIED) {
+            if (result.primaryColor == selectedColor) {
+                // primary 일치 → 완화된 임계값
+                val relaxedScoreThreshold = minColorScore * 0.70f
+                if (result.colorScore < relaxedScoreThreshold) return false
+                if (selectedColor !in achromaticColors && result.validPixelRatio < 0.05f) return false
+                return true
+            }
+            // primary 불일치이지만 label은 맞음 → 기존 strict
+            if (result.colorScore < minColorScore) return false
+            val distributionOk = (result.colorDistribution[selectedColor] ?: 0f) >= Config.Filtering.STRICT_DISTRIBUTION_FLOOR
+            val primaryOk = result.primaryColor == selectedColor
+            if (!distributionOk && !primaryOk) return false
+            if (selectedColor !in achromaticColors && result.validPixelRatio < Config.Scoring.MIN_FILTER_VALID_RATIO) return false
+            return true
+        }
+
+        // ── Tier 2: 약한 분류 (STATUS_CLASSIFIED_WEAK) ──
+        // 경계 영역의 홀드: unknown 직전이지만 primary color는 정확
+        if (result.colorLabel == selectedColor && result.colorStatus == STATUS_CLASSIFIED_WEAK) {
+            if (result.primaryColor == selectedColor && result.colorScore >= minColorScore * 0.55f) {
+                if (selectedColor !in achromaticColors && result.validPixelRatio < 0.04f) return false
+                return true
+            }
             return false
         }
-        return true
-    }
 
-    /**
-     * Brown 픽셀 비율 계산: orange/red hue 범위에서 낮은 value와 중간 saturation을 가진 픽셀
-     * (조명을 받지 못한 갈색, 나무색 홀드를 감지)
-     */
-    private fun computeBrownRatio(
-        pixels: IntArray,
-        mask: BooleanArray,
-        thresholds: ThresholdProfile
-    ): Float {
-        var brownCount = 0
-        var totalMasked = 0
-        for (index in mask.indices) {
-            if (!mask[index]) continue
-            totalMasked++
-            val pixel = pixels[index]
-            val hsv = rgbToHsv180(
-                r = ((pixel shr 16) and 0xFF).toFloat(),
-                g = ((pixel shr 8) and 0xFF).toFloat(),
-                b = (pixel and 0xFF).toFloat()
-            )
-            // brown: orange/red hue(0~25) + 낮은 value + 중간 saturation
-            val hueInBrownRange = hsv.h <= 25f || hsv.h >= 165f // orange~red Hue/2 범위
-            val valueLow = hsv.v <= Config.Hsv.Base.BROWN_VALUE_MAX
-            val satMid = hsv.s >= Config.Hsv.Base.BROWN_S_MIN
-            val notBlack = hsv.v > thresholds.blackValueCutoff
-            if (hueInBrownRange && valueLow && satMid && notBlack) brownCount++
+        // ── Tier 3: unknown 구제 ──
+        // colorLabel이 unknown이지만, 색상 분포에서 target color 증거가 충분한 경우 구제
+        if (result.colorLabel == "unknown" && result.primaryColor == selectedColor) {
+            val targetDistShare = result.colorDistribution[selectedColor] ?: 0f
+            // primary가 target이고, 분포 상 가장 높은 chromatic color가 target이어야 함
+            val isTopChromatic = result.colorDistribution.entries
+                .filter { it.key !in setOf("unknown", "black", "white", "gray", "brown") }
+                .maxByOrNull { it.value }
+                ?.let { it.key == selectedColor && it.value >= 0.15f }
+                ?: false
+
+            if (isTopChromatic && result.rawColorScore >= 0.20f) {
+                Log.d(TAG, "🔄 unknown 홀드 구제: bbox=${result.hold.boundingBox}, " +
+                    "primary=$selectedColor, dist=${targetDistShare}, " +
+                    "rawScore=${result.rawColorScore}, status=${result.colorStatus}")
+                return true
+            }
         }
-        return if (totalMasked > 0) brownCount.toFloat() / totalMasked.toFloat() else 0f
+
+        return false
+    }
+
+    // computeBrownRatio removed: brown detection merged into collectRegionColorStats
+    // via isBrownPixel() to avoid redundant second pass over all pixels.
+
+    /**
+     * 홀드별 적응적 채도 부스트 계수 산출.
+     * 어두운 홀드(low V)와 탈채도 홀드(low S)에는 더 강한 부스트를 적용하여
+     * 동일 물리 색상이 조명 차이로 놓치는 현상을 방지.
+     */
+    private fun computeAdaptiveBoostFactor(
+        localStats: RawMaskStats,
+        surroundingStats: RawMaskStats,
+        globalStats: CalibrationContext
+    ): Float {
+        val effectiveMeanV = when {
+            localStats.pixelCount >= 16 -> localStats.meanV
+            surroundingStats.pixelCount >= 16 -> surroundingStats.meanV
+            else -> globalStats.meanV
+        }
+        val effectiveMeanS = when {
+            localStats.pixelCount >= 16 -> localStats.meanS
+            surroundingStats.pixelCount >= 16 -> surroundingStats.meanS
+            else -> globalStats.meanS
+        }
+
+        val darknessFactor = Config.Hsv.Calibration.REFERENCE_MEAN_VALUE / max(effectiveMeanV, 40f)
+        val desaturationFactor = 96f / max(effectiveMeanS, 30f)
+
+        val rawBoost = Config.Preprocessing.SATURATION_BOOST * (
+            Config.Preprocessing.DARKNESS_WEIGHT * darknessFactor +
+                Config.Preprocessing.DESATURATION_WEIGHT * desaturationFactor
+        )
+
+        return clamp(
+            rawBoost,
+            Config.Preprocessing.MIN_ADAPTIVE_BOOST,
+            Config.Preprocessing.MAX_ADAPTIVE_BOOST
+        )
     }
 
     /**
-     * 픽셀 배열의 채도를 factor 배 증폭 (H, V는 유지 / S만 조정)
-     * factor=1.0이면 원본 그대로, 1.3이면 채도 30% 상승
+     * 픽셀 배열의 채도를 비선형(power curve) 증폭 (H, V는 유지 / S만 조정)
+     * factor=1.0이면 원본 그대로.
+     * 공식: boostedS = 255 * (1 - (1 - S/255)^factor)
+     * → S=0 → 0, S=255 → 255 (경계 보존, 클램핑 불필요)
+     * → 낮은 채도(S=50): 1-(1-0.196)^1.3 ≈ 0.244 → 62 (24% 증가)
+     * → 높은 채도(S=200): 1-(1-0.784)^1.3 ≈ 0.818 → 209 (4.5% 증가)
+     * → orange(S=180)과 red(S=190)의 상대적 차이가 보존됨
      */
     private fun boostPixelSaturation(pixels: IntArray, factor: Float): IntArray {
         if (factor <= 1f) return pixels
+        val factorD = factor.toDouble()
         return IntArray(pixels.size) { i ->
             val pixel = pixels[i]
             val r = ((pixel shr 16) and 0xFF).toFloat()
             val g = ((pixel shr 8) and 0xFF).toFloat()
             val b = (pixel and 0xFF).toFloat()
             val hsv = rgbToHsv180(r, g, b)
-            val boostedS = min(hsv.s * factor, 255f)
+            // Power curve: maps [0,255]→[0,255] with no clipping needed
+            val sNorm = (hsv.s / 255f).toDouble()
+            val boostedS = (255.0 * (1.0 - Math.pow(1.0 - sNorm, factorD))).toFloat()
             hsvToRgb180Packed(hsv.h, boostedS, hsv.v)
         }
     }
@@ -1577,6 +2027,7 @@ class HoldColorClassifier @Inject constructor() {
         private const val TAG = "HoldColorClassifier"
 
         private const val STATUS_CLASSIFIED = "classified"
+        private const val STATUS_CLASSIFIED_WEAK = "classified_weak"
         private const val STATUS_MIXED_COLOR = "mixed_color"
         private const val STATUS_UNKNOWN_LOW_CHROMA = "unknown_low_chroma"
         private const val STATUS_UNKNOWN_LOW_CONF = "unknown_low_conf"
@@ -1600,5 +2051,16 @@ class HoldColorClassifier @Inject constructor() {
         private const val WARNING_LOW_DETECTION_RELIABILITY = "low_det_reliability"
         private const val WARNING_THIN_INNER_MASK = "thin_inner_mask"
         private const val WARNING_PREPROCESS_EXCLUDED = "preprocess_excluded"
+
+        // ── 근접 동색 홀드 구제 상수 ──
+        // 정규화 좌표(0~1) 기준 거리. 0.18 ≈ 이미지 크기의 18%
+        // 볼더링 루트에서 인접 홀드 간 일반적 거리
+        private const val PROXIMITY_THRESHOLD = 0.18f
+        // 근접 가중치 최대값: 너무 크면 오탐, 너무 작으면 효과 없음
+        private const val PROXIMITY_MAX_BOOST = 0.12f
+        // 구제 대상 홀드의 target 색상 최소 분포 비율
+        private const val PROXIMITY_MIN_TARGET_SHARE = 0.10f
+        // 근접 가중치 반영 후 최소 점수 기준
+        private const val PROXIMITY_MIN_RESCUE_SCORE = 0.15f
     }
 }

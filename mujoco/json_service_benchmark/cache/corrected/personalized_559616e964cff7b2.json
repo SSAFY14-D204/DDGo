@@ -1,0 +1,68 @@
+{
+  "base_xml": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_articulated_human\\custom_articulated_human.xml",
+  "base_xml_mtime_ns": 1773688159316173200,
+  "applied_metrics_m": {
+    "body_mass_kg": 80.0,
+    "upper_arm_m": 0.24890806836814183,
+    "forearm_m": 0.2597929427172223,
+    "thigh_m": 0.39691622130428883,
+    "shin_m": 0.3528437195756503,
+    "shoulder_width_m": 0.38648157101172714,
+    "torso_length_m": 0.5555654447601042,
+    "hip_width_m": 0.19975598077887988,
+    "hand_extension_m": 0.05
+  },
+  "target_metrics_m": {
+    "detected_frames": 8,
+    "torso_length_target_m": 0.6095695383143287,
+    "shoulder_width_target_m": 0.38135593484613706,
+    "hip_width_target_m": 0.21638538198380464,
+    "head_offset_local_m": [
+      0.13623709054745406,
+      0.03551191771525905,
+      0.2617328923520823
+    ],
+    "left_shoulder_offset_local_m": [
+      0.0010778273149181462,
+      0.19078700974219404,
+      0.00025725256837765866
+    ],
+    "right_shoulder_offset_local_m": [
+      0.004434958904244551,
+      -0.18462651376958106,
+      0.0007061207229826279
+    ],
+    "left_hip_offset_local_m": [
+      0.0007554832332799203,
+      0.107959072413267,
+      0.0042537000215737975
+    ],
+    "right_hip_offset_local_m": [
+      -0.0007554832332799224,
+      -0.107959072413267,
+      -0.004253700021573799
+    ],
+    "left_foot_vector_local_m": [
+      0.017489953217287302,
+      -0.014474285431772847,
+      -0.11979757362749466
+    ],
+    "right_foot_vector_local_m": [
+      0.029104267596440494,
+      -0.025160360974198905,
+      -0.10246223526221321
+    ],
+    "left_heel_vector_local_m": [
+      0.0014394203679341455,
+      -0.0030205021093389784,
+      -0.0627177210114704
+    ],
+    "right_heel_vector_local_m": [
+      0.008404992947040953,
+      -0.004268919745132873,
+      -0.046367950704964245
+    ],
+    "hand_reach_target_m": 0.25690031171425304,
+    "foot_reach_target_m": 0.11860842670201428
+  }
+}

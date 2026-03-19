@@ -29,10 +29,10 @@ interface KakaoLocalApi {
     @GET("v2/local/search/keyword.json")
     suspend fun searchPlacesByKeyword(
         @Query("query") query: String,
-        @Query("x") longitude: String,
-        @Query("y") latitude: String,
-        @Query("radius") radius: Int,
-        @Query("sort") sort: String = "distance",
+        @Query("x") longitude: String? = null,
+        @Query("y") latitude: String? = null,
+        @Query("radius") radius: Int? = null,
+        @Query("sort") sort: String? = "distance",
         @Query("size") size: Int = 15
     ): KakaoKeywordSearchResponseDto
 }

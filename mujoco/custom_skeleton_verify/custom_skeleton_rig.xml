@@ -1,0 +1,56 @@
+<mujoco model="custom_pose_skeleton">
+  <compiler angle="degree"/>
+  <option timestep="0.01" gravity="0 0 0"/>
+  <visual>
+    <headlight diffuse="0.7 0.7 0.7" ambient="0.35 0.35 0.35" specular="0.15 0.15 0.15"/>
+    <rgba haze="0.15 0.18 0.20 1"/>
+  </visual>
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512"
+      rgb1="0.15 0.17 0.19" rgb2="0.09 0.10 0.11"/>
+    <material name="grid" texture="grid" texrepeat="8 8" reflectance="0.05"/>
+  </asset>
+  <worldbody>
+    <light pos="0 0 5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="5 5 0.1" material="grid" rgba="0.22 0.24 0.26 1"/>
+    <camera name="overview" pos="2.8 -3.0 2.0" xyaxes="0.72 0.69 0 -0.24 0.25 0.94"/>
+
+    <body name="joint_head" mocap="true" pos="0 0 1.8"><geom type="sphere" size="0.04" rgba="0.98 0.98 0.98 0.95"/></body>
+    <body name="joint_thorax" mocap="true" pos="0 0 1.45"><geom type="sphere" size="0.04" rgba="0.95 0.72 0.28 0.95"/></body>
+    <body name="joint_pelvis" mocap="true" pos="0 0 1.05"><geom type="sphere" size="0.045" rgba="0.95 0.48 0.28 0.95"/></body>
+    <body name="joint_left_shoulder" mocap="true" pos="0 0.22 1.45"><geom type="sphere" size="0.032" rgba="0.14 0.92 0.88 0.95"/></body>
+    <body name="joint_right_shoulder" mocap="true" pos="0 -0.22 1.45"><geom type="sphere" size="0.032" rgba="0.92 0.36 0.88 0.95"/></body>
+    <body name="joint_left_elbow" mocap="true" pos="0.18 0.34 1.25"><geom type="sphere" size="0.03" rgba="0.18 1 0.54 0.95"/></body>
+    <body name="joint_right_elbow" mocap="true" pos="0.18 -0.34 1.25"><geom type="sphere" size="0.03" rgba="1 0.48 0.16 0.95"/></body>
+    <body name="joint_left_hand" mocap="true" pos="0.38 0.45 1.1"><geom type="sphere" size="0.03" rgba="0.16 0.78 1 0.95"/></body>
+    <body name="joint_right_hand" mocap="true" pos="0.38 -0.45 1.1"><geom type="sphere" size="0.03" rgba="1 0.30 0.30 0.95"/></body>
+    <body name="joint_left_hip" mocap="true" pos="0 0.12 1.0"><geom type="sphere" size="0.032" rgba="0.28 0.82 1 0.95"/></body>
+    <body name="joint_right_hip" mocap="true" pos="0 -0.12 1.0"><geom type="sphere" size="0.032" rgba="0.82 0.46 1 0.95"/></body>
+    <body name="joint_left_knee" mocap="true" pos="0.02 0.18 0.62"><geom type="sphere" size="0.03" rgba="1 0.88 0.22 0.95"/></body>
+    <body name="joint_right_knee" mocap="true" pos="0.02 -0.18 0.62"><geom type="sphere" size="0.03" rgba="0.52 0.58 1 0.95"/></body>
+    <body name="joint_left_ankle" mocap="true" pos="0.02 0.22 0.18"><geom type="sphere" size="0.028" rgba="0.40 1 0.54 0.95"/></body>
+    <body name="joint_right_ankle" mocap="true" pos="0.02 -0.22 0.18"><geom type="sphere" size="0.028" rgba="1 0.58 0.26 0.95"/></body>
+    <body name="joint_left_foot" mocap="true" pos="0.1 0.26 0.08"><geom type="sphere" size="0.028" rgba="0.24 0.94 0.64 0.95"/></body>
+    <body name="joint_right_foot" mocap="true" pos="0.1 -0.26 0.08"><geom type="sphere" size="0.028" rgba="1 0.68 0.20 0.95"/></body>
+    <body name="marker_com" mocap="true" pos="0 0 1.0"><geom type="sphere" size="0.04" rgba="1 1 0.15 0.95"/></body>
+    <body name="marker_support_center" mocap="true" pos="0 0 0.2"><geom type="sphere" size="0.035" rgba="0.15 1 1 0.95"/></body>
+    <body name="marker_tripod_center" mocap="true" pos="0 0 0.2"><geom type="sphere" size="0.032" rgba="1 0.32 0.9 0.95"/></body>
+
+    <body name="segment_neck" mocap="true" pos="0 0 1.62"><geom name="segment_neck_geom" type="capsule" size="0.022 0.10" rgba="0.96 0.96 0.96 0.78"/></body>
+    <body name="segment_spine" mocap="true" pos="0 0 1.25"><geom name="segment_spine_geom" type="capsule" size="0.03 0.18" rgba="0.95 0.68 0.26 0.78"/></body>
+    <body name="segment_left_clavicle" mocap="true" pos="0 0.11 1.45"><geom name="segment_left_clavicle_geom" type="capsule" size="0.02 0.08" rgba="0.14 0.92 0.88 0.78"/></body>
+    <body name="segment_right_clavicle" mocap="true" pos="0 -0.11 1.45"><geom name="segment_right_clavicle_geom" type="capsule" size="0.02 0.08" rgba="0.92 0.36 0.88 0.78"/></body>
+    <body name="segment_left_upper_arm" mocap="true" pos="0.1 0.28 1.33"><geom name="segment_left_upper_arm_geom" type="capsule" size="0.024 0.16" rgba="0.18 1 0.54 0.78"/></body>
+    <body name="segment_right_upper_arm" mocap="true" pos="0.1 -0.28 1.33"><geom name="segment_right_upper_arm_geom" type="capsule" size="0.024 0.16" rgba="1 0.48 0.16 0.78"/></body>
+    <body name="segment_left_forearm" mocap="true" pos="0.28 0.40 1.17"><geom name="segment_left_forearm_geom" type="capsule" size="0.022 0.16" rgba="0.16 0.78 1 0.78"/></body>
+    <body name="segment_right_forearm" mocap="true" pos="0.28 -0.40 1.17"><geom name="segment_right_forearm_geom" type="capsule" size="0.022 0.16" rgba="1 0.30 0.30 0.78"/></body>
+    <body name="segment_left_hip_link" mocap="true" pos="0 0.06 1.02"><geom name="segment_left_hip_link_geom" type="capsule" size="0.022 0.08" rgba="0.28 0.82 1 0.78"/></body>
+    <body name="segment_right_hip_link" mocap="true" pos="0 -0.06 1.02"><geom name="segment_right_hip_link_geom" type="capsule" size="0.022 0.08" rgba="0.82 0.46 1 0.78"/></body>
+    <body name="segment_left_thigh" mocap="true" pos="0.01 0.15 0.81"><geom name="segment_left_thigh_geom" type="capsule" size="0.028 0.19" rgba="1 0.88 0.22 0.78"/></body>
+    <body name="segment_right_thigh" mocap="true" pos="0.01 -0.15 0.81"><geom name="segment_right_thigh_geom" type="capsule" size="0.028 0.19" rgba="0.52 0.58 1 0.78"/></body>
+    <body name="segment_left_shin" mocap="true" pos="0.02 0.20 0.40"><geom name="segment_left_shin_geom" type="capsule" size="0.024 0.18" rgba="0.40 1 0.54 0.78"/></body>
+    <body name="segment_right_shin" mocap="true" pos="0.02 -0.20 0.40"><geom name="segment_right_shin_geom" type="capsule" size="0.024 0.18" rgba="1 0.58 0.26 0.78"/></body>
+    <body name="segment_left_foot" mocap="true" pos="0.06 0.24 0.12"><geom name="segment_left_foot_geom" type="capsule" size="0.022 0.07" rgba="0.24 0.94 0.64 0.78"/></body>
+    <body name="segment_right_foot" mocap="true" pos="0.06 -0.24 0.12"><geom name="segment_right_foot_geom" type="capsule" size="0.022 0.07" rgba="1 0.68 0.20 0.78"/></body>
+  </worldbody>
+</mujoco>

@@ -20,6 +20,9 @@ import java.io.File
 import javax.inject.Inject
 import kotlin.system.measureTimeMillis
 
+private const val DEFAULT_ANALYSIS_FPS_LIMIT = 30
+private val SUPPORTED_ANALYSIS_FPS_LIMITS = setOf(10, 20, 30)
+
 @HiltViewModel
 class PrePoseLandmarkerViewModel @Inject constructor(
     private val prePoseVideoAnalyzer: PrePoseVideoAnalyzer,
@@ -29,7 +32,14 @@ class PrePoseLandmarkerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(PrePoseUiState())
     val uiState: StateFlow<PrePoseUiState> = _uiState.asStateFlow()
 
-    fun analyzeVideo(uri: Uri, displayName: String, useOptimized: Boolean = false) {
+    fun analyzeVideo(
+        uri: Uri,
+        displayName: String,
+        useOptimized: Boolean = false,
+        analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
+    ) {
+        val normalizedAnalysisFpsLimit = normalizeAnalysisFpsLimit(analysisFpsLimit)
+
         _uiState.value = _uiState.value.copy(
             selectedVideoUri = uri,
             selectedVideoName = displayName,
@@ -38,18 +48,25 @@ class PrePoseLandmarkerViewModel @Inject constructor(
             poseFrames = emptyList(),
             errorMessage = null,
             analysisTimeMs = 0L,
-            isOptimized = useOptimized
+            isOptimized = useOptimized,
+            analysisFpsLimit = normalizedAnalysisFpsLimit
         )
 
         viewModelScope.launch {
             var poses: List<DebugPoseFrameResult> = emptyList()
             val time = measureTimeMillis {
                 val result = if (useOptimized) {
-                    optimizedPrePoseVideoAnalyzer(uri.toString()) { progress ->
+                    optimizedPrePoseVideoAnalyzer(
+                        videoUri = uri.toString(),
+                        analysisFpsLimit = normalizedAnalysisFpsLimit
+                    ) { progress ->
                         _uiState.value = _uiState.value.copy(analysisProgress = progress)
                     }
                 } else {
-                    prePoseVideoAnalyzer(uri.toString()) { progress ->
+                    prePoseVideoAnalyzer(
+                        videoUri = uri.toString(),
+                        analysisFpsLimit = normalizedAnalysisFpsLimit
+                    ) { progress ->
                         _uiState.value = _uiState.value.copy(analysisProgress = progress)
                     }
                 }
@@ -73,6 +90,14 @@ class PrePoseLandmarkerViewModel @Inject constructor(
         }
     }
 
+    private fun normalizeAnalysisFpsLimit(value: Int): Int {
+        return if (value in SUPPORTED_ANALYSIS_FPS_LIMITS) {
+            value
+        } else {
+            DEFAULT_ANALYSIS_FPS_LIMIT
+        }
+    }
+
     fun exportPoseDataToJson(context: Context) {
         val currentPoseFrames = _uiState.value.poseFrames
         if (currentPoseFrames.isEmpty()) {
@@ -87,10 +112,24 @@ class PrePoseLandmarkerViewModel @Inject constructor(
                     PoseExportDto(
                         frameTimeMs = frame.pose.frameTimeMs,
                         landmarks = frame.pose.landmarks.map { 
-                            LandmarkDto(it.index, it.x, it.y, it.z) 
+                            LandmarkDto(
+                                index = it.index,
+                                x = it.x,
+                                y = it.y,
+                                z = it.z,
+                                visibility = it.visibility,
+                                presence = it.presence
+                            ) 
                         },
                         worldLandmarks = frame.worldLandmarks.map { 
-                            LandmarkDto(it.index, it.x, it.y, it.z) 
+                            LandmarkDto(
+                                index = it.index,
+                                x = it.x,
+                                y = it.y,
+                                z = it.z,
+                                visibility = it.visibility,
+                                presence = it.presence
+                            ) 
                         }
                     )
                 }
@@ -137,7 +176,8 @@ data class PrePoseUiState(
     val poseFrames: List<DebugPoseFrameResult> = emptyList(),
     val errorMessage: String? = null,
     val analysisTimeMs: Long = 0L,
-    val isOptimized: Boolean = false
+    val isOptimized: Boolean = false,
+    val analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
 )
 
 @Serializable
@@ -152,5 +192,7 @@ data class LandmarkDto(
     val index: Int,
     val x: Float,
     val y: Float,
-    val z: Float
+    val z: Float,
+    val visibility: Float? = null,
+    val presence: Float? = null
 )

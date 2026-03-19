@@ -51,7 +51,7 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "추락을 데이터로 바꾸다",
+                    text = "\uCD94\uB77D\uC758 \uB370\uC774\uD130\uB97C \uBC14\uAFB8\uB294",
                     style = TextStyle(
                         fontFamily = PretendardFamily,
                         fontSize = 16.sp,
@@ -65,7 +65,7 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "이메일",
+                text = "\uC774\uBA54\uC77C",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 16.sp,
@@ -78,8 +78,8 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
 
             TextField(
                 value = viewModel.username,
-                onValueChange = { viewModel.username = it },
-                placeholder = { Text("이메일", color = Color(0xFF8391A1)) },
+                onValueChange = viewModel::updateUsername,
+                placeholder = { Text("\uC774\uBA54\uC77C", color = Color(0xFF8391A1)) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -107,7 +107,7 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DA1F2))
                 ) {
                     Text(
-                        "다음",
+                        "\uB2E4\uC74C",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = PretendardFamily,
@@ -124,15 +124,15 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFE812))
                 ) {
                     Text(
-                        "카카오로 3초만에 로그인",
+                        "\uCE74\uCE74\uC624\uB85C 3\uCD08\uB9CC\uC5D0 \uB85C\uADF8\uC778",
                         color = Color.Black,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = PretendardFamily
                     )
                 }
-                
+
                 Button(
-                    onClick = onNext, 
+                    onClick = onNext,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -140,7 +140,7 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF121212))
                 ) {
                     Text(
-                        "Google로 로그인",
+                        "Google\uB85C \uB85C\uADF8\uC778",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = PretendardFamily
@@ -151,7 +151,7 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
 
                 TextButton(onClick = onRegisterClick) {
                     Text(
-                        "회원가입",
+                        "\uD68C\uC6D0\uAC00\uC785",
                         color = Color(0xFF1DA1F2),
                         fontFamily = PretendardFamily,
                         fontWeight = FontWeight.SemiBold

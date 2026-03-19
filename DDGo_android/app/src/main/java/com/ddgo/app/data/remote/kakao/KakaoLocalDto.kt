@@ -40,6 +40,9 @@ data class KakaoSearchMetaDto(
 data class KakaoPlaceDocumentDto(
     @SerialName("id") val id: String,
     @SerialName("place_name") val placeName: String,
+    @SerialName("category_name") val categoryName: String? = null,
+    @SerialName("category_group_code") val categoryGroupCode: String? = null,
+    @SerialName("category_group_name") val categoryGroupName: String? = null,
     @SerialName("address_name") val addressName: String? = null,
     @SerialName("road_address_name") val roadAddressName: String? = null,
     @SerialName("x") val longitude: String,

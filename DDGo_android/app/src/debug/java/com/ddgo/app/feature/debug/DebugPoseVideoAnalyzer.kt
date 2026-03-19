@@ -25,6 +25,7 @@ import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
+import java.util.Optional
 import javax.inject.Inject
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -299,7 +300,9 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                 frameTimeMs = result.timestampMs(),
                 rawLandmarks = landmarks.map { landmark ->
                     Triple(landmark.x(), landmark.y(), landmark.z())
-                }
+                },
+                visibilityValues = landmarks.map { landmark -> landmark.visibility().toNullable() },
+                presenceValues = landmarks.map { landmark -> landmark.presence().toNullable() }
             )
 
             return DebugPoseFrameResult(
@@ -309,7 +312,9 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                         index = index,
                         x = landmark.x(),
                         y = landmark.y(),
-                        z = landmark.z()
+                        z = landmark.z(),
+                        visibility = landmark.visibility().toNullable(),
+                        presence = landmark.presence().toNullable()
                     )
                 }
             )
@@ -598,6 +603,8 @@ class DebugPoseVideoAnalyzer @Inject constructor(
     private fun formatCoordinate(value: Float): String {
         return String.format(java.util.Locale.US, "%.4f", value)
     }
+
+    private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
 
     private companion object {
         private const val TAG = "DebugPoseVideoAnalyzer"

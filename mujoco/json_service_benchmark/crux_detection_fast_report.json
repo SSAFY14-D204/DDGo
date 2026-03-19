@@ -1,0 +1,781 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "fast_crux_detection",
+  "inputs": {
+    "holds_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\holds_polygon.json",
+    "pose3d_sequence_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\pose3d_sequence.json",
+    "user_body_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\user_body.json"
+  },
+  "tracker_mode": "polygon",
+  "video_metadata": {
+    "frame_width": 1080,
+    "frame_height": 1920,
+    "fps": 29.99827810713493,
+    "total_frames": 964,
+    "processed_frames": 964,
+    "frame_step": 1
+  },
+  "timings_s": {
+    "load_inputs_s": 0.22063240001443774,
+    "correction_s": 0.842311599990353,
+    "hold_tracking_s": 2.528793399920687,
+    "crux_scoring_s": 0.014053200022317469,
+    "serialize_s": 0.0013110000872984529,
+    "total_s": 3.6092326999641955
+  },
+  "correction_summary": {
+    "config": {
+      "visibility_low": 0.35,
+      "visibility_missing": 0.15,
+      "freeze_frames": 2,
+      "alpha_torso": 0.55,
+      "alpha_major": 0.4,
+      "alpha_distal": 0.25,
+      "segment_length_tolerance": 0.12
+    },
+    "frame_count": 964,
+    "filled_from_previous_frame_count": 3,
+    "total_low_visibility_joint_count": 198,
+    "total_frozen_joint_count": 198,
+    "total_reconstructed_joint_count": 0
+  },
+  "hold_state_summary": {
+    "left_hand": {
+      "REACH": 323,
+      "GRIP": 606,
+      "FREE": 35
+    },
+    "right_hand": {
+      "REACH": 383,
+      "GRIP": 534,
+      "FREE": 47
+    },
+    "left_foot": {
+      "REACH": 220,
+      "STEP": 692,
+      "FREE": 52
+    },
+    "right_foot": {
+      "REACH": 262,
+      "STEP": 660,
+      "FREE": 42
+    }
+  },
+  "crux_result": {
+    "logic": {
+      "score_formula": "0.7 * longest_continuous_dwell_norm + 0.3 * total_active_time_norm",
+      "why": "빠른 크럭스 후보는 가장 오래 막힌 연속 체류를 우선 보고, 반복 접촉 총시간으로 보정한다."
+    },
+    "candidate_count": 21,
+    "top_candidates": [
+      {
+        "hold_id": 15,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 10.334335246657446,
+        "longest_continuous_dwell_s": 10.334335246657446,
+        "best_segment": {
+          "start_frame": 67,
+          "end_frame": 376,
+          "start_time_ms": 2233,
+          "end_time_ms": 12534,
+          "duration_s": 10.334335246657446,
+          "dominant_limbs": [
+            "left_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 310
+        },
+        "mode_counts": {
+          "STEP": 310
+        },
+        "fast_crux_score": 0.9924349419635061,
+        "reason_tags": [
+          "longest_dwell",
+          "high_total_dwell"
+        ]
+      },
+      {
+        "hold_id": 27,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 9.93367049331489,
+        "longest_continuous_dwell_s": 9.000335246657444,
+        "best_segment": {
+          "start_frame": 75,
+          "end_frame": 344,
+          "start_time_ms": 2500,
+          "end_time_ms": 11467,
+          "duration_s": 9.000335246657444,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 298
+        },
+        "mode_counts": {
+          "STEP": 298
+        },
+        "fast_crux_score": 0.8907381855871848,
+        "reason_tags": [
+          "longest_dwell",
+          "high_total_dwell"
+        ]
+      },
+      {
+        "hold_id": 9,
+        "segment_count": 5,
+        "engagement_count": 5,
+        "total_active_time_s": 10.601676233287229,
+        "longest_continuous_dwell_s": 4.800335246657446,
+        "best_segment": {
+          "start_frame": 589,
+          "end_frame": 732,
+          "start_time_ms": 19634,
+          "end_time_ms": 24401,
+          "duration_s": 4.800335246657446,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 100,
+          "right_foot": 221,
+          "right_hand": 11
+        },
+        "mode_counts": {
+          "STEP": 307,
+          "GRIP": 11
+        },
+        "fast_crux_score": 0.6251524740062069,
+        "reason_tags": [
+          "high_total_dwell"
+        ]
+      }
+    ],
+    "all_candidates": [
+      {
+        "hold_id": 15,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 10.334335246657446,
+        "longest_continuous_dwell_s": 10.334335246657446,
+        "best_segment": {
+          "start_frame": 67,
+          "end_frame": 376,
+          "start_time_ms": 2233,
+          "end_time_ms": 12534,
+          "duration_s": 10.334335246657446,
+          "dominant_limbs": [
+            "left_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 310
+        },
+        "mode_counts": {
+          "STEP": 310
+        },
+        "fast_crux_score": 0.9924349419635061,
+        "reason_tags": [
+          "longest_dwell",
+          "high_total_dwell"
+        ]
+      },
+      {
+        "hold_id": 27,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 9.93367049331489,
+        "longest_continuous_dwell_s": 9.000335246657444,
+        "best_segment": {
+          "start_frame": 75,
+          "end_frame": 344,
+          "start_time_ms": 2500,
+          "end_time_ms": 11467,
+          "duration_s": 9.000335246657444,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 298
+        },
+        "mode_counts": {
+          "STEP": 298
+        },
+        "fast_crux_score": 0.8907381855871848,
+        "reason_tags": [
+          "longest_dwell",
+          "high_total_dwell"
+        ]
+      },
+      {
+        "hold_id": 9,
+        "segment_count": 5,
+        "engagement_count": 5,
+        "total_active_time_s": 10.601676233287229,
+        "longest_continuous_dwell_s": 4.800335246657446,
+        "best_segment": {
+          "start_frame": 589,
+          "end_frame": 732,
+          "start_time_ms": 19634,
+          "end_time_ms": 24401,
+          "duration_s": 4.800335246657446,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 100,
+          "right_foot": 221,
+          "right_hand": 11
+        },
+        "mode_counts": {
+          "STEP": 307,
+          "GRIP": 11
+        },
+        "fast_crux_score": 0.6251524740062069,
+        "reason_tags": [
+          "high_total_dwell"
+        ]
+      },
+      {
+        "hold_id": 30,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 6.900670493314891,
+        "longest_continuous_dwell_s": 4.300335246657446,
+        "best_segment": {
+          "start_frame": 591,
+          "end_frame": 719,
+          "start_time_ms": 19701,
+          "end_time_ms": 23968,
+          "duration_s": 4.300335246657446,
+          "dominant_limbs": [
+            "left_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 207
+        },
+        "mode_counts": {
+          "STEP": 207
+        },
+        "fast_crux_score": 0.4865559059068043,
+        "reason_tags": [
+          "high_total_dwell"
+        ]
+      },
+      {
+        "hold_id": 32,
+        "segment_count": 6,
+        "engagement_count": 6,
+        "total_active_time_s": 6.267011479944675,
+        "longest_continuous_dwell_s": 4.533335246657446,
+        "best_segment": {
+          "start_frame": 415,
+          "end_frame": 550,
+          "start_time_ms": 13834,
+          "end_time_ms": 18334,
+          "duration_s": 4.533335246657446,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 148,
+          "right_hand": 40
+        },
+        "mode_counts": {
+          "GRIP": 188
+        },
+        "fast_crux_score": 0.48440733647591094,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 28,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 4.000335246657445,
+        "longest_continuous_dwell_s": 4.000335246657445,
+        "best_segment": {
+          "start_frame": 134,
+          "end_frame": 253,
+          "start_time_ms": 4467,
+          "end_time_ms": 8434,
+          "duration_s": 4.000335246657445,
+          "dominant_limbs": [
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "right_hand": 120
+        },
+        "mode_counts": {
+          "GRIP": 120
+        },
+        "fast_crux_score": 0.38416331419431515,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 17,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 4.200670493314892,
+        "longest_continuous_dwell_s": 3.9003352466574457,
+        "best_segment": {
+          "start_frame": 4,
+          "end_frame": 120,
+          "start_time_ms": 133,
+          "end_time_ms": 4000,
+          "duration_s": 3.9003352466574457,
+          "dominant_limbs": [
+            "right_hand",
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 125,
+          "right_hand": 117
+        },
+        "mode_counts": {
+          "GRIP": 126
+        },
+        "fast_crux_score": 0.3830587464114791,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 26,
+        "segment_count": 3,
+        "engagement_count": 3,
+        "total_active_time_s": 5.300005739972336,
+        "longest_continuous_dwell_s": 3.1003352466574454,
+        "best_segment": {
+          "start_frame": 422,
+          "end_frame": 514,
+          "start_time_ms": 14067,
+          "end_time_ms": 17134,
+          "duration_s": 3.1003352466574454,
+          "dominant_limbs": [
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "right_hand": 159
+        },
+        "mode_counts": {
+          "GRIP": 159
+        },
+        "fast_crux_score": 0.35997879445981007,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 41,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 3.4673352466574454,
+        "longest_continuous_dwell_s": 3.4673352466574454,
+        "best_segment": {
+          "start_frame": 364,
+          "end_frame": 467,
+          "start_time_ms": 12134,
+          "end_time_ms": 15568,
+          "duration_s": 3.4673352466574454,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 104
+        },
+        "mode_counts": {
+          "STEP": 104
+        },
+        "fast_crux_score": 0.33297784251749507,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 5,
+        "segment_count": 4,
+        "engagement_count": 4,
+        "total_active_time_s": 3.5993409866297834,
+        "longest_continuous_dwell_s": 1.9993352466574459,
+        "best_segment": {
+          "start_frame": 670,
+          "end_frame": 729,
+          "start_time_ms": 22335,
+          "end_time_ms": 24301,
+          "duration_s": 1.9993352466574459,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 101,
+          "right_hand": 7
+        },
+        "mode_counts": {
+          "GRIP": 108
+        },
+        "fast_crux_score": 0.23727774323803513,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 49,
+        "segment_count": 3,
+        "engagement_count": 3,
+        "total_active_time_s": 2.5660057399723373,
+        "longest_continuous_dwell_s": 2.1993352466574456,
+        "best_segment": {
+          "start_frame": 184,
+          "end_frame": 249,
+          "start_time_ms": 6134,
+          "end_time_ms": 8300,
+          "duration_s": 2.1993352466574456,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 66,
+          "right_hand": 11
+        },
+        "mode_counts": {
+          "GRIP": 77
+        },
+        "fast_crux_score": 0.22158410363624528,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 3,
+        "segment_count": 8,
+        "engagement_count": 8,
+        "total_active_time_s": 3.7666819732595664,
+        "longest_continuous_dwell_s": 1.2333352466574459,
+        "best_segment": {
+          "start_frame": 262,
+          "end_frame": 298,
+          "start_time_ms": 8734,
+          "end_time_ms": 9934,
+          "duration_s": 1.2333352466574459,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 66,
+          "right_hand": 47
+        },
+        "mode_counts": {
+          "GRIP": 113
+        },
+        "fast_crux_score": 0.19012776826074718,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 58,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 1.767335246657446,
+        "longest_continuous_dwell_s": 1.767335246657446,
+        "best_segment": {
+          "start_frame": 743,
+          "end_frame": 795,
+          "start_time_ms": 24768,
+          "end_time_ms": 26502,
+          "duration_s": 1.767335246657446,
+          "dominant_limbs": [
+            "left_hand",
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "right_hand": 10,
+          "left_hand": 47
+        },
+        "mode_counts": {
+          "GRIP": 53
+        },
+        "fast_crux_score": 0.1697221167190068,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 7,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 2.5006704933148916,
+        "longest_continuous_dwell_s": 1.400335246657446,
+        "best_segment": {
+          "start_frame": 729,
+          "end_frame": 770,
+          "start_time_ms": 24301,
+          "end_time_ms": 25668,
+          "duration_s": 1.400335246657446,
+          "dominant_limbs": [
+            "left_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 75
+        },
+        "mode_counts": {
+          "STEP": 75
+        },
+        "fast_crux_score": 0.1656147262879033,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 4,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 1.1333352466574458,
+        "longest_continuous_dwell_s": 1.1333352466574458,
+        "best_segment": {
+          "start_frame": 624,
+          "end_frame": 657,
+          "start_time_ms": 20801,
+          "end_time_ms": 21901,
+          "duration_s": 1.1333352466574458,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 34
+        },
+        "mode_counts": {
+          "GRIP": 34
+        },
+        "fast_crux_score": 0.10883733427415884,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 34,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.5663352466574458,
+        "longest_continuous_dwell_s": 0.5663352466574458,
+        "best_segment": {
+          "start_frame": 36,
+          "end_frame": 52,
+          "start_time_ms": 1200,
+          "end_time_ms": 1733,
+          "duration_s": 0.5663352466574458,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 17
+        },
+        "mode_counts": {
+          "STEP": 17
+        },
+        "fast_crux_score": 0.05438674808136893,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 11,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.46733524665744586,
+        "longest_continuous_dwell_s": 0.46733524665744586,
+        "best_segment": {
+          "start_frame": 950,
+          "end_frame": 963,
+          "start_time_ms": 31668,
+          "end_time_ms": 32102,
+          "duration_s": 0.46733524665744586,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 14
+        },
+        "mode_counts": {
+          "GRIP": 14
+        },
+        "fast_crux_score": 0.04487950287310403,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 18,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.40033524665744585,
+        "longest_continuous_dwell_s": 0.40033524665744585,
+        "best_segment": {
+          "start_frame": 871,
+          "end_frame": 882,
+          "start_time_ms": 29035,
+          "end_time_ms": 29402,
+          "duration_s": 0.40033524665744585,
+          "dominant_limbs": [
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "right_hand": 12
+        },
+        "mode_counts": {
+          "GRIP": 12
+        },
+        "fast_crux_score": 0.03844530662104596,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 2,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 0.43267049331489166,
+        "longest_continuous_dwell_s": 0.3663352466574458,
+        "best_segment": {
+          "start_frame": 823,
+          "end_frame": 833,
+          "start_time_ms": 27435,
+          "end_time_ms": 27768,
+          "duration_s": 0.3663352466574458,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 11,
+          "left_hand": 2
+        },
+        "mode_counts": {
+          "STEP": 11,
+          "GRIP": 2
+        },
+        "fast_crux_score": 0.0370573079082121,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 37,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.3003352466574459,
+        "longest_continuous_dwell_s": 0.3003352466574459,
+        "best_segment": {
+          "start_frame": 57,
+          "end_frame": 65,
+          "start_time_ms": 1900,
+          "end_time_ms": 2167,
+          "duration_s": 0.3003352466574459,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 9
+        },
+        "mode_counts": {
+          "STEP": 9
+        },
+        "fast_crux_score": 0.0288420286328996,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 13,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.10033524665744582,
+        "longest_continuous_dwell_s": 0.10033524665744582,
+        "best_segment": {
+          "start_frame": 880,
+          "end_frame": 882,
+          "start_time_ms": 29335,
+          "end_time_ms": 29402,
+          "duration_s": 0.10033524665744582,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 3
+        },
+        "mode_counts": {
+          "GRIP": 3
+        },
+        "fast_crux_score": 0.009635472656606858,
+        "reason_tags": []
+      }
+    ]
+  }
+}

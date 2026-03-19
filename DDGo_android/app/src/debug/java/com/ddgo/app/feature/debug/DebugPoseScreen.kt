@@ -758,6 +758,8 @@ private fun PoseLandmark.toJsonObject(): JsonObject = buildJsonObject {
     put("x", JsonPrimitive(x))
     put("y", JsonPrimitive(y))
     put("z", JsonPrimitive(z))
+    visibility?.let { put("visibility", JsonPrimitive(it)) }
+    presence?.let { put("presence", JsonPrimitive(it)) }
 }
 
 private fun DebugPoseWorldLandmark.toJsonObject(): JsonObject = buildJsonObject {
@@ -765,6 +767,8 @@ private fun DebugPoseWorldLandmark.toJsonObject(): JsonObject = buildJsonObject 
     put("x", JsonPrimitive(x))
     put("y", JsonPrimitive(y))
     put("z", JsonPrimitive(z))
+    visibility?.let { put("visibility", JsonPrimitive(it)) }
+    presence?.let { put("presence", JsonPrimitive(it)) }
 }
 
 private suspend fun exportPoseResultsJson(

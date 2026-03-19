@@ -7,7 +7,11 @@ import com.ddgo.app.data.remote.auth.AuthApi
 import com.ddgo.app.data.remote.auth.LoginRequestDto
 import com.ddgo.app.data.remote.auth.RefreshTokenRequestDto
 import com.ddgo.app.data.remote.auth.RegisterRequestDto
+import com.ddgo.app.data.remote.auth.UpdateNicknameRequestDto
+import com.ddgo.app.data.remote.auth.UpdatePasswordRequestDto
+import com.ddgo.app.data.remote.auth.UpdateProfileRequestDto
 import com.ddgo.app.domain.model.AuthToken
+import com.ddgo.app.domain.model.LogoutResult
 import com.ddgo.app.domain.model.User
 import com.ddgo.app.domain.repository.AuthRepository
 import javax.inject.Inject
@@ -15,17 +19,18 @@ import javax.inject.Inject
 private const val TAG = "AuthRepository"
 
 /**
- * AuthRepository 인터페이스(domain)의 실제 구현체.
+ * [AuthRepository]의 실제 구현체입니다.
  *
- * domain 계층은 이 클래스를 직접 알지 못하며,
- * di/RepositoryModule에서 AuthRepository 인터페이스로 바인딩됩니다.
+ * 역할:
+ * - AuthApi 호출 결과를 domain 계층에서 다루기 쉬운 `Result` 형태로 변환합니다.
+ * - 토큰 저장/삭제처럼 로컬 인증 상태 정리도 함께 담당합니다.
  */
 class AuthRepositoryImpl @Inject constructor(
     private val authApi: AuthApi,
     private val tokenDataStore: TokenDataStore
 ) : AuthRepository {
 
-    // 1. 회원가입 구현
+    /** 회원가입 요청을 수행합니다. */
     override suspend fun register(
         username: String,
         password: String,
@@ -43,8 +48,11 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    // 2. 로그인 구현
-    override suspend fun login(username: String, password: String): Result<AuthToken> {
+    /** 로그인 요청을 수행하고 토큰을 저장합니다. */
+    override suspend fun login(
+        username: String,
+        password: String
+    ): Result<AuthToken> {
         return try {
             val response = authApi.login(LoginRequestDto(username, password))
             if (response.success && response.data != null) {
@@ -66,7 +74,7 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    // 3. 토큰 재발급 구현
+    /** Refresh Token으로 토큰을 재발급하고 저장합니다. */
     override suspend fun refreshToken(refreshToken: String): Result<AuthToken> {
         return try {
             val response = authApi.refresh(RefreshTokenRequestDto(refreshToken))
@@ -89,30 +97,42 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    // 4. 로그아웃 구현
-    override suspend fun logout(): Result<Unit> {
+    /**
+     * 로그아웃 요청을 시도하고 로컬 토큰을 정리합니다.
+     *
+     * 서버 응답이 실패해도 로컬 토큰 정리는 수행해 앱 상태는 확실히 로그아웃되도록 합니다.
+     */
+    override suspend fun logout(): Result<LogoutResult> {
         return try {
-            val response = authApi.logout()
-            // 서버 응답이 성공이든 실패든 상관없이 일단 로컬 토큰은 삭제합니다.
-            // (이미 만료된 토큰이거나 서버 세션이 끊긴 경우에도 사용자는 로그아웃되어야 함)
+            val serverResult = runCatching { authApi.logout() }
             tokenDataStore.clearTokens()
-            
-            if (response.success) {
-                Result.success(Unit)
-            } else {
-                // 서버에서 에러 메시지를 보낸 경우에도 로컬은 정리되었으므로 성공으로 간주하거나 
-                // 에러를 반환하되 UI에서는 이동 처리
-                Result.success(Unit) 
-            }
+
+            serverResult.fold(
+                onSuccess = { response ->
+                    if (response.success) {
+                        Result.success(LogoutResult.ServerConfirmed)
+                    } else {
+                        Result.success(
+                            LogoutResult.LocalOnly(
+                                reason = response.message?.takeIf { it.isNotBlank() }
+                            )
+                        )
+                    }
+                },
+                onFailure = { throwable ->
+                    Result.success(
+                        LogoutResult.LocalOnly(
+                            reason = throwable.message
+                        )
+                    )
+                }
+            )
         } catch (e: Exception) {
-            // 403 Forbidden 등 네트워크 예외 발생 시에도 로컬 토큰을 강제로 삭제합니다.
-            tokenDataStore.clearTokens()
-            // 사용자에게는 성공한 것처럼 보여주어 흐름을 끊지 않습니다.
-            Result.success(Unit)
+            Result.failure(e)
         }
     }
 
-    // 5. 내 정보 조회 구현
+    /** 로그인한 사용자의 정보를 조회합니다. */
     override suspend fun getMyInfo(): Result<User> {
         return try {
             val response = authApi.getMyInfo()
@@ -126,12 +146,79 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    // 6. 회원 탈퇴 구현
+    /** 신체 정보 수정 요청을 수행합니다. */
+    override suspend fun updateProfile(
+        sex: String,
+        heightCm: Float,
+        weightKg: Float,
+        wingspanCm: Float
+    ): Result<Unit> {
+        return try {
+            val response = authApi.updateProfile(
+                UpdateProfileRequestDto(
+                    sex = sex,
+                    heightCm = heightCm,
+                    weightKg = weightKg,
+                    wingspanCm = wingspanCm
+                )
+            )
+
+            if (response.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 닉네임 등록 또는 변경 요청을 수행합니다. */
+    override suspend fun updateNickname(nickname: String): Result<Unit> {
+        return try {
+            val response = authApi.updateNickname(
+                UpdateNicknameRequestDto(
+                    nickname = nickname
+                )
+            )
+
+            if (response.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 기존 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다. */
+    override suspend fun updatePassword(
+        oldPassword: String,
+        newPassword: String
+    ): Result<Unit> {
+        return try {
+            val response = authApi.updatePassword(
+                UpdatePasswordRequestDto(
+                    oldPassword = oldPassword,
+                    newPassword = newPassword
+                )
+            )
+
+            if (response.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 회원 탈퇴 요청 후 로컬 토큰을 정리합니다. */
     override suspend fun deleteMe(): Result<Unit> {
         return try {
             val response = authApi.deleteMe()
-            // 탈퇴 성공 여부와 관계없이 사용자 데이터 정리가 필요할 수 있으나, 
-            // 여기서는 성공 시에만 로컬 토큰을 삭제합니다.
             if (response.success) {
                 tokenDataStore.clearTokens()
                 Result.success(Unit)

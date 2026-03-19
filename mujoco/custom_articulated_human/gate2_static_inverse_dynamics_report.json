@@ -1,0 +1,2518 @@
+{
+  "xml": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_articulated_human\\custom_articulated_human_personalized.xml",
+  "video": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\주황.mp4",
+  "detections_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\detections.json",
+  "hold_source_file": "daegu.jpg",
+  "detection_video_scale_check": {
+    "video_width_px": 1080,
+    "video_height_px": 1920,
+    "detection_extent_x_px": 1079.0,
+    "detection_extent_y_px": 1317.0,
+    "coverage_ratio_x": 0.9990740740740741,
+    "coverage_ratio_y": 0.6859375
+  },
+  "sample_frame_indices": [
+    0,
+    138,
+    275,
+    413,
+    550,
+    688,
+    825,
+    963
+  ],
+  "sample_reports": [
+    {
+      "frame_index": 0,
+      "timestamp_ms": 0,
+      "detected": true,
+      "fit_mean_error_m": 0.15396437946036903,
+      "fit_max_error_m": 0.45006502871590853,
+      "fit_final_error_norm": 1.1964118075803136,
+      "com_position_m": [
+        0.07442104004687278,
+        0.0062985066614830556,
+        1.238921914295013
+      ],
+      "support_center_m": [
+        0.30172250969242476,
+        -0.1647354668487575,
+        0.8824066511970342
+      ],
+      "com_support_offset_m": [
+        -0.22730146964555198,
+        0.17103397351024055,
+        0.35651526309797876
+      ],
+      "support_mode": "fallback_all_limbs",
+      "active_contact_limbs": [],
+      "used_support_limbs": [
+        "left_hand",
+        "right_hand",
+        "left_foot",
+        "right_foot"
+      ],
+      "active_hold_ids": {},
+      "support_stability": {
+        "support_type": "quad_support",
+        "support_geometry": "polygon",
+        "support_point_count": 4,
+        "support_points_xyz": {
+          "left_hand": [
+            0.40859663126548845,
+            0.12149361577835543,
+            1.3232064785961102
+          ],
+          "right_hand": [
+            -0.022389816590342004,
+            -0.4565939161460673,
+            1.4356476319089075
+          ],
+          "left_foot": [
+            0.2544220191369726,
+            -0.043290510662905984,
+            0.14956917168846384
+          ],
+          "right_foot": [
+            0.56626120495758,
+            -0.2805510563644122,
+            0.6212033225946549
+          ]
+        },
+        "support_points_yz": {
+          "left_hand": [
+            0.12149361577835543,
+            1.3232064785961102
+          ],
+          "right_hand": [
+            -0.4565939161460673,
+            1.4356476319089075
+          ],
+          "left_foot": [
+            -0.043290510662905984,
+            0.14956917168846384
+          ],
+          "right_foot": [
+            -0.2805510563644122,
+            0.6212033225946549
+          ]
+        },
+        "support_points_xz": {
+          "left_hand": [
+            0.40859663126548845,
+            1.3232064785961102
+          ],
+          "right_hand": [
+            -0.022389816590342004,
+            1.4356476319089075
+          ],
+          "left_foot": [
+            0.2544220191369726,
+            0.14956917168846384
+          ],
+          "right_foot": [
+            0.56626120495758,
+            0.6212033225946549
+          ]
+        },
+        "support_centroid_yz": [
+          -0.1647354668487575,
+          0.8824066511970342
+        ],
+        "support_centroid_xz": [
+          0.30172250969242476,
+          0.8824066511970342
+        ],
+        "com_proj_yz": [
+          0.0062985066614830556,
+          1.238921914295013
+        ],
+        "com_proj_xz": [
+          0.07442104004687278,
+          1.238921914295013
+        ],
+        "inside_support": true,
+        "stability_margin_m": 0.10235718168223926,
+        "distance_to_support_m": 0.10235718168223926,
+        "hull_vertices_yz": [
+          [
+            -0.456593916,
+            1.435647632
+          ],
+          [
+            -0.280551056,
+            0.621203323
+          ],
+          [
+            -0.043290511,
+            0.149569172
+          ],
+          [
+            0.121493616,
+            1.323206479
+          ]
+        ],
+        "confidence": 1.0
+      },
+      "root_inverse_force": [
+        0.0,
+        0.0,
+        784.8000196200001,
+        13.137327579152407,
+        -40.04357067075922,
+        -30.43276061916737
+      ],
+      "joint_inverse_forces": {
+        "abdomen_z": {
+          "qfrc_inverse": -513.5184538495979,
+          "qpos": 0.09282275947457942,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_y": {
+          "qfrc_inverse": -355.60718631164764,
+          "qpos": 0.11840627360186882,
+          "range_low": -1.3962634015954636,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_x": {
+          "qfrc_inverse": 2696.889106878123,
+          "qpos": 0.5036001336691296,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_z": {
+          "qfrc_inverse": -0.4984837396370762,
+          "qpos": -0.00766301224944052,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "neck_y": {
+          "qfrc_inverse": -5.055975337695439,
+          "qpos": -0.38465149556277345,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_x": {
+          "qfrc_inverse": 0.8909978200550766,
+          "qpos": -0.26694382108089176,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "shoulder_shrug_left": {
+          "qfrc_inverse": 34.2930086324559,
+          "qpos": 0.1,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_left": {
+          "qfrc_inverse": -0.1754086420105373,
+          "qpos": 0.11432165939688399,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_left": {
+          "qfrc_inverse": 5.077000161305536,
+          "qpos": -1.108016058416073,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_left": {
+          "qfrc_inverse": -1.0785115014981161,
+          "qpos": 0.5583828971291919,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_left": {
+          "qfrc_inverse": 2.3377796007281875,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "shoulder_shrug_right": {
+          "qfrc_inverse": 34.25134737367327,
+          "qpos": 0.05833874121736602,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_right": {
+          "qfrc_inverse": -7.107801002945131,
+          "qpos": -1.117250588897298,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_right": {
+          "qfrc_inverse": 3.4889402859549894,
+          "qpos": -1.047719390493222,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_right": {
+          "qfrc_inverse": 3.959913094726157,
+          "qpos": -1.9084798553549855,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_right": {
+          "qfrc_inverse": -0.6434201029561563,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "hip_x_left": {
+          "qfrc_inverse": -2.4987408865126817,
+          "qpos": 0.5560763192394909,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_left": {
+          "qfrc_inverse": -0.19290328843574692,
+          "qpos": -0.002425457128529168,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_left": {
+          "qfrc_inverse": -11.339673696176256,
+          "qpos": -0.07667407759602393,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_left": {
+          "qfrc_inverse": -2.6015391528491545,
+          "qpos": -0.05218635282939913,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_left": {
+          "qfrc_inverse": 0.5080464617487026,
+          "qpos": 0.9053984255186803,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_left": {
+          "qfrc_inverse": 0.6088308523567221,
+          "qpos": 0.6108652381980153,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        },
+        "hip_x_right": {
+          "qfrc_inverse": -15.47008616735102,
+          "qpos": -0.9599310885968813,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_right": {
+          "qfrc_inverse": -34.485685823041045,
+          "qpos": 0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_right": {
+          "qfrc_inverse": 7.7343445193013425,
+          "qpos": -1.077770550399003,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_right": {
+          "qfrc_inverse": -3.0179733048938377,
+          "qpos": -1.0025667055290182,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_right": {
+          "qfrc_inverse": 1.2429593773840226,
+          "qpos": 1.8223583571167874,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_right": {
+          "qfrc_inverse": -0.3179717295380414,
+          "qpos": 0.48243340737770013,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        }
+      }
+    },
+    {
+      "frame_index": 138,
+      "timestamp_ms": 4600,
+      "detected": true,
+      "fit_mean_error_m": 0.12604828020311576,
+      "fit_max_error_m": 0.3238900060995486,
+      "fit_final_error_norm": 0.8878132944241014,
+      "com_position_m": [
+        0.053833233622462104,
+        0.032500086526775294,
+        1.249897453621118
+      ],
+      "support_center_m": [
+        0.23684304104023468,
+        -0.11814717944189122,
+        0.9499025865362468
+      ],
+      "com_support_offset_m": [
+        -0.18300980741777256,
+        0.1506472659686665,
+        0.2999948670848712
+      ],
+      "support_mode": "active_contacts",
+      "active_contact_limbs": [
+        "right_hand",
+        "left_foot"
+      ],
+      "used_support_limbs": [
+        "right_hand",
+        "left_foot"
+      ],
+      "active_hold_ids": {
+        "right_hand": 38,
+        "left_foot": 56
+      },
+      "support_stability": {
+        "support_type": "line_support",
+        "support_geometry": "line",
+        "support_point_count": 2,
+        "support_points_xyz": {
+          "right_hand": [
+            0.16147958136960847,
+            -0.44071671726088213,
+            1.6884452717574454
+          ],
+          "left_foot": [
+            0.31220650071086087,
+            0.20442235837709968,
+            0.21135990131504814
+          ]
+        },
+        "support_points_yz": {
+          "right_hand": [
+            -0.44071671726088213,
+            1.6884452717574454
+          ],
+          "left_foot": [
+            0.20442235837709968,
+            0.21135990131504814
+          ]
+        },
+        "support_points_xz": {
+          "right_hand": [
+            0.16147958136960847,
+            1.6884452717574454
+          ],
+          "left_foot": [
+            0.31220650071086087,
+            0.21135990131504814
+          ]
+        },
+        "support_centroid_yz": [
+          -0.11814717944189122,
+          0.9499025865362468
+        ],
+        "support_centroid_xz": [
+          0.23684304104023468,
+          0.9499025865362468
+        ],
+        "com_proj_yz": [
+          0.032500086526775294,
+          1.249897453621118
+        ],
+        "com_proj_xz": [
+          0.053833233622462104,
+          1.249897453621118
+        ],
+        "inside_support": false,
+        "stability_margin_m": -0.2581277870676362,
+        "distance_to_support_m": 0.2581277870676362,
+        "segment_projection_t": 0.36684699515956753,
+        "hull_vertices_yz": [
+          [
+            -0.440716717,
+            1.688445272
+          ],
+          [
+            0.204422358,
+            0.211359901
+          ]
+        ],
+        "confidence": 0.5
+      },
+      "root_inverse_force": [
+        0.0,
+        0.0,
+        784.8000196200001,
+        20.75291270073945,
+        -36.819488301312205,
+        -15.829828368248378
+      ],
+      "joint_inverse_forces": {
+        "abdomen_z": {
+          "qfrc_inverse": 22.80012812094119,
+          "qpos": 0.1491018512132306,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_y": {
+          "qfrc_inverse": -263.3483391875296,
+          "qpos": -0.053611474572500574,
+          "range_low": -1.3962634015954636,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_x": {
+          "qfrc_inverse": 1800.1872863666842,
+          "qpos": 0.27580899921999613,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_z": {
+          "qfrc_inverse": 0.6567893193780842,
+          "qpos": 0.10529699323243606,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "neck_y": {
+          "qfrc_inverse": -0.27696101629243675,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_x": {
+          "qfrc_inverse": 2.8049061516924727,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "shoulder_shrug_left": {
+          "qfrc_inverse": 17.1030618757354,
+          "qpos": 0.08693015728925758,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_left": {
+          "qfrc_inverse": 2.5480674163338577,
+          "qpos": 0.23017477952967133,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_left": {
+          "qfrc_inverse": 5.606272061121249,
+          "qpos": -1.2896158017223947,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_left": {
+          "qfrc_inverse": 1.312838775244938,
+          "qpos": 0.69354479925209,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_left": {
+          "qfrc_inverse": 2.9976650821585427,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "shoulder_shrug_right": {
+          "qfrc_inverse": 17.082512279770402,
+          "qpos": 0.06638056132425861,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_right": {
+          "qfrc_inverse": -8.143815589251924,
+          "qpos": -0.9831842443685938,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_right": {
+          "qfrc_inverse": 4.168578169355725,
+          "qpos": -1.0999624433370128,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_right": {
+          "qfrc_inverse": 6.25239558990053,
+          "qpos": -1.8597981585659196,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_right": {
+          "qfrc_inverse": -0.22877843369973905,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "hip_x_left": {
+          "qfrc_inverse": 7.629006061954695,
+          "qpos": 0.5723518466253965,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_left": {
+          "qfrc_inverse": 2.460451879286585,
+          "qpos": -0.0005588646030150815,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_left": {
+          "qfrc_inverse": -15.070215017144331,
+          "qpos": -0.31668704889814275,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_left": {
+          "qfrc_inverse": -3.417153203122182,
+          "qpos": -0.06227587021585335,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_left": {
+          "qfrc_inverse": 0.4247049156788046,
+          "qpos": 0.8893422303756787,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_left": {
+          "qfrc_inverse": 0.4502883582486875,
+          "qpos": 0.6108652381980153,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        },
+        "hip_x_right": {
+          "qfrc_inverse": -23.504066544781054,
+          "qpos": -0.9599310885968813,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_right": {
+          "qfrc_inverse": -24.155339860619595,
+          "qpos": 0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_right": {
+          "qfrc_inverse": 12.126659451902475,
+          "qpos": -0.7472468648746771,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_right": {
+          "qfrc_inverse": -3.1860952187605256,
+          "qpos": -1.0075688535184772,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_right": {
+          "qfrc_inverse": 1.3487575970295602,
+          "qpos": 1.8304955216279915,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_right": {
+          "qfrc_inverse": -0.19128648181933983,
+          "qpos": 0.49971791439149627,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        }
+      }
+    },
+    {
+      "frame_index": 275,
+      "timestamp_ms": 9167,
+      "detected": true,
+      "fit_mean_error_m": 0.08929878150105486,
+      "fit_max_error_m": 0.3517782138975961,
+      "fit_final_error_norm": 0.7164978871364673,
+      "com_position_m": [
+        0.031082887698807266,
+        0.04585442347398815,
+        1.22160205298404
+      ],
+      "support_center_m": [
+        0.3357032691925929,
+        0.02910697020156026,
+        1.1681096620516278
+      ],
+      "com_support_offset_m": [
+        -0.3046203814937857,
+        0.01674745327242789,
+        0.05349239093241209
+      ],
+      "support_mode": "active_contacts",
+      "active_contact_limbs": [
+        "left_hand",
+        "right_hand",
+        "left_foot"
+      ],
+      "used_support_limbs": [
+        "left_hand",
+        "right_hand",
+        "left_foot"
+      ],
+      "active_hold_ids": {
+        "left_hand": 5,
+        "right_hand": 29,
+        "left_foot": 56
+      },
+      "support_stability": {
+        "support_type": "tri_support",
+        "support_geometry": "polygon",
+        "support_point_count": 3,
+        "support_points_xyz": {
+          "left_hand": [
+            0.3176146379296031,
+            0.04945162791836319,
+            1.4220031777849906
+          ],
+          "right_hand": [
+            0.42714202595298467,
+            -0.23562147363671762,
+            1.86568139321345
+          ],
+          "left_foot": [
+            0.2623531436951908,
+            0.2734907563230352,
+            0.21664441515644245
+          ]
+        },
+        "support_points_yz": {
+          "left_hand": [
+            0.04945162791836319,
+            1.4220031777849906
+          ],
+          "right_hand": [
+            -0.23562147363671762,
+            1.86568139321345
+          ],
+          "left_foot": [
+            0.2734907563230352,
+            0.21664441515644245
+          ]
+        },
+        "support_points_xz": {
+          "left_hand": [
+            0.3176146379296031,
+            1.4220031777849906
+          ],
+          "right_hand": [
+            0.42714202595298467,
+            1.86568139321345
+          ],
+          "left_foot": [
+            0.2623531436951908,
+            0.21664441515644245
+          ]
+        },
+        "support_centroid_yz": [
+          0.02910697020156026,
+          1.1681096620516278
+        ],
+        "support_centroid_xz": [
+          0.3357032691925929,
+          1.1681096620516278
+        ],
+        "com_proj_yz": [
+          0.04585442347398815,
+          1.22160205298404
+        ],
+        "com_proj_xz": [
+          0.031082887698807266,
+          1.22160205298404
+        ],
+        "inside_support": true,
+        "stability_margin_m": 0.04015782715646747,
+        "distance_to_support_m": 0.04015782715646747,
+        "hull_vertices_yz": [
+          [
+            -0.235621474,
+            1.865681393
+          ],
+          [
+            0.273490756,
+            0.216644415
+          ],
+          [
+            0.049451628,
+            1.422003178
+          ]
+        ],
+        "confidence": 0.8
+      },
+      "root_inverse_force": [
+        0.0,
+        0.0,
+        784.8000196200001,
+        26.535313873323584,
+        -24.824482801429014,
+        5.839742414518236
+      ],
+      "joint_inverse_forces": {
+        "abdomen_z": {
+          "qfrc_inverse": 3.3186136431497886,
+          "qpos": 0.1809622564415,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_y": {
+          "qfrc_inverse": 247.97391552214074,
+          "qpos": -0.42024460308284395,
+          "range_low": -1.3962634015954636,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_x": {
+          "qfrc_inverse": 48.58236333810232,
+          "qpos": -0.07816632645310129,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_z": {
+          "qfrc_inverse": 1.4832322155490045,
+          "qpos": 0.26935118749604803,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "neck_y": {
+          "qfrc_inverse": 0.1769506175510287,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_x": {
+          "qfrc_inverse": 2.3653982132911953,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "shoulder_shrug_left": {
+          "qfrc_inverse": 15.705914577499485,
+          "qpos": 0.1,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_left": {
+          "qfrc_inverse": 3.515699187725279,
+          "qpos": 0.3765244462733947,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_left": {
+          "qfrc_inverse": 4.075729504034324,
+          "qpos": -1.3536603217817331,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_left": {
+          "qfrc_inverse": 2.3772437563816364,
+          "qpos": 0.8556753237792514,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_left": {
+          "qfrc_inverse": 2.999437814240323,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "shoulder_shrug_right": {
+          "qfrc_inverse": 15.633794545114243,
+          "qpos": 0.027879967614758822,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_right": {
+          "qfrc_inverse": -8.951169104710786,
+          "qpos": -0.9173665605555269,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_right": {
+          "qfrc_inverse": 4.1101128299832475,
+          "qpos": -0.8643621216122458,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_right": {
+          "qfrc_inverse": 6.4451943043983055,
+          "qpos": -1.5556070832117836,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_right": {
+          "qfrc_inverse": -0.839391360239301,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "hip_x_left": {
+          "qfrc_inverse": 8.402597018992676,
+          "qpos": 0.5115970193327258,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_left": {
+          "qfrc_inverse": 6.7194003586427895,
+          "qpos": -0.014811291741198931,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_left": {
+          "qfrc_inverse": -12.56337903286769,
+          "qpos": -0.664563176910725,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_left": {
+          "qfrc_inverse": -3.4922658834081215,
+          "qpos": -0.136771090068992,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_left": {
+          "qfrc_inverse": 0.3129949147313353,
+          "qpos": 0.8000441623665292,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_left": {
+          "qfrc_inverse": 0.4019430585895364,
+          "qpos": 0.6108652381980153,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        },
+        "hip_x_right": {
+          "qfrc_inverse": -29.312112503163043,
+          "qpos": -0.9599310885968813,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_right": {
+          "qfrc_inverse": -12.562556272897066,
+          "qpos": 0.6112224543080719,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_right": {
+          "qfrc_inverse": 23.210610704706664,
+          "qpos": -0.5154808889210343,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_right": {
+          "qfrc_inverse": 0.5646303432605982,
+          "qpos": -0.6744520269760905,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_right": {
+          "qfrc_inverse": 1.483700324169529,
+          "qpos": 1.6523441967167618,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_right": {
+          "qfrc_inverse": -0.14702966366704326,
+          "qpos": 0.38221746603846213,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        }
+      }
+    },
+    {
+      "frame_index": 413,
+      "timestamp_ms": 13767,
+      "detected": true,
+      "fit_mean_error_m": 0.1016929893836145,
+      "fit_max_error_m": 0.47301415560528326,
+      "fit_final_error_norm": 0.8590985285299376,
+      "com_position_m": [
+        0.024944570757162284,
+        0.019293198671900613,
+        1.238635493491541
+      ],
+      "support_center_m": [
+        0.3174206480087071,
+        -0.2111326867163356,
+        1.1871080590230507
+      ],
+      "com_support_offset_m": [
+        -0.29247607725154484,
+        0.2304258853882362,
+        0.051527434468490174
+      ],
+      "support_mode": "active_contacts",
+      "active_contact_limbs": [
+        "left_hand",
+        "right_hand",
+        "right_foot"
+      ],
+      "used_support_limbs": [
+        "left_hand",
+        "right_hand",
+        "right_foot"
+      ],
+      "active_hold_ids": {
+        "left_hand": 41,
+        "right_hand": 29,
+        "right_foot": 32
+      },
+      "support_stability": {
+        "support_type": "tri_support",
+        "support_geometry": "polygon",
+        "support_point_count": 3,
+        "support_points_xyz": {
+          "left_hand": [
+            0.30147750180502386,
+            0.27181766242765704,
+            1.4005580458527096
+          ],
+          "right_hand": [
+            0.32973326215743837,
+            -0.37927550514549985,
+            1.7985612542564018
+          ],
+          "right_foot": [
+            0.321051180063659,
+            -0.525940217431164,
+            0.36220487696004056
+          ]
+        },
+        "support_points_yz": {
+          "left_hand": [
+            0.27181766242765704,
+            1.4005580458527096
+          ],
+          "right_hand": [
+            -0.37927550514549985,
+            1.7985612542564018
+          ],
+          "right_foot": [
+            -0.525940217431164,
+            0.36220487696004056
+          ]
+        },
+        "support_points_xz": {
+          "left_hand": [
+            0.30147750180502386,
+            1.4005580458527096
+          ],
+          "right_hand": [
+            0.32973326215743837,
+            1.7985612542564018
+          ],
+          "right_foot": [
+            0.321051180063659,
+            0.36220487696004056
+          ]
+        },
+        "support_centroid_yz": [
+          -0.2111326867163356,
+          1.1871080590230507
+        ],
+        "support_centroid_xz": [
+          0.3174206480087071,
+          1.1871080590230507
+        ],
+        "com_proj_yz": [
+          0.019293198671900613,
+          1.238635493491541
+        ],
+        "com_proj_xz": [
+          0.024944570757162284,
+          1.238635493491541
+        ],
+        "inside_support": true,
+        "stability_margin_m": 0.10159767972256892,
+        "distance_to_support_m": 0.10159767972256892,
+        "hull_vertices_yz": [
+          [
+            -0.525940217,
+            0.362204877
+          ],
+          [
+            0.271817662,
+            1.400558046
+          ],
+          [
+            -0.379275505,
+            1.798561254
+          ]
+        ],
+        "confidence": 0.8
+      },
+      "root_inverse_force": [
+        0.0,
+        0.0,
+        784.8000196200001,
+        9.956709938783737,
+        -10.408208816211605,
+        5.0000089562566705
+      ],
+      "joint_inverse_forces": {
+        "abdomen_z": {
+          "qfrc_inverse": -741.3618892724203,
+          "qpos": -0.024292546481659332,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_y": {
+          "qfrc_inverse": 300.7684466216925,
+          "qpos": -0.5809467390094776,
+          "range_low": -1.3962634015954636,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_x": {
+          "qfrc_inverse": -1273.2781861678038,
+          "qpos": -0.17017184036599445,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_z": {
+          "qfrc_inverse": 0.9037291724795501,
+          "qpos": 0.059790988196301166,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "neck_y": {
+          "qfrc_inverse": 1.7505026322364774,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_x": {
+          "qfrc_inverse": -0.8139920139354322,
+          "qpos": -0.005150467710153251,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "shoulder_shrug_left": {
+          "qfrc_inverse": 23.668338689799462,
+          "qpos": 0.1,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_left": {
+          "qfrc_inverse": -1.9256820291748369,
+          "qpos": 0.1713575510470071,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_left": {
+          "qfrc_inverse": 5.317349293754271,
+          "qpos": -1.4356572267302992,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_left": {
+          "qfrc_inverse": -1.8932578382557785,
+          "qpos": 0.6816068327457596,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_left": {
+          "qfrc_inverse": 2.513233928057976,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "shoulder_shrug_right": {
+          "qfrc_inverse": 23.63395040344956,
+          "qpos": 0.06561171365009993,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_right": {
+          "qfrc_inverse": -6.267577681038067,
+          "qpos": -0.8679713296981989,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_right": {
+          "qfrc_inverse": 4.625014525141838,
+          "qpos": -0.561005772716237,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_right": {
+          "qfrc_inverse": 7.129182433811852,
+          "qpos": -1.2723510627184729,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_right": {
+          "qfrc_inverse": 0.19341708431033605,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "hip_x_left": {
+          "qfrc_inverse": 10.916267371671516,
+          "qpos": 0.5021785831300969,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_left": {
+          "qfrc_inverse": 12.921462202131316,
+          "qpos": -0.20943395077135288,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_left": {
+          "qfrc_inverse": -10.818342640185064,
+          "qpos": -0.7372496999426639,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_left": {
+          "qfrc_inverse": -4.324453190559402,
+          "qpos": -0.29074412684077855,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_left": {
+          "qfrc_inverse": 0.13426199542778172,
+          "qpos": 0.7015830984847664,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_left": {
+          "qfrc_inverse": 0.263929063139864,
+          "qpos": 0.6108652381980153,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        },
+        "hip_x_right": {
+          "qfrc_inverse": -24.16926265934314,
+          "qpos": -0.9599310885968813,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_right": {
+          "qfrc_inverse": -19.250363773651262,
+          "qpos": 0.23475425522798687,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_right": {
+          "qfrc_inverse": 3.3927729387396774,
+          "qpos": -0.6455392479978915,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_right": {
+          "qfrc_inverse": -1.2497333865604663,
+          "qpos": -0.36186872520758206,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_right": {
+          "qfrc_inverse": 1.2597904345852484,
+          "qpos": 1.5637210838809845,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_right": {
+          "qfrc_inverse": -0.31893162852223017,
+          "qpos": 0.3017774160546173,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        }
+      }
+    },
+    {
+      "frame_index": 550,
+      "timestamp_ms": 18334,
+      "detected": true,
+      "fit_mean_error_m": 0.1115295228258192,
+      "fit_max_error_m": 0.3949712591553935,
+      "fit_final_error_norm": 0.8730771089286028,
+      "com_position_m": [
+        0.026425881014855292,
+        -0.03675044874917666,
+        1.2412548943754043
+      ],
+      "support_center_m": [
+        0.43893405244183303,
+        0.2723995575080145,
+        0.45264938849516884
+      ],
+      "com_support_offset_m": [
+        -0.41250817142697777,
+        -0.30915000625719113,
+        0.7886055058802355
+      ],
+      "support_mode": "active_contacts",
+      "active_contact_limbs": [
+        "left_foot"
+      ],
+      "used_support_limbs": [
+        "left_foot"
+      ],
+      "active_hold_ids": {
+        "left_foot": 19
+      },
+      "support_stability": {
+        "support_type": "point_support",
+        "support_geometry": "point",
+        "support_point_count": 1,
+        "support_points_xyz": {
+          "left_foot": [
+            0.43893405244183303,
+            0.2723995575080145,
+            0.45264938849516884
+          ]
+        },
+        "support_points_yz": {
+          "left_foot": [
+            0.2723995575080145,
+            0.45264938849516884
+          ]
+        },
+        "support_points_xz": {
+          "left_foot": [
+            0.43893405244183303,
+            0.45264938849516884
+          ]
+        },
+        "support_centroid_yz": [
+          0.2723995575080145,
+          0.45264938849516884
+        ],
+        "support_centroid_xz": [
+          0.43893405244183303,
+          0.45264938849516884
+        ],
+        "com_proj_yz": [
+          -0.03675044874917666,
+          1.2412548943754043
+        ],
+        "com_proj_xz": [
+          0.026425881014855292,
+          1.2412548943754043
+        ],
+        "inside_support": false,
+        "stability_margin_m": -0.8470374078359488,
+        "distance_to_support_m": 0.8470374078359488,
+        "confidence": 0.25
+      },
+      "root_inverse_force": [
+        0.0,
+        0.0,
+        784.8000196200001,
+        -16.7290475816539,
+        -17.446882302078247,
+        3.5063681696409787
+      ],
+      "joint_inverse_forces": {
+        "abdomen_z": {
+          "qfrc_inverse": -1011.1757446955033,
+          "qpos": 0.05150821840641757,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_y": {
+          "qfrc_inverse": 377.84624118816566,
+          "qpos": -0.44510722309687145,
+          "range_low": -1.3962634015954636,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_x": {
+          "qfrc_inverse": -2052.0617264541083,
+          "qpos": -0.36009529759636677,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_z": {
+          "qfrc_inverse": 1.2059045662274506,
+          "qpos": 0.2709342493044498,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "neck_y": {
+          "qfrc_inverse": -0.7424628184905,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_x": {
+          "qfrc_inverse": -1.9946025150860942,
+          "qpos": 0.3563413880056428,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "shoulder_shrug_left": {
+          "qfrc_inverse": 20.701400625924677,
+          "qpos": 0.029462654548903896,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_left": {
+          "qfrc_inverse": -5.9152371392105225,
+          "qpos": 0.01393086972583211,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_left": {
+          "qfrc_inverse": 6.04286323682931,
+          "qpos": -1.4055308486482223,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_left": {
+          "qfrc_inverse": -5.4757036399450465,
+          "qpos": 0.5230510396062675,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_left": {
+          "qfrc_inverse": 2.1145535086055034,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "shoulder_shrug_right": {
+          "qfrc_inverse": 20.771937971375774,
+          "qpos": 0.1,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_right": {
+          "qfrc_inverse": -2.217648833067192,
+          "qpos": -0.6183171620214617,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_right": {
+          "qfrc_inverse": 4.691846505398626,
+          "qpos": -0.5647191073782274,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_right": {
+          "qfrc_inverse": 6.1793804485248005,
+          "qpos": -1.428630835219038,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_right": {
+          "qfrc_inverse": 1.2654551906701643,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "hip_x_left": {
+          "qfrc_inverse": 28.29117199979244,
+          "qpos": 0.7853981633974483,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_left": {
+          "qfrc_inverse": 17.478646622559808,
+          "qpos": -0.6291867468862632,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_left": {
+          "qfrc_inverse": 17.813951753259634,
+          "qpos": -0.5776514999933066,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_left": {
+          "qfrc_inverse": -1.2092831629412877,
+          "qpos": -0.7300134563099182,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_left": {
+          "qfrc_inverse": 0.23830091867481862,
+          "qpos": 0.5782388288935278,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_left": {
+          "qfrc_inverse": 0.08637700911964286,
+          "qpos": 0.6108652381980153,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        },
+        "hip_x_right": {
+          "qfrc_inverse": -17.74666144741689,
+          "qpos": -0.9599310885968813,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_right": {
+          "qfrc_inverse": -15.931707070196307,
+          "qpos": -0.030762388633880436,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_right": {
+          "qfrc_inverse": -21.03592379552201,
+          "qpos": -0.7639682333385466,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_right": {
+          "qfrc_inverse": -4.622862595899544,
+          "qpos": -0.12565128350200575,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_right": {
+          "qfrc_inverse": 0.9963113654539771,
+          "qpos": 1.485669859954087,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_right": {
+          "qfrc_inverse": -0.22004477707891712,
+          "qpos": 0.2632957430115037,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        }
+      }
+    },
+    {
+      "frame_index": 688,
+      "timestamp_ms": 22935,
+      "detected": true,
+      "fit_mean_error_m": 0.11174158567777749,
+      "fit_max_error_m": 0.41631110946393934,
+      "fit_final_error_norm": 0.8637722705531514,
+      "com_position_m": [
+        0.025579388212451037,
+        -0.010497571200073412,
+        1.2358479868556886
+      ],
+      "support_center_m": [
+        0.34415507024352615,
+        0.3115577369484345,
+        0.4510761270601411
+      ],
+      "com_support_offset_m": [
+        -0.3185756820310751,
+        -0.3220553081485079,
+        0.7847718597955475
+      ],
+      "support_mode": "active_contacts",
+      "active_contact_limbs": [
+        "left_foot"
+      ],
+      "used_support_limbs": [
+        "left_foot"
+      ],
+      "active_hold_ids": {
+        "left_foot": 19
+      },
+      "support_stability": {
+        "support_type": "point_support",
+        "support_geometry": "point",
+        "support_point_count": 1,
+        "support_points_xyz": {
+          "left_foot": [
+            0.34415507024352615,
+            0.3115577369484345,
+            0.4510761270601411
+          ]
+        },
+        "support_points_yz": {
+          "left_foot": [
+            0.3115577369484345,
+            0.4510761270601411
+          ]
+        },
+        "support_points_xz": {
+          "left_foot": [
+            0.34415507024352615,
+            0.4510761270601411
+          ]
+        },
+        "support_centroid_yz": [
+          0.3115577369484345,
+          0.4510761270601411
+        ],
+        "support_centroid_xz": [
+          0.34415507024352615,
+          0.4510761270601411
+        ],
+        "com_proj_yz": [
+          -0.010497571200073412,
+          1.2358479868556886
+        ],
+        "com_proj_xz": [
+          0.025579388212451037,
+          1.2358479868556886
+        ],
+        "inside_support": false,
+        "stability_margin_m": -0.8482844413482974,
+        "distance_to_support_m": 0.8482844413482974,
+        "confidence": 0.25
+      },
+      "root_inverse_force": [
+        0.0,
+        0.0,
+        784.8000196200001,
+        1.9787904231121174,
+        -14.191433825488529,
+        8.626461607837266
+      ],
+      "joint_inverse_forces": {
+        "abdomen_z": {
+          "qfrc_inverse": -1194.0740364287567,
+          "qpos": 0.011955010002272531,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_y": {
+          "qfrc_inverse": 290.06878471310046,
+          "qpos": -0.4272845325010074,
+          "range_low": -1.3962634015954636,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_x": {
+          "qfrc_inverse": -2567.1066738710624,
+          "qpos": -0.4587137861506528,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_z": {
+          "qfrc_inverse": 0.6471397540681966,
+          "qpos": 0.28001761059659497,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "neck_y": {
+          "qfrc_inverse": 0.08009232203951377,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_x": {
+          "qfrc_inverse": -0.4762582608892672,
+          "qpos": 0.10377021691596819,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "shoulder_shrug_left": {
+          "qfrc_inverse": 25.251581009479647,
+          "qpos": 0.1,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_left": {
+          "qfrc_inverse": -4.866894480855598,
+          "qpos": -0.019431203680483605,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_left": {
+          "qfrc_inverse": 6.579433221117738,
+          "qpos": -1.2785528863911158,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_left": {
+          "qfrc_inverse": -4.705217644290527,
+          "qpos": 0.4826974157732426,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_left": {
+          "qfrc_inverse": 2.35125529595769,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "shoulder_shrug_right": {
+          "qfrc_inverse": 25.22158592970639,
+          "qpos": 0.07000492022674422,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_right": {
+          "qfrc_inverse": -4.1783683719809215,
+          "qpos": -0.6628980369384002,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_right": {
+          "qfrc_inverse": 4.158763200060015,
+          "qpos": -0.5910949026530304,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_right": {
+          "qfrc_inverse": 5.997001140783324,
+          "qpos": -1.617151735203343,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_right": {
+          "qfrc_inverse": 0.43951410560262716,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "hip_x_left": {
+          "qfrc_inverse": 31.34107746770155,
+          "qpos": 0.7853981633974483,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_left": {
+          "qfrc_inverse": 11.747809075762033,
+          "qpos": -0.756993593244014,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_left": {
+          "qfrc_inverse": 24.947596774065573,
+          "qpos": -0.4244915132508353,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_left": {
+          "qfrc_inverse": -1.4034988760547127,
+          "qpos": -0.9531032505869855,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_left": {
+          "qfrc_inverse": 0.31150965170016537,
+          "qpos": 0.6461964609560916,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_left": {
+          "qfrc_inverse": -0.020491478969324683,
+          "qpos": 0.4544898879411483,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        },
+        "hip_x_right": {
+          "qfrc_inverse": -18.8859494269762,
+          "qpos": -0.9599310885968813,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_right": {
+          "qfrc_inverse": -14.25018130478121,
+          "qpos": -0.07137949698407349,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_right": {
+          "qfrc_inverse": -18.89450075418671,
+          "qpos": -0.7083066289895602,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_right": {
+          "qfrc_inverse": -3.678280828322804,
+          "qpos": -0.04165243304418981,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_right": {
+          "qfrc_inverse": 0.9213633834059718,
+          "qpos": 1.348102539536507,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_right": {
+          "qfrc_inverse": -0.273406474325972,
+          "qpos": 0.20553431706176162,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        }
+      }
+    },
+    {
+      "frame_index": 825,
+      "timestamp_ms": 27502,
+      "detected": true,
+      "fit_mean_error_m": 0.13668417503299315,
+      "fit_max_error_m": 0.35941304976188565,
+      "fit_final_error_norm": 0.9501281340228114,
+      "com_position_m": [
+        0.021415864655294086,
+        -0.0019138227984603177,
+        1.2503417332726372
+      ],
+      "support_center_m": [
+        0.3402312505028784,
+        -0.1229433254608213,
+        0.9424245854310501
+      ],
+      "com_support_offset_m": [
+        -0.3188153858475843,
+        0.12102950266236098,
+        0.3079171478415871
+      ],
+      "support_mode": "fallback_all_limbs",
+      "active_contact_limbs": [],
+      "used_support_limbs": [
+        "left_hand",
+        "right_hand",
+        "left_foot",
+        "right_foot"
+      ],
+      "active_hold_ids": {},
+      "support_stability": {
+        "support_type": "quad_support",
+        "support_geometry": "polygon",
+        "support_point_count": 4,
+        "support_points_xyz": {
+          "left_hand": [
+            0.3311550269567653,
+            0.25321652241677733,
+            1.4668173830092965
+          ],
+          "right_hand": [
+            0.2929365117867843,
+            -0.42809643300924216,
+            1.4509918820431402
+          ],
+          "left_foot": [
+            0.34897311396044767,
+            0.12950027767374983,
+            0.4961339292619744
+          ],
+          "right_foot": [
+            0.38786034930751623,
+            -0.4463936689245702,
+            0.3557551474097892
+          ]
+        },
+        "support_points_yz": {
+          "left_hand": [
+            0.25321652241677733,
+            1.4668173830092965
+          ],
+          "right_hand": [
+            -0.42809643300924216,
+            1.4509918820431402
+          ],
+          "left_foot": [
+            0.12950027767374983,
+            0.4961339292619744
+          ],
+          "right_foot": [
+            -0.4463936689245702,
+            0.3557551474097892
+          ]
+        },
+        "support_points_xz": {
+          "left_hand": [
+            0.3311550269567653,
+            1.4668173830092965
+          ],
+          "right_hand": [
+            0.2929365117867843,
+            1.4509918820431402
+          ],
+          "left_foot": [
+            0.34897311396044767,
+            0.4961339292619744
+          ],
+          "right_foot": [
+            0.38786034930751623,
+            0.3557551474097892
+          ]
+        },
+        "support_centroid_yz": [
+          -0.1229433254608213,
+          0.9424245854310501
+        ],
+        "support_centroid_xz": [
+          0.3402312505028784,
+          0.9424245854310501
+        ],
+        "com_proj_yz": [
+          -0.0019138227984603177,
+          1.2503417332726372
+        ],
+        "com_proj_xz": [
+          0.021415864655294086,
+          1.2503417332726372
+        ],
+        "inside_support": true,
+        "stability_margin_m": 0.21049271897739139,
+        "distance_to_support_m": 0.21049271897739139,
+        "hull_vertices_yz": [
+          [
+            -0.446393669,
+            0.355755147
+          ],
+          [
+            0.129500278,
+            0.496133929
+          ],
+          [
+            0.253216522,
+            1.466817383
+          ],
+          [
+            -0.428096433,
+            1.450991882
+          ]
+        ],
+        "confidence": 1.0
+      },
+      "root_inverse_force": [
+        0.0,
+        0.0,
+        784.8000196200001,
+        15.062280154298374,
+        -5.660167863803523,
+        6.9815350179327185
+      ],
+      "joint_inverse_forces": {
+        "abdomen_z": {
+          "qfrc_inverse": -1103.2144331575475,
+          "qpos": 0.07227482668039878,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_y": {
+          "qfrc_inverse": 437.12143816554135,
+          "qpos": -0.46447639898537385,
+          "range_low": -1.3962634015954636,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_x": {
+          "qfrc_inverse": -2104.664468490761,
+          "qpos": -0.38993539591128296,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_z": {
+          "qfrc_inverse": 0.637201236540452,
+          "qpos": 0.29648939313877043,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "neck_y": {
+          "qfrc_inverse": -0.015325530572502188,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_x": {
+          "qfrc_inverse": 0.060007897938305854,
+          "qpos": -0.05405448071900365,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "shoulder_shrug_left": {
+          "qfrc_inverse": 22.959724200732115,
+          "qpos": 0.1,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_left": {
+          "qfrc_inverse": -3.0227284293719388,
+          "qpos": 0.05633391572680128,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_left": {
+          "qfrc_inverse": 6.0927865599777515,
+          "qpos": -1.4348368928171327,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_left": {
+          "qfrc_inverse": -2.8471446614533273,
+          "qpos": 0.5793258881850806,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_left": {
+          "qfrc_inverse": 2.5417539003654723,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "shoulder_shrug_right": {
+          "qfrc_inverse": 22.859724200732114,
+          "qpos": 0.0,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_right": {
+          "qfrc_inverse": -5.144034161212401,
+          "qpos": -0.673678325697626,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_right": {
+          "qfrc_inverse": 4.299871928147732,
+          "qpos": -0.5991996215458718,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_right": {
+          "qfrc_inverse": 5.849556320609877,
+          "qpos": -1.7555875187722496,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_right": {
+          "qfrc_inverse": -0.093792165590059,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "hip_x_left": {
+          "qfrc_inverse": 28.450700114275552,
+          "qpos": 0.7853981633974483,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_left": {
+          "qfrc_inverse": 8.629133878096606,
+          "qpos": -0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_left": {
+          "qfrc_inverse": 22.603270889467684,
+          "qpos": -0.2923342526086064,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_left": {
+          "qfrc_inverse": -4.740552054498882,
+          "qpos": -1.3070604577529161,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_left": {
+          "qfrc_inverse": 0.23756704540194873,
+          "qpos": 0.7946582601720227,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_left": {
+          "qfrc_inverse": -0.2075740945870911,
+          "qpos": 0.27438649022564493,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        },
+        "hip_x_right": {
+          "qfrc_inverse": -11.18031823996358,
+          "qpos": -0.8109756275761797,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_right": {
+          "qfrc_inverse": -15.531257952224921,
+          "qpos": 0.0419771076946548,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_right": {
+          "qfrc_inverse": -27.184537867738875,
+          "qpos": -0.9137458955889806,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_right": {
+          "qfrc_inverse": -6.0374189274349135,
+          "qpos": -0.18751052808419336,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_right": {
+          "qfrc_inverse": 1.2801478502899477,
+          "qpos": 1.8265317752115673,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_right": {
+          "qfrc_inverse": -0.21335309393612947,
+          "qpos": 0.22308006535324182,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        }
+      }
+    },
+    {
+      "frame_index": 963,
+      "timestamp_ms": 32102,
+      "detected": true,
+      "fit_mean_error_m": 0.10264065782489501,
+      "fit_max_error_m": 0.22255258550524742,
+      "fit_final_error_norm": 0.7143324200330329,
+      "com_position_m": [
+        -0.015405528826231587,
+        -0.0009765841250609654,
+        1.2160303606734844
+      ],
+      "support_center_m": [
+        0.2399253202590458,
+        -0.07072144755421184,
+        0.8546642817017915
+      ],
+      "com_support_offset_m": [
+        -0.2553308490852774,
+        0.06974486342915087,
+        0.3613660789716928
+      ],
+      "support_mode": "fallback_all_limbs",
+      "active_contact_limbs": [],
+      "used_support_limbs": [
+        "left_hand",
+        "right_hand",
+        "left_foot",
+        "right_foot"
+      ],
+      "active_hold_ids": {},
+      "support_stability": {
+        "support_type": "quad_support",
+        "support_geometry": "polygon",
+        "support_point_count": 4,
+        "support_points_xyz": {
+          "left_hand": [
+            0.27076905778000787,
+            0.02638978546498237,
+            1.4374145983085647
+          ],
+          "right_hand": [
+            0.20783549890482653,
+            -0.15051194830250356,
+            1.2983984455640805
+          ],
+          "left_foot": [
+            0.30057197721305196,
+            0.15720683933523522,
+            0.4128593605269013
+          ],
+          "right_foot": [
+            0.18052474713829691,
+            -0.31597046671456136,
+            0.2699847224076194
+          ]
+        },
+        "support_points_yz": {
+          "left_hand": [
+            0.02638978546498237,
+            1.4374145983085647
+          ],
+          "right_hand": [
+            -0.15051194830250356,
+            1.2983984455640805
+          ],
+          "left_foot": [
+            0.15720683933523522,
+            0.4128593605269013
+          ],
+          "right_foot": [
+            -0.31597046671456136,
+            0.2699847224076194
+          ]
+        },
+        "support_points_xz": {
+          "left_hand": [
+            0.27076905778000787,
+            1.4374145983085647
+          ],
+          "right_hand": [
+            0.20783549890482653,
+            1.2983984455640805
+          ],
+          "left_foot": [
+            0.30057197721305196,
+            0.4128593605269013
+          ],
+          "right_foot": [
+            0.18052474713829691,
+            0.2699847224076194
+          ]
+        },
+        "support_centroid_yz": [
+          -0.07072144755421184,
+          0.8546642817017915
+        ],
+        "support_centroid_xz": [
+          0.2399253202590458,
+          0.8546642817017915
+        ],
+        "com_proj_yz": [
+          -0.0009765841250609654,
+          1.2160303606734844
+        ],
+        "com_proj_xz": [
+          -0.015405528826231587,
+          1.2160303606734844
+        ],
+        "inside_support": true,
+        "stability_margin_m": 0.05518509359282296,
+        "distance_to_support_m": 0.05518509359282296,
+        "hull_vertices_yz": [
+          [
+            -0.315970467,
+            0.269984722
+          ],
+          [
+            0.157206839,
+            0.412859361
+          ],
+          [
+            0.026389785,
+            1.437414598
+          ],
+          [
+            -0.150511948,
+            1.298398446
+          ]
+        ],
+        "confidence": 1.0
+      },
+      "root_inverse_force": [
+        0.0,
+        0.0,
+        784.8000196200001,
+        1.7780079755778837,
+        8.084220226876614,
+        -6.948317250623611
+      ],
+      "joint_inverse_forces": {
+        "abdomen_z": {
+          "qfrc_inverse": -2339.979461918467,
+          "qpos": 0.0866042730535445,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_y": {
+          "qfrc_inverse": 346.7521054295309,
+          "qpos": -1.0582601812346215,
+          "range_low": -1.3962634015954636,
+          "range_high": 0.8726646259971648
+        },
+        "abdomen_x": {
+          "qfrc_inverse": -2581.6266977672703,
+          "qpos": -0.49285268044160363,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_z": {
+          "qfrc_inverse": 1.7794572531951738,
+          "qpos": 0.20175807112630725,
+          "range_low": -0.8726646259971648,
+          "range_high": 0.8726646259971648
+        },
+        "neck_y": {
+          "qfrc_inverse": -1.350426895727391,
+          "qpos": -0.6084177612835473,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "neck_x": {
+          "qfrc_inverse": -4.086405090626455,
+          "qpos": 0.7853981633974483,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "shoulder_shrug_left": {
+          "qfrc_inverse": 15.460500400378402,
+          "qpos": 0.05458520276080844,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_left": {
+          "qfrc_inverse": -6.191959937274482,
+          "qpos": 0.4159400066951885,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_left": {
+          "qfrc_inverse": 2.4297185207810266,
+          "qpos": -1.4140759092018291,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_left": {
+          "qfrc_inverse": -5.5498508900360335,
+          "qpos": 0.8710148463704335,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_left": {
+          "qfrc_inverse": 0.6704061687369338,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "shoulder_shrug_right": {
+          "qfrc_inverse": 15.460814091307677,
+          "qpos": 0.05489889369008282,
+          "range_low": 0.0,
+          "range_high": 0.1
+        },
+        "shoulder1_right": {
+          "qfrc_inverse": 1.6810213134714915,
+          "qpos": -0.3367123088002588,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder2_right": {
+          "qfrc_inverse": 1.0678066244634912,
+          "qpos": -0.6794086316221276,
+          "range_low": -2.0943951023931953,
+          "range_high": 2.0943951023931953
+        },
+        "shoulder3_right": {
+          "qfrc_inverse": 3.4756894289048486,
+          "qpos": -1.812192553456468,
+          "range_low": -2.6179938779914944,
+          "range_high": 2.6179938779914944
+        },
+        "elbow_right": {
+          "qfrc_inverse": 2.1282467793832467,
+          "qpos": 0.17453292519943295,
+          "range_low": -3.0543261909900767,
+          "range_high": 0.17453292519943295
+        },
+        "hip_x_left": {
+          "qfrc_inverse": 24.083737207815336,
+          "qpos": 0.4169236208916777,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_left": {
+          "qfrc_inverse": 3.6049912756144615,
+          "qpos": -0.6716430031880393,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_left": {
+          "qfrc_inverse": 30.157946621500475,
+          "qpos": -0.44425474112921837,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_left": {
+          "qfrc_inverse": -0.6849082070159973,
+          "qpos": -0.9240776057628325,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_left": {
+          "qfrc_inverse": 0.2939991417573555,
+          "qpos": 0.5820578932903516,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_left": {
+          "qfrc_inverse": -0.017239312644925037,
+          "qpos": 0.25198762916388834,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        },
+        "hip_x_right": {
+          "qfrc_inverse": 42.234527358164755,
+          "qpos": -0.9573068735357815,
+          "range_low": -0.9599310885968813,
+          "range_high": 0.7853981633974483
+        },
+        "hip_z_right": {
+          "qfrc_inverse": 145.68445857299736,
+          "qpos": 0.03053430974712273,
+          "range_low": -0.7853981633974483,
+          "range_high": 0.7853981633974483
+        },
+        "hip_y_right": {
+          "qfrc_inverse": -400.13315871510406,
+          "qpos": -1.359772730607267,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.7853981633974483
+        },
+        "knee_right": {
+          "qfrc_inverse": -5.376434728714583,
+          "qpos": -0.01896962037893389,
+          "range_low": -2.9670597283903604,
+          "range_high": 0.0
+        },
+        "ankle_y_right": {
+          "qfrc_inverse": 1.6416614359638675,
+          "qpos": 2.0723137638592894,
+          "range_low": -1.5707963267948966,
+          "range_high": 2.0943951023931953
+        },
+        "ankle_x_right": {
+          "qfrc_inverse": -0.19226140339478925,
+          "qpos": -0.04000497809061754,
+          "range_low": -0.6108652381980153,
+          "range_high": 0.6108652381980153
+        }
+      }
+    }
+  ],
+  "joint_load_summary": {
+    "abdomen_z": {
+      "mean_abs_qfrc_inverse": 866.180345135798,
+      "max_abs_qfrc_inverse": 2339.979461918467,
+      "p95_abs_qfrc_inverse": 1938.9125629970679
+    },
+    "abdomen_y": {
+      "mean_abs_qfrc_inverse": 327.4358071424186,
+      "max_abs_qfrc_inverse": 437.12143816554135,
+      "p95_abs_qfrc_inverse": 416.3751192234598
+    },
+    "abdomen_x": {
+      "mean_abs_qfrc_inverse": 1890.5495636667395,
+      "max_abs_qfrc_inverse": 2696.889106878123,
+      "p95_abs_qfrc_inverse": 2656.5472636893246
+    },
+    "neck_z": {
+      "mean_abs_qfrc_inverse": 0.9764921571343734,
+      "max_abs_qfrc_inverse": 1.7794572531951738,
+      "p95_abs_qfrc_inverse": 1.6757784900190145
+    },
+    "neck_y": {
+      "mean_abs_qfrc_inverse": 1.1810871463256611,
+      "max_abs_qfrc_inverse": 5.055975337695439,
+      "p95_abs_qfrc_inverse": 3.899059890784801
+    },
+    "neck_x": {
+      "mean_abs_qfrc_inverse": 1.6865709954392873,
+      "max_abs_qfrc_inverse": 4.086405090626455,
+      "p95_abs_qfrc_inverse": 3.6378804619995604
+    },
+    "shoulder_shrug_left": {
+      "mean_abs_qfrc_inverse": 21.892941251500638,
+      "max_abs_qfrc_inverse": 34.2930086324559,
+      "p95_abs_qfrc_inverse": 31.12850896441421
+    },
+    "shoulder1_left": {
+      "mean_abs_qfrc_inverse": 3.5202096577446316,
+      "max_abs_qfrc_inverse": 6.191959937274482,
+      "p95_abs_qfrc_inverse": 6.095106957952096
+    },
+    "shoulder2_left": {
+      "mean_abs_qfrc_inverse": 5.1526440698651506,
+      "max_abs_qfrc_inverse": 6.579433221117738,
+      "p95_abs_qfrc_inverse": 6.409106889718743
+    },
+    "shoulder3_left": {
+      "mean_abs_qfrc_inverse": 3.1549710883881756,
+      "max_abs_qfrc_inverse": 5.5498508900360335,
+      "p95_abs_qfrc_inverse": 5.523899352504188
+    },
+    "elbow_left": {
+      "mean_abs_qfrc_inverse": 2.315760662356329,
+      "max_abs_qfrc_inverse": 2.999437814240323,
+      "p95_abs_qfrc_inverse": 2.9988173580117
+    },
+    "shoulder_shrug_right": {
+      "mean_abs_qfrc_inverse": 21.864458349391178,
+      "max_abs_qfrc_inverse": 34.25134737367327,
+      "p95_abs_qfrc_inverse": 31.090930868284858
+    },
+    "shoulder1_right": {
+      "mean_abs_qfrc_inverse": 5.46142950720974,
+      "max_abs_qfrc_inverse": 8.951169104710786,
+      "p95_abs_qfrc_inverse": 8.668595374300184
+    },
+    "shoulder2_right": {
+      "mean_abs_qfrc_inverse": 3.826366758563208,
+      "max_abs_qfrc_inverse": 4.691846505398626,
+      "p95_abs_qfrc_inverse": 4.66845531230875
+    },
+    "shoulder3_right": {
+      "mean_abs_qfrc_inverse": 5.661039095207462,
+      "max_abs_qfrc_inverse": 7.129182433811852,
+      "p95_abs_qfrc_inverse": 6.889786588517111
+    },
+    "elbow_right": {
+      "mean_abs_qfrc_inverse": 0.7290019028064537,
+      "max_abs_qfrc_inverse": 2.1282467793832467,
+      "p95_abs_qfrc_inverse": 1.8262697233336673
+    },
+    "hip_x_left": {
+      "mean_abs_qfrc_inverse": 17.701662266089556,
+      "max_abs_qfrc_inverse": 31.34107746770155,
+      "p95_abs_qfrc_inverse": 30.329445394002448
+    },
+    "hip_z_left": {
+      "mean_abs_qfrc_inverse": 7.969349822566169,
+      "max_abs_qfrc_inverse": 17.478646622559808,
+      "p95_abs_qfrc_inverse": 15.883632075409833
+    },
+    "hip_y_left": {
+      "mean_abs_qfrc_inverse": 18.164297053083338,
+      "max_abs_qfrc_inverse": 30.157946621500475,
+      "p95_abs_qfrc_inverse": 28.334324174898256
+    },
+    "knee_left": {
+      "mean_abs_qfrc_inverse": 2.7342067163062174,
+      "max_abs_qfrc_inverse": 4.740552054498882,
+      "p95_abs_qfrc_inverse": 4.594917452120064
+    },
+    "ankle_y_left": {
+      "mean_abs_qfrc_inverse": 0.30767313064011403,
+      "max_abs_qfrc_inverse": 0.5080464617487026,
+      "p95_abs_qfrc_inverse": 0.47887692062423826
+    },
+    "ankle_x_left": {
+      "mean_abs_qfrc_inverse": 0.2570841534569742,
+      "max_abs_qfrc_inverse": 0.6088308523567221,
+      "p95_abs_qfrc_inverse": 0.5533409794189099
+    },
+    "hip_x_right": {
+      "mean_abs_qfrc_inverse": 22.81287304339496,
+      "max_abs_qfrc_inverse": 42.234527358164755,
+      "p95_abs_qfrc_inverse": 37.71168215891415
+    },
+    "hip_z_right": {
+      "mean_abs_qfrc_inverse": 35.2314438288011,
+      "max_abs_qfrc_inverse": 145.68445857299736,
+      "p95_abs_qfrc_inverse": 106.7648881105126
+    },
+    "hip_y_right": {
+      "mean_abs_qfrc_inverse": 64.21406359340023,
+      "max_abs_qfrc_inverse": 400.13315871510406,
+      "p95_abs_qfrc_inverse": 269.601141418526
+    },
+    "knee_right": {
+      "mean_abs_qfrc_inverse": 3.466678666730909,
+      "max_abs_qfrc_inverse": 6.0374189274349135,
+      "p95_abs_qfrc_inverse": 5.806074457882797
+    },
+    "ankle_y_right": {
+      "mean_abs_qfrc_inverse": 1.2718364710352654,
+      "max_abs_qfrc_inverse": 1.6416614359638675,
+      "p95_abs_qfrc_inverse": 1.5863750468358488
+    },
+    "ankle_x_right": {
+      "mean_abs_qfrc_inverse": 0.2342856565353078,
+      "max_abs_qfrc_inverse": 0.31893162852223017,
+      "p95_abs_qfrc_inverse": 0.3185956638777641
+    }
+  },
+  "support_stability_summary": {
+    "support_type_counts": {
+      "quad_support": 3,
+      "line_support": 1,
+      "tri_support": 2,
+      "point_support": 2
+    },
+    "inside_support_count": 5,
+    "outside_support_count": 3,
+    "stability_margin_summary_m": {
+      "mean_m": -0.18045739189004906,
+      "median_m": 0.047671460374645216,
+      "min_m": -0.8482844413482974,
+      "max_m": 0.21049271897739139
+    }
+  },
+  "gate2_static_inverse_dynamics": {
+    "passed": true,
+    "failures": [],
+    "fit_mean_error_m": 0.11670004648870487,
+    "max_abs_joint_inverse_force": 2696.889106878123
+  },
+  "processed_sample_frames": 8
+}

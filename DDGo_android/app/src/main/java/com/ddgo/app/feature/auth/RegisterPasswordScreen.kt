@@ -31,14 +31,16 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
     LaunchedEffect(uiState) {
         when (uiState) {
             is AuthUiState.Success -> {
-                Toast.makeText(context, "회원가입이 완료되었습니다.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "\uD68C\uC6D0\uAC00\uC785\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", Toast.LENGTH_SHORT).show()
                 viewModel.resetUiState()
                 onRegComplete()
             }
+
             is AuthUiState.Error -> {
                 Toast.makeText(context, (uiState as AuthUiState.Error).message, Toast.LENGTH_SHORT).show()
                 viewModel.resetUiState()
             }
+
             else -> {}
         }
     }
@@ -55,13 +57,13 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
             }
-            
+
             Spacer(modifier = Modifier.height(20.dp))
-            
+
             Text(
-                text = "비밀번호를 정확하게 입력해주세요",
+                text = "\uBE44\uBC00\uBC88\uD638\uB97C \uC815\uD655\uD558\uAC8C \uC785\uB825\uD574\uC8FC\uC138\uC694",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 24.sp,
@@ -73,7 +75,7 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "비밀번호",
+                text = "\uBE44\uBC00\uBC88\uD638",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 16.sp,
@@ -86,8 +88,8 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
 
             TextField(
                 value = viewModel.password,
-                onValueChange = { viewModel.password = it },
-                placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
+                onValueChange = viewModel::updatePassword,
+                placeholder = { Text("\uBE44\uBC00\uBC88\uD638", color = Color(0xFF8391A1)) },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
@@ -100,11 +102,11 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
                     Text("~", color = Color(0xFF64788D))
                 }
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Text(
-                text = "✕ 영문/숫자/특수문자 2가지 이상 조합 (8~20자)",
+                text = "\u2715 \uC601\uBB38/\uC22B\uC790/\uD2B9\uC218\uBB38\uC790 2\uAC00\uC9C0 \uC774\uC0C1 \uC870\uD569 (8~20\uC790)",
                 style = TextStyle(
                     color = Color(0xFFFF3B30),
                     fontSize = 12.sp,
@@ -131,7 +133,7 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
                 )
             } else {
                 Text(
-                    "다음",
+                    "\uB2E4\uC74C",
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
