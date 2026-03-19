@@ -31,13 +31,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.R
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
 fun AuthLandingScreen(onRegisterClick: () -> Unit, onLoginClick: () -> Unit) {
-    Box(
+    SafeAreaScreen(
         modifier = Modifier
-            .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(

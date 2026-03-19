@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 
 @Composable
 fun AdditionalUploadScreen(
@@ -52,10 +53,8 @@ fun AdditionalUploadScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0D0D0D)) // 기존 AttemptUploadScreen과 유사한 다크 테마 배경
+    SafeAreaScreen(
+        containerColor = Color(0xFF0D0D0D)
     ) {
         Column(
             modifier = Modifier
