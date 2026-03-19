@@ -68,6 +68,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.usecase.HoldNumbered
 import kotlinx.coroutines.delay
@@ -229,11 +230,7 @@ fun AttemptResultScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(C_BG)
-    ) {
+    SafeAreaScreen(containerColor = C_BG) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
