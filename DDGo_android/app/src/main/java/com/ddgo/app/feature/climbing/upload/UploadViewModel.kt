@@ -611,11 +611,21 @@ class UploadViewModel @Inject constructor(
      * 3. UseCase를 통해 Kakao Local API 검색
      * 4. 결과를 UI 상태로 반영
      */
-    fun searchNearbyPlaces(latitude: Double, longitude: Double) {
+    fun searchNearbyPlaces(
+        latitude: Double,
+        longitude: Double,
+        query: String = "",
+        nearbyOnly: Boolean = false
+    ) {
         lastSearchLatitude = latitude
         lastSearchLongitude = longitude
 
-        Log.d(TAG, "searchNearbyPlaces: latitude=$latitude, longitude=$longitude")
+        val normalizedQuery = query.trim()
+
+        Log.d(
+            TAG,
+            "searchNearbyPlaces: latitude=$latitude, longitude=$longitude, query=$normalizedQuery, nearbyOnly=$nearbyOnly"
+        )
 
         selectedNearbyPlace = null
         resolvedGym = null
@@ -628,7 +638,12 @@ class UploadViewModel @Inject constructor(
         viewModelScope.launch {
             _gymSearchUiState.value = GymSearchUiState.Loading
 
-            searchNearbyClimbingGymsUseCase(latitude, longitude)
+            searchNearbyClimbingGymsUseCase(
+                latitude = latitude,
+                longitude = longitude,
+                query = normalizedQuery,
+                nearbyOnly = nearbyOnly
+            )
                 .onSuccess { places ->
                     nearbyPlaces = places
                     Log.d(TAG, "searchNearbyPlaces: success, placeCount=${places.size}")

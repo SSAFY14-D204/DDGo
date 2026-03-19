@@ -5,6 +5,7 @@ import com.ddgo.app.data.mapper.GymMapper.toDomainOrNull
 import com.ddgo.app.data.remote.gym.GymApi
 import com.ddgo.app.data.remote.gym.ResolveGymRequestDto
 import com.ddgo.app.data.remote.kakao.KakaoLocalApi
+import com.ddgo.app.data.remote.kakao.KakaoPlaceDocumentDto
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.ResolvedGym
 import com.ddgo.app.domain.repository.GymRepository
@@ -35,10 +36,11 @@ class GymRepositoryImpl @Inject constructor(
         latitude: Double,
         longitude: Double,
         radiusMeters: Int,
-        size: Int
+        size: Int,
+        allowGlobalFallback: Boolean
     ): Result<List<NearbyPlace>> {
         return try {
-            val response = kakaoLocalApi.searchPlacesByKeyword(
+            val nearbyResponse = kakaoLocalApi.searchPlacesByKeyword(
                 query = query,
                 longitude = longitude.toString(),
                 latitude = latitude.toString(),
@@ -46,7 +48,30 @@ class GymRepositoryImpl @Inject constructor(
                 size = size
             )
 
-            Result.success(response.documents.mapNotNull { it.toDomainOrNull() })
+            val nearbyPlaces = nearbyResponse.documents
+                .filter(::isClimbingRelevant)
+                .mapNotNull { it.toDomainOrNull() }
+            if (nearbyPlaces.isNotEmpty()) {
+                return Result.success(nearbyPlaces)
+            }
+
+            if (!allowGlobalFallback) {
+                return Result.success(emptyList())
+            }
+
+            // 특정 암장명을 입력했는데 현재 위치 반경 안에 없을 수 있어,
+            // 주변 검색이 비면 위치 제한 없이 키워드 검색을 한 번 더 시도합니다.
+            val globalResponse = kakaoLocalApi.searchPlacesByKeyword(
+                query = query,
+                sort = null,
+                size = size
+            )
+
+            Result.success(
+                globalResponse.documents
+                    .filter(::isClimbingRelevant)
+                    .mapNotNull { it.toDomainOrNull() }
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -77,5 +102,26 @@ class GymRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun isClimbingRelevant(document: KakaoPlaceDocumentDto): Boolean {
+        val searchableText = buildString {
+            append(document.placeName)
+            append(' ')
+            append(document.categoryName.orEmpty())
+            append(' ')
+            append(document.categoryGroupName.orEmpty())
+        }.lowercase()
+
+        val climbingKeywords = listOf(
+            "\uD074\uB77C\uC774\uBC0D",
+            "\uC554\uBCBD",
+            "\uC554\uC7A5",
+            "\uBCFC\uB354\uB9C1",
+            "climbing",
+            "bouldering"
+        )
+
+        return climbingKeywords.any(searchableText::contains)
     }
 }
