@@ -1,37 +1,45 @@
 package com.ddgo.app.feature.calendar.model
 
+import com.ddgo.app.domain.model.CalendarEntry
 import java.time.LocalDate
 import java.time.YearMonth
 
-// Screen이 그리기 위해 필요한 상태만 모아둔 화면 전용 모델이다.
+enum class CalendarDisplayMode {
+    COLOR,
+    GYM
+}
+
 data class CalendarUiState(
     val today: LocalDate,
     val currentMonth: YearMonth,
     val selectedDate: LocalDate,
+    val availableMonths: List<YearMonth>,
+    val displayMode: CalendarDisplayMode,
+    val headerSolvedCount: Int,
+    val entries: List<CalendarEntry>,
     val weeks: List<List<CalendarDayUiModel>>,
-    val summary: CalendarMonthSummaryUiModel,
-    val selectedEntries: List<CalendarEntryUiModel>,
     val isLoading: Boolean,
     val errorMessage: String?
 )
 
-// 날짜 셀은 날짜 자체와 현재 월 포함 여부, 기록 개수만 가진다.
 data class CalendarDayUiModel(
     val date: LocalDate,
     val isInCurrentMonth: Boolean,
-    val entryCount: Int
+    val isSelected: Boolean,
+    val isToday: Boolean,
+    val markers: List<CalendarMarkerUiModel>,
+    val overflowCount: Int
 )
 
-// 상단 요약 카드에서 쓰는 월간 집계 값이다.
-data class CalendarMonthSummaryUiModel(
-    val activeDays: Int = 0,
-    val totalSessions: Int = 0,
-    val longestStreak: Int = 0
+data class CalendarMarkerUiModel(
+    val style: CalendarMarkerStyle,
+    val colorHex: String? = null,
+    val isSolved: Boolean = true,
+    val logoUrl: String? = null,
+    val fallbackLabel: String = ""
 )
 
-// 상세 카드에서 바로 렌더링할 수 있도록 가공한 기록 모델이다.
-data class CalendarEntryUiModel(
-    val title: String,
-    val secondaryText: String,
-    val timeLabel: String
-)
+enum class CalendarMarkerStyle {
+    DIFFICULTY,
+    GYM
+}

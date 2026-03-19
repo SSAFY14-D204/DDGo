@@ -1,19 +1,38 @@
 package com.ddgo.app.domain.model
 
 import java.time.LocalDate
-import java.time.LocalTime
+import java.time.LocalDateTime
 
-// 캘린더에 표시할 한 건의 활동 기록이다.
 data class CalendarEntry(
     val id: Long,
     val date: LocalDate,
-    val title: String,
-    val venue: String,
-    val time: LocalTime?,
-    val note: String
+    val startedAt: LocalDateTime?,
+    val endedAt: LocalDateTime?,
+    val createdAt: LocalDateTime,
+    val gymId: Long?,
+    val gymGradeId: Long?,
+    val gymName: String,
+    val problemColor: String,
+    val difficultyLabel: String,
+    val difficultyColorHex: String,
+    val challengeStatus: String,
+    val challengeResult: CalendarChallengeResult,
+    val gymLogoUrl: String?,
+    val brandLogoUrl: String?
 )
 
-// 상단 요약 카드에 필요한 월간 집계 값이다.
+enum class CalendarChallengeResult {
+    SUCCESS,
+    FAIL,
+    UNKNOWN;
+
+    companion object {
+        fun from(raw: String?): CalendarChallengeResult {
+            return entries.firstOrNull { it.name == raw } ?: UNKNOWN
+        }
+    }
+}
+
 data class CalendarMonthSummary(
     val activeDays: Int = 0,
     val totalSessions: Int = 0,
