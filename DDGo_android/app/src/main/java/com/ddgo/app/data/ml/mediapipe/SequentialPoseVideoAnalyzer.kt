@@ -1,5 +1,4 @@
-// [DEBUG ONLY] 이 파일은 MediaPipe 포즈 랜드마커 디버깅 분석기입니다.
-package com.ddgo.app.feature.debug
+package com.ddgo.app.data.ml.mediapipe
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -17,45 +16,53 @@ import android.net.Uri
 import android.util.Log
 import com.ddgo.app.data.mapper.VisionMapper
 import com.ddgo.app.domain.model.Pose
-import com.ddgo.app.domain.model.PoseLandmark
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
-import java.io.FileNotFoundException
 import java.util.Optional
 import javax.inject.Inject
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
-/**
- * 디버그 화면에서 선택한 비디오를 순차 디코딩해 MediaPipe Pose 결과를 반환합니다.
- *
- * 핵심 포인트:
- * - Python의 `cap.read()`처럼 처음부터 끝까지 프레임을 순서대로 읽습니다.
- * - 압축 샘플 PTS를 따로 모은 뒤 다시 seek 하지 않고, 디코더가 실제로 출력한 프레임만 처리합니다.
- * - 일부 코덱/컨테이너에서 첫 키프레임으로 반복 스냅되는 문제를 피합니다.
- */
-class DebugPoseVideoAnalyzer @Inject constructor(
+class SequentialPoseVideoAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    suspend operator fun invoke(videoUri: String): Result<List<DebugPoseFrameResult>> = withContext(Dispatchers.IO) {
-        runCatching { analyzeInternal(videoUri) }
+    suspend operator fun invoke(
+        videoUri: String,
+        analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
+    ): List<Pose> = withContext(Dispatchers.IO) {
+        val cancellationCheckpoint = {
+            coroutineContext.ensureActive()
+        }
+
+        analyzeInternal(
+            videoUri = videoUri,
+            analysisFpsLimit = analysisFpsLimit,
+            cancellationCheckpoint = cancellationCheckpoint
+        )
     }
 
-    private fun analyzeInternal(videoUri: String): List<DebugPoseFrameResult> {
-        val uri = Uri.parse(videoUri)
-        val poseLandmarker = createPoseLandmarker()
+    private fun analyzeInternal(
+        videoUri: String,
+        analysisFpsLimit: Int,
+        cancellationCheckpoint: () -> Unit
+    ): List<Pose> {
+        val poseLandmarker = createPoseLandmarker() ?: return emptyList()
 
         try {
             return analyzeSequentialFrames(
-                uri = uri,
-                poseLandmarker = poseLandmarker
+                uri = Uri.parse(videoUri),
+                poseLandmarker = poseLandmarker,
+                analysisFpsLimit = analysisFpsLimit,
+                cancellationCheckpoint = cancellationCheckpoint
             )
         } finally {
             poseLandmarker.close()
@@ -64,48 +71,47 @@ class DebugPoseVideoAnalyzer @Inject constructor(
 
     private fun analyzeSequentialFrames(
         uri: Uri,
-        poseLandmarker: PoseLandmarker
-    ): List<DebugPoseFrameResult> {
+        poseLandmarker: PoseLandmarker,
+        analysisFpsLimit: Int,
+        cancellationCheckpoint: () -> Unit
+    ): List<Pose> {
         val extractor = MediaExtractor()
 
         try {
             require(setExtractorDataSource(extractor, uri)) {
-                "선택한 비디오를 열 수 없습니다."
+                "Could not open selected video."
             }
 
             val videoTrackIndex = findVideoTrackIndex(extractor)
             if (videoTrackIndex == -1) {
-                Log.w(TAG, "비디오 트랙을 찾지 못했습니다.")
+                Log.w(TAG, "No video track found.")
                 return emptyList()
             }
 
             extractor.selectTrack(videoTrackIndex)
             val trackFormat = extractor.getTrackFormat(videoTrackIndex)
             val mimeType = trackFormat.getString(MediaFormat.KEY_MIME)
-                ?: throw IllegalStateException("비디오 MIME 정보를 읽을 수 없습니다.")
-            val durationUs = trackFormat.readDurationUs()
-            val sampleStepUs = resolveSampleStepUs(durationUs)
+                ?: throw IllegalStateException("Missing video mime type.")
             val rotationDegrees = trackFormat.readRotationDegrees()
-            val width = trackFormat.readDimension(MediaFormat.KEY_WIDTH)
-            val height = trackFormat.readDimension(MediaFormat.KEY_HEIGHT)
             val frameRate = trackFormat.readFrameRateOrNull()
-            val decoder = createVideoDecoder(mimeType, trackFormat)
+            val decoder = createVideoDecoder(
+                mimeType = mimeType,
+                trackFormat = trackFormat
+            )
 
             try {
-                return decodeFramesSequentially(
+                return decodeEveryFrame(
                     extractor = extractor,
                     decoder = decoder,
                     poseLandmarker = poseLandmarker,
-                    sampleStepUs = sampleStepUs,
+                    analysisFpsLimit = analysisFpsLimit,
                     rotationDegrees = rotationDegrees,
-                    durationUs = durationUs,
-                    width = width,
-                    height = height,
-                    frameRate = frameRate
+                    frameRate = frameRate,
+                    cancellationCheckpoint = cancellationCheckpoint
                 )
             } finally {
                 runCatching { decoder.stop() }
-                    .onFailure { error -> Log.w(TAG, "디코더 stop 실패", error) }
+                    .onFailure { error -> Log.w(TAG, "Failed to stop decoder.", error) }
                 decoder.release()
             }
         } finally {
@@ -113,36 +119,39 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         }
     }
 
-    private fun decodeFramesSequentially(
+    private fun decodeEveryFrame(
         extractor: MediaExtractor,
         decoder: MediaCodec,
         poseLandmarker: PoseLandmarker,
-        sampleStepUs: Long,
+        analysisFpsLimit: Int,
         rotationDegrees: Int,
-        durationUs: Long,
-        width: Int,
-        height: Int,
-        frameRate: Int?
-    ): List<DebugPoseFrameResult> {
+        frameRate: Int?,
+        cancellationCheckpoint: () -> Unit
+    ): List<Pose> {
         val bufferInfo = MediaCodec.BufferInfo()
-        val poses = ArrayList<DebugPoseFrameResult>()
+        val poses = ArrayList<Pose>()
+        val normalizedAnalysisFpsLimit = analysisFpsLimit.coerceAtLeast(1)
+        val minProcessFrameGapUs = 1_000_000L / normalizedAnalysisFpsLimit
         var inputEnded = false
         var outputEnded = false
-        var lastProcessedUs = Long.MIN_VALUE
         var decodedFrameCount = 0
-        var sampledFrameCount = 0
+        var processedFrameCount = 0
+        var skippedFrameCount = 0
+        var lastProcessedPresentationTimeUs = Long.MIN_VALUE
 
         Log.d(
             TAG,
-            "Pose 순차 디코딩 시작: size=${width}x$height, fps=${frameRate ?: "unknown"}, stepUs=$sampleStepUs, durationUs=$durationUs, rotation=$rotationDegrees"
+            "Sequential pose decode started: fps=${frameRate ?: "unknown"}, targetAnalysisFps=$normalizedAnalysisFpsLimit"
         )
 
         while (!outputEnded) {
+            cancellationCheckpoint()
+
             if (!inputEnded) {
                 val inputBufferIndex = decoder.dequeueInputBuffer(DEQUEUE_TIMEOUT_US)
                 if (inputBufferIndex >= 0) {
                     val inputBuffer = decoder.getInputBuffer(inputBufferIndex)
-                        ?: throw IllegalStateException("디코더 입력 버퍼를 가져오지 못했습니다.")
+                        ?: throw IllegalStateException("Could not obtain decoder input buffer.")
 
                     inputBuffer.clear()
                     val sampleSize = extractor.readSampleData(inputBuffer, 0)
@@ -172,7 +181,7 @@ class DebugPoseVideoAnalyzer @Inject constructor(
             when (val outputBufferIndex = decoder.dequeueOutputBuffer(bufferInfo, DEQUEUE_TIMEOUT_US)) {
                 MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
                 MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    Log.d(TAG, "디코더 출력 포맷 변경: ${decoder.outputFormat}")
+                    Log.d(TAG, "Decoder output format changed: ${decoder.outputFormat}")
                 }
 
                 else -> {
@@ -187,15 +196,14 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                     if (!isCodecConfig && presentationTimeUs >= 0L) {
                         decodedFrameCount++
 
-                        val shouldSample = lastProcessedUs == Long.MIN_VALUE ||
-                            presentationTimeUs - lastProcessedUs >= sampleStepUs ||
-                            isEndOfStream
-
-                        if (shouldSample) {
-                            sampledFrameCount++
-                            val frameLabel =
-                                "sample[$sampledFrameCount] decoded[$decodedFrameCount] ptsUs=$presentationTimeUs ptsMs=${presentationTimeUs / 1_000L}"
-                            Log.d(TAG, "$frameLabel frame=selected")
+                        if (
+                            lastProcessedPresentationTimeUs != Long.MIN_VALUE &&
+                            presentationTimeUs - lastProcessedPresentationTimeUs < minProcessFrameGapUs
+                        ) {
+                            skippedFrameCount++
+                        } else {
+                            lastProcessedPresentationTimeUs = presentationTimeUs
+                            processedFrameCount++
 
                             runCatching {
                                 inferPoseFromDecodedFrame(
@@ -203,13 +211,11 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                                     outputBufferIndex = outputBufferIndex,
                                     poseLandmarker = poseLandmarker,
                                     presentationTimeUs = presentationTimeUs,
-                                    rotationDegrees = rotationDegrees,
-                                    frameLabel = frameLabel
+                                    rotationDegrees = rotationDegrees
                                 )
                             }.onFailure { error ->
-                                Log.e(TAG, "$frameLabel pose=inference_error", error)
+                                Log.e(TAG, "Pose inference failed at ptsUs=$presentationTimeUs", error)
                             }.getOrNull()?.let(poses::add)
-                            lastProcessedUs = presentationTimeUs
                         }
                     }
 
@@ -224,7 +230,7 @@ class DebugPoseVideoAnalyzer @Inject constructor(
 
         Log.d(
             TAG,
-            "Pose 순차 디코딩 완료: decoded=$decodedFrameCount, sampled=$sampledFrameCount, detected=${poses.size}"
+            "Sequential pose decode completed: decoded=$decodedFrameCount, processed=$processedFrameCount, skipped=$skippedFrameCount, poses=${poses.size}"
         )
 
         return poses
@@ -235,32 +241,20 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         outputBufferIndex: Int,
         poseLandmarker: PoseLandmarker,
         presentationTimeUs: Long,
-        rotationDegrees: Int,
-        frameLabel: String
-    ): DebugPoseFrameResult? {
-        val image = decoder.getOutputImage(outputBufferIndex)
-        if (image == null) {
-            Log.w(TAG, "$frameLabel frame=image_unavailable")
-            return null
-        }
+        rotationDegrees: Int
+    ): Pose? {
+        val image = decoder.getOutputImage(outputBufferIndex) ?: return null
 
         try {
             val rawBitmap = image.toBitmap()
             val preparedBitmap = rawBitmap.prepareForInference(rotationDegrees)
-            Log.d(
-                TAG,
-                "$frameLabel frame=decoded rawBitmap=${rawBitmap.width}x${rawBitmap.height} preparedBitmap=${preparedBitmap.width}x${preparedBitmap.height} rotation=$rotationDegrees"
-            )
 
             try {
                 return inferPose(
                     poseLandmarker = poseLandmarker,
                     frameBitmap = preparedBitmap,
-                    frameTimeMs = presentationTimeUs / 1_000L,
-                    frameLabel = frameLabel
-                ).also { pose ->
-                    logPoseResult(frameLabel, pose)
-                }
+                    frameTimeMs = presentationTimeUs / 1_000L
+                )
             } finally {
                 if (preparedBitmap !== rawBitmap) {
                     preparedBitmap.recycle()
@@ -275,28 +269,16 @@ class DebugPoseVideoAnalyzer @Inject constructor(
     private fun inferPose(
         poseLandmarker: PoseLandmarker,
         frameBitmap: Bitmap,
-        frameTimeMs: Long,
-        frameLabel: String
-    ): DebugPoseFrameResult? {
+        frameTimeMs: Long
+    ): Pose? {
         val mpImage = BitmapImageBuilder(frameBitmap).build()
 
         try {
             val result = poseLandmarker.detectForVideo(mpImage, frameTimeMs)
             val landmarks = result.landmarks().firstOrNull().orEmpty()
-            val worldLandmarks = result.worldLandmarks().firstOrNull().orEmpty()
-            if (landmarks.isEmpty()) {
-                Log.w(TAG, "$frameLabel pose=not_detected timestampMs=${result.timestampMs()}")
-                return null
-            }
+            if (landmarks.isEmpty()) return null
 
-            if (worldLandmarks.size != landmarks.size) {
-                Log.w(
-                    TAG,
-                    "$frameLabel pose=world_landmark_mismatch normalized=${landmarks.size} world=${worldLandmarks.size}"
-                )
-            }
-
-            val pose = VisionMapper.toPose(
+            return VisionMapper.toPose(
                 frameTimeMs = result.timestampMs(),
                 rawLandmarks = landmarks.map { landmark ->
                     Triple(landmark.x(), landmark.y(), landmark.z())
@@ -304,81 +286,32 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                 visibilityValues = landmarks.map { landmark -> landmark.visibility().toNullable() },
                 presenceValues = landmarks.map { landmark -> landmark.presence().toNullable() }
             )
-
-            return DebugPoseFrameResult(
-                pose = pose,
-                worldLandmarks = worldLandmarks.mapIndexed { index, landmark ->
-                    DebugPoseWorldLandmark(
-                        index = index,
-                        x = landmark.x(),
-                        y = landmark.y(),
-                        z = landmark.z(),
-                        visibility = landmark.visibility().toNullable(),
-                        presence = landmark.presence().toNullable()
-                    )
-                }
-            )
         } finally {
             mpImage.close()
         }
     }
 
-    private fun logPoseResult(
-        frameLabel: String,
-        frameResult: DebugPoseFrameResult?
-    ) {
-        if (frameResult == null) return
-        val pose = frameResult.pose
+    private fun createPoseLandmarker(): PoseLandmarker? {
+        return try {
+            val baseOptions = BaseOptions.builder()
+                .setModelAssetPath(POSE_MODEL_PATH)
+                .build()
+            val options = PoseLandmarker.PoseLandmarkerOptions.builder()
+                .setBaseOptions(baseOptions)
+                .setRunningMode(RunningMode.VIDEO)
+                .setNumPoses(1)
+                .setMinPoseDetectionConfidence(0.5f)
+                .setMinPosePresenceConfidence(0.5f)
+                .setMinTrackingConfidence(0.5f)
+                .build()
 
-        Log.i(
-            TAG,
-            "$frameLabel pose=detected landmarks=${pose.landmarks.size} worldLandmarks=${frameResult.worldLandmarks.size} keyJoints=${pose.formatKeyJoints()} keyWorldJoints=${frameResult.formatKeyWorldJoints()}"
-        )
-
-        pose.landmarks
-            .chunked(LANDMARKS_PER_LOG_LINE)
-            .forEachIndexed { chunkIndex, chunk ->
-                Log.d(
-                    TAG,
-                    "$frameLabel joints[$chunkIndex]=${chunk.joinToString(separator = " | ") { it.toDebugString() }}"
-                )
-            }
-
-        frameResult.worldLandmarks
-            .chunked(LANDMARKS_PER_LOG_LINE)
-            .forEachIndexed { chunkIndex, chunk ->
-                Log.d(
-                    TAG,
-                    "$frameLabel worldJoints[$chunkIndex]=${chunk.joinToString(separator = " | ") { it.toDebugString() }}"
-                )
-            }
-    }
-
-    private fun createPoseLandmarker(): PoseLandmarker {
-        ensureModelAssetExists()
-
-        val baseOptions = BaseOptions.builder()
-            .setModelAssetPath(POSE_MODEL_PATH)
-            .build()
-        val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-            .setBaseOptions(baseOptions)
-            .setRunningMode(RunningMode.VIDEO)
-            .setNumPoses(1)
-            .setMinPoseDetectionConfidence(MIN_POSE_DETECTION_CONFIDENCE)
-            .setMinPosePresenceConfidence(MIN_POSE_PRESENCE_CONFIDENCE)
-            .setMinTrackingConfidence(MIN_TRACKING_CONFIDENCE)
-            .build()
-
-        return PoseLandmarker.createFromOptions(context, options)
-    }
-
-    private fun ensureModelAssetExists() {
-        try {
-            context.assets.open(POSE_MODEL_PATH).use { }
-        } catch (error: FileNotFoundException) {
-            throw error
+            PoseLandmarker.createFromOptions(context, options)
+        } catch (error: UnsatisfiedLinkError) {
+            Log.w(TAG, "MediaPipe video analyzer is unavailable on this device.", error)
+            null
         } catch (error: Exception) {
-            throw IllegalStateException("MediaPipe Pose 모델 파일을 열 수 없습니다.", error)
+            Log.e(TAG, "Failed to create pose landmarker.", error)
+            null
         }
     }
 
@@ -404,13 +337,6 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         return decoder
     }
 
-    private fun resolveSampleStepUs(durationUs: Long): Long {
-        if (durationUs <= 0L) return MIN_SAMPLE_STEP_US
-
-        return (durationUs / TARGET_SAMPLE_COUNT)
-            .coerceIn(MIN_SAMPLE_STEP_US, MAX_SAMPLE_STEP_US)
-    }
-
     private fun findVideoTrackIndex(extractor: MediaExtractor): Int {
         for (trackIndex in 0 until extractor.trackCount) {
             val mime = extractor.getTrackFormat(trackIndex).getString(MediaFormat.KEY_MIME)
@@ -418,7 +344,6 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                 return trackIndex
             }
         }
-
         return -1
     }
 
@@ -427,7 +352,7 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         uri: Uri
     ): Boolean {
         return try {
-            if (uri.scheme == FILE_SCHEME) {
+            if (uri.scheme == "file") {
                 extractor.setDataSource(uri.path ?: return false)
             } else {
                 context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
@@ -435,31 +360,14 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                 } ?: return false
             }
             true
-        } catch (error: Exception) {
-            Log.e(TAG, "MediaExtractor setDataSource 실패", error)
+        } catch (_: Exception) {
             false
-        }
-    }
-
-    private fun MediaFormat.readDurationUs(): Long {
-        return if (containsKey(MediaFormat.KEY_DURATION)) {
-            getLong(MediaFormat.KEY_DURATION)
-        } else {
-            0L
         }
     }
 
     private fun MediaFormat.readRotationDegrees(): Int {
         return if (containsKey(MediaFormat.KEY_ROTATION)) {
             getInteger(MediaFormat.KEY_ROTATION)
-        } else {
-            0
-        }
-    }
-
-    private fun MediaFormat.readDimension(key: String): Int {
-        return if (containsKey(key)) {
-            getInteger(key)
         } else {
             0
         }
@@ -479,12 +387,10 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         val nv21Bytes = toNv21Bytes()
         val yuvImage = YuvImage(nv21Bytes, ImageFormat.NV21, cropWidth, cropHeight, null)
         val jpegStream = ByteArrayOutputStream()
-
-        yuvImage.compressToJpeg(Rect(0, 0, cropWidth, cropHeight), JPEG_QUALITY, jpegStream)
+        yuvImage.compressToJpeg(Rect(0, 0, cropWidth, cropHeight), 90, jpegStream)
         val jpegBytes = jpegStream.toByteArray()
-
         return BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
-            ?: throw IllegalStateException("디코더 출력 프레임을 Bitmap으로 변환하지 못했습니다.")
+            ?: throw IllegalStateException("Failed to decode frame bitmap.")
     }
 
     private fun Image.toNv21Bytes(): ByteArray {
@@ -521,7 +427,6 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                 } else {
                     (planeWidth - 1) * pixelStride + 1
                 }
-
                 if (pixelStride == 1 && outputStride == 1) {
                     buffer.get(output, channelOffset, length)
                     channelOffset += length
@@ -532,13 +437,11 @@ class DebugPoseVideoAnalyzer @Inject constructor(
                         channelOffset += outputStride
                     }
                 }
-
                 if (row < planeHeight - 1) {
                     buffer.position(buffer.position() + rowStride - length)
                 }
             }
         }
-
         return output
     }
 
@@ -546,119 +449,30 @@ class DebugPoseVideoAnalyzer @Inject constructor(
         val rotatedBitmap = if (rotationDegrees == 0) {
             this
         } else {
-            val matrix = Matrix().apply {
-                postRotate(rotationDegrees.toFloat())
-            }
+            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
             Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
         }
 
         val maxDimension = max(rotatedBitmap.width, rotatedBitmap.height)
-        if (maxDimension <= MAX_INFERENCE_DIMENSION_PX) {
-            return rotatedBitmap
-        }
+        if (maxDimension <= MAX_INFERENCE_DIMENSION_PX) return rotatedBitmap
 
         val scale = MAX_INFERENCE_DIMENSION_PX.toFloat() / maxDimension.toFloat()
         val scaledWidth = (rotatedBitmap.width * scale).roundToInt().coerceAtLeast(1)
         val scaledHeight = (rotatedBitmap.height * scale).roundToInt().coerceAtLeast(1)
-        val scaledBitmap = Bitmap.createScaledBitmap(
-            rotatedBitmap,
-            scaledWidth,
-            scaledHeight,
-            true
-        )
-
+        val scaledBitmap = Bitmap.createScaledBitmap(rotatedBitmap, scaledWidth, scaledHeight, true)
         if (rotatedBitmap !== this) {
             rotatedBitmap.recycle()
         }
-
         return scaledBitmap
-    }
-
-    private fun Pose.formatKeyJoints(): String {
-        val landmarksByIndex = landmarks.associateBy { it.index }
-        return KEY_LANDMARK_INDICES.joinToString(separator = ", ") { index ->
-            landmarksByIndex[index]?.toDebugString() ?: "${landmarkName(index)}=missing"
-        }
-    }
-
-    private fun DebugPoseFrameResult.formatKeyWorldJoints(): String {
-        val landmarksByIndex = worldLandmarks.associateBy { it.index }
-        return KEY_LANDMARK_INDICES.joinToString(separator = ", ") { index ->
-            landmarksByIndex[index]?.toDebugString() ?: "${landmarkName(index)}=missing"
-        }
-    }
-
-    private fun PoseLandmark.toDebugString(): String {
-        return "${landmarkName(index)}=(${formatCoordinate(x)},${formatCoordinate(y)},${formatCoordinate(z)})"
-    }
-
-    private fun DebugPoseWorldLandmark.toDebugString(): String {
-        return "${landmarkName(index)}=(${formatCoordinate(x)},${formatCoordinate(y)},${formatCoordinate(z)})"
-    }
-
-    private fun landmarkName(index: Int): String {
-        return LANDMARK_NAMES.getOrElse(index) { "joint$index" }
-    }
-
-    private fun formatCoordinate(value: Float): String {
-        return String.format(java.util.Locale.US, "%.4f", value)
     }
 
     private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
 
-    private companion object {
-        private const val TAG = "DebugPoseVideoAnalyzer"
-        private const val FILE_SCHEME = "file"
+    companion object {
+        private const val TAG = "SequentialPoseVideoAnalyzer"
         private const val POSE_MODEL_PATH = "models/pose_landmarker_lite.task"
-
-        private const val TARGET_SAMPLE_COUNT = 450L
-        private const val MIN_SAMPLE_STEP_US = 100_000L
-        private const val MAX_SAMPLE_STEP_US = 250_000L
-
-        private const val MIN_POSE_DETECTION_CONFIDENCE = 0.5f
-        private const val MIN_POSE_PRESENCE_CONFIDENCE = 0.5f
-        private const val MIN_TRACKING_CONFIDENCE = 0.5f
-
         private const val DEQUEUE_TIMEOUT_US = 10_000L
-        private const val JPEG_QUALITY = 90
-        private const val MAX_INFERENCE_DIMENSION_PX = 1280
-        private const val LANDMARKS_PER_LOG_LINE = 5
-
-        private val KEY_LANDMARK_INDICES = listOf(0, 11, 12, 15, 16, 23, 24, 27, 28)
-        private val LANDMARK_NAMES = listOf(
-            "nose",
-            "leftEyeInner",
-            "leftEye",
-            "leftEyeOuter",
-            "rightEyeInner",
-            "rightEye",
-            "rightEyeOuter",
-            "leftEar",
-            "rightEar",
-            "mouthLeft",
-            "mouthRight",
-            "leftShoulder",
-            "rightShoulder",
-            "leftElbow",
-            "rightElbow",
-            "leftWrist",
-            "rightWrist",
-            "leftPinky",
-            "rightPinky",
-            "leftIndex",
-            "rightIndex",
-            "leftThumb",
-            "rightThumb",
-            "leftHip",
-            "rightHip",
-            "leftKnee",
-            "rightKnee",
-            "leftAnkle",
-            "rightAnkle",
-            "leftHeel",
-            "rightHeel",
-            "leftFootIndex",
-            "rightFootIndex"
-        )
+        private const val MAX_INFERENCE_DIMENSION_PX = 640
+        private const val DEFAULT_ANALYSIS_FPS_LIMIT = 10
     }
 }

@@ -23,7 +23,9 @@ object VisionMapper {
      */
     fun toPose(
         frameTimeMs: Long,
-        rawLandmarks: List<Triple<Float, Float, Float>>
+        rawLandmarks: List<Triple<Float, Float, Float>>,
+        visibilityValues: List<Float?> = emptyList(),
+        presenceValues: List<Float?> = emptyList()
     ): Pose = Pose(
         frameTimeMs = frameTimeMs,
         landmarks = rawLandmarks.mapIndexed { index, (x, y, z) ->
@@ -31,7 +33,9 @@ object VisionMapper {
                 index = index,
                 x = x,
                 y = y,
-                z = z
+                z = z,
+                visibility = visibilityValues.getOrNull(index),
+                presence = presenceValues.getOrNull(index)
             )
         }
     )

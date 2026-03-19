@@ -10,7 +10,7 @@ import org.junit.Test
 class HoldContactAnalysisTest {
 
     @Test
-    fun `손 랜드마크가 홀드 안에 들어오면 접촉으로 판정한다`() {
+    fun `손 랜드마크가 홀드 영역에 들어오면 접촉으로 판단한다`() {
         val hold = numberedHold(holdNo = 1, centerX = 0.30f, centerY = 0.70f)
 
         val contacts = detectHoldContacts(
@@ -63,6 +63,28 @@ class HoldContactAnalysisTest {
 
         assertEquals(0, result.highestReachedHoldNo)
         assertTrue(result.contactedHoldNos.isEmpty())
+    }
+
+    @Test
+    fun `촘촘한 pose 시퀀스에서도 최고 도달 홀드가 동일하게 계산된다`() {
+        val start = numberedHold(holdNo = 1, centerX = 0.18f, centerY = 0.84f)
+        val middle = numberedHold(holdNo = 2, centerX = 0.44f, centerY = 0.58f)
+        val end = numberedHold(holdNo = 3, centerX = 0.66f, centerY = 0.30f)
+
+        val result = analyzeAttemptHoldReach(
+            poses = listOf(
+                poseAt(0L, handLandmark(index = 19, x = 0.18f, y = 0.84f)),
+                poseAt(100L, handLandmark(index = 19, x = 0.19f, y = 0.83f)),
+                poseAt(200L, handLandmark(index = 20, x = 0.44f, y = 0.58f)),
+                poseAt(300L, handLandmark(index = 20, x = 0.45f, y = 0.57f)),
+                poseAt(400L, handLandmark(index = 19, x = 0.66f, y = 0.30f))
+            ),
+            holds = listOf(start, middle, end)
+        )
+
+        assertEquals(3, result.highestReachedHoldNo)
+        assertEquals(400L, result.highestReachedFrameTimeMs)
+        assertEquals(setOf(1, 2, 3), result.contactedHoldNos)
     }
 
     @Test

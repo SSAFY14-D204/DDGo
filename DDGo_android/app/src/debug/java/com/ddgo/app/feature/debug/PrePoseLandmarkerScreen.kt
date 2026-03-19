@@ -11,9 +11,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -27,10 +30,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.asImageBitmap
@@ -44,8 +49,13 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
 import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.feature.climbing.upload.PoseOverlay
+import com.ddgo.app.feature.climbing.upload.PoseScrubberColors
+import com.ddgo.app.feature.climbing.upload.PoseVideoScrubber
+import com.ddgo.app.feature.climbing.upload.calculateVideoContentRect
+import com.ddgo.app.feature.climbing.upload.findNearestPoseForPlayback
+import com.ddgo.app.feature.climbing.upload.findNearestTimestamp
 import kotlinx.coroutines.delay
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,14 +67,21 @@ fun PrePoseLandmarkerScreen(
     val context = LocalContext.current
     val selectedVideoUri = uiState.selectedVideoUri
     val selectedVideoName = uiState.selectedVideoName
-    var useOptimized by remember { mutableStateOf(false) }
+    var useOptimized by remember { mutableStateOf(true) }
+    var analysisFpsLimit by remember { mutableIntStateOf(uiState.analysisFpsLimit) }
+    val analysisFpsOptions = remember { listOf(10, 20, 30) }
 
     val pickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
         persistReadPermission(context, uri)
-        viewModel.analyzeVideo(uri, context.resolveDisplayName(uri), useOptimized)
+        viewModel.analyzeVideo(
+            uri = uri,
+            displayName = context.resolveDisplayName(uri),
+            useOptimized = useOptimized,
+            analysisFpsLimit = analysisFpsLimit
+        )
     }
 
     Scaffold(
@@ -141,6 +158,30 @@ fun PrePoseLandmarkerScreen(
                     enabled = !uiState.isAnalyzing
                 )
                 Text("최적화 모드 사용 (Bitmap 패스, GPU 가속)")
+            }
+
+            Text(
+                text = "분석 FPS 제한",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "MediaPipe에 초당 최대 몇 프레임을 보낼지 선택합니다. 10fps가 가장 빠르고, 30fps가 가장 촘촘합니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                analysisFpsOptions.forEach { fps ->
+                    FilterChip(
+                        selected = analysisFpsLimit == fps,
+                        onClick = { analysisFpsLimit = fps },
+                        enabled = !uiState.isAnalyzing,
+                        label = { Text("${fps}fps") }
+                    )
+                }
             }
 
             DdgoPrimaryButton(
@@ -222,19 +263,36 @@ private fun PrePoseResultView(
             playWhenReady = true
         }
     }
-    var currentPositionMs by remember { mutableLongStateOf(0L) }
-    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var currentPositionMs by remember(videoUri) { mutableLongStateOf(0L) }
+    var durationMs by remember(videoUri) { mutableLongStateOf(0L) }
+    var containerSize by remember(videoUri) { mutableStateOf(IntSize.Zero) }
     var playerVideoSize by remember(videoUri) { mutableStateOf(VideoSize.UNKNOWN) }
+    var playbackState by remember(videoUri) { mutableIntStateOf(Player.STATE_IDLE) }
+    var isScrubbing by remember(videoUri) { mutableStateOf(false) }
+    var scrubPositionMs by remember(videoUri) { mutableLongStateOf(0L) }
+    var wasPlayingBeforeScrub by remember(videoUri) { mutableStateOf(false) }
+    val poseTimestamps = remember(poseFrames) {
+        poseFrames.map { frame -> frame.pose.frameTimeMs }
+            .distinct()
+            .sorted()
+    }
+    val displayedPositionMs = if (isScrubbing) scrubPositionMs else currentPositionMs
+    val canScrub = durationMs > 0L && poseTimestamps.isNotEmpty()
 
     LaunchedEffect(exoPlayer, videoUri) {
         exoPlayer.setMediaItem(MediaItem.fromUri(videoUri))
         exoPlayer.prepare()
         playerVideoSize = exoPlayer.videoSize
+        playbackState = exoPlayer.playbackState
+        durationMs = exoPlayer.duration.coerceAtLeast(0L)
     }
 
-    LaunchedEffect(exoPlayer) {
+    LaunchedEffect(exoPlayer, isScrubbing) {
         while (true) {
-            currentPositionMs = exoPlayer.currentPosition
+            durationMs = exoPlayer.duration.coerceAtLeast(0L)
+            if (!isScrubbing) {
+                currentPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+            }
             delay(16)
         }
     }
@@ -244,6 +302,14 @@ private fun PrePoseResultView(
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 playerVideoSize = videoSize
             }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                playbackState = state
+                durationMs = exoPlayer.duration.coerceAtLeast(0L)
+                if (!isScrubbing) {
+                    currentPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+                }
+            }
         }
         exoPlayer.addListener(listener)
         onDispose {
@@ -252,8 +318,11 @@ private fun PrePoseResultView(
         }
     }
 
-    val currentPose = remember(poseFrames, currentPositionMs) {
-        poseFrames.minByOrNull { frame -> abs(frame.pose.frameTimeMs - currentPositionMs) }?.pose
+    val currentPose = remember(poseFrames, displayedPositionMs) {
+        findNearestPoseForPlayback(
+            poses = poseFrames.map { frame -> frame.pose },
+            positionMs = displayedPositionMs
+        )
     }
 
     val videoContentRect = remember(containerSize, playerVideoSize) {
@@ -261,6 +330,16 @@ private fun PrePoseResultView(
             containerSize = containerSize,
             videoSize = playerVideoSize
         )
+    }
+    val seekToNearestPoseFrame: (Long) -> Long? = { targetTimeMs ->
+        if (!canScrub) {
+            null
+        } else {
+            poseTimestamps.findNearestTimestamp(targetTimeMs.coerceIn(0L, durationMs))
+                ?.also { snappedTimeMs ->
+                    exoPlayer.seekTo(snappedTimeMs)
+                }
+        }
     }
 
     Card(
@@ -292,7 +371,7 @@ private fun PrePoseResultView(
                     factory = { viewContext ->
                         PlayerView(viewContext).apply {
                             player = exoPlayer
-                            useController = true
+                            useController = false
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                             setShutterBackgroundColor(android.graphics.Color.BLACK)
                         }
@@ -303,64 +382,87 @@ private fun PrePoseResultView(
                 )
 
                 currentPose?.let { pose ->
-                    PrePoseOverlay(
+                    PoseOverlay(
                         pose = pose,
                         contentRect = videoContentRect,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        lineColor = Color.Cyan.copy(alpha = 0.8f),
+                        pointColor = Color.Magenta
                     )
                 }
+
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable {
+                            if (playbackState == Player.STATE_ENDED) {
+                                exoPlayer.seekTo(0L)
+                            }
+                            if (exoPlayer.isPlaying) {
+                                exoPlayer.pause()
+                            } else {
+                                exoPlayer.play()
+                            }
+                        }
+                )
             }
-            
+
+            PoseVideoScrubber(
+                currentPositionMs = displayedPositionMs,
+                durationMs = durationMs,
+                enabled = canScrub,
+                colors = PoseScrubberColors(
+                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(
+                        alpha = if (canScrub) 0.9f else 0.4f
+                    ),
+                    progressColor = MaterialTheme.colorScheme.primary,
+                    thumbColor = Color.White,
+                    textColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                onTapSeek = { requestedTimeMs ->
+                    val wasPlaying = exoPlayer.isPlaying
+                    seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
+                        currentPositionMs = snappedTimeMs
+                        scrubPositionMs = snappedTimeMs
+                        if (wasPlaying) {
+                            exoPlayer.play()
+                        } else {
+                            exoPlayer.pause()
+                        }
+                    }
+                },
+                onScrubStart = {
+                    if (!canScrub) return@PoseVideoScrubber
+                    wasPlayingBeforeScrub = exoPlayer.isPlaying
+                    scrubPositionMs = poseTimestamps.findNearestTimestamp(displayedPositionMs)
+                        ?: displayedPositionMs
+                    isScrubbing = true
+                    exoPlayer.pause()
+                },
+                onScrubMove = { requestedTimeMs ->
+                    if (!canScrub) return@PoseVideoScrubber
+                    seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
+                        scrubPositionMs = snappedTimeMs
+                        currentPositionMs = snappedTimeMs
+                    }
+                },
+                onScrubStop = {
+                    if (!isScrubbing) return@PoseVideoScrubber
+                    val finalTimeMs = poseTimestamps.findNearestTimestamp(scrubPositionMs)
+                        ?: scrubPositionMs
+                    exoPlayer.seekTo(finalTimeMs)
+                    currentPositionMs = finalTimeMs
+                    scrubPositionMs = finalTimeMs
+                    isScrubbing = false
+                    if (wasPlayingBeforeScrub) {
+                        exoPlayer.play()
+                    }
+                }
+            )
+
             Text(
                 text = "미리 계산된 ${poseFrames.size}개의 포즈 데이터를 사용하여 실시간으로 렌더링 중입니다.",
                 style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
-}
-
-@Composable
-private fun PrePoseOverlay(
-    pose: Pose,
-    contentRect: VideoContentRect,
-    modifier: Modifier = Modifier
-) {
-    Canvas(modifier = modifier) {
-        if (contentRect.width <= 0f || contentRect.height <= 0f) return@Canvas
-
-        val landmarksByIndex = pose.landmarks.associateBy { landmark -> landmark.index }
-        val jointRadius = 4.dp.toPx()
-        val strokeWidth = 2.dp.toPx()
-        val lineColor = Color.Cyan
-        val pointColor = Color.Magenta
-
-        POSE_CONNECTIONS.forEach { (startIndex, endIndex) ->
-            val start = landmarksByIndex[startIndex] ?: return@forEach
-            val end = landmarksByIndex[endIndex] ?: return@forEach
-
-            drawLine(
-                color = lineColor.copy(alpha = 0.8f),
-                start = Offset(
-                    x = contentRect.left + (start.x.coerceIn(0f, 1f) * contentRect.width),
-                    y = contentRect.top + (start.y.coerceIn(0f, 1f) * contentRect.height)
-                ),
-                end = Offset(
-                    x = contentRect.left + (end.x.coerceIn(0f, 1f) * contentRect.width),
-                    y = contentRect.top + (end.y.coerceIn(0f, 1f) * contentRect.height)
-                ),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
-        }
-
-        pose.landmarks.forEach { landmark ->
-            drawCircle(
-                color = pointColor,
-                radius = jointRadius,
-                center = Offset(
-                    x = contentRect.left + (landmark.x.coerceIn(0f, 1f) * contentRect.width),
-                    y = contentRect.top + (landmark.y.coerceIn(0f, 1f) * contentRect.height)
-                )
             )
         }
     }
@@ -394,68 +496,6 @@ private fun Context.resolveDisplayName(uri: Uri): String {
 
     return fallback
 }
-
-private fun calculateVideoContentRect(
-    containerSize: IntSize,
-    videoSize: VideoSize
-): VideoContentRect {
-    val containerWidth = containerSize.width.toFloat()
-    val containerHeight = containerSize.height.toFloat()
-    if (containerWidth <= 0f || containerHeight <= 0f) {
-        return VideoContentRect(0f, 0f, 0f, 0f)
-    }
-
-    if (videoSize.width <= 0 || videoSize.height <= 0) {
-        return VideoContentRect(0f, 0f, containerWidth, containerHeight)
-    }
-
-    val sourceWidth = videoSize.width * videoSize.pixelWidthHeightRatio
-    val sourceHeight = videoSize.height.toFloat()
-    val isRotated = videoSize.unappliedRotationDegrees % 180 != 0
-    val displayedWidth = if (isRotated) sourceHeight else sourceWidth
-    val displayedHeight = if (isRotated) sourceWidth else sourceHeight
-    if (displayedWidth <= 0f || displayedHeight <= 0f) {
-        return VideoContentRect(0f, 0f, containerWidth, containerHeight)
-    }
-
-    val videoAspectRatio = displayedWidth / displayedHeight
-    val containerAspectRatio = containerWidth / containerHeight
-
-    return if (containerAspectRatio > videoAspectRatio) {
-        val fittedHeight = containerHeight
-        val fittedWidth = fittedHeight * videoAspectRatio
-        VideoContentRect(
-            left = (containerWidth - fittedWidth) / 2f,
-            top = 0f,
-            width = fittedWidth,
-            height = fittedHeight
-        )
-    } else {
-        val fittedWidth = containerWidth
-        val fittedHeight = fittedWidth / videoAspectRatio
-        VideoContentRect(
-            left = 0f,
-            top = (containerHeight - fittedHeight) / 2f,
-            width = fittedWidth,
-            height = fittedHeight
-        )
-    }
-}
-
-private data class VideoContentRect(
-    val left: Float,
-    val top: Float,
-    val width: Float,
-    val height: Float
-)
-
-private val POSE_CONNECTIONS = listOf(
-    0 to 1, 1 to 2, 2 to 3, 3 to 7, 0 to 4, 4 to 5, 5 to 6, 6 to 8, 9 to 10,
-    11 to 12, 11 to 13, 13 to 15, 15 to 17, 15 to 19, 15 to 21,
-    12 to 14, 14 to 16, 16 to 18, 16 to 20, 16 to 22,
-    11 to 23, 12 to 24, 23 to 24, 23 to 25, 25 to 27, 27 to 29, 29 to 31,
-    24 to 26, 26 to 28, 28 to 30, 30 to 32
-)
 
 @Composable
 private fun SampleFramesSection(poseFrames: List<DebugPoseFrameResult>) {
