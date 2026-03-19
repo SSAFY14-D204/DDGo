@@ -79,15 +79,15 @@
 ### 브랜치 네이밍 예시
 
 ```
-feat/S14P21D204-42-social-login
+feat/S14P21D204-42-소셜-로그인
 fix/S14P21D204-105-token-expired-error
 hotfix/S14P21D204-200-critical-login-failure
-
 ```
 
 ###
 ```
 master과 dev에는 직접 push금지 
+언어 제한 없음
 ```
 
 ---
@@ -101,13 +101,14 @@ master과 dev에는 직접 push금지
 
 ### 제목
 ```
-[Type] 작업 내용 요약
+[Jira이슈번호][Type] 작업 내용 요약
 ```
 
 ### 설정
 ```
-squash merge 필수
+squash commit 필수
 merge 후 브랜치 삭제
+commit edit message 필수
 ```
 
 ### 예시
@@ -155,6 +156,7 @@ merge 후 브랜치 삭제
 |-----------|------|------|
 | **Epic** | 큰 단위의 기능 묶음 (1~2주 이상 소요) | 회원 관리, 게임 플레이 |
 | **Task** | 개발/기술 작업 단위 | API 설계, DB 스키마 작성 |
+| **story** | 개발 외 작업 | 스프린트 회고, 문서 작성 |
 | **Bug** | 버그 수정 | 로그인 시 토큰 미발급 오류 |
 
 ---
