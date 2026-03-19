@@ -95,5 +95,7 @@ data class DebugPoseWorldLandmark(
     val index: Int,
     val x: Float,
     val y: Float,
-    val z: Float
+    val z: Float,
+    val visibility: Float? = null,
+    val presence: Float? = null
 )

@@ -1,10 +1,10 @@
-// [DEBUG ONLY] 이 파일은 디버그 모드에서의 비디오 포즈 추출 가속화를 위해 작성되었습니다.
 package com.ddgo.app.feature.debug
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.SurfaceTexture
+import android.media.Image
 import android.media.ImageReader
 import android.media.MediaCodec
 import android.media.MediaExtractor
@@ -22,43 +22,40 @@ import android.os.HandlerThread
 import android.util.Log
 import android.view.Surface
 import com.ddgo.app.data.mapper.VisionMapper
-import com.google.mediapipe.framework.image.MediaImageBuilder
+import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Optional
 import javax.inject.Inject
 import kotlin.math.max
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-/**
- * 최종 최적화 Pre-Pose 분석기 (OpenGL EGL Hardware Scaling 적용 - 대안 1)
- * - URI 안정성 확보 (임시 파일 복사)
- * - MediaCodec + OpenGL EGL(OES Texture)를 활용해 원본(1080p) -> 최적화(640px) GPU 가속 스케일링 수행
- * - ImageReader(RGBA_8888)에서 추출한 android.media.Image를 MediaImageBuilder로 직접 전달 (Zero-Copy 지향)
- */
 class OptimizedPrePoseVideoAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private var lastTimestampMs: Long = -1
-    private var lastCaptureTimeMs: Long = -10_000 // 첫 프레임(0초) 캡처를 위해 -10초로 초기화
+    private var lastTimestampMs: Long = -1L
+    private var lastCaptureTimeMs: Long = -CAPTURE_INTERVAL_MS
 
     suspend operator fun invoke(
         videoUri: String,
+        analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT,
         onProgress: (Float) -> Unit = {}
     ): Result<List<DebugPoseFrameResult>> = withContext(Dispatchers.IO) {
         runCatching {
-            lastTimestampMs = -1
-            lastCaptureTimeMs = -5_000
+            lastTimestampMs = -1L
+            lastCaptureTimeMs = -CAPTURE_INTERVAL_MS
+
             val safeUri = prepareSafeUri(videoUri)
             try {
-                analyzeInternal(safeUri, onProgress)
+                analyzeInternal(safeUri, analysisFpsLimit, onProgress)
             } finally {
                 cleanupSafeUri(safeUri)
             }
@@ -70,34 +67,39 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
         if (uri.scheme == "file") return uri
 
         return try {
-            val tempFile = File(context.cacheDir, "pre_pose_temp_${System.currentTimeMillis()}.mp4")
+            val tempFile = File(
+                context.cacheDir,
+                "pre_pose_temp_${System.currentTimeMillis()}.mp4"
+            )
             context.contentResolver.openInputStream(uri)?.use { input ->
                 tempFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
             }
-            Log.d(TAG, "📋 분석용 임시 파일 복사 완료: ${tempFile.absolutePath}")
+            Log.d(TAG, "Temporary analysis file created: ${tempFile.absolutePath}")
             Uri.fromFile(tempFile)
-        } catch (e: Exception) {
-            Log.w(TAG, "⚠️ 임시 파일 복사 실패, 원본 URI 사용: ${e.message}")
+        } catch (error: Exception) {
+            Log.w(TAG, "Failed to create temporary file, falling back to source URI", error)
             uri
         }
     }
 
     private fun cleanupSafeUri(uri: Uri) {
-        if (uri.scheme == "file" && uri.path?.contains("pre_pose_temp_") == true) {
-            File(uri.path!!).delete()
-            Log.d(TAG, "🗑️ 임시 파일 삭제 완료")
+        val path = uri.path ?: return
+        if (uri.scheme == "file" && path.contains("pre_pose_temp_")) {
+            runCatching { File(path).delete() }
+                .onFailure { Log.w(TAG, "Failed to delete temp file: $path", it) }
         }
     }
 
     private fun analyzeInternal(
         uri: Uri,
+        analysisFpsLimit: Int,
         onProgress: (Float) -> Unit
     ): List<DebugPoseFrameResult> {
         val poseLandmarker = createPoseLandmarker()
         try {
-            return analyzeWithSurface(uri, poseLandmarker, onProgress)
+            return analyzeWithSurface(uri, poseLandmarker, analysisFpsLimit, onProgress)
         } finally {
             poseLandmarker.close()
         }
@@ -106,11 +108,11 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
     private fun analyzeWithSurface(
         uri: Uri,
         poseLandmarker: PoseLandmarker,
+        analysisFpsLimit: Int,
         onProgress: (Float) -> Unit
     ): List<DebugPoseFrameResult> {
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
-
         var handlerThread: HandlerThread? = null
         var imageReader: ImageReader? = null
         var eglWindow: EglWindow? = null
@@ -120,7 +122,7 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
 
         try {
             if (!setExtractorDataSource(extractor, uri)) {
-                throw IllegalStateException("비디오 소스를 열 수 없습니다.")
+                throw IllegalStateException("Could not open the selected video.")
             }
 
             val videoTrackIndex = findVideoTrackIndex(extractor)
@@ -128,37 +130,49 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
 
             extractor.selectTrack(videoTrackIndex)
             val trackFormat = extractor.getTrackFormat(videoTrackIndex)
-            val mimeType = trackFormat.getString(MediaFormat.KEY_MIME) ?: ""
-            val durationUs = if (trackFormat.containsKey(MediaFormat.KEY_DURATION)) trackFormat.getLong(MediaFormat.KEY_DURATION) else 0L
-            val width = trackFormat.getInteger(MediaFormat.KEY_WIDTH)
-            val height = trackFormat.getInteger(MediaFormat.KEY_HEIGHT)
-            val rotationDegrees = if (trackFormat.containsKey(MediaFormat.KEY_ROTATION)) trackFormat.getInteger(MediaFormat.KEY_ROTATION) else 0
+            val mimeType = trackFormat.getString(MediaFormat.KEY_MIME)
+                ?: throw IllegalStateException("Missing video mime type.")
+            val durationUs = trackFormat.getLongOrZero(MediaFormat.KEY_DURATION)
+            val width = trackFormat.getIntOrZero(MediaFormat.KEY_WIDTH)
+            val height = trackFormat.getIntOrZero(MediaFormat.KEY_HEIGHT)
+            val rotationDegrees = trackFormat.getIntOrZero(MediaFormat.KEY_ROTATION)
+            val sourceFrameRate = trackFormat.getIntOrNull(MediaFormat.KEY_FRAME_RATE)
 
-            // 1. 시각적 해상도 결정 (회전 반영: 90, 270이면 너비/높이 스왑)
             val isRotated = rotationDegrees == 90 || rotationDegrees == 270
-            val visualW = if (isRotated) height else width
-            val visualH = if (isRotated) width else height
+            val visualWidth = if (isRotated) height else width
+            val visualHeight = if (isRotated) width else height
+            val maxDim = max(visualWidth, visualHeight)
+            val scale = if (maxDim > MAX_INFERENCE_DIM) {
+                MAX_INFERENCE_DIM.toFloat() / maxDim.toFloat()
+            } else {
+                1f
+            }
+            val targetWidth = (visualWidth * scale).toInt().coerceAtLeast(1)
+            val targetHeight = (visualHeight * scale).toInt().coerceAtLeast(1)
+            val normalizedAnalysisFpsLimit = analysisFpsLimit.coerceAtLeast(1)
+            val minProcessFrameGapUs = 1_000_000L / normalizedAnalysisFpsLimit
 
-            // 분석 효율을 위해 해상도 결정 (최대 640px)
-            val maxDim = max(visualW, visualH)
-            val scale = if (maxDim > MAX_INFERENCE_DIM) MAX_INFERENCE_DIM.toFloat() / maxDim else 1.0f
-            val targetW = (visualW * scale).toInt()
-            val targetH = (visualH * scale).toInt()
+            Log.d(
+                TAG,
+                "Video setup: ${width}x$height -> ${targetWidth}x$targetHeight, " +
+                    "rotation=$rotationDegrees, fps=${sourceFrameRate ?: "unknown"}, " +
+                    "targetAnalysisFps=$normalizedAnalysisFpsLimit, minGapUs=$minProcessFrameGapUs"
+            )
 
-            Log.d(TAG, "디코딩 설정: 원본 ${width}x${height}, 시각적 ${visualW}x${visualH} -> 타겟 ${targetW}x${targetH}, rotation=$rotationDegrees")
-
-            // SurfaceTexture의 onFrameAvailable 콜백을 받기 위한 스레드
-            handlerThread = HandlerThread("SurfaceTextureThread").apply { start() }
+            handlerThread = HandlerThread("PrePoseSurfaceTexture").apply { start() }
             val handler = Handler(handlerThread.looper)
 
-            // ImageReader를 RGBA_8888 포맷으로 생성하여 스케일링된 픽셀을 받음
-            imageReader = ImageReader.newInstance(targetW, targetH, PixelFormat.RGBA_8888, 2)
-            
-            // ImageReader의 Surface를 EGL Window로 래핑하여 OpenGL 컨텍스트 생성
+            imageReader = ImageReader.newInstance(
+                targetWidth,
+                targetHeight,
+                PixelFormat.RGBA_8888,
+                2
+            )
+
             eglWindow = EglWindow(imageReader.surface)
             eglWindow.makeCurrent()
-            GLES20.glViewport(0, 0, targetW, targetH)
-            
+            GLES20.glViewport(0, 0, targetWidth, targetHeight)
+
             textureRenderer = TextureRenderer()
             surfaceTexture = SurfaceTexture(textureRenderer.textureId)
             decoderSurface = Surface(surfaceTexture)
@@ -166,28 +180,41 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
             val frameSyncObject = Object()
             var frameAvailable = false
 
-            surfaceTexture.setOnFrameAvailableListener({
-                synchronized(frameSyncObject) {
-                    frameAvailable = true
-                    frameSyncObject.notifyAll()
-                }
-            }, handler)
+            surfaceTexture.setOnFrameAvailableListener(
+                {
+                    synchronized(frameSyncObject) {
+                        frameAvailable = true
+                        frameSyncObject.notifyAll()
+                    }
+                },
+                handler
+            )
 
             decoder = MediaCodec.createDecoderByType(mimeType)
-            // 디코더는 OpenGL OES 텍스처(surfaceTexture)에 원본 해상도로 그림을 그림
             decoder.configure(trackFormat, decoderSurface, null, 0)
             decoder.start()
 
             return decodeLoop(
-                extractor, decoder, imageReader, poseLandmarker, 
-                durationUs, rotationDegrees, onProgress, 
-                targetW, targetH,
-                frameSyncObject, { frameAvailable }, { frameAvailable = it },
-                surfaceTexture, textureRenderer, eglWindow
+                extractor = extractor,
+                decoder = decoder,
+                imageReader = imageReader,
+                poseLandmarker = poseLandmarker,
+                durationUs = durationUs,
+                rotationDegrees = rotationDegrees,
+                onProgress = onProgress,
+                targetWidth = targetWidth,
+                targetHeight = targetHeight,
+                minProcessFrameGapUs = minProcessFrameGapUs,
+                frameSyncObject = frameSyncObject,
+                isFrameAvailable = { frameAvailable },
+                setFrameAvailable = { frameAvailable = it },
+                surfaceTexture = surfaceTexture,
+                textureRenderer = textureRenderer,
+                eglWindow = eglWindow
             )
-
         } finally {
-            try { decoder?.stop(); decoder?.release() } catch (_: Exception) {}
+            runCatching { decoder?.stop() }
+            runCatching { decoder?.release() }
             decoderSurface?.release()
             surfaceTexture?.release()
             textureRenderer?.release()
@@ -206,8 +233,9 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
         durationUs: Long,
         rotationDegrees: Int,
         onProgress: (Float) -> Unit,
-        targetW: Int,
-        targetH: Int,
+        targetWidth: Int,
+        targetHeight: Int,
+        minProcessFrameGapUs: Long,
         frameSyncObject: Object,
         isFrameAvailable: () -> Boolean,
         setFrameAvailable: (Boolean) -> Unit,
@@ -217,206 +245,322 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
     ): List<DebugPoseFrameResult> {
         val bufferInfo = MediaCodec.BufferInfo()
         val poses = ArrayList<DebugPoseFrameResult>()
-        var inputEnded = false
-        var outputEnded = false
-        val TIMEOUT_US = 10_000L
-
-        // GPU에서 이미 시각적 방향으로 회전시켜 ImageReader에 그릴 것이므로,
-        // MediaPipe에는 회전 정보를 0으로 넘겨 중복 회전을 방지합니다.
+        val bitmapExtractor = RgbaBitmapExtractor(targetWidth, targetHeight)
         val imageOptions = ImageProcessingOptions.builder()
             .setRotationDegrees(0)
             .build()
-            
         val texMatrix = FloatArray(16)
         val mvpMatrix = FloatArray(16)
         android.opengl.Matrix.setIdentityM(mvpMatrix, 0)
-        
-        // 시각적 정렬을 위해 MVP 행렬에 회전 적용
-        // "현재 상태에서 왼쪽으로 90도 회전(+90f)"을 요청하셨으므로 90도를 더해줍니다.
+
         if (rotationDegrees != 0) {
-            android.opengl.Matrix.rotateM(mvpMatrix, 0, -rotationDegrees.toFloat() + 90f, 0f, 0f, 1f)
+            android.opengl.Matrix.rotateM(
+                mvpMatrix,
+                0,
+                -rotationDegrees.toFloat() + 90f,
+                0f,
+                0f,
+                1f
+            )
         }
-        
+
+        var inputEnded = false
+        var outputEnded = false
+        var processedFrameCount = 0
+        var skippedFrameCount = 0
+        var lastProcessedPresentationTimeUs = Long.MIN_VALUE
+
         while (!outputEnded) {
             if (!inputEnded) {
-                val inputIndex = decoder.dequeueInputBuffer(TIMEOUT_US)
+                val inputIndex = decoder.dequeueInputBuffer(DEQUEUE_TIMEOUT_US)
                 if (inputIndex >= 0) {
-                    val inputBuffer = decoder.getInputBuffer(inputIndex)!!
+                    val inputBuffer = decoder.getInputBuffer(inputIndex)
+                        ?: throw IllegalStateException("Failed to obtain decoder input buffer.")
                     val sampleSize = extractor.readSampleData(inputBuffer, 0)
                     if (sampleSize < 0) {
-                        decoder.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        decoder.queueInputBuffer(
+                            inputIndex,
+                            0,
+                            0,
+                            0L,
+                            MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                        )
                         inputEnded = true
                     } else {
-                        decoder.queueInputBuffer(inputIndex, 0, sampleSize, extractor.sampleTime, 0)
+                        decoder.queueInputBuffer(
+                            inputIndex,
+                            0,
+                            sampleSize,
+                            extractor.sampleTime,
+                            extractor.sampleFlags
+                        )
                         extractor.advance()
                     }
                 }
             }
 
-            val outputIndex = decoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
-            if (outputIndex >= 0) {
-                if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputEnded = true
-                
-                if (bufferInfo.presentationTimeUs >= 0 && bufferInfo.size > 0) {
-                    if (durationUs > 0) onProgress(bufferInfo.presentationTimeUs.toFloat() / durationUs.toFloat())
-                    
-                    // 디코더 텍스처로 렌더링 호출
-                    decoder.releaseOutputBuffer(outputIndex, true)
+            when (val outputIndex = decoder.dequeueOutputBuffer(bufferInfo, DEQUEUE_TIMEOUT_US)) {
+                MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
+                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    Log.d(TAG, "Decoder output format changed: ${decoder.outputFormat}")
+                }
 
-                    var awaitSuccess = false
-                    synchronized(frameSyncObject) {
-                        val deadline = System.currentTimeMillis() + 500
-                        while (!isFrameAvailable()) {
-                            val waitTime = deadline - System.currentTimeMillis()
-                            if (waitTime <= 0) break // Time out
-                            frameSyncObject.wait(waitTime)
-                        }
-                        if (isFrameAvailable()) {
-                            setFrameAvailable(false)
-                            awaitSuccess = true
-                        }
-                    }
+                else -> {
+                    if (outputIndex < 0) continue
 
-                    if (awaitSuccess) {
+                    val isEndOfStream =
+                        bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                    val isCodecConfig =
+                        bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
+
+                    if (!isCodecConfig && bufferInfo.presentationTimeUs >= 0L) {
+                        if (durationUs > 0L) {
+                            onProgress(bufferInfo.presentationTimeUs.toFloat() / durationUs.toFloat())
+                        }
+
+                        decoder.releaseOutputBuffer(outputIndex, true)
+
+                        if (
+                            !awaitFrame(
+                                frameSyncObject = frameSyncObject,
+                                isFrameAvailable = isFrameAvailable,
+                                setFrameAvailable = setFrameAvailable
+                            )
+                        ) {
+                            Log.w(TAG, "Timed out waiting for SurfaceTexture frame.")
+                            if (isEndOfStream) {
+                                outputEnded = true
+                                onProgress(1f)
+                            }
+                            continue
+                        }
+
                         surfaceTexture.updateTexImage()
-                        surfaceTexture.getTransformMatrix(texMatrix)
-                        
-                        // OES 텍스처를 시각적 규격(targetW x targetH)에 맞춰 회전 및 렌더링
-                        textureRenderer.draw(texMatrix, mvpMatrix)
-                        eglWindow.swapBuffers()
+                        val currentTimestampMs = normalizeTimestampMs(bufferInfo.presentationTimeUs)
 
-                        // ImageReader에서 축소된 RGBA 이미지 획득
-                        val image = imageReader.acquireLatestImage()
-                        if (image != null) {
-                            try {
-                                // 타임스탬프 단조 증가 보정
-                                var currentTimestampMs = bufferInfo.presentationTimeUs / 1000
-                                if (currentTimestampMs <= lastTimestampMs) {
-                                    currentTimestampMs = lastTimestampMs + 1
-                                }
-                                lastTimestampMs = currentTimestampMs
+                        if (
+                            lastProcessedPresentationTimeUs != Long.MIN_VALUE &&
+                            bufferInfo.presentationTimeUs - lastProcessedPresentationTimeUs <
+                                minProcessFrameGapUs
+                        ) {
+                            skippedFrameCount++
+                        } else {
+                            lastProcessedPresentationTimeUs = bufferInfo.presentationTimeUs
+                            surfaceTexture.getTransformMatrix(texMatrix)
+                            textureRenderer.draw(texMatrix, mvpMatrix)
+                            eglWindow.swapBuffers()
 
-                                // 메모리 안정성을 위해 Bitmap으로 변환 후 MediaPipe 전달
-                                val bitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-                                val plane = image.planes[0]
-                                val buffer = plane.buffer
-                                val rowStride = plane.rowStride
-                                val pixelStride = 4 
-
-                                buffer.rewind()
-                                if (rowStride == targetW * pixelStride) {
-                                    bitmap.copyPixelsFromBuffer(buffer)
-                                } else {
-                                    val rowBuffer = ByteArray(rowStride)
-                                    val pixelBuffer = ByteBuffer.allocateDirect(targetW * targetH * pixelStride)
-                                        .order(ByteOrder.nativeOrder())
-                                    for (y in 0 until targetH) {
-                                        buffer.position(y * rowStride)
-                                        buffer.get(rowBuffer, 0, rowStride)
-                                        pixelBuffer.put(rowBuffer, 0, targetW * pixelStride)
+                            val image = imageReader.acquireLatestImage()
+                            if (image != null) {
+                                val shouldCapture =
+                                    currentTimestampMs >= lastCaptureTimeMs + CAPTURE_INTERVAL_MS
+                                var capturedBitmap: Bitmap? = null
+                                var frameBitmap: Bitmap? = null
+                                try {
+                                    frameBitmap = bitmapExtractor.copyToBitmap(image)
+                                    capturedBitmap = if (shouldCapture) {
+                                        Bitmap.createBitmap(frameBitmap)
+                                    } else {
+                                        null
                                     }
-                                    pixelBuffer.rewind()
-                                    bitmap.copyPixelsFromBuffer(pixelBuffer)
-                                }
+                                    val mpImage = BitmapImageBuilder(frameBitmap).build()
 
-                                val mpImage = com.google.mediapipe.framework.image.BitmapImageBuilder(bitmap).build()
-                                
-                                // 5초 간격으로 이미지 캡처 (디버깅용)
-                                val shouldCapture = currentTimestampMs >= lastCaptureTimeMs + 5_000
-                                val capturedBitmap = if (shouldCapture) {
-                                    lastCaptureTimeMs = (currentTimestampMs / 5000) * 5000
-                                    Bitmap.createBitmap(bitmap)
-                                } else null
+                                    try {
+                                        val result = poseLandmarker.detectForVideo(
+                                            mpImage,
+                                            imageOptions,
+                                            currentTimestampMs
+                                        )
+                                        processedFrameCount++
 
-                                // GPU Delegate 추론 수행
-                                val result = poseLandmarker.detectForVideo(mpImage, imageOptions, currentTimestampMs)
-                                
-                                val landmarks = result.landmarks().firstOrNull().orEmpty()
-                                val pose = VisionMapper.toPose(
-                                    frameTimeMs = result.timestampMs(),
-                                    rawLandmarks = landmarks.map { Triple(it.x(), it.y(), it.z()) }
-                                )
-                                
-                                // 포즈가 검출되었거나, 디버깅용 캡처 이미지가 있는 경우 결과에 추가
-                                if (landmarks.isNotEmpty() || capturedBitmap != null) {
-                                    poses.add(DebugPoseFrameResult(
-                                        pose = pose,
-                                        worldLandmarks = result.worldLandmarks().firstOrNull().orEmpty().mapIndexed { i, l ->
-                                            DebugPoseWorldLandmark(i, l.x(), l.y(), l.z())
-                                        },
-                                        capturedBitmap = capturedBitmap
-                                    ))
+                                        val landmarks = result.landmarks().firstOrNull().orEmpty()
+                                        if (landmarks.isNotEmpty() || shouldCapture) {
+                                            if (shouldCapture) {
+                                                lastCaptureTimeMs =
+                                                    (currentTimestampMs / CAPTURE_INTERVAL_MS) *
+                                                        CAPTURE_INTERVAL_MS
+                                            }
+
+                                            poses.add(
+                                                DebugPoseFrameResult(
+                                                    pose = VisionMapper.toPose(
+                                                        frameTimeMs = result.timestampMs(),
+                                                        rawLandmarks = landmarks.map {
+                                                            Triple(it.x(), it.y(), it.z())
+                                                        },
+                                                        visibilityValues = landmarks.map {
+                                                            it.visibility().toNullable()
+                                                        },
+                                                        presenceValues = landmarks.map {
+                                                            it.presence().toNullable()
+                                                        }
+                                                    ),
+                                                    worldLandmarks = result.worldLandmarks()
+                                                        .firstOrNull()
+                                                        .orEmpty()
+                                                        .mapIndexed { index, landmark ->
+                                                            DebugPoseWorldLandmark(
+                                                                index = index,
+                                                                x = landmark.x(),
+                                                                y = landmark.y(),
+                                                                z = landmark.z(),
+                                                                visibility = landmark.visibility()
+                                                                    .toNullable(),
+                                                                presence = landmark.presence()
+                                                                    .toNullable()
+                                                            )
+                                                        },
+                                                    capturedBitmap = capturedBitmap
+                                                )
+                                            )
+                                        }
+                                    } finally {
+                                        mpImage.close()
+                                    }
+                                } catch (error: Exception) {
+                                    if (shouldCapture) {
+                                        lastCaptureTimeMs =
+                                            (currentTimestampMs / CAPTURE_INTERVAL_MS) *
+                                                CAPTURE_INTERVAL_MS
+                                        poses.add(
+                                            DebugPoseFrameResult(
+                                                pose = VisionMapper.toPose(
+                                                    frameTimeMs = currentTimestampMs,
+                                                    rawLandmarks = emptyList()
+                                                ),
+                                                worldLandmarks = emptyList(),
+                                                capturedBitmap = capturedBitmap
+                                            )
+                                        )
+                                    }
+                                    Log.e(
+                                        TAG,
+                                        "Pose inference failed at ${bufferInfo.presentationTimeUs / 1_000L}ms",
+                                        error
+                                    )
+                                } finally {
+                                    frameBitmap?.takeIf { !it.isRecycled }?.recycle()
+                                    image.close()
                                 }
-                                mpImage.close()
-                            } catch (e: Exception) {
-                                Log.e(TAG, "추론 실패 (PTS: ${bufferInfo.presentationTimeUs / 1000}): ${e.message}")
-                            } finally {
-                                image.close()
                             }
                         }
+                    } else {
+                        decoder.releaseOutputBuffer(outputIndex, false)
                     }
-                } else {
-                    decoder.releaseOutputBuffer(outputIndex, false)
+
+                    if (isEndOfStream) {
+                        outputEnded = true
+                        onProgress(1f)
+                    }
                 }
             }
         }
-        Log.d(TAG, "분석 완료: 총 ${poses.size}개의 포즈 검출")
+
+        Log.d(
+            TAG,
+            "Analysis complete: poses=${poses.size}, processed=$processedFrameCount, skipped=$skippedFrameCount"
+        )
         return poses
     }
 
+    private fun awaitFrame(
+        frameSyncObject: Object,
+        isFrameAvailable: () -> Boolean,
+        setFrameAvailable: (Boolean) -> Unit
+    ): Boolean {
+        synchronized(frameSyncObject) {
+            val deadline = System.currentTimeMillis() + FRAME_WAIT_TIMEOUT_MS
+            while (!isFrameAvailable()) {
+                val waitTime = deadline - System.currentTimeMillis()
+                if (waitTime <= 0L) break
+                frameSyncObject.wait(waitTime)
+            }
+
+            if (!isFrameAvailable()) {
+                return false
+            }
+
+            setFrameAvailable(false)
+            return true
+        }
+    }
+
+    private fun normalizeTimestampMs(presentationTimeUs: Long): Long {
+        var timestampMs = presentationTimeUs / 1_000L
+        if (timestampMs <= lastTimestampMs) {
+            timestampMs = lastTimestampMs + 1L
+        }
+        lastTimestampMs = timestampMs
+        return timestampMs
+    }
+
     private fun createPoseLandmarker(): PoseLandmarker {
-        val baseOptions = BaseOptions.builder()
-            .setModelAssetPath("models/pose_landmarker_lite.task")
-            .setDelegate(Delegate.GPU)
-            .build()
+        val gpuResult = runCatching { createPoseLandmarker(delegate = Delegate.GPU) }
+        gpuResult.onFailure {
+            Log.w(TAG, "GPU delegate unavailable. Falling back to CPU.", it)
+        }
+        return gpuResult.getOrElse { createPoseLandmarker(delegate = null) }
+    }
+
+    private fun createPoseLandmarker(delegate: Delegate?): PoseLandmarker {
+        val baseOptionsBuilder = BaseOptions.builder()
+            .setModelAssetPath(POSE_MODEL_PATH)
+        if (delegate != null) {
+            baseOptionsBuilder.setDelegate(delegate)
+        }
+
         val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-            .setBaseOptions(baseOptions)
+            .setBaseOptions(baseOptionsBuilder.build())
             .setRunningMode(RunningMode.VIDEO)
             .setNumPoses(1)
             .setMinPoseDetectionConfidence(0.5f)
             .setMinPosePresenceConfidence(0.5f)
             .setMinTrackingConfidence(0.5f)
             .build()
+
         return PoseLandmarker.createFromOptions(context, options)
     }
 
     private fun findVideoTrackIndex(extractor: MediaExtractor): Int {
-        for (i in 0 until extractor.trackCount) {
-            val mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)
-            if (mime?.startsWith("video/") == true) return i
+        for (index in 0 until extractor.trackCount) {
+            val mime = extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
+            if (mime?.startsWith("video/") == true) {
+                return index
+            }
         }
         return -1
     }
 
-    private fun setExtractorDataSource(extractor: MediaExtractor, uri: Uri): Boolean {
+    private fun setExtractorDataSource(
+        extractor: MediaExtractor,
+        uri: Uri
+    ): Boolean {
         return try {
             if (uri.scheme == "file") {
-                extractor.setDataSource(uri.path!!)
+                extractor.setDataSource(uri.path ?: return false)
             } else {
-                context.contentResolver.openFileDescriptor(uri, "r")?.use { 
-                    extractor.setDataSource(it.fileDescriptor) 
-                }
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                    extractor.setDataSource(descriptor.fileDescriptor)
+                } ?: return false
             }
             true
-        } catch (e: Exception) { 
-            Log.e(TAG, "DataSource 설정 실패: ${e.message}")
-            false 
+        } catch (error: Exception) {
+            Log.e(TAG, "Failed to set video data source.", error)
+            false
         }
     }
 
-    // --- EGL 보조 클래스 (하드웨어 스케일러) ---
-
-    private class EglWindow(val surface: Surface) {
-        var eglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
-        var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
-        var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
+    private class EglWindow(surface: Surface) {
+        private val eglDisplay: EGLDisplay
+        private val eglContext: EGLContext
+        private val eglSurface: EGLSurface
 
         init {
             eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
             val version = IntArray(2)
             EGL14.eglInitialize(eglDisplay, version, 0, version, 1)
 
-            val attribList = intArrayOf(
+            val configAttributes = intArrayOf(
                 EGL14.EGL_RED_SIZE, 8,
                 EGL14.EGL_GREEN_SIZE, 8,
                 EGL14.EGL_BLUE_SIZE, 8,
@@ -426,16 +570,37 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
             )
             val configs = arrayOfNulls<EGLConfig>(1)
             val numConfigs = IntArray(1)
-            EGL14.eglChooseConfig(eglDisplay, attribList, 0, configs, 0, configs.size, numConfigs, 0)
+            EGL14.eglChooseConfig(
+                eglDisplay,
+                configAttributes,
+                0,
+                configs,
+                0,
+                configs.size,
+                numConfigs,
+                0
+            )
 
-            val contextAttribs = intArrayOf(
+            val contextAttributes = intArrayOf(
                 EGL14.EGL_CONTEXT_CLIENT_VERSION, 2,
                 EGL14.EGL_NONE
             )
-            eglContext = EGL14.eglCreateContext(eglDisplay, configs[0], EGL14.EGL_NO_CONTEXT, contextAttribs, 0)
+            eglContext = EGL14.eglCreateContext(
+                eglDisplay,
+                configs[0],
+                EGL14.EGL_NO_CONTEXT,
+                contextAttributes,
+                0
+            )
 
-            val surfaceAttribs = intArrayOf(EGL14.EGL_NONE)
-            eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, configs[0], surface, surfaceAttribs, 0)
+            val surfaceAttributes = intArrayOf(EGL14.EGL_NONE)
+            eglSurface = EGL14.eglCreateWindowSurface(
+                eglDisplay,
+                configs[0],
+                surface,
+                surfaceAttributes,
+                0
+            )
         }
 
         fun makeCurrent() {
@@ -448,20 +613,45 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
 
         fun release() {
             if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
-                EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
-                if (eglSurface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, eglSurface)
-                if (eglContext != EGL14.EGL_NO_CONTEXT) EGL14.eglDestroyContext(eglDisplay, eglContext)
+                EGL14.eglMakeCurrent(
+                    eglDisplay,
+                    EGL14.EGL_NO_SURFACE,
+                    EGL14.EGL_NO_SURFACE,
+                    EGL14.EGL_NO_CONTEXT
+                )
+                if (eglSurface != EGL14.EGL_NO_SURFACE) {
+                    EGL14.eglDestroySurface(eglDisplay, eglSurface)
+                }
+                if (eglContext != EGL14.EGL_NO_CONTEXT) {
+                    EGL14.eglDestroyContext(eglDisplay, eglContext)
+                }
                 EGL14.eglTerminate(eglDisplay)
             }
         }
     }
 
     private class TextureRenderer {
-        private var program = 0
-        private var positionHandle = 0
-        private var texCoordHandle = 0
-        private var texMatrixHandle = 0
-        private var mvpMatrixHandle = 0
+        private val program: Int
+        private val positionHandle: Int
+        private val texCoordHandle: Int
+        private val texMatrixHandle: Int
+        private val mvpMatrixHandle: Int
+        private val vertexBuffer = ByteBuffer
+            .allocateDirect(VERTICES.size * 4)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer()
+            .apply {
+                put(VERTICES)
+                position(0)
+            }
+        private val texCoordBuffer = ByteBuffer
+            .allocateDirect(TEX_COORDS.size * 4)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer()
+            .apply {
+                put(TEX_COORDS)
+                position(0)
+            }
         val textureId: Int
 
         init {
@@ -489,6 +679,7 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
 
             val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderSource)
             val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderSource)
+
             program = GLES20.glCreateProgram()
             GLES20.glAttachShader(program, vertexShader)
             GLES20.glAttachShader(program, fragmentShader)
@@ -503,56 +694,60 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
             GLES20.glGenTextures(1, textures, 0)
             textureId = textures[0]
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
-            GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR.toFloat())
-            GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR.toFloat())
-            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
-            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
-        }
-
-        private fun loadShader(type: Int, shaderCode: String): Int {
-            val shader = GLES20.glCreateShader(type)
-            GLES20.glShaderSource(shader, shaderCode)
-            GLES20.glCompileShader(shader)
-            return shader
+            GLES20.glTexParameterf(
+                GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+                GLES20.GL_TEXTURE_MIN_FILTER,
+                GLES20.GL_LINEAR.toFloat()
+            )
+            GLES20.glTexParameterf(
+                GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+                GLES20.GL_TEXTURE_MAG_FILTER,
+                GLES20.GL_LINEAR.toFloat()
+            )
+            GLES20.glTexParameteri(
+                GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+                GLES20.GL_TEXTURE_WRAP_S,
+                GLES20.GL_CLAMP_TO_EDGE
+            )
+            GLES20.glTexParameteri(
+                GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
+                GLES20.GL_TEXTURE_WRAP_T,
+                GLES20.GL_CLAMP_TO_EDGE
+            )
         }
 
         fun draw(texMatrix: FloatArray, mvpMatrix: FloatArray) {
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             GLES20.glUseProgram(program)
-
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
 
-            val vertices = floatArrayOf(
-                -1f, -1f,
-                 1f, -1f,
-                -1f,  1f,
-                 1f,  1f
-            )
-            val texCoords = floatArrayOf(
-                0f, 0f,
-                1f, 0f,
-                0f, 1f,
-                1f, 1f
-            )
-
-            val vertexBuffer = ByteBuffer.allocateDirect(vertices.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
-            vertexBuffer.put(vertices).position(0)
-
-            val texCoordBuffer = ByteBuffer.allocateDirect(texCoords.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
-            texCoordBuffer.put(texCoords).position(0)
+            vertexBuffer.position(0)
+            texCoordBuffer.position(0)
 
             GLES20.glEnableVertexAttribArray(positionHandle)
-            GLES20.glVertexAttribPointer(positionHandle, 2, GLES20.GL_FLOAT, false, 0, vertexBuffer)
+            GLES20.glVertexAttribPointer(
+                positionHandle,
+                2,
+                GLES20.GL_FLOAT,
+                false,
+                0,
+                vertexBuffer
+            )
 
             GLES20.glEnableVertexAttribArray(texCoordHandle)
-            GLES20.glVertexAttribPointer(texCoordHandle, 2, GLES20.GL_FLOAT, false, 0, texCoordBuffer)
+            GLES20.glVertexAttribPointer(
+                texCoordHandle,
+                2,
+                GLES20.GL_FLOAT,
+                false,
+                0,
+                texCoordBuffer
+            )
 
             GLES20.glUniformMatrix4fv(texMatrixHandle, 1, false, texMatrix, 0)
             GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
-
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-
             GLES20.glDisableVertexAttribArray(positionHandle)
             GLES20.glDisableVertexAttribArray(texCoordHandle)
         }
@@ -562,10 +757,90 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
             val textures = intArrayOf(textureId)
             GLES20.glDeleteTextures(1, textures, 0)
         }
+
+        private fun loadShader(type: Int, shaderCode: String): Int {
+            val shader = GLES20.glCreateShader(type)
+            GLES20.glShaderSource(shader, shaderCode)
+            GLES20.glCompileShader(shader)
+            return shader
+        }
+
+        companion object {
+            private val VERTICES = floatArrayOf(
+                -1f, -1f,
+                 1f, -1f,
+                -1f,  1f,
+                 1f,  1f
+            )
+            private val TEX_COORDS = floatArrayOf(
+                0f, 0f,
+                1f, 0f,
+                0f, 1f,
+                1f, 1f
+            )
+        }
     }
+
+    private class RgbaBitmapExtractor(
+        private val width: Int,
+        private val height: Int
+    ) {
+        private var rowBuffer = ByteArray(width * PIXEL_STRIDE)
+        private val contiguousBuffer = ByteBuffer
+            .allocateDirect(width * height * PIXEL_STRIDE)
+            .order(ByteOrder.nativeOrder())
+
+        fun copyToBitmap(image: Image): Bitmap {
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val plane = image.planes[0]
+            val buffer = plane.buffer
+            val rowStride = plane.rowStride
+
+            buffer.rewind()
+            if (rowStride == width * PIXEL_STRIDE) {
+                bitmap.copyPixelsFromBuffer(buffer)
+                return bitmap
+            }
+
+            if (rowBuffer.size < rowStride) {
+                rowBuffer = ByteArray(rowStride)
+            }
+
+            contiguousBuffer.clear()
+            for (y in 0 until height) {
+                buffer.position(y * rowStride)
+                buffer.get(rowBuffer, 0, rowStride)
+                contiguousBuffer.put(rowBuffer, 0, width * PIXEL_STRIDE)
+            }
+            contiguousBuffer.rewind()
+            bitmap.copyPixelsFromBuffer(contiguousBuffer)
+            return bitmap
+        }
+    }
+
+    private fun MediaFormat.getIntOrZero(key: String): Int =
+        if (containsKey(key)) getInteger(key) else 0
+
+    private fun MediaFormat.getIntOrNull(key: String): Int? =
+        if (containsKey(key)) getInteger(key) else null
+
+    private fun MediaFormat.getLongOrZero(key: String): Long =
+        if (containsKey(key)) getLong(key) else 0L
+
+    private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
 
     companion object {
         private const val TAG = "OptimizedPrePose"
-        private const val MAX_INFERENCE_DIM = 640
+        private const val POSE_MODEL_PATH = "models/pose_landmarker_lite.task"
+        // pose_detector.tflite input: 224x224
+        // pose_landmarks_detector.tflite input: 256x256
+        // Pre-scaling the long edge to 256 keeps us close to the actual task input sizes
+        // and avoids paying copy/resize cost on larger intermediate frames.
+        private const val MAX_INFERENCE_DIM = 256
+        private const val DEFAULT_ANALYSIS_FPS_LIMIT = 30
+        private const val CAPTURE_INTERVAL_MS = 5_000L
+        private const val DEQUEUE_TIMEOUT_US = 10_000L
+        private const val FRAME_WAIT_TIMEOUT_MS = 500L
+        private const val PIXEL_STRIDE = 4
     }
 }
