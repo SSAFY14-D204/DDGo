@@ -290,10 +290,12 @@ private fun GymNameStep(
     ) {
         CreateAppBar(onBack = onBack)
 
+        // 스크롤 가능한 콘텐츠 영역: 하단 버튼 공간을 제외하고 남은 공간을 차지
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 24.dp)
+                .weight(1f)
+                .padding(horizontal = 24.dp)
+                .padding(top = 24.dp)
         ) {
             SearchHeroSection(
                 query = searchQuery,
@@ -344,10 +346,11 @@ private fun GymNameStep(
                             fontSize = 14.sp
                         )
                     } else {
+                        // weight(1f)로 남은 공간을 유동적으로 차지 → 하단 버튼이 가려지지 않음
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(280.dp),
+                                .weight(1f),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(places, key = { it.externalPlaceId }) { place ->
@@ -392,25 +395,26 @@ private fun GymNameStep(
                     )
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            Button(
-                onClick = onNext,
-                enabled = gymResolveUiState is GymResolveUiState.Success,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4A90E2),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color(0xFF333333),
-                    disabledContentColor = Color(0xFF666666)
-                )
-            ) {
-                Text(text = "\uB2E4\uC74C", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
+        // "다음" 버튼: Column 하단에 고정 배치 (스크롤 콘텐츠 밖)
+        Button(
+            onClick = onNext,
+            enabled = gymResolveUiState is GymResolveUiState.Success,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp)
+                .height(56.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF4A90E2),
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFF333333),
+                disabledContentColor = Color(0xFF666666)
+            )
+        ) {
+            Text(text = "\uB2E4\uC74C", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1236,7 +1240,7 @@ private val difficultyReferenceSlots = listOf(
     HoldPaletteSlot(key = "brown", color = Color(0xFF6B3E1C)),
     HoldPaletteSlot(key = "purple", color = Color(0xFF876FFF)),
     HoldPaletteSlot(key = "navy", color = Color(0xFF373FD7)),
-    HoldPaletteSlot(key = "blue", color = Color(0xFF4396FB)),
+    HoldPaletteSlot(key = "skyblue", color = Color(0xFF4396FB)),
     HoldPaletteSlot(key = "green", color = Color(0xFF65B969)),
     HoldPaletteSlot(key = "orange", color = Color(0xFFFF7700)),
     HoldPaletteSlot(key = "red", color = Color(0xFFFF0000)),
@@ -1257,7 +1261,7 @@ private val holdPaletteRows = listOf(
         HoldPaletteSlot(key = "navy", color = Color(0xFF373FD7))
     ),
     listOf(
-        HoldPaletteSlot(key = "blue", color = Color(0xFF4396FB)),
+        HoldPaletteSlot(key = "skyblue", color = Color(0xFF4396FB)),
         HoldPaletteSlot(key = "green", color = Color(0xFF65B969))
     ),
     listOf(
@@ -1278,7 +1282,7 @@ private val holdPickerRows = listOf(
         HoldPaletteSlot(key = "green", color = Color(0xFF48BE5C))
     ),
     listOf(
-        HoldPaletteSlot(key = "blue", color = Color(0xFF1FC4E2)),
+        HoldPaletteSlot(key = "skyblue", color = Color(0xFF1FC4E2)),
         HoldPaletteSlot(key = "navy", color = Color(0xFF3F43DB)),
         HoldPaletteSlot(key = "purple", color = Color(0xFF8265EE)),
         HoldPaletteSlot(key = "brown", color = Color(0xFF8A4B16))
@@ -1319,7 +1323,7 @@ private fun holdAssetPathForKey(key: String): String? {
         "pink" -> "holds/hold_pink.png"
         "purple" -> "holds/hold_purple.png"
         "red" -> "holds/hold_red.png"
-        "blue" -> "holds/hold_sky.png"
+        "skyblue" -> "holds/hold_sky.png"
         "yellow" -> "holds/hold_yellow.png"
         else -> null
     }
@@ -1600,8 +1604,8 @@ private fun holdAssetColorOverride(colorName: String): Color? {
         "\uC8FC\uD669", "orange" -> Color(0xFFFF7700)
         "\uB178\uB791", "yellow" -> Color(0xFFFED500)
         "\uCD08\uB85D", "green" -> Color(0xFF65B969)
-        "\uD30C\uB791", "blue", "cyan" -> Color(0xFF4396FB)
-        "\uB0A8\uC0C9", "navy" -> Color(0xFF373FD7)
+        "\uD558\uB298\uC0C9", "skyblue", "cyan" -> Color(0xFF4396FB)
+        "\uD30C\uB791", "blue", "\uB0A8\uC0C9", "navy" -> Color(0xFF373FD7)
         "\uBCF4\uB77C", "purple" -> Color(0xFF876FFF)
         "\uAC08\uC0C9", "brown" -> Color(0xFF6B3E1C)
         "\uD551\uD06C", "pink" -> Color(0xFFFF56A8)
@@ -1632,7 +1636,7 @@ private fun fallbackColorByName(colorName: String): Color {
         "orange" -> Color(0xFFFF7700)
         "yellow" -> Color(0xFFFED500)
         "green" -> Color(0xFF65B969)
-        "blue" -> Color(0xFF4396FB)
+        "skyblue" -> Color(0xFF4396FB)
         "navy" -> Color(0xFF373FD7)
         "purple" -> Color(0xFF876FFF)
         "brown" -> Color(0xFF6B3E1C)
@@ -1654,7 +1658,7 @@ private fun HoldAssetThumbnail(
         holdPaletteRows.flatten().firstOrNull { it.color == color }
             ?: holdPickerRows.flatten().firstOrNull { it.color == color }
             ?: when (color) {
-                Color(0xFF4396FB) -> findHoldPaletteSlot("blue")
+                Color(0xFF4396FB) -> findHoldPaletteSlot("skyblue")
                 Color(0xFF65B969) -> findHoldPaletteSlot("green")
                 Color(0xFFFF7700) -> findHoldPaletteSlot("orange")
                 Color(0xFFFF0000) -> findHoldPaletteSlot("red")
