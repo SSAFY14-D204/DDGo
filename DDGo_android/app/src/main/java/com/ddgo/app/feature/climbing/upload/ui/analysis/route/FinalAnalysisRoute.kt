@@ -15,6 +15,7 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewH
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPage
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPageState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisTab
+import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import kotlin.math.roundToInt
 
 @Composable
@@ -23,18 +24,20 @@ fun FinalAnalysisRoute(
     onNavigateBack: () -> Unit = {},
     onNavigateToMain: () -> Unit = {}
 ) {
-    val totalHolds = viewModel.detectedHolds.size.takeIf { it > 0 } ?: 14
+    val totalHolds = viewModel.totalSelectedHoldCount.takeIf { it > 0 } ?: 14
     val attemptSummaries = remember(
         viewModel.allAttemptUris,
         viewModel.analysisPoints,
         viewModel.attemptDummyResults,
-        totalHolds
+        totalHolds,
+        viewModel.attemptHoldReachResults
     ) {
         buildAttemptSummaries(
             totalAttempts = viewModel.allAttemptUris.size,
             fallbackPoints = viewModel.analysisPoints,
             dummyResults = viewModel.attemptDummyResults,
-            totalHolds = totalHolds
+            totalHolds = totalHolds,
+            holdReachResults = viewModel.attemptHoldReachResults
         )
     }
     val attemptCount = attemptSummaries.size.coerceAtLeast(1)
@@ -48,14 +51,25 @@ fun FinalAnalysisRoute(
 
     val safeSelectedAttempt = selectedAttempt.coerceIn(1, attemptCount)
     val currentSummary = attemptSummaries[(safeSelectedAttempt - 1).coerceIn(0, attemptSummaries.lastIndex)]
-    val averageReachedHolds = remember(attemptSummaries) {
-        attemptSummaries.map { it.reachedHolds }.average().roundToInt()
+    val averageReachedHolds = remember(viewModel.attemptHoldReachResults, attemptSummaries) {
+        if (viewModel.attemptHoldReachResults.isNotEmpty()) {
+            viewModel.attemptHoldReachResults
+                .map(AttemptHoldReachResult::highestReachedHoldNo)
+                .average()
+                .roundToInt()
+        } else {
+            attemptSummaries.map { it.reachedHolds }.average().roundToInt()
+        }
     }
     val averageBalanceRatio = remember(attemptSummaries) {
         attemptSummaries.map { it.balanceRatio }.average().roundToInt()
     }
-    val overallSuccess = remember(attemptSummaries) {
-        attemptSummaries.any { it.isSuccess }
+    val overallSuccess = remember(viewModel.attemptHoldReachResults, attemptSummaries, totalHolds) {
+        if (viewModel.attemptHoldReachResults.isNotEmpty()) {
+            viewModel.attemptHoldReachResults.any { it.highestReachedHoldNo >= totalHolds }
+        } else {
+            attemptSummaries.any { it.isSuccess }
+        }
     }
     val combinedTimeline = remember(attemptSummaries) {
         val maxLength = attemptSummaries.maxOfOrNull { it.stabilityTimeline.size } ?: 0

@@ -184,6 +184,18 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
+        composable(ScreenRoutes.Climbing.Upload.HOLD_CONTACT_DEBUG) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
+            }
+            val viewModel: UploadViewModel = hiltViewModel(parentEntry)
+
+            HoldContactDebugScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         // 5. 최종 분석 결과 화면
         composable(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {

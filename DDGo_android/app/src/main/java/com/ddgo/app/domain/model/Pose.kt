@@ -9,7 +9,9 @@ package com.ddgo.app.domain.model
  */
 data class Pose(
     val frameTimeMs: Long,
-    val landmarks: List<PoseLandmark>
+    val landmarks: List<PoseLandmark>,
+    val landmarksPx: Map<String, PosePixelPoint> = emptyMap(),
+    val worldLandmarksSample: Map<String, PoseWorldPoint> = emptyMap()
 )
 
 /**
@@ -25,4 +27,21 @@ data class PoseLandmark(
     val z: Float,
     val visibility: Float? = null,
     val presence: Float? = null
+)
+
+/**
+ * JSON 전송 및 후속 분석에 사용하는 2D 픽셀 좌표입니다.
+ */
+data class PosePixelPoint(
+    val x: Float,
+    val y: Float
+)
+
+/**
+ * MediaPipe world landmark에서 추출한 3D 좌표 샘플입니다.
+ */
+data class PoseWorldPoint(
+    val x: Float,
+    val y: Float,
+    val z: Float
 )

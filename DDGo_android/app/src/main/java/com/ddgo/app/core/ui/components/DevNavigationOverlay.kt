@@ -148,6 +148,7 @@ private val devRoutes = listOf(
     DevRoute("4. 홀드 선택", ScreenRoutes.Climbing.Upload.HOLD_SELECT),
     DevRoute("3-2. 분석 로딩", ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING),
     DevRoute("5. 시도 결과", ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT),
+    DevRoute("홀드탐지디버깅", ScreenRoutes.Climbing.Upload.HOLD_CONTACT_DEBUG),
     DevRoute("6. 최종 분석", ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS),
 
     // ── Record ──
@@ -158,7 +159,7 @@ private val sectionLabels = mapOf(
     0 to "Auth",
     5 to "Main",
     6 to "Upload Flow",
-    15 to "Record",
+    16 to "Record",
 )
 
 @Composable

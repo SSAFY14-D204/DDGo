@@ -14,9 +14,13 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.util.Log
-import com.ddgo.app.data.mapper.VisionMapper
 import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.domain.model.PosePixelPoint
+import com.ddgo.app.domain.model.PoseWorldPoint
 import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.tasks.components.containers.Landmark
+import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
@@ -247,17 +251,19 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
 
         try {
             val rawBitmap = image.toBitmap()
-            val preparedBitmap = rawBitmap.prepareForInference(rotationDegrees)
+            val preparedFrame = rawBitmap.prepareForInference(rotationDegrees)
 
             try {
                 return inferPose(
                     poseLandmarker = poseLandmarker,
-                    frameBitmap = preparedBitmap,
-                    frameTimeMs = presentationTimeUs / 1_000L
+                    frameBitmap = preparedFrame.bitmap,
+                    frameTimeMs = presentationTimeUs / 1_000L,
+                    frameWidthPx = preparedFrame.referenceWidthPx,
+                    frameHeightPx = preparedFrame.referenceHeightPx
                 )
             } finally {
-                if (preparedBitmap !== rawBitmap) {
-                    preparedBitmap.recycle()
+                if (preparedFrame.bitmap !== rawBitmap) {
+                    preparedFrame.bitmap.recycle()
                 }
                 rawBitmap.recycle()
             }
@@ -269,7 +275,9 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
     private fun inferPose(
         poseLandmarker: PoseLandmarker,
         frameBitmap: Bitmap,
-        frameTimeMs: Long
+        frameTimeMs: Long,
+        frameWidthPx: Int,
+        frameHeightPx: Int
     ): Pose? {
         val mpImage = BitmapImageBuilder(frameBitmap).build()
 
@@ -278,13 +286,11 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             val landmarks = result.landmarks().firstOrNull().orEmpty()
             if (landmarks.isEmpty()) return null
 
-            return VisionMapper.toPose(
+            return landmarks.toPose(
                 frameTimeMs = result.timestampMs(),
-                rawLandmarks = landmarks.map { landmark ->
-                    Triple(landmark.x(), landmark.y(), landmark.z())
-                },
-                visibilityValues = landmarks.map { landmark -> landmark.visibility().toNullable() },
-                presenceValues = landmarks.map { landmark -> landmark.presence().toNullable() }
+                frameWidthPx = frameWidthPx,
+                frameHeightPx = frameHeightPx,
+                worldLandmarks = result.worldLandmarks().firstOrNull().orEmpty()
             )
         } finally {
             mpImage.close()
@@ -445,28 +451,104 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         return output
     }
 
-    private fun Bitmap.prepareForInference(rotationDegrees: Int): Bitmap {
-        val rotatedBitmap = if (rotationDegrees == 0) {
+    private fun List<NormalizedLandmark>.toPose(
+        frameTimeMs: Long,
+        frameWidthPx: Int,
+        frameHeightPx: Int,
+        worldLandmarks: List<Landmark>
+    ): Pose = Pose(
+        frameTimeMs = frameTimeMs,
+        landmarks = mapIndexed { index, landmark ->
+            PoseLandmark(
+                index = index,
+                x = landmark.x(),
+                y = landmark.y(),
+                z = landmark.z(),
+                visibility = landmark.visibility().toNullable(),
+                presence = landmark.presence().toNullable()
+            )
+        },
+        landmarksPx = toNamedPixelMap(
+            frameWidthPx = frameWidthPx,
+            frameHeightPx = frameHeightPx
+        ),
+        worldLandmarksSample = worldLandmarks.toNamedWorldMap()
+    )
+
+    private fun List<NormalizedLandmark>.toNamedPixelMap(
+        frameWidthPx: Int,
+        frameHeightPx: Int
+    ): Map<String, PosePixelPoint> {
+        if (isEmpty()) return emptyMap()
+
+        val points = linkedMapOf<String, PosePixelPoint>()
+        POSE_DTO_LANDMARK_NAMES_BY_INDEX.forEach { (index, landmarkName) ->
+            getOrNull(index)?.let { landmark ->
+                points[landmarkName] = PosePixelPoint(
+                    x = landmark.x() * frameWidthPx.toFloat(),
+                    y = landmark.y() * frameHeightPx.toFloat()
+                )
+            }
+        }
+        return points
+    }
+
+    private fun List<Landmark>.toNamedWorldMap(): Map<String, PoseWorldPoint> {
+        if (isEmpty()) return emptyMap()
+
+        val points = linkedMapOf<String, PoseWorldPoint>()
+        POSE_DTO_LANDMARK_NAMES_BY_INDEX.forEach { (index, landmarkName) ->
+            getOrNull(index)?.let { landmark ->
+                points[landmarkName] = PoseWorldPoint(
+                    x = landmark.x(),
+                    y = landmark.y(),
+                    z = landmark.z()
+                )
+            }
+        }
+        return points
+    }
+
+    private fun Bitmap.prepareForInference(rotationDegrees: Int): PreparedInferenceBitmap {
+        val orientedBitmap = if (rotationDegrees == 0) {
             this
         } else {
             val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
             Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
         }
 
-        val maxDimension = max(rotatedBitmap.width, rotatedBitmap.height)
-        if (maxDimension <= MAX_INFERENCE_DIMENSION_PX) return rotatedBitmap
+        val referenceWidthPx = orientedBitmap.width
+        val referenceHeightPx = orientedBitmap.height
+        val maxDimension = max(orientedBitmap.width, orientedBitmap.height)
+        if (maxDimension <= MAX_INFERENCE_DIMENSION_PX) {
+            return PreparedInferenceBitmap(
+                bitmap = orientedBitmap,
+                referenceWidthPx = referenceWidthPx,
+                referenceHeightPx = referenceHeightPx
+            )
+        }
 
         val scale = MAX_INFERENCE_DIMENSION_PX.toFloat() / maxDimension.toFloat()
-        val scaledWidth = (rotatedBitmap.width * scale).roundToInt().coerceAtLeast(1)
-        val scaledHeight = (rotatedBitmap.height * scale).roundToInt().coerceAtLeast(1)
-        val scaledBitmap = Bitmap.createScaledBitmap(rotatedBitmap, scaledWidth, scaledHeight, true)
-        if (rotatedBitmap !== this) {
-            rotatedBitmap.recycle()
+        val scaledWidth = (orientedBitmap.width * scale).roundToInt().coerceAtLeast(1)
+        val scaledHeight = (orientedBitmap.height * scale).roundToInt().coerceAtLeast(1)
+        val scaledBitmap = Bitmap.createScaledBitmap(orientedBitmap, scaledWidth, scaledHeight, true)
+        if (orientedBitmap !== this) {
+            orientedBitmap.recycle()
         }
-        return scaledBitmap
+        return PreparedInferenceBitmap(
+            bitmap = scaledBitmap,
+            referenceWidthPx = referenceWidthPx,
+            referenceHeightPx = referenceHeightPx
+        )
     }
 
     private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
+
+    private data class PreparedInferenceBitmap(
+        val bitmap: Bitmap,
+        val referenceWidthPx: Int,
+        val referenceHeightPx: Int
+    )
 
     companion object {
         private const val TAG = "SequentialPoseVideoAnalyzer"
@@ -474,5 +556,21 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         private const val DEQUEUE_TIMEOUT_US = 10_000L
         private const val MAX_INFERENCE_DIMENSION_PX = 640
         private const val DEFAULT_ANALYSIS_FPS_LIMIT = 10
+        private val POSE_DTO_LANDMARK_NAMES_BY_INDEX = linkedMapOf(
+            11 to "left_shoulder",
+            12 to "right_shoulder",
+            13 to "left_elbow",
+            14 to "right_elbow",
+            15 to "left_wrist",
+            16 to "right_wrist",
+            19 to "left_hand_tip",
+            20 to "right_hand_tip",
+            23 to "left_hip",
+            24 to "right_hip",
+            25 to "left_knee",
+            26 to "right_knee",
+            27 to "left_ankle",
+            28 to "right_ankle"
+        )
     }
 }
