@@ -105,7 +105,11 @@ fun AttemptResultScreen(
     ) {
         viewModel.attemptDummyResults.first()
     }
-    val isSuccess = dummyResult.first
+    val currentAttemptHoldReachResult = viewModel.currentAttemptHoldReachResult
+    val totalSelectedHoldCount = viewModel.totalSelectedHoldCount
+    val isSuccess = currentAttemptHoldReachResult?.let { result ->
+        totalSelectedHoldCount > 0 && result.highestReachedHoldNo >= totalSelectedHoldCount
+    } ?: dummyResult.first
     val currentAnalysisPoints = dummyResult.second
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry

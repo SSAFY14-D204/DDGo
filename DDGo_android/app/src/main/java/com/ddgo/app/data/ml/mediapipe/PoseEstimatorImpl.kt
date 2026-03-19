@@ -3,6 +3,7 @@ package com.ddgo.app.data.ml.mediapipe
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
 import com.ddgo.app.domain.repository.PoseEstimator
 import com.google.mediapipe.framework.image.BitmapImageBuilder

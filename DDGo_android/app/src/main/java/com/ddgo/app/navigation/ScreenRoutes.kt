@@ -41,6 +41,7 @@ sealed class ScreenRoutes(val route: String) {
             const val HOLD_SELECT = "hold_select"
             const val ANALYSIS_LOADING = "analysis_loading"
             const val ATTEMPT_RESULT = "attempt_result"
+            const val HOLD_CONTACT_DEBUG = "hold_contact_debug"
             const val FINAL_ANALYSIS = "final_analysis"
         }
 

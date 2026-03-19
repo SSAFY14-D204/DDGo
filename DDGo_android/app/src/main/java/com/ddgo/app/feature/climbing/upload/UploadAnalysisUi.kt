@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.Hold
+import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -87,10 +88,11 @@ internal fun buildAttemptSummaries(
     totalAttempts: Int,
     fallbackPoints: List<AnalysisPoint>,
     dummyResults: List<Pair<Boolean, List<AnalysisPoint>>>,
-    totalHolds: Int
+    totalHolds: Int,
+    holdReachResults: List<AttemptHoldReachResult> = emptyList()
 ): List<AnalysisAttemptSummary> {
-    val attemptSize = max(totalAttempts, 1)
-    val safeTotalHolds = totalHolds.coerceAtLeast(10)
+    val attemptSize = max(max(totalAttempts, holdReachResults.size), 1)
+    val safeTotalHolds = totalHolds.coerceAtLeast(1)
     val safeFallbackPoints = fallbackPoints.ifEmpty { defaultAnalysisPoints() }
     val safeDummyResults = dummyResults.ifEmpty {
         listOf(false to safeFallbackPoints)
@@ -99,14 +101,18 @@ internal fun buildAttemptSummaries(
     return List(attemptSize) { index ->
         val seed = safeDummyResults[index % safeDummyResults.size]
         val points = seed?.second?.takeIf { it.isNotEmpty() } ?: safeFallbackPoints
-        val isSuccess = seed?.first ?: index == attemptSize - 1
+        val holdReachResult = holdReachResults.getOrNull(index)
+        val isSuccess = holdReachResult?.let { it.highestReachedHoldNo >= safeTotalHolds } ?:
+            (seed?.first ?: index == attemptSize - 1)
         val progressBase = when {
             isSuccess -> 0.88f
             attemptSize == 1 -> 0.64f
             else -> (0.52f + (index / attemptSize.toFloat()) * 0.2f).coerceAtMost(0.82f)
         }
-        val reachedHolds = (safeTotalHolds * progressBase).roundToInt()
-            .coerceIn(1, safeTotalHolds)
+        val reachedHolds = holdReachResult
+            ?.highestReachedHoldNo
+            ?.coerceIn(0, safeTotalHolds)
+            ?: (safeTotalHolds * progressBase).roundToInt().coerceIn(1, safeTotalHolds)
         val balanceRatio = when {
             isSuccess -> 82
             else -> (58 + index * 7 + points.size * 3).coerceAtMost(76)

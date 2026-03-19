@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.data.mapper.toPoseSequenceDto
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.HoldBoundingBox
@@ -24,17 +25,20 @@ import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.model.PoseLandmark
 import com.ddgo.app.domain.model.ResolvedGym
 import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.data.ml.color.HoldColorClassifier
+import com.ddgo.app.data.remote.pose.PoseSequenceDto
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
-import com.ddgo.app.domain.usecase.analyzeAttemptHoldReach
+import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
+import com.ddgo.app.domain.usecase.analyzePolygonHoldContacts
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
@@ -42,6 +46,7 @@ import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
 import com.ddgo.app.domain.usecase.assignHoldNumbers
 import com.ddgo.app.domain.usecase.summarizeHoldReachResults
+import com.ddgo.app.domain.usecase.toAttemptHoldReachResult
 import com.ddgo.app.domain.usecase.toHolds
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -73,6 +78,15 @@ import kotlin.math.sqrt
  */
 
 private const val TAG = "UploadViewModel"
+private const val HOLD_CONTACT_ANALYSIS_TAG = "HoldContactAnalysis"
+private const val HOLD_CONTACT_LOG_PREFIX = "[DDGO_HOLD_CONTACT]"
+
+private data class AttemptPoseAnalysis(
+    val holdReachResult: AttemptHoldReachResult,
+    val poseSequenceDto: PoseSequenceDto,
+    val poses: List<Pose>,
+    val polygonHoldContactDebugResult: PolygonHoldContactDebugResult
+)
 
 @HiltViewModel
 class UploadViewModel @Inject constructor(
@@ -284,6 +298,18 @@ class UploadViewModel @Inject constructor(
     var attemptHoldReachResults by mutableStateOf<List<AttemptHoldReachResult>>(emptyList())
         private set
 
+    /** 시도별 MediaPipe Pose DTO */
+    var attemptPoseDtos by mutableStateOf<List<PoseSequenceDto>>(emptyList())
+        private set
+
+    /** 시도별 분석용 MediaPipe Pose 프레임 */
+    var attemptAnalyzedPoses by mutableStateOf<List<List<Pose>>>(emptyList())
+        private set
+
+    /** 시도별 폴리곤 홀드 접촉 디버그 결과 */
+    var attemptPolygonHoldContactDebugResults by mutableStateOf<List<PolygonHoldContactDebugResult>>(emptyList())
+        private set
+
     /** 시도별 pre-pose 시퀀스 캐시 */
     val attemptPoseSequences: List<List<Pose>>
         get() = playbackAttemptUris.map { playbackUri ->
@@ -305,9 +331,21 @@ class UploadViewModel @Inject constructor(
         
     fun nextAttempt() {
         if (currentAttemptIndex < playbackAttemptUris.size - 1) {
-            currentAttemptIndex++
+            selectAttempt(currentAttemptIndex + 1)
         }
     }
+
+    fun selectAttempt(index: Int) {
+        currentAttemptIndex = index.coerceIn(
+            minimumValue = 0,
+            maximumValue = (playbackAttemptUris.size - 1).coerceAtLeast(0)
+        )
+        currentPoseLandmarks = emptyList()
+    }
+
+    /** 현재 재생 프레임의 MediaPipe 33 랜드마크 (실시간 업데이트) */
+    var currentPoseLandmarks by mutableStateOf<List<PoseLandmark>>(emptyList())
+        private set
 
     /** 현재 선택된 시도의 pre-pose 시퀀스 */
     val currentAttemptPoseSequence: List<Pose>
@@ -324,6 +362,18 @@ class UploadViewModel @Inject constructor(
     /** 현재 선택된 시도의 최고 도달 홀드 결과 */
     val currentAttemptHoldReachResult: AttemptHoldReachResult?
         get() = attemptHoldReachResults.getOrNull(currentAttemptIndex)
+
+    /** 현재 선택된 시도의 MediaPipe Pose DTO */
+    val currentAttemptPoseDto: PoseSequenceDto?
+        get() = attemptPoseDtos.getOrNull(currentAttemptIndex)
+
+    /** 현재 선택된 시도의 분석용 MediaPipe Pose 프레임 */
+    val currentAttemptAnalyzedPoses: List<Pose>
+        get() = attemptAnalyzedPoses.getOrNull(currentAttemptIndex).orEmpty()
+
+    /** 현재 선택된 시도의 폴리곤 홀드 접촉 디버그 결과 */
+    val currentAttemptPolygonHoldContactDebugResult: PolygonHoldContactDebugResult?
+        get() = attemptPolygonHoldContactDebugResults.getOrNull(currentAttemptIndex)
 
     /** 최종 분석 화면에 표시할 평균 도달 홀드 번호(반올림) */
     val averageReachedHoldNo: Int
@@ -607,12 +657,7 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    /**
-     * content:// URI를 앱 캐시 디렉토리의 임시 파일로 복사해 file:// URI 문자열로 반환합니다.
-     *
-     * file:// URI(테스트 코드 방식)는 그대로 반환합니다.
-     * 복사 실패 시 원본 URI 문자열을 반환합니다(폴백).
-     */
+    /** 선택한 URI를 분석/재생용 managed video로 정규화합니다. */
     private suspend fun prepareManagedVideos(
         uris: List<String>,
         filePrefix: String
@@ -647,7 +692,6 @@ class UploadViewModel @Inject constructor(
                 context.cacheDir,
                 "${filePrefix}_${UUID.randomUUID()}$extension"
             )
-
             context.contentResolver.openInputStream(uri)?.use { input ->
                 tempFile.outputStream().use { output ->
                     input.copyTo(output)
@@ -1440,6 +1484,20 @@ class UploadViewModel @Inject constructor(
      * AttemptResultScreen의 LaunchedEffect 루프에서 150ms 간격으로 호출됩니다.
      * 이전 추론이 진행 중이면 자동으로 건너뜁니다 (PoseEstimatorImpl 내부 플래그).
      */
+    fun updatePoseFrame(bitmap: Bitmap) {
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val landmarks = poseEstimator.estimateFromFrame(bitmap)
+                withContext(Dispatchers.Main) {
+                    currentPoseLandmarks = landmarks
+                }
+            } finally {
+                if (!bitmap.isRecycled) {
+                    bitmap.recycle()
+                }
+            }
+        }
+    }
 
     // (기존 단일 추가 URI 메서드는 삭제하고 updateAdditionalVideoUris 사용)
 
@@ -1758,10 +1816,13 @@ class UploadViewModel @Inject constructor(
             )
         }
 
-        val results = analyses.map { it.holdReach }
-        attemptHoldReachResults = results
+        attemptHoldReachResults = analyses.map(AttemptPoseAnalysis::holdReachResult)
+        attemptPoseDtos = analyses.map(AttemptPoseAnalysis::poseSequenceDto)
+        attemptAnalyzedPoses = analyses.map(AttemptPoseAnalysis::poses)
+        attemptPolygonHoldContactDebugResults =
+            analyses.map(AttemptPoseAnalysis::polygonHoldContactDebugResult)
         overallHoldReachSummary = summarizeHoldReachResults(
-            results = results,
+            results = attemptHoldReachResults,
             totalHoldCount = holds.size
         )
     }
@@ -1771,47 +1832,49 @@ class UploadViewModel @Inject constructor(
         poses: List<Pose>,
         holds: List<HoldNumbered>
     ): AttemptPoseAnalysis {
-        /*
-        val poses = runCatching {
-            poseEstimator.estimateFromVideo(videoUri)
-        }.onFailure { throwable ->
-            Log.e(TAG, "❌ 최고 도달 홀드 분석용 pose 추출 실패: uri=$videoUri", throwable)
-        }.getOrElse {
-            emptyList()
-        }
-
-        val cachedEntry = prePoseCacheEntries[videoUri]
-        val stablePoses = when (cachedEntry?.status) {
-            PrePoseStatus.Ready -> cachedEntry.poses
-            PrePoseStatus.Failed -> emptyList()
-            else -> poses
-        }
-
-        */
         val stablePoses = poses
         val videoUri = playbackUri
+        val poseSequenceDto = stablePoses.toPoseSequenceDto()
 
-        val holdReach = analyzeAttemptHoldReach(
+        Log.i(
+            HOLD_CONTACT_ANALYSIS_TAG,
+            "$HOLD_CONTACT_LOG_PREFIX HoldContactAnalysis 전달: " +
+                "uri=$videoUri, " +
+                "poseCount=${stablePoses.size}, holdCount=${holds.size}, " +
+                "dtoFrameCount=${poseSequenceDto.poses.size}"
+        )
+
+        val polygonHoldContactDebugResult = analyzePolygonHoldContacts(
             poses = stablePoses,
             holds = holds
-        ).also { result ->
+        )
+
+        val holdReachResult = polygonHoldContactDebugResult
+            .toAttemptHoldReachResult(holds = holds)
+            .also { result ->
             Log.d(
                 TAG,
-                "✅ 최고 도달 홀드 분석 완료: uri=$videoUri, " +
+                "✅ 최고 도달 홀드 분석 완료(Polygon Main): uri=$videoUri, " +
                     "highestHoldNo=${result.highestReachedHoldNo}, " +
                     "contacted=${result.contactedHoldNos}"
             )
         }
 
         return AttemptPoseAnalysis(
+            holdReachResult = holdReachResult,
+            poseSequenceDto = poseSequenceDto,
             poses = stablePoses,
-            holdReach = holdReach
+            polygonHoldContactDebugResult = polygonHoldContactDebugResult
         )
     }
 
     private fun clearHoldReachAnalysis() {
         attemptHoldReachResults = emptyList()
+        attemptPoseDtos = emptyList()
+        attemptAnalyzedPoses = emptyList()
+        attemptPolygonHoldContactDebugResults = emptyList()
         overallHoldReachSummary = null
+        currentPoseLandmarks = emptyList()
     }
 
     private fun clearAttemptResultState(clearPublishedSession: Boolean) {
@@ -1829,6 +1892,9 @@ class UploadViewModel @Inject constructor(
         uploadedVideos: List<UploadedAttemptVideo>,
         currentAttemptIndex: Int,
         holdReachResults: List<AttemptHoldReachResult>,
+        poseDtos: List<PoseSequenceDto>,
+        analyzedPoses: List<List<Pose>>,
+        polygonHoldContactDebugResults: List<PolygonHoldContactDebugResult>,
         overallSummary: OverallHoldReachSummary?
     ) {
         resultPlaybackUris = playbackUris
@@ -1838,12 +1904,18 @@ class UploadViewModel @Inject constructor(
             maximumValue = playbackUris.lastIndex.coerceAtLeast(0)
         )
         attemptHoldReachResults = holdReachResults
+        attemptPoseDtos = poseDtos
+        attemptAnalyzedPoses = analyzedPoses
+        attemptPolygonHoldContactDebugResults = polygonHoldContactDebugResults
         overallHoldReachSummary = overallSummary
         publishedAttemptResultSession = PublishedAttemptResultSession(
             resultPlaybackUris = playbackUris,
             uploadedAttemptVideos = uploadedVideos,
             currentAttemptIndex = this.currentAttemptIndex,
             holdReachResults = holdReachResults,
+            attemptPoseDtos = poseDtos,
+            attemptAnalyzedPoses = analyzedPoses,
+            attemptPolygonHoldContactDebugResults = polygonHoldContactDebugResults,
             overallHoldReachSummary = overallSummary
         )
     }
@@ -1858,6 +1930,9 @@ class UploadViewModel @Inject constructor(
                 maximumValue = playbackUris.lastIndex.coerceAtLeast(0)
             ),
             holdReachResults = attemptHoldReachResults,
+            attemptPoseDtos = attemptPoseDtos,
+            attemptAnalyzedPoses = attemptAnalyzedPoses,
+            attemptPolygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
             overallHoldReachSummary = overallHoldReachSummary
         )
     }
@@ -1875,7 +1950,11 @@ class UploadViewModel @Inject constructor(
             maximumValue = session.resultPlaybackUris.lastIndex.coerceAtLeast(0)
         )
         attemptHoldReachResults = session.holdReachResults
+        attemptPoseDtos = session.attemptPoseDtos
+        attemptAnalyzedPoses = session.attemptAnalyzedPoses
+        attemptPolygonHoldContactDebugResults = session.attemptPolygonHoldContactDebugResults
         overallHoldReachSummary = session.overallHoldReachSummary
+        currentPoseLandmarks = emptyList()
     }
 
     private fun publishedResultPlaybackUris(): Set<String> =
@@ -1929,11 +2008,6 @@ class UploadViewModel @Inject constructor(
             ?: "V${grade.sortOrder}"
     }
 }
-
-private data class AttemptPoseAnalysis(
-    val poses: List<Pose>,
-    val holdReach: AttemptHoldReachResult
-)
 
 data class ManagedAttemptVideo(
     val sourceUri: String,
@@ -2000,6 +2074,9 @@ private data class PublishedAttemptResultSession(
     val uploadedAttemptVideos: List<UploadedAttemptVideo>,
     val currentAttemptIndex: Int,
     val holdReachResults: List<AttemptHoldReachResult>,
+    val attemptPoseDtos: List<PoseSequenceDto>,
+    val attemptAnalyzedPoses: List<List<Pose>>,
+    val attemptPolygonHoldContactDebugResults: List<PolygonHoldContactDebugResult>,
     val overallHoldReachSummary: OverallHoldReachSummary?
 )
 
