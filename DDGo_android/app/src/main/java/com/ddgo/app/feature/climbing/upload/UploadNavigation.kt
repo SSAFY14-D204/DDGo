@@ -7,6 +7,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
+import com.ddgo.app.feature.climbing.upload.ui.analysis.route.FinalAnalysisRoute
 import com.ddgo.app.navigation.ScreenRoutes
 
 /**
@@ -190,7 +191,7 @@ fun NavGraphBuilder.uploadGraph(
             }
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
 
-            FinalAnalysisScreen(
+            FinalAnalysisRoute(
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToMain = { 
