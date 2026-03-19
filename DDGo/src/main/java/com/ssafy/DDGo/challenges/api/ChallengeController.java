@@ -66,11 +66,43 @@ public class ChallengeController {
         return ResponseEntity.ok(ApiResponse.success("챌린지 목록 조회 성공", response));
     }
 
-    @Operation(summary = "홀드 좌표 저장", description = "챌린지에 홀드 좌표 목록을 저장합니다. 기존 홀드 데이터가 있으면 덮어씁니다.")
+    @Operation(summary = "홀드 좌표 저장", description = "챌린지에 세그멘테이션 폴리곤 좌표를 저장합니다. 기존 홀드 데이터가 있으면 덮어씁니다. 좌표는 정규화(0~1) 값입니다.")
     @PatchMapping("/{challengeId}/holds")
     public ResponseEntity<ApiResponse<HoldSaveResponse>> saveHolds(
             Authentication authentication,
             @PathVariable Long challengeId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                    name = "홀드 폴리곤 저장 예시",
+                                    value = """
+                                            {
+                                              "holds": [
+                                                {
+                                                  "holdNo": 1,
+                                                  "polygon": [
+                                                    { "x": 0.45, "y": 0.32 },
+                                                    { "x": 0.48, "y": 0.30 },
+                                                    { "x": 0.52, "y": 0.33 },
+                                                    { "x": 0.50, "y": 0.38 },
+                                                    { "x": 0.46, "y": 0.36 }
+                                                  ]
+                                                },
+                                                {
+                                                  "holdNo": 2,
+                                                  "polygon": [
+                                                    { "x": 0.60, "y": 0.50 },
+                                                    { "x": 0.65, "y": 0.48 },
+                                                    { "x": 0.68, "y": 0.53 },
+                                                    { "x": 0.63, "y": 0.55 }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                            """
+                            )
+                    )
+            )
             @RequestBody @Valid HoldSaveRequest request) {
         HoldSaveResponse response = challengeService.saveHolds(authentication.getName(), challengeId, request);
         return ResponseEntity.ok(ApiResponse.success("홀드 좌표가 저장되었습니다.", response));

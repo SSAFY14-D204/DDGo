@@ -18,13 +18,25 @@ data class ChallengeSession(
     val createdAt: String
 )
 
-/** 챌린지 홀드 저장에 사용하는 좌표 모델입니다. */
+/** 챌린지 홀드 저장에 사용하는 좌표 모델입니다. (바운딩 박스 + 세그멘테이션 폴리곤) */
 data class ChallengeHoldCoordinate(
     val holdNo: Int,
-    val x1: Int,
-    val x2: Int,
-    val y1: Int,
-    val y2: Int
+    val boundingBox: HoldBoundingBox,
+    val polygon: List<HoldPoint>
+)
+
+/** 바운딩 박스 좌표 (정규화 0~1) */
+data class HoldBoundingBox(
+    val x1: Float,
+    val x2: Float,
+    val y1: Float,
+    val y2: Float
+)
+
+/** 폴리곤 좌표 점 (정규화 0~1) */
+data class HoldPoint(
+    val x: Float,
+    val y: Float
 )
 
 /** 챌린지 홀드 저장 후 반환되는 결과 모델입니다. */
