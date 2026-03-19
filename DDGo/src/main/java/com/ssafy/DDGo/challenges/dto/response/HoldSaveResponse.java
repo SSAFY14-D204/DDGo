@@ -15,9 +15,9 @@ public class HoldSaveResponse {
     @Schema(description = "챌린지 ID", example = "1")
     private Long challengeId;
 
-    @Schema(description = "저장된 홀드 수", example = "5")
+    @Schema(description = "저장된 홀드 수", example = "2")
     private int holdCount;
 
-    @Schema(description = "저장된 홀드 목록")
+    @Schema(description = "저장된 홀드 목록 (세그멘테이션 폴리곤)")
     private List<HoldItem> holds;
 }

@@ -1,10 +1,14 @@
 package com.ddgo.app.data.mapper
 
+import com.ddgo.app.data.remote.challenge.BoundingBoxDto
 import com.ddgo.app.data.remote.challenge.ChallengeCreateResponseDto
 import com.ddgo.app.data.remote.challenge.HoldItemDto
 import com.ddgo.app.data.remote.challenge.HoldSaveResponseDto
+import com.ddgo.app.data.remote.challenge.PointItemDto
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.ChallengeSession
+import com.ddgo.app.domain.model.HoldBoundingBox
+import com.ddgo.app.domain.model.HoldPoint
 import com.ddgo.app.domain.model.SavedChallengeHolds
 
 /**
@@ -42,17 +46,23 @@ object ChallengeMapper {
     /** domain 홀드 좌표를 요청 DTO로 변환합니다. */
     fun ChallengeHoldCoordinate.toDto(): HoldItemDto = HoldItemDto(
         holdNo = holdNo,
-        x1 = x1,
-        x2 = x2,
-        y1 = y1,
-        y2 = y2
+        boundingBox = BoundingBoxDto(
+            x1 = boundingBox.x1,
+            x2 = boundingBox.x2,
+            y1 = boundingBox.y1,
+            y2 = boundingBox.y2
+        ),
+        polygon = polygon.map { PointItemDto(x = it.x, y = it.y) }
     )
 
     private fun HoldItemDto.toDomain(): ChallengeHoldCoordinate = ChallengeHoldCoordinate(
         holdNo = holdNo,
-        x1 = x1,
-        x2 = x2,
-        y1 = y1,
-        y2 = y2
+        boundingBox = HoldBoundingBox(
+            x1 = boundingBox.x1,
+            x2 = boundingBox.x2,
+            y1 = boundingBox.y1,
+            y2 = boundingBox.y2
+        ),
+        polygon = polygon.map { HoldPoint(x = it.x, y = it.y) }
     )
 }
