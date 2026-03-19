@@ -61,6 +61,12 @@ fun NavGraph() {
         // 메인 플로우 (탭 UI + 클라이밍 기능들)
         mainGraph(
             navController = navController,
+            onNavigateToAuth = {
+                navController.navigate(ScreenRoutes.Auth.route) {
+                    popUpTo(0) { inclusive = true }
+                    launchSingleTop = true
+                }
+            },
             onNavigateToDebug = {
                 navController.navigate("debug_main")
             }

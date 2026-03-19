@@ -28,6 +28,7 @@ import com.ddgo.app.feature.profile.ProfileScreen
 fun MainScreen(
     onNavigateToUpload: () -> Unit,
     onNavigateToRecord: () -> Unit,
+    onNavigateToAuth: () -> Unit,
     onNavigateToDebug: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
@@ -49,7 +50,9 @@ fun MainScreen(
                     MainTab.CALENDAR   -> CalendarScreen()
                     MainTab.COMMUNITY  -> CommunityScreen()
                     MainTab.ANALYSIS   -> AnalysisScreen()
-                    MainTab.PROFILE    -> ProfileScreen()
+                    MainTab.PROFILE    -> ProfileScreen(
+                        onNavigateToAuth = onNavigateToAuth
+                    )
                 }
             }
         }

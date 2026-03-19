@@ -23,6 +23,7 @@ import com.ddgo.app.navigation.ScreenRoutes
  */
 fun NavGraphBuilder.mainGraph(
     navController: NavController,
+    onNavigateToAuth: () -> Unit,
     onNavigateToDebug: () -> Unit = {}
 ) {
     navigation(
@@ -37,6 +38,7 @@ fun NavGraphBuilder.mainGraph(
                 onNavigateToRecord = {
                     navController.navigateToRecord()
                 },
+                onNavigateToAuth = onNavigateToAuth,
                 onNavigateToDebug = onNavigateToDebug
             )
         }
