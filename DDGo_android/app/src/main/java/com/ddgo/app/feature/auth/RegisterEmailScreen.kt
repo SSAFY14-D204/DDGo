@@ -14,18 +14,19 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
 fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: () -> Unit = {}) {
-    Box(
+    SafeAreaScreen(
         modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
             .padding(horizontal = 24.dp)
             .padding(top = 40.dp)
-            .keyboardAwareBottomPadding()
+            .keyboardAwareBottomPadding(),
+        containerColor = Color.White,
+        applyBottomInset = false
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()

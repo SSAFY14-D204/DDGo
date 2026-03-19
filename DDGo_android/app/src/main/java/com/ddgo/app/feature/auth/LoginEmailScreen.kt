@@ -27,6 +27,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
@@ -35,13 +36,13 @@ import com.ddgo.app.core.ui.theme.PretendardFamily
 fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterClick: () -> Unit = {}) {
     val isImeVisible = WindowInsets.isImeVisible
 
-    Box(
+    SafeAreaScreen(
         modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
             .padding(horizontal = 24.dp)
             .padding(top = 80.dp)
-            .keyboardAwareBottomPadding()
+            .keyboardAwareBottomPadding(),
+        containerColor = Color.White,
+        applyBottomInset = false
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()

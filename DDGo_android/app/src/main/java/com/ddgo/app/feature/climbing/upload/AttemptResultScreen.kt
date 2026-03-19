@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,6 +69,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.usecase.HoldNumbered
 import kotlinx.coroutines.delay
@@ -224,10 +226,9 @@ fun AttemptResultScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(C_BG)
+    SafeAreaScreen(
+        containerColor = C_BG,
+        applyBottomInset = false
     ) {
         Column(
             modifier = Modifier
@@ -443,6 +444,7 @@ fun AttemptResultScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
                 .background(
                     Brush.verticalGradient(
                         listOf(Color.Transparent, C_BG.copy(alpha = 0.95f), C_BG)

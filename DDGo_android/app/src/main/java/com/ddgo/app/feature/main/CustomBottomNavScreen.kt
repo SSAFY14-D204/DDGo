@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.main
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -9,19 +10,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Chat
-import androidx.compose.material.icons.rounded.DateRange
-import androidx.compose.material.icons.rounded.List
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,11 +38,13 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.R
 
 object MainTab {
     const val CALENDAR = 0
@@ -49,19 +54,41 @@ object MainTab {
     const val PROFILE = 4
 }
 
-class BumpShape(
+object MainChromeDefaults {
+    val NavBarHeight = 108.dp
+    val ContentBottomPadding = 118.dp
+    val FloatingButtonBottomPadding = 36.dp
+    val MenuOverlayBottomPadding = 138.dp
+}
+
+private class BumpShape(
     private val bumpRadius: Float = 120f,
-    private val bumpHeight: Float = 50f
+    private val bumpHeight: Float = 52f
 ) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
         val path = Path().apply {
             val width = size.width
             val height = size.height
             val centerX = width / 2f
+
             moveTo(0f, bumpHeight)
-            lineTo(centerX - bumpRadius * 1.2f, bumpHeight)
-            cubicTo(centerX - bumpRadius * 0.6f, bumpHeight, centerX - bumpRadius * 0.8f, 0f, centerX, 0f)
-            cubicTo(centerX + bumpRadius * 0.8f, 0f, centerX + bumpRadius * 0.6f, bumpHeight, centerX + bumpRadius * 1.2f, bumpHeight)
+            lineTo(centerX - bumpRadius * 1.18f, bumpHeight)
+            cubicTo(
+                centerX - bumpRadius * 0.82f,
+                bumpHeight,
+                centerX - bumpRadius * 0.78f,
+                0f,
+                centerX,
+                0f
+            )
+            cubicTo(
+                centerX + bumpRadius * 0.78f,
+                0f,
+                centerX + bumpRadius * 0.82f,
+                bumpHeight,
+                centerX + bumpRadius * 1.18f,
+                bumpHeight
+            )
             lineTo(width, bumpHeight)
             lineTo(width, height)
             lineTo(0f, height)
@@ -71,9 +98,6 @@ class BumpShape(
     }
 }
 
-/**
- * 1. 하단 바 본체 (배경 + 4개 탭)
- */
 @Composable
 fun CustomBottomNavBarBase(
     selectedIndex: Int,
@@ -81,25 +105,26 @@ fun CustomBottomNavBarBase(
     modifier: Modifier = Modifier,
     onNavigateToDebug: () -> Unit = {}
 ) {
-    val activeColor = Color(0xFF42A5F5)
-    val inactiveColor = Color(0xFF788490)
+    val activeColor = Color(0xFF4396FB)
+    val inactiveColor = Color(0xFF595C63)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(8.dp, shape = BumpShape())
+            .navigationBarsPadding()
+            .shadow(10.dp, shape = BumpShape())
             .background(Color.White, shape = BumpShape())
-            .height(110.dp)
+            .height(MainChromeDefaults.NavBarHeight)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 50.dp),
+                .padding(top = 52.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
             BottomNavItem(
-                icon = Icons.Rounded.DateRange,
+                icon = Icons.Rounded.CalendarMonth,
                 label = "캘린더",
                 isSelected = selectedIndex == MainTab.CALENDAR,
                 activeColor = activeColor,
@@ -114,9 +139,9 @@ fun CustomBottomNavBarBase(
                 inactiveColor = inactiveColor,
                 onClick = { onTabSelected(MainTab.COMMUNITY) }
             )
-            Spacer(modifier = Modifier.width(80.dp)) // 중앙 FAB 자리
+            Spacer(modifier = Modifier.width(86.dp))
             BottomNavItem(
-                icon = Icons.Rounded.List,
+                icon = Icons.Rounded.BarChart,
                 label = "분석",
                 isSelected = selectedIndex == MainTab.ANALYSIS,
                 activeColor = activeColor,
@@ -136,9 +161,6 @@ fun CustomBottomNavBarBase(
     }
 }
 
-/**
- * 2. 중앙 클라이밍 FAB 버튼 (별도 계층)
- */
 @Composable
 fun ClimbingFloatingButton(
     isSelected: Boolean,
@@ -146,37 +168,56 @@ fun ClimbingFloatingButton(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(top = 8.dp),
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
-                .size(64.dp)
+                .size(94.dp)
+                .shadow(18.dp, CircleShape)
                 .clip(CircleShape)
-                .background(if (isSelected) Color(0xFF1E88E5) else Color(0xFF42A5F5))
-                .clickable { onClick() },
+                .background(Color.White.copy(alpha = 0.92f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = "클라이밍",
-                tint = Color.White,
-                modifier = Modifier.size(32.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1995FF))
+                    .clickable(onClick = onClick),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "클라이밍 메뉴 닫기",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_ddgo_mark_fill),
+                        contentDescription = "클라이밍 열기",
+                        modifier = Modifier.size(38.dp)
+                    )
+                }
+            }
         }
+
         Spacer(modifier = Modifier.height(10.dp))
+
         Text(
             text = "클라이밍",
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
-            color = if (isSelected) Color(0xFF42A5F5) else Color(0xFF788490)
+            color = if (isSelected) Color(0xFF4396FB) else Color(0xFF595C63)
         )
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun BottomNavItem(
+private fun BottomNavItem(
     icon: ImageVector,
     label: String,
     isSelected: Boolean,
@@ -186,15 +227,35 @@ fun BottomNavItem(
     onLongClick: (() -> Unit)? = null
 ) {
     val color = if (isSelected) activeColor else inactiveColor
+
     Column(
         modifier = Modifier
-            .let { m -> if (onLongClick != null) m.combinedClickable(onClick = onClick, onLongClick = onLongClick) else m.clickable(onClick = onClick) }
+            .let { currentModifier ->
+                if (onLongClick != null) {
+                    currentModifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    currentModifier.clickable(onClick = onClick)
+                }
+            }
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(imageVector = icon, contentDescription = label, tint = color, modifier = Modifier.size(28.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = color,
+            modifier = Modifier.size(26.dp)
+        )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(text = label, fontSize = 12.sp, color = color, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = color,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }

@@ -5,9 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 
 @Composable
 fun AdditionalUploadScreen(
@@ -41,22 +40,16 @@ fun AdditionalUploadScreen(
         }
     }
 
-    // 다중 동영상 선택기
     val multipleVideoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia()
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
-            val validUris = uris.map { it.toString() }
-            viewModel.updateAdditionalVideoUris(validUris)
+            viewModel.updateAdditionalVideoUris(uris.map(Uri::toString))
             onNavigateToNext()
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0D0D0D)) // 기존 AttemptUploadScreen과 유사한 다크 테마 배경
-    ) {
+    SafeAreaScreen(containerColor = Color(0xFF0D0D0D)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -66,7 +59,7 @@ fun AdditionalUploadScreen(
             Column {
                 Text(
                     text = if (isAttemptOnlyMode) {
-                        "이 챌린지에 추가할 시도 영상을\n모두 선택해주세요"
+                        "이 챌린지의 추가 시도 영상을\n모두 선택해주세요"
                     } else {
                         "이 문제의 추가 시도 영상을\n모두 선택해주세요"
                     },
@@ -81,9 +74,7 @@ fun AdditionalUploadScreen(
                 Button(
                     onClick = {
                         multipleVideoPicker.launch(
-                            PickVisualMediaRequest(
-                                ActivityResultContracts.PickVisualMedia.VideoOnly
-                            )
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                         )
                     },
                     modifier = Modifier
@@ -96,7 +87,7 @@ fun AdditionalUploadScreen(
                     )
                 ) {
                     Text(
-                        text = "동영상 여러 개 선택하기",
+                        text = "동영상을 여러 개 선택하기",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -104,7 +95,6 @@ fun AdditionalUploadScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 건너뛰기 버튼
                 Button(
                     onClick = {
                         viewModel.updateAdditionalVideoUris(emptyList())
@@ -120,7 +110,7 @@ fun AdditionalUploadScreen(
                         .height(56.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2E2E2E), // 어두운 회색
+                        containerColor = Color(0xFF2E2E2E),
                         contentColor = Color.White
                     )
                 ) {
