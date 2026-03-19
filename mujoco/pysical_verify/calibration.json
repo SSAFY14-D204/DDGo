@@ -1,5 +1,5 @@
 {
-  "image_path": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\pysical_verify\\video\\fullbody_dg.png",
+  "image_path": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\fullbody_dg.png",
   "height_m": 1.75,
   "scale_m_per_px": 0.0023208758498428845,
   "upper_arm_m": 0.24890806836814186,
@@ -7,14 +7,16 @@
   "thigh_m": 0.3969162213042889,
   "shin_m": 0.3528437195756503,
   "shoulder_width_m": 0.38648157101172714,
-  "wingspan_m": 1.5372563956503538,
+  "wingspan_raw_m": 1.5372563956503538,
+  "wingspan_extra_m": 0.2,
+  "wingspan_m": 1.7372563956503537,
   "ratios": {
     "upper_arm": 0.14223318192465248,
     "forearm": 0.148453110124127,
     "thigh": 0.2268092693167365,
     "shin": 0.2016249826146573,
     "shoulder_width": 0.22084661200670122,
-    "wingspan": 0.8784322260859164
+    "wingspan": 0.9927179403716307
   },
   "pixel_lengths": {
     "upper_arm_left_px": 114.70225291378807,

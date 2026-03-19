@@ -58,12 +58,11 @@
 ### 3.1 입력 자산
 
 - 동영상
-  - `mujoco/advance/video/주황.mp4`
-  - `mujoco/pysical_verify/video/주황.mp4`
-  - `mujoco/pysical_verify/video/준영주황.mp4`
+  - `mujoco/video/주황.mp4`
+  - `mujoco/video/준영주황.mp4`
 - 정적 이미지
-  - `mujoco/pysical_verify/video/static.png`
-  - `mujoco/pysical_verify/video/fullbody_dg.png`
+  - `mujoco/video/static.png`
+  - `mujoco/video/fullbody_dg.png`
 - 샘플 입력 JSON
   - `mujoco/verify/sample_pose_world.json`
   - `mujoco/pysical_verify/sample_pose_world.json`
@@ -81,7 +80,7 @@
 ### 3.3 캘리브레이션 자산
 
 - T-pose 기반 개인화 길이 추정 이미지
-  - `mujoco/pysical_verify/video/fullbody_dg.png`
+  - `mujoco/video/fullbody_dg.png`
 - 출력 캘리브레이션
   - `mujoco/pysical_verify/calibration.json`
   - `mujoco/static_load_extract/calibration.json`

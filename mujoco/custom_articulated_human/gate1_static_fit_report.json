@@ -1,0 +1,431 @@
+{
+  "xml": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_articulated_human\\custom_articulated_human_personalized.xml",
+  "video": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\주황.mp4",
+  "sample_frame_indices": [
+    0,
+    138,
+    275,
+    413,
+    550,
+    688,
+    825,
+    963
+  ],
+  "sample_reports": [
+    {
+      "mean_error_m": 0.15396437946036903,
+      "max_error_m": 0.45006502871590853,
+      "per_target_errors_m": {
+        "pelvis": 0.021720411149390054,
+        "thorax": 0.027099383869577734,
+        "left_shoulder": 0.09285870576615705,
+        "right_shoulder": 0.10808715225695326,
+        "left_elbow": 0.09100785208796638,
+        "right_elbow": 0.1113983602891216,
+        "left_hand": 0.40602189323861254,
+        "right_hand": 0.43297688055228367,
+        "left_hip": 0.024202492624565218,
+        "right_hip": 0.061468470270130214,
+        "left_knee": 0.022369739223899454,
+        "right_knee": 0.13153771342579249,
+        "left_ankle": 0.028556434733985312,
+        "right_ankle": 0.4238948287097731,
+        "left_foot": 0.030164724451787948,
+        "right_foot": 0.45006502871590853
+      },
+      "final_error_norm": 1.1964118075803136,
+      "lower_limb_consistency": {
+        "left": {
+          "bend_alignment_dot": 0.9878783695288467,
+          "bend_norm": 0.05216266853505542,
+          "foot_vs_pelvis_forward_dot": 0.6225080010839699
+        },
+        "right": {
+          "bend_alignment_dot": 0.916297411224613,
+          "bend_norm": 0.8428550084066723,
+          "foot_vs_pelvis_forward_dot": 0.5200130474334381
+        }
+      },
+      "frame_index": 0,
+      "timestamp_ms": 0,
+      "detected": true
+    },
+    {
+      "mean_error_m": 0.13287964809591932,
+      "max_error_m": 0.35814743880311495,
+      "per_target_errors_m": {
+        "pelvis": 0.02759744453949117,
+        "thorax": 0.01800061734389592,
+        "left_shoulder": 0.17250753389059034,
+        "right_shoulder": 0.03606763881064175,
+        "left_elbow": 0.11195825042372945,
+        "right_elbow": 0.08226812554078798,
+        "left_hand": 0.35814743880311495,
+        "right_hand": 0.22729213545086832,
+        "left_hip": 0.032226196112250055,
+        "right_hip": 0.04568750710385118,
+        "left_knee": 0.09598517786100284,
+        "right_knee": 0.09979573589719472,
+        "left_ankle": 0.16740951946693586,
+        "right_ankle": 0.2533319054967719,
+        "left_foot": 0.15935345608701165,
+        "right_foot": 0.2384456867065706
+      },
+      "final_error_norm": 0.9160455856480393,
+      "lower_limb_consistency": {
+        "left": {
+          "bend_alignment_dot": 0.98886570878187,
+          "bend_norm": 0.01859037339531475,
+          "foot_vs_pelvis_forward_dot": 0.8168803303871139
+        },
+        "right": {
+          "bend_alignment_dot": 0.9193010816290766,
+          "bend_norm": 0.8580844919634608,
+          "foot_vs_pelvis_forward_dot": 0.47818636874741194
+        }
+      },
+      "frame_index": 138,
+      "timestamp_ms": 4600,
+      "detected": true
+    },
+    {
+      "mean_error_m": 0.09768724493384973,
+      "max_error_m": 0.43475407904520946,
+      "per_target_errors_m": {
+        "pelvis": 0.020380452804171372,
+        "thorax": 0.06461229993126597,
+        "left_shoulder": 0.0896963035929444,
+        "right_shoulder": 0.04762785365217471,
+        "left_elbow": 0.1731442651206172,
+        "right_elbow": 0.10967472217860628,
+        "left_hand": 0.43475407904520946,
+        "right_hand": 0.06331343364284188,
+        "left_hip": 0.06519995028881757,
+        "right_hip": 0.03129746383442825,
+        "left_knee": 0.03616385605749368,
+        "right_knee": 0.06398819705342908,
+        "left_ankle": 0.09543939509114105,
+        "right_ankle": 0.1357529902476132,
+        "left_foot": 0.07092209639431549,
+        "right_foot": 0.061028560006525935
+      },
+      "final_error_norm": 0.7696302872934903,
+      "lower_limb_consistency": {
+        "left": {
+          "bend_alignment_dot": 0.9993508563512872,
+          "bend_norm": 0.05999291829962966,
+          "foot_vs_pelvis_forward_dot": 0.9793821800887506
+        },
+        "right": {
+          "bend_alignment_dot": 0.7052665370045608,
+          "bend_norm": 0.271287992576068,
+          "foot_vs_pelvis_forward_dot": 0.5136282877247237
+        }
+      },
+      "frame_index": 275,
+      "timestamp_ms": 9167,
+      "detected": true
+    },
+    {
+      "mean_error_m": 0.1253316908788244,
+      "max_error_m": 0.5765516783205601,
+      "per_target_errors_m": {
+        "pelvis": 0.015895560028625005,
+        "thorax": 0.04203942510433704,
+        "left_shoulder": 0.0797377490656781,
+        "right_shoulder": 0.15606386490622437,
+        "left_elbow": 0.22320988898514726,
+        "right_elbow": 0.23713227706238774,
+        "left_hand": 0.42111412413564064,
+        "right_hand": 0.5765516783205601,
+        "left_hip": 0.03633219158765012,
+        "right_hip": 0.012884870177129127,
+        "left_knee": 0.03906875593858974,
+        "right_knee": 0.02133528024609304,
+        "left_ankle": 0.018153985002059232,
+        "right_ankle": 0.05789106519676098,
+        "left_foot": 0.02531137965831566,
+        "right_foot": 0.04258495864599221
+      },
+      "final_error_norm": 1.0686458658671074,
+      "lower_limb_consistency": {
+        "left": {
+          "bend_alignment_dot": 0.9999081868966928,
+          "bend_norm": 0.4749015824083286,
+          "foot_vs_pelvis_forward_dot": 0.9255746265873441
+        },
+        "right": {
+          "bend_alignment_dot": 0.931567842221486,
+          "bend_norm": 0.17546911972300971,
+          "foot_vs_pelvis_forward_dot": 0.7711337178461939
+        }
+      },
+      "frame_index": 413,
+      "timestamp_ms": 13767,
+      "detected": true
+    },
+    {
+      "mean_error_m": 0.19386047692596622,
+      "max_error_m": 0.40731297904527647,
+      "per_target_errors_m": {
+        "pelvis": 0.05060670673372049,
+        "thorax": 0.0404101672374533,
+        "left_shoulder": 0.0929083731217246,
+        "right_shoulder": 0.07025614638231421,
+        "left_elbow": 0.1577915357122615,
+        "right_elbow": 0.15356864969424833,
+        "left_hand": 0.26873043975074634,
+        "right_hand": 0.2675199229203808,
+        "left_hip": 0.07302271958506917,
+        "right_hip": 0.036641109539745885,
+        "left_knee": 0.2964193539403795,
+        "right_knee": 0.2604867338561774,
+        "left_ankle": 0.29172773726236856,
+        "right_ankle": 0.25845124059936025,
+        "left_foot": 0.40731297904527647,
+        "right_foot": 0.3759138154342331
+      },
+      "final_error_norm": 1.3477828236577691,
+      "lower_limb_consistency": {
+        "left": {
+          "bend_alignment_dot": 0.9998875265385322,
+          "bend_norm": 0.6454046091072615,
+          "foot_vs_pelvis_forward_dot": 0.8986353149174208
+        },
+        "right": {
+          "bend_alignment_dot": 0.9606472449273169,
+          "bend_norm": 0.579277710715477,
+          "foot_vs_pelvis_forward_dot": 0.7311429043023553
+        }
+      },
+      "frame_index": 550,
+      "timestamp_ms": 18334,
+      "detected": true
+    },
+    {
+      "mean_error_m": 0.1319593431419589,
+      "max_error_m": 0.3522051711700463,
+      "per_target_errors_m": {
+        "pelvis": 0.02445379461077805,
+        "thorax": 0.043254636556223976,
+        "left_shoulder": 0.03453488462086968,
+        "right_shoulder": 0.11132496744389915,
+        "left_elbow": 0.12639695231299394,
+        "right_elbow": 0.09246973305638456,
+        "left_hand": 0.3330733932702014,
+        "right_hand": 0.26952764451589767,
+        "left_hip": 0.09185407059550238,
+        "right_hip": 0.04570089474567867,
+        "left_knee": 0.1870198902358651,
+        "right_knee": 0.052039683397774934,
+        "left_ankle": 0.2254781374156934,
+        "right_ankle": 0.07202243285537967,
+        "left_foot": 0.3522051711700463,
+        "right_foot": 0.049993203468153564
+      },
+      "final_error_norm": 0.9564515192450024,
+      "lower_limb_consistency": {
+        "left": {
+          "bend_alignment_dot": 0.9999693681956332,
+          "bend_norm": 0.7786074607911458,
+          "foot_vs_pelvis_forward_dot": 0.71809250851252
+        },
+        "right": {
+          "bend_alignment_dot": 0.9206455885727656,
+          "bend_norm": 0.1725945798255103,
+          "foot_vs_pelvis_forward_dot": 0.8565999027202638
+        }
+      },
+      "frame_index": 688,
+      "timestamp_ms": 22935,
+      "detected": true
+    },
+    {
+      "mean_error_m": 0.19471346420402547,
+      "max_error_m": 0.6202742657666745,
+      "per_target_errors_m": {
+        "pelvis": 0.018778527232665074,
+        "thorax": 0.04159799106051654,
+        "left_shoulder": 0.03200201779812955,
+        "right_shoulder": 0.10051753702212128,
+        "left_elbow": 0.10395433331103694,
+        "right_elbow": 0.19229538066584942,
+        "left_hand": 0.17829467646890595,
+        "right_hand": 0.2312664579624975,
+        "left_hip": 0.036726213935368325,
+        "right_hip": 0.0032196070657273786,
+        "left_knee": 0.105614562919189,
+        "right_knee": 0.04711279044049646,
+        "left_ankle": 0.5019270514394296,
+        "right_ankle": 0.4146995857819713,
+        "left_foot": 0.6202742657666745,
+        "right_foot": 0.48713442839382864
+      },
+      "final_error_norm": 1.4497979680535353,
+      "lower_limb_consistency": {
+        "left": {
+          "bend_alignment_dot": 0.999677564839853,
+          "bend_norm": 0.9827492763399918,
+          "foot_vs_pelvis_forward_dot": 0.5265495367807719
+        },
+        "right": {
+          "bend_alignment_dot": 0.9522792030885818,
+          "bend_norm": 0.9540768257047129,
+          "foot_vs_pelvis_forward_dot": 0.333443922625945
+        }
+      },
+      "frame_index": 825,
+      "timestamp_ms": 27502,
+      "detected": true
+    },
+    {
+      "mean_error_m": 0.08523553869339653,
+      "max_error_m": 0.16831544459541745,
+      "per_target_errors_m": {
+        "pelvis": 0.028689453602798162,
+        "thorax": 0.08154397505751906,
+        "left_shoulder": 0.0384557792220537,
+        "right_shoulder": 0.07906619761732606,
+        "left_elbow": 0.09717082326363433,
+        "right_elbow": 0.11271397639110085,
+        "left_hand": 0.1123790716224256,
+        "right_hand": 0.16831544459541745,
+        "left_hip": 0.0574548008078176,
+        "right_hip": 0.06670065438701735,
+        "left_knee": 0.05173599272083,
+        "right_knee": 0.05464001537312752,
+        "left_ankle": 0.15866959135840925,
+        "right_ankle": 0.10945557992366291,
+        "left_foot": 0.04989639100462109,
+        "right_foot": 0.0968808721465836
+      },
+      "final_error_norm": 0.6375953189417828,
+      "lower_limb_consistency": {
+        "left": {
+          "bend_alignment_dot": 0.9952709596613426,
+          "bend_norm": 0.3924940621799637,
+          "foot_vs_pelvis_forward_dot": 0.7980556157604093
+        },
+        "right": {
+          "bend_alignment_dot": 0.9892480721372814,
+          "bend_norm": 0.34854352959940516,
+          "foot_vs_pelvis_forward_dot": 0.9301810861860882
+        }
+      },
+      "frame_index": 963,
+      "timestamp_ms": 32102,
+      "detected": true
+    }
+  ],
+  "site_error_summary": {
+    "pelvis": {
+      "mean_error_m": 0.02601529383770492,
+      "median_error_m": 0.023087102880084052,
+      "p95_error_m": 0.04293566813789766,
+      "max_error_m": 0.05060670673372049
+    },
+    "thorax": {
+      "mean_error_m": 0.04481981202009869,
+      "median_error_m": 0.041818708082426784,
+      "p95_error_m": 0.07561788876333048,
+      "max_error_m": 0.08154397505751906
+    },
+    "left_shoulder": {
+      "mean_error_m": 0.07908766838476843,
+      "median_error_m": 0.08471702632931125,
+      "p95_error_m": 0.14464782762148728,
+      "max_error_m": 0.17250753389059034
+    },
+    "right_shoulder": {
+      "mean_error_m": 0.08862641976145684,
+      "median_error_m": 0.08979186731972366,
+      "p95_error_m": 0.14040525079441052,
+      "max_error_m": 0.15606386490622437
+    },
+    "left_elbow": {
+      "mean_error_m": 0.13557923765217336,
+      "median_error_m": 0.1191776013683617,
+      "p95_error_m": 0.20568692063256172,
+      "max_error_m": 0.22320988898514726
+    },
+    "right_elbow": {
+      "mean_error_m": 0.13644015310981084,
+      "median_error_m": 0.11205616834011123,
+      "p95_error_m": 0.22143936332359931,
+      "max_error_m": 0.23713227706238774
+    },
+    "left_hand": {
+      "mean_error_m": 0.3140643895418571,
+      "median_error_m": 0.3456104160366582,
+      "p95_error_m": 0.4299800948268604,
+      "max_error_m": 0.43475407904520946
+    },
+    "right_hand": {
+      "mean_error_m": 0.2795954497450934,
+      "median_error_m": 0.24939319044143915,
+      "p95_error_m": 0.5263004991016633,
+      "max_error_m": 0.5765516783205601
+    },
+    "left_hip": {
+      "mean_error_m": 0.052127329442130055,
+      "median_error_m": 0.04709050737159296,
+      "p95_error_m": 0.08526309774185074,
+      "max_error_m": 0.09185407059550238
+    },
+    "right_hip": {
+      "mean_error_m": 0.0379500721404635,
+      "median_error_m": 0.04116430832179853,
+      "p95_error_m": 0.06486938994610685,
+      "max_error_m": 0.06670065438701735
+    },
+    "left_knee": {
+      "mean_error_m": 0.10429716611215617,
+      "median_error_m": 0.07386058529091642,
+      "p95_error_m": 0.2581295416437994,
+      "max_error_m": 0.2964193539403795
+    },
+    "right_knee": {
+      "mean_error_m": 0.0913670187112607,
+      "median_error_m": 0.0593141062132783,
+      "p95_error_m": 0.2153545767055426,
+      "max_error_m": 0.2604867338561774
+    },
+    "left_ankle": {
+      "mean_error_m": 0.18592023147125278,
+      "median_error_m": 0.16303955541267257,
+      "p95_error_m": 0.42835729147745816,
+      "max_error_m": 0.5019270514394296
+    },
+    "right_ankle": {
+      "mean_error_m": 0.21568745360141167,
+      "median_error_m": 0.19454244787219255,
+      "p95_error_m": 0.42067649368504245,
+      "max_error_m": 0.4238948287097731
+    },
+    "left_foot": {
+      "mean_error_m": 0.21443005794725617,
+      "median_error_m": 0.11513777624066357,
+      "p95_error_m": 0.5457378154141851,
+      "max_error_m": 0.6202742657666745
+    },
+    "right_foot": {
+      "mean_error_m": 0.2252558191897245,
+      "median_error_m": 0.1676632794265771,
+      "p95_error_m": 0.4741601385065566,
+      "max_error_m": 0.48713442839382864
+    }
+  },
+  "gate1_static_fit": {
+    "passed": false,
+    "failures": [
+      "overall_mean_error_above_12cm",
+      "hands_mean_error_above_18cm",
+      "feet_mean_error_above_18cm"
+    ],
+    "overall_mean_error_m": 0.13945397329178869,
+    "hands_mean_error_m": 0.29682991964347527,
+    "feet_mean_error_m": 0.21984293856849035,
+    "major_joint_mean_error_m": 0.09068438316427749
+  },
+  "processed_sample_frames": 8
+}

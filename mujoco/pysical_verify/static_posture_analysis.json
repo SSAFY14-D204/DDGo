@@ -1,5 +1,5 @@
 {
-  "image_path": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\pysical_verify\\video\\static.png",
+  "image_path": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\static.png",
   "joint_torques": [
     {
       "joint_id": "abdomen_z",
