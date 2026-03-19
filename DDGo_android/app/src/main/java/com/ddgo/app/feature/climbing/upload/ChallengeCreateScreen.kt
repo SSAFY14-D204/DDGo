@@ -1,11 +1,16 @@
 ﻿package com.ddgo.app.feature.climbing.upload
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.Color as AndroidColor
+import android.location.Location
 import android.location.LocationManager
+import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,12 +40,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
@@ -63,17 +73,21 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
-import androidx.core.os.CancellationSignal
+import androidx.core.util.Consumer
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.R
 import com.ddgo.app.domain.model.GymGrade
@@ -183,6 +197,47 @@ private fun GymNameStep(
     val gymSearchUiState by viewModel.gymSearchUiState.collectAsState()
     val gymResolveUiState by viewModel.gymResolveUiState.collectAsState()
     var locationMessage by remember { mutableStateOf<String?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var isResolvingLocation by remember { mutableStateOf(false) }
+    var hasShownCachedLocationResult by remember { mutableStateOf(false) }
+
+    val startIncrementalLocationSearch = {
+        hasShownCachedLocationResult = false
+        isResolvingLocation = true
+        loadCurrentLocationIncrementally(
+            context = context,
+            onCachedLocation = { latitude, longitude ->
+                hasShownCachedLocationResult = true
+                locationMessage = null
+                viewModel.searchNearbyPlaces(
+                    latitude = latitude,
+                    longitude = longitude,
+                    query = "",
+                    nearbyOnly = true
+                )
+            },
+            onFreshLocation = { latitude, longitude, isSameAsCached ->
+                isResolvingLocation = false
+                locationMessage = null
+                if (!isSameAsCached) {
+                    viewModel.searchNearbyPlaces(
+                        latitude = latitude,
+                        longitude = longitude,
+                        query = "",
+                        nearbyOnly = true
+                    )
+                }
+            },
+            onError = {
+                isResolvingLocation = false
+                locationMessage = if (hasShownCachedLocationResult) {
+                    "최근 위치 기준 결과를 먼저 보여주고 있어요."
+                } else {
+                    it
+                }
+            }
+        )
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -191,29 +246,16 @@ private fun GymNameStep(
             result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
 
         if (granted) {
-            loadCurrentLocation(
-                context = context,
-                onSuccess = { latitude, longitude ->
-                    locationMessage = null
-                    viewModel.searchNearbyPlaces(latitude, longitude)
-                },
-                onError = { locationMessage = it }
-            )
+            startIncrementalLocationSearch()
         } else {
+            isResolvingLocation = false
             locationMessage = "\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."
         }
     }
 
     val searchAroundCurrentLocation = {
         if (hasLocationPermission(context)) {
-            loadCurrentLocation(
-                context = context,
-                onSuccess = { latitude, longitude ->
-                    locationMessage = null
-                    viewModel.searchNearbyPlaces(latitude, longitude)
-                },
-                onError = { locationMessage = it }
-            )
+            startIncrementalLocationSearch()
         } else {
             permissionLauncher.launch(
                 arrayOf(
@@ -221,6 +263,23 @@ private fun GymNameStep(
                     Manifest.permission.ACCESS_COARSE_LOCATION
                 )
             )
+        }
+    }
+
+    val submitKeywordSearch = {
+        val query = searchQuery.trim()
+        locationMessage = null
+        val cachedLatitude = viewModel.lastSearchLatitude
+        val cachedLongitude = viewModel.lastSearchLongitude
+
+        if (cachedLatitude != null && cachedLongitude != null) {
+            viewModel.searchNearbyPlaces(
+                latitude = cachedLatitude,
+                longitude = cachedLongitude,
+                query = query
+            )
+        } else {
+            searchAroundCurrentLocation()
         }
     }
 
@@ -236,56 +295,35 @@ private fun GymNameStep(
                 .fillMaxSize()
                 .padding(horizontal = 24.dp, vertical = 24.dp)
         ) {
-            Text(
-                text = "\uC8FC\uBCC0 \uC554\uC7A5\uC744 \uAC80\uC0C9\uD574\n\uC120\uD0DD\uD574\uC8FC\uC138\uC694",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                lineHeight = 32.sp
+            SearchHeroSection(
+                query = searchQuery,
+                onQueryChange = {
+                    searchQuery = it
+                    locationMessage = null
+                },
+                onSearch = submitKeywordSearch,
+                onCurrentLocationSearch = searchAroundCurrentLocation,
+                isBusy = isResolvingLocation || gymSearchUiState is GymSearchUiState.Loading,
+                locationMessage = locationMessage,
+                isResolvingLocation = isResolvingLocation
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = searchAroundCurrentLocation,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4A90E2),
-                    contentColor = Color.White
-                )
-            ) {
-                Text(
-                    text = "\uD604\uC7AC \uC704\uCE58\uB85C \uC554\uC7A5 \uAC80\uC0C9",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (locationMessage != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = locationMessage.orEmpty(),
-                    color = Color(0xFFFF8A8A),
-                    fontSize = 13.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             when (gymSearchUiState) {
                 GymSearchUiState.Idle -> {
-                    Text(
-                        text = "\uBC84\uD2BC\uC744 \uB20C\uB7EC \uC8FC\uBCC0 \uC554\uC7A5\uC744 \uCC3E\uC544\uBCFC\uAC8C\uC694.",
-                        color = Color(0xFFB0B0B0),
-                        fontSize = 14.sp
-                    )
+                    SearchEmptyGuide()
                 }
 
                 GymSearchUiState.Loading -> {
-                    CircularProgressIndicator(color = Color(0xFF4A90E2))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFF4A90E2))
+                    }
                 }
 
                 is GymSearchUiState.Error -> {
@@ -386,35 +424,57 @@ private fun NearbyPlaceItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Color(0xFF1C3A5E) else Color(0xFF1C1C1E))
-            .clickable(onClick = onClick)
-            .padding(16.dp)
-    ) {
-        Text(
-            text = place.placeName,
-            color = Color.White,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = place.roadAddressName ?: place.addressName ?: "\uC8FC\uC18C \uC815\uBCF4 \uC5C6\uC74C",
-            color = Color(0xFFB0B0B0),
-            fontSize = 13.sp,
-            lineHeight = 18.sp
-        )
-
-        if (place.distanceMeters != null) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "${place.distanceMeters}m",
-                color = Color(0xFF9CCCFF),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (selected) Color(0xFF1A2744) else Color(0xFF1E1E1E))
+            .border(
+                width = 1.dp,
+                color = if (selected) Color(0xFF42A5F5) else Color(0xFF2A2A2A),
+                shape = RoundedCornerShape(18.dp)
             )
+            .clickable(onClick = onClick)
+            .padding(18.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SearchResultLeadingBadge(selected = selected)
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = place.placeName,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = place.roadAddressName ?: place.addressName ?: "\uC8FC\uC18C \uC815\uBCF4 \uC5C6\uC74C",
+                    color = Color(0xFFB0B0B0),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp
+                )
+            }
+
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (place.distanceMeters != null) {
+                    Text(
+                        text = formatDistanceLabel(place.distanceMeters),
+                        color = Color(0xFF82B1FF),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                if (selected) {
+                    SelectionPill()
+                }
+            }
         }
     }
 }
@@ -1455,10 +1515,14 @@ private fun SelectedGymSummaryCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF151517))
-            .border(1.dp, Color(0xFF2B4F77), RoundedCornerShape(16.dp))
-            .padding(16.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(Color(0xFF151517), Color(0xFF101114))
+                )
+            )
+            .border(1.dp, Color(0xFF2A3C56), RoundedCornerShape(20.dp))
+            .padding(18.dp)
     ) {
         Text(
             text = "\uC120\uD0DD\uD55C \uC554\uC7A5",
@@ -1653,46 +1717,494 @@ private fun hasLocationPermission(context: Context): Boolean {
     return fineGranted || coarseGranted
 }
 
+@SuppressLint("MissingPermission")
 private fun loadCurrentLocation(
     context: Context,
     onSuccess: (Double, Double) -> Unit,
     onError: (String) -> Unit
 ) {
+    if (!hasLocationPermission(context)) {
+        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+        return
+    }
+
     val locationManager = context.getSystemService(LocationManager::class.java)
         ?: run {
             onError("\uC704\uCE58 \uC11C\uBE44\uC2A4\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.")
             return
         }
 
-    val provider = when {
-        locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-        locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-        else -> null
-    } ?: run {
+    val availableProviders = listOf(
+        LocationManager.NETWORK_PROVIDER,
+        LocationManager.GPS_PROVIDER,
+        LocationManager.PASSIVE_PROVIDER
+    ).filter(locationManager::isProviderEnabled)
+
+    if (availableProviders.isEmpty()) {
         onError("\uC704\uCE58 \uC11C\uBE44\uC2A4\uB97C \uCF1C\uC8FC\uC138\uC694.")
         return
     }
 
     try {
-        LocationManagerCompat.getCurrentLocation(
-            locationManager,
-            provider,
-            CancellationSignal(),
-            ContextCompat.getMainExecutor(context)
-        ) { location ->
-            if (location != null) {
-                onSuccess(location.latitude, location.longitude)
-                return@getCurrentLocation
-            }
-
-            val lastKnownLocation = locationManager.getLastKnownLocation(provider)
-            if (lastKnownLocation != null) {
-                onSuccess(lastKnownLocation.latitude, lastKnownLocation.longitude)
-            } else {
-                onError("\uD604\uC7AC \uC704\uCE58\uB97C \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.")
-            }
+        // 실기기에서는 GPS 첫 고정이 느릴 수 있으므로, 최근 위치가 있으면 즉시 사용합니다.
+        findBestLastKnownLocation(locationManager, availableProviders)?.let { cachedLocation ->
+            onSuccess(cachedLocation.latitude, cachedLocation.longitude)
+            return
         }
+
+        requestCurrentLocation(
+            context = context,
+            locationManager = locationManager,
+            providers = availableProviders,
+            providerIndex = 0,
+            onSuccess = onSuccess,
+            onError = onError
+        )
     } catch (_: SecurityException) {
         onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
     }
+}
+
+@Composable
+private fun GymSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onCurrentLocationSearch: () -> Unit,
+    isBusy: Boolean
+) {
+    TextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp)),
+        singleLine = true,
+        placeholder = {
+            Text(
+                text = "\uC554\uC7A5\uBA85\uC744 \uC785\uB825\uD574\uBCF4\uC138\uC694",
+                color = Color(0xFF8A94A3),
+                fontSize = 15.sp
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "\uAC80\uC0C9",
+                tint = Color(0xFF7F8EA3)
+            )
+        },
+        trailingIcon = {
+            SearchBarTrailingActions(
+                onSearch = onSearch,
+                onCurrentLocationSearch = onCurrentLocationSearch,
+                isBusy = isBusy
+            )
+        },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        shape = RoundedCornerShape(24.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color(0xFF22262D),
+            unfocusedContainerColor = Color(0xFF22262D),
+            disabledContainerColor = Color(0xFF22262D),
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            cursorColor = Color(0xFF1D9BF0),
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            focusedLeadingIconColor = Color(0xFF7F8EA3),
+            unfocusedLeadingIconColor = Color(0xFF7F8EA3),
+            focusedTrailingIconColor = Color.White,
+            unfocusedTrailingIconColor = Color.White
+        )
+    )
+}
+
+@Composable
+private fun SearchBarTrailingActions(
+    onSearch: () -> Unit,
+    onCurrentLocationSearch: () -> Unit,
+    isBusy: Boolean
+) {
+    Row(
+        modifier = Modifier.padding(end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        SearchActionChip(
+            icon = Icons.Default.MyLocation,
+            contentDescription = "\uD604\uC7AC \uC704\uCE58 \uAC80\uC0C9",
+            tint = Color(0xFF1D9BF0),
+            onClick = onCurrentLocationSearch,
+            enabled = !isBusy,
+            isBusy = isBusy
+        )
+
+        SearchActionChip(
+            icon = Icons.Default.NearMe,
+            contentDescription = "\uD0A4\uC6CC\uB4DC \uAC80\uC0C9",
+            tint = Color(0xFF1D9BF0),
+            onClick = onSearch,
+            enabled = !isBusy,
+            isBusy = false
+        )
+    }
+}
+
+@SuppressLint("MissingPermission")
+private fun loadCurrentLocationIncrementally(
+    context: Context,
+    onCachedLocation: (Double, Double) -> Unit,
+    onFreshLocation: (Double, Double, Boolean) -> Unit,
+    onError: (String) -> Unit
+) {
+    if (!hasLocationPermission(context)) {
+        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+        return
+    }
+
+    val locationManager = context.getSystemService(LocationManager::class.java)
+        ?: run {
+            onError("\uC704\uCE58 \uC11C\uBE44\uC2A4\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.")
+            return
+        }
+
+    val availableProviders = listOf(
+        LocationManager.NETWORK_PROVIDER,
+        LocationManager.GPS_PROVIDER,
+        LocationManager.PASSIVE_PROVIDER
+    ).filter(locationManager::isProviderEnabled)
+
+    if (availableProviders.isEmpty()) {
+        onError("\uC704\uCE58 \uC11C\uBE44\uC2A4\uB97C \uCF1C\uC8FC\uC138\uC694.")
+        return
+    }
+
+    try {
+        val cachedLocation = findBestLastKnownLocation(locationManager, availableProviders)
+        cachedLocation?.let { location ->
+            onCachedLocation(location.latitude, location.longitude)
+        }
+
+        requestCurrentLocation(
+            context = context,
+            locationManager = locationManager,
+            providers = availableProviders,
+            providerIndex = 0,
+            onSuccess = { latitude, longitude ->
+                val isSameAsCached = cachedLocation?.let {
+                    areLocationsEffectivelySame(
+                        cachedLatitude = it.latitude,
+                        cachedLongitude = it.longitude,
+                        freshLatitude = latitude,
+                        freshLongitude = longitude
+                    )
+                } ?: false
+
+                onFreshLocation(latitude, longitude, isSameAsCached)
+            },
+            onError = onError
+        )
+    } catch (_: SecurityException) {
+        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+    }
+}
+
+@Composable
+private fun SearchActionChip(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    isBusy: Boolean
+) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isBusy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = Color(0xFF1D9BF0)
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = tint,
+                modifier = Modifier.size(21.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchHeroSection(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onCurrentLocationSearch: () -> Unit,
+    isBusy: Boolean,
+    locationMessage: String?,
+    isResolvingLocation: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF161A20), Color(0xFF0E1116))
+                )
+            )
+            .border(1.dp, Color(0xFF252D38), RoundedCornerShape(28.dp))
+            .padding(20.dp)
+    ) {
+        Text(
+            text = "\uC554\uC7A5 \uD0D0\uC0C9",
+            color = Color(0xFF82B1FF),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "\uC9C0\uAE08 \uAC00\uACE0 \uC2F6\uC740 \uD074\uB77C\uC774\uBC0D\uC7A5\uC744\n\uBE60\uB974\uAC8C \uCC3E\uC544\uBCF4\uC138\uC694",
+            color = Color.White,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 31.sp
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        GymSearchBar(
+            query = query,
+            onQueryChange = onQueryChange,
+            onSearch = onSearch,
+            onCurrentLocationSearch = onCurrentLocationSearch,
+            isBusy = isBusy
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Text(
+            text = "\uC554\uC7A5\uBA85\uC73C\uB85C \uCC3E\uAC70\uB098, \uD604\uC7AC \uC704\uCE58 \uBC84\uD2BC\uC73C\uB85C \uC8FC\uBCC0 \uC554\uC7A5\uB9CC \uBC14\uB85C \uD655\uC778\uD560 \uC218 \uC788\uC5B4\uC694.",
+            color = Color.White.copy(alpha = 0.62f),
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        )
+
+        if (isResolvingLocation) {
+            Spacer(modifier = Modifier.height(12.dp))
+            SearchStatusChip(
+                text = "\uD604\uC7AC \uC704\uCE58\uB97C \uD655\uC778\uD558\uB294 \uC911\uC785\uB2C8\uB2E4",
+                background = Color(0xFF173657),
+                content = Color(0xFF9CCCFF)
+            )
+        }
+
+        if (locationMessage != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            SearchStatusChip(
+                text = locationMessage,
+                background = Color(0xFF351A20),
+                content = Color(0xFFFFA4AF)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchStatusChip(
+    text: String,
+    background: Color,
+    content: Color
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(background)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = text,
+            color = content,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun SearchEmptyGuide() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF16181D))
+            .border(1.dp, Color(0xFF252A33), RoundedCornerShape(20.dp))
+            .padding(20.dp)
+    ) {
+        Text(
+            text = "\uC544\uC9C1 \uAC80\uC0C9\uD55C \uC554\uC7A5\uC774 \uC5C6\uC5B4\uC694",
+            color = Color.White,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "\uC554\uC7A5\uBA85\uC744 \uC785\uB825\uD574 \uCC3E\uAC70\uB098, \uD604\uC7AC \uC704\uCE58 \uBC84\uD2BC\uC73C\uB85C \uAC00\uAE4C\uC6B4 \uD074\uB77C\uC774\uBC0D\uC7A5\uC744 \uBD88\uB7EC\uC624\uC138\uC694.",
+            color = Color.White.copy(alpha = 0.62f),
+            fontSize = 14.sp,
+            lineHeight = 20.sp
+        )
+    }
+}
+
+@Composable
+private fun SearchResultLeadingBadge(selected: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) Color(0xFF2979FF) else Color(0xFF2A2F38)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.NearMe,
+            contentDescription = null,
+            tint = if (selected) Color.White else Color(0xFF82B1FF)
+        )
+    }
+}
+
+@Composable
+private fun SelectionPill() {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0xFF204B72))
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+    ) {
+        Text(
+            text = "\uC120\uD0DD\uB428",
+            color = Color(0xFFB7DCFF),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+private fun formatDistanceLabel(distanceMeters: Int): String {
+    return if (distanceMeters >= 1000) {
+        String.format("%.1fkm", distanceMeters / 1000f)
+    } else {
+        "${distanceMeters}m"
+    }
+}
+
+@SuppressLint("MissingPermission")
+private fun requestCurrentLocation(
+    context: Context,
+    locationManager: LocationManager,
+    providers: List<String>,
+    providerIndex: Int,
+    onSuccess: (Double, Double) -> Unit,
+    onError: (String) -> Unit
+) {
+    if (!hasLocationPermission(context)) {
+        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+        return
+    }
+
+    if (providerIndex >= providers.size) {
+        onError("\uD604\uC7AC \uC704\uCE58\uB97C \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.")
+        return
+    }
+
+    val provider = providers[providerIndex]
+    val cancellationSignal = CancellationSignal()
+    val timeoutHandler = Handler(Looper.getMainLooper())
+    var completed = false
+
+    fun completeWithFallback() {
+        if (completed) {
+            return
+        }
+        completed = true
+        cancellationSignal.cancel()
+        timeoutHandler.removeCallbacksAndMessages(null)
+        requestCurrentLocation(
+            context = context,
+            locationManager = locationManager,
+            providers = providers,
+            providerIndex = providerIndex + 1,
+            onSuccess = onSuccess,
+            onError = onError
+        )
+    }
+
+    timeoutHandler.postDelayed(
+        { completeWithFallback() },
+        6_000L
+    )
+
+    val locationConsumer = Consumer<Location> { location ->
+        if (completed) {
+            return@Consumer
+        }
+
+        completed = true
+        timeoutHandler.removeCallbacksAndMessages(null)
+
+        if (location != null) {
+            onSuccess(location.latitude, location.longitude)
+        } else {
+            requestCurrentLocation(
+                context = context,
+                locationManager = locationManager,
+                providers = providers,
+                providerIndex = providerIndex + 1,
+                onSuccess = onSuccess,
+                onError = onError
+            )
+        }
+    }
+
+    LocationManagerCompat.getCurrentLocation(
+        locationManager,
+        provider,
+        cancellationSignal,
+        ContextCompat.getMainExecutor(context),
+        locationConsumer
+    )
+}
+
+private fun findBestLastKnownLocation(
+    locationManager: LocationManager,
+    providers: List<String>
+): Location? {
+    return providers
+        .mapNotNull(locationManager::getLastKnownLocation)
+        .maxByOrNull { it.time }
+}
+
+private fun areLocationsEffectivelySame(
+    cachedLatitude: Double,
+    cachedLongitude: Double,
+    freshLatitude: Double,
+    freshLongitude: Double
+): Boolean {
+    return kotlin.math.abs(cachedLatitude - freshLatitude) < 0.0001 &&
+        kotlin.math.abs(cachedLongitude - freshLongitude) < 0.0001
 }

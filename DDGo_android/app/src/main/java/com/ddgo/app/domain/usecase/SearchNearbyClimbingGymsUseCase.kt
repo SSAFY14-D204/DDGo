@@ -29,24 +29,87 @@ class SearchNearbyClimbingGymsUseCase @Inject constructor(
     suspend operator fun invoke(
         latitude: Double,
         longitude: Double,
-        query: String = "\uD074\uB77C\uC774\uBC0D",
+        query: String = "",
         radiusMeters: Int = 3000,
-        size: Int = 15
+        size: Int = 15,
+        nearbyOnly: Boolean = false
     ): Result<List<NearbyPlace>> {
-        if (query.isBlank()) {
-            return Result.failure(Exception("Query must not be blank."))
-        }
-
         if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) {
             return Result.failure(Exception("Invalid location coordinates."))
         }
 
-        return gymRepository.searchNearbyPlaces(
-            query = query,
-            latitude = latitude,
-            longitude = longitude,
-            radiusMeters = radiusMeters,
-            size = size
-        )
+        val candidateQueries = buildClimbingGymQueries(query)
+        var lastFailure: Throwable? = null
+        val aggregatedPlaces = linkedMapOf<String, NearbyPlace>()
+
+        candidateQueries.forEach { candidate ->
+            val result = gymRepository.searchNearbyPlaces(
+                query = candidate.query,
+                latitude = latitude,
+                longitude = longitude,
+                radiusMeters = radiusMeters,
+                size = size,
+                allowGlobalFallback = !nearbyOnly && candidate.allowGlobalFallback
+            )
+
+            if (result.isSuccess) {
+                val places = result.getOrDefault(emptyList())
+                if (nearbyOnly) {
+                    places.forEach { place -> aggregatedPlaces.putIfAbsent(place.externalPlaceId, place) }
+                } else if (places.isNotEmpty()) {
+                    return Result.success(places)
+                }
+            } else {
+                lastFailure = result.exceptionOrNull()
+            }
+        }
+
+        if (nearbyOnly && aggregatedPlaces.isNotEmpty()) {
+            return Result.success(aggregatedPlaces.values.toList())
+        }
+
+        return lastFailure?.let { Result.failure(it) } ?: Result.success(emptyList())
     }
+
+    private fun buildClimbingGymQueries(query: String): List<SearchQueryCandidate> {
+        val trimmedQuery = query.trim()
+
+        if (trimmedQuery.isBlank()) {
+            return listOf(
+                SearchQueryCandidate("\uD074\uB77C\uC774\uBC0D\uC7A5"),
+                SearchQueryCandidate("\uC554\uC7A5"),
+                SearchQueryCandidate("\uBCFC\uB354\uB9C1")
+            )
+        }
+
+        val normalized = trimmedQuery.lowercase()
+        val climbingKeywords = listOf(
+            "\uD074\uB77C\uC774\uBC0D",
+            "\uD074\uB77C\uC774\uBC0D\uC7A5",
+            "\uC554\uC7A5",
+            "\uBCFC\uB354\uB9C1",
+            "climbing",
+            "bouldering",
+            "gym"
+        )
+
+        if (climbingKeywords.any { normalized.contains(it) }) {
+            return listOf(SearchQueryCandidate(trimmedQuery))
+        }
+
+        return buildList {
+            add(SearchQueryCandidate("$trimmedQuery \uD074\uB77C\uC774\uBC0D"))
+            add(SearchQueryCandidate("$trimmedQuery \uD074\uB77C\uC774\uBC0D\uC7A5"))
+            add(SearchQueryCandidate("$trimmedQuery \uC554\uC7A5"))
+            add(SearchQueryCandidate("$trimmedQuery \uBCFC\uB354\uB9C1"))
+            add(SearchQueryCandidate("$trimmedQuery climbing"))
+            add(SearchQueryCandidate("$trimmedQuery bouldering"))
+            add(SearchQueryCandidate(trimmedQuery, allowGlobalFallback = false))
+        }.distinct()
+    }
+
+    private data class SearchQueryCandidate(
+        val query: String,
+        val allowGlobalFallback: Boolean = true
+    )
 }
