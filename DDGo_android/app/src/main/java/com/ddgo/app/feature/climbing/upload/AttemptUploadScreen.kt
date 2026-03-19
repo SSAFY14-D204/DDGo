@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 
 @Composable
 fun AttemptUploadScreen(
@@ -44,11 +45,7 @@ fun AttemptUploadScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
+    SafeAreaScreen(containerColor = Color.Black) {
         Column(
             modifier = Modifier
                 .fillMaxSize()

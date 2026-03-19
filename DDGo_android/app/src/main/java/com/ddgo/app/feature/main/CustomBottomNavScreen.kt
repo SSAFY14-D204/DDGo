@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -47,6 +48,11 @@ object MainTab {
     const val CLIMBING = 2
     const val ANALYSIS = 3
     const val PROFILE = 4
+}
+
+object MainChromeDefaults {
+    val NavBarHeight = 110.dp
+    val MenuOverlayBottomPadding = 110.dp
 }
 
 class BumpShape(
@@ -87,9 +93,10 @@ fun CustomBottomNavBarBase(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .shadow(8.dp, shape = BumpShape())
             .background(Color.White, shape = BumpShape())
-            .height(110.dp)
+            .height(MainChromeDefaults.NavBarHeight)
     ) {
         Row(
             modifier = Modifier
