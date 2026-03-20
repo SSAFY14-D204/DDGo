@@ -17,6 +17,7 @@ data class ProfileBodyProfileEditorUiState(
     val heightCmInput: String = "",
     val weightKgInput: String = "",
     val wingspanCmInput: String = "",
+    val errorMessage: String? = null,
     val isSaving: Boolean = false
 )
 

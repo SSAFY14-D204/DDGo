@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +36,11 @@ import com.ddgo.app.core.ui.theme.PretendardFamily
 @Composable
 fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterClick: () -> Unit = {}) {
     val isImeVisible = WindowInsets.isImeVisible
+    val errorMessage = viewModel.errorMessage
+
+    LaunchedEffect(Unit) {
+        viewModel.clearErrorState()
+    }
 
     SafeAreaScreen(
         modifier = Modifier
@@ -89,6 +95,11 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
                     unfocusedIndicatorColor = Color(0xFF1DA1F2),
                 )
             )
+
+            errorMessage?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                AuthInlineErrorMessage(message = message)
+            }
         }
 
         Column(
@@ -100,7 +111,11 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
         ) {
             if (isImeVisible) {
                 Button(
-                    onClick = onNext,
+                    onClick = {
+                        if (viewModel.validateUsernameStep() == null) {
+                            onNext()
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -117,7 +132,11 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
                 }
             } else {
                 Button(
-                    onClick = onNext,
+                    onClick = {
+                        if (viewModel.validateUsernameStep() == null) {
+                            onNext()
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -133,7 +152,11 @@ fun LoginEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onRegisterCli
                 }
 
                 Button(
-                    onClick = onNext,
+                    onClick = {
+                        if (viewModel.validateUsernameStep() == null) {
+                            onNext()
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),

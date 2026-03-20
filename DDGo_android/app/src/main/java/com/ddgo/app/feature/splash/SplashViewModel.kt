@@ -3,6 +3,7 @@ package com.ddgo.app.feature.splash
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.core.datastore.TokenDataStore
+import com.ddgo.app.core.network.JwtTokenParser
 import com.ddgo.app.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -31,7 +32,7 @@ class SplashViewModel @Inject constructor(
             delay(1500)
 
             val accessToken = tokenDataStore.accessToken.first()
-            if (!accessToken.isNullOrEmpty()) {
+            if (!accessToken.isNullOrEmpty() && !JwtTokenParser.isExpired(accessToken)) {
                 // ✅ 액세스 토큰이 있으면 바로 메인으로
                 _navigationEvent.emit(SplashNavigationEvent.NavigateToMain)
                 return@launch

@@ -35,6 +35,7 @@ internal fun ProfilePasswordEditorDialog(
         confirmLabel = state.submitLabel,
         dismissLabel = ProfileStrings.ActionCancel,
         confirmTone = ProfileActionTone.Accent,
+        message = state.errorMessage,
         isProcessing = state.isSaving,
         onConfirm = onConfirm,
         onDismiss = onDismiss,

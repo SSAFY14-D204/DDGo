@@ -31,7 +31,7 @@ DROP TABLE IF EXISTS `users`;
 -- =========================================================
 CREATE TABLE `users` (
   `id` INT NOT NULL AUTO_INCREMENT,
-  `username` VARCHAR(30) NOT NULL,
+  `username` VARCHAR(255) NOT NULL,
   `password` VARCHAR(255) NOT NULL,
   `nickname` VARCHAR(30) NOT NULL,
 

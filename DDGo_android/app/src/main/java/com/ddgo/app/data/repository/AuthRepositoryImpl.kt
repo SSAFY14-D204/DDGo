@@ -10,27 +10,23 @@ import com.ddgo.app.data.remote.auth.RegisterRequestDto
 import com.ddgo.app.data.remote.auth.UpdateNicknameRequestDto
 import com.ddgo.app.data.remote.auth.UpdatePasswordRequestDto
 import com.ddgo.app.data.remote.auth.UpdateProfileRequestDto
+import com.ddgo.app.data.remote.common.ApiErrorResponse
 import com.ddgo.app.domain.model.AuthToken
 import com.ddgo.app.domain.model.LogoutResult
 import com.ddgo.app.domain.model.User
 import com.ddgo.app.domain.repository.AuthRepository
 import javax.inject.Inject
+import kotlinx.serialization.json.Json
+import retrofit2.HttpException
 
 private const val TAG = "AuthRepository"
 
-/**
- * [AuthRepository]의 실제 구현체입니다.
- *
- * 역할:
- * - AuthApi 호출 결과를 domain 계층에서 다루기 쉬운 `Result` 형태로 변환합니다.
- * - 토큰 저장/삭제처럼 로컬 인증 상태 정리도 함께 담당합니다.
- */
 class AuthRepositoryImpl @Inject constructor(
     private val authApi: AuthApi,
-    private val tokenDataStore: TokenDataStore
+    private val tokenDataStore: TokenDataStore,
+    private val json: Json
 ) : AuthRepository {
 
-    /** 회원가입 요청을 수행합니다. */
     override suspend fun register(
         username: String,
         password: String,
@@ -41,14 +37,13 @@ class AuthRepositoryImpl @Inject constructor(
             if (response.success) {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message.ifBlank { REGISTER_FAILED_MESSAGE }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(resolveErrorMessage(e, REGISTER_FAILED_MESSAGE), e))
         }
     }
 
-    /** 로그인 요청을 수행하고 토큰을 저장합니다. */
     override suspend fun login(
         username: String,
         password: String
@@ -67,14 +62,13 @@ class AuthRepositoryImpl @Inject constructor(
                 )
                 Result.success(response.data.toDomain())
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message.ifBlank { LOGIN_FAILED_MESSAGE }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(resolveErrorMessage(e, LOGIN_FAILED_MESSAGE), e))
         }
     }
 
-    /** Refresh Token으로 토큰을 재발급하고 저장합니다. */
     override suspend fun refreshToken(refreshToken: String): Result<AuthToken> {
         return try {
             val response = authApi.refresh(RefreshTokenRequestDto(refreshToken))
@@ -90,18 +84,13 @@ class AuthRepositoryImpl @Inject constructor(
                 )
                 Result.success(response.data.toDomain())
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message.ifBlank { REFRESH_FAILED_MESSAGE }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(resolveErrorMessage(e, REFRESH_FAILED_MESSAGE), e))
         }
     }
 
-    /**
-     * 로그아웃 요청을 시도하고 로컬 토큰을 정리합니다.
-     *
-     * 서버 응답이 실패해도 로컬 토큰 정리는 수행해 앱 상태는 확실히 로그아웃되도록 합니다.
-     */
     override suspend fun logout(): Result<LogoutResult> {
         return try {
             val serverResult = runCatching { authApi.logout() }
@@ -114,7 +103,7 @@ class AuthRepositoryImpl @Inject constructor(
                     } else {
                         Result.success(
                             LogoutResult.LocalOnly(
-                                reason = response.message?.takeIf { it.isNotBlank() }
+                                reason = response.message.takeIf { it.isNotBlank() }
                             )
                         )
                     }
@@ -132,21 +121,19 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    /** 로그인한 사용자의 정보를 조회합니다. */
     override suspend fun getMyInfo(): Result<User> {
         return try {
             val response = authApi.getMyInfo()
             if (response.success && response.data != null) {
                 Result.success(response.data.toDomain())
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message.ifBlank { LOAD_PROFILE_FAILED_MESSAGE }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(resolveErrorMessage(e, LOAD_PROFILE_FAILED_MESSAGE), e))
         }
     }
 
-    /** 신체 정보 수정 요청을 수행합니다. */
     override suspend fun updateProfile(
         sex: String,
         heightCm: Float,
@@ -166,14 +153,13 @@ class AuthRepositoryImpl @Inject constructor(
             if (response.success) {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message.ifBlank { UPDATE_PROFILE_FAILED_MESSAGE }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(resolveErrorMessage(e, UPDATE_PROFILE_FAILED_MESSAGE), e))
         }
     }
 
-    /** 닉네임 등록 또는 변경 요청을 수행합니다. */
     override suspend fun updateNickname(nickname: String): Result<Unit> {
         return try {
             val response = authApi.updateNickname(
@@ -185,14 +171,13 @@ class AuthRepositoryImpl @Inject constructor(
             if (response.success) {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message.ifBlank { UPDATE_NICKNAME_FAILED_MESSAGE }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(resolveErrorMessage(e, UPDATE_NICKNAME_FAILED_MESSAGE), e))
         }
     }
 
-    /** 기존 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다. */
     override suspend fun updatePassword(
         oldPassword: String,
         newPassword: String
@@ -208,14 +193,13 @@ class AuthRepositoryImpl @Inject constructor(
             if (response.success) {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message.ifBlank { UPDATE_PASSWORD_FAILED_MESSAGE }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(resolveErrorMessage(e, UPDATE_PASSWORD_FAILED_MESSAGE), e))
         }
     }
 
-    /** 회원 탈퇴 요청 후 로컬 토큰을 정리합니다. */
     override suspend fun deleteMe(): Result<Unit> {
         return try {
             val response = authApi.deleteMe()
@@ -223,10 +207,55 @@ class AuthRepositoryImpl @Inject constructor(
                 tokenDataStore.clearTokens()
                 Result.success(Unit)
             } else {
-                Result.failure(Exception(response.message))
+                Result.failure(Exception(response.message.ifBlank { DELETE_ME_FAILED_MESSAGE }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(resolveErrorMessage(e, DELETE_ME_FAILED_MESSAGE), e))
         }
+    }
+
+    private fun resolveErrorMessage(throwable: Exception, fallbackMessage: String): String {
+        if (throwable is HttpException) {
+            val parsedMessage = throwable.response()
+                ?.errorBody()
+                ?.string()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { body ->
+                    runCatching {
+                        json.decodeFromString(ApiErrorResponse.serializer(), body).message
+                    }.getOrNull()
+                }
+                ?.takeIf { it.isNotBlank() }
+
+            if (!parsedMessage.isNullOrBlank()) {
+                return parsedMessage
+            }
+        }
+
+        val rawMessage = throwable.message?.trim()
+        return if (rawMessage.isNullOrBlank() || rawMessage.startsWith("HTTP ")) {
+            fallbackMessage
+        } else {
+            rawMessage
+        }
+    }
+
+    private companion object {
+        const val REGISTER_FAILED_MESSAGE =
+            "회원가입을 완료하지 못했어요. 입력한 정보를 확인해 주세요."
+        const val LOGIN_FAILED_MESSAGE =
+            "로그인에 실패했어요. 아이디와 비밀번호를 확인해 주세요."
+        const val REFRESH_FAILED_MESSAGE =
+            "세션을 갱신하지 못했어요. 다시 로그인해 주세요."
+        const val LOAD_PROFILE_FAILED_MESSAGE =
+            "프로필 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
+        const val UPDATE_PROFILE_FAILED_MESSAGE =
+            "신체 정보를 저장하지 못했어요. 잠시 후 다시 시도해 주세요."
+        const val UPDATE_NICKNAME_FAILED_MESSAGE =
+            "닉네임을 저장하지 못했어요. 잠시 후 다시 시도해 주세요."
+        const val UPDATE_PASSWORD_FAILED_MESSAGE =
+            "비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요."
+        const val DELETE_ME_FAILED_MESSAGE =
+            "회원 탈퇴를 완료하지 못했어요. 잠시 후 다시 시도해 주세요."
     }
 }

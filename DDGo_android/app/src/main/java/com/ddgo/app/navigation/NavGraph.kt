@@ -1,34 +1,49 @@
 package com.ddgo.app.navigation
 
+import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavHostController
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import android.util.Log
 import com.ddgo.app.BuildConfig
+import com.ddgo.app.core.datastore.AuthSessionEvent
 import com.ddgo.app.core.ui.components.DevNavigationOverlay
 import com.ddgo.app.feature.auth.authGraph
 import com.ddgo.app.feature.debug.debugGraph
 import com.ddgo.app.feature.main.mainGraph
 import com.ddgo.app.feature.splash.SplashScreen
+import kotlinx.coroutines.flow.collectLatest
 
-/**
- * 앱 전체 네비게이션 진입점.
- *
- * 각 플로우는 별도 파일에서 정의된 그래프 함수로 관리됩니다:
- * - [authGraph]  : 인증 플로우 (AuthNavigation.kt)
- * - [mainGraph]  : 메인 플로우 (MainNavigation.kt)
- * - [debugGraph] : 디버그 플로우 (DebugNavigation.kt)
- */
 @Composable
 fun NavGraph() {
     val navController: NavHostController = rememberNavController()
+    val appSessionViewModel: AppSessionViewModel = hiltViewModel()
+    var showSessionExpiredDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(appSessionViewModel) {
+        appSessionViewModel.authSessionEvent.collectLatest { event ->
+            when (event) {
+                AuthSessionEvent.SessionExpired -> {
+                    showSessionExpiredDialog = true
+                }
+            }
+        }
+    }
 
     if (BuildConfig.DEBUG) {
         DisposableEffect(navController) {
@@ -44,56 +59,76 @@ fun NavGraph() {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-    NavHost(
-        navController = navController,
-        startDestination = ScreenRoutes.Splash.route
-    ) {
-        // 스플래시
-        composable(ScreenRoutes.Splash.route) {
-            SplashScreen(
+        NavHost(
+            navController = navController,
+            startDestination = ScreenRoutes.Splash.route
+        ) {
+            composable(ScreenRoutes.Splash.route) {
+                SplashScreen(
+                    onNavigateToAuth = {
+                        navController.navigate(ScreenRoutes.Auth.route) {
+                            popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
+                        }
+                    },
+                    onNavigateToMain = {
+                        navController.navigate(ScreenRoutes.MainGraph.route) {
+                            popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            authGraph(
+                navController = navController,
+                onLoginSuccess = {
+                    navController.navigate(ScreenRoutes.MainGraph.route) {
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+
+            mainGraph(
+                navController = navController,
                 onNavigateToAuth = {
                     navController.navigate(ScreenRoutes.Auth.route) {
-                        popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
-                onNavigateToMain = {
-                    navController.navigate(ScreenRoutes.MainGraph.route) {
-                        popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
+                onNavigateToDebug = {
+                    navController.navigate("debug_main")
+                }
+            )
+
+            debugGraph(navController = navController)
+        }
+
+        DevNavigationOverlay(navController = navController)
+
+        if (showSessionExpiredDialog) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = {
+                    Text(text = "\uC138\uC158 \uB9CC\uB8CC")
+                },
+                text = {
+                    Text(text = "\uC138\uC158\uC774 \uB9CC\uB8CC\uB418\uC5C8\uC5B4\uC694. \uB2E4\uC2DC \uB85C\uADF8\uC778\uD574 \uC8FC\uC138\uC694.")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showSessionExpiredDialog = false
+                            navController.navigate(ScreenRoutes.Auth.route) {
+                                popUpTo(0) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    ) {
+                        Text(text = "\uD655\uC778")
                     }
                 }
             )
         }
-
-        // 인증 플로우 (로그인, 회원가입)
-        authGraph(
-            navController = navController,
-            onLoginSuccess = {
-                navController.navigate(ScreenRoutes.MainGraph.route) {
-                    popUpTo(0) { inclusive = true }
-                    launchSingleTop = true
-                }
-            }
-        )
-
-        // 메인 플로우 (탭 UI + 클라이밍 기능들)
-        mainGraph(
-            navController = navController,
-            onNavigateToAuth = {
-                navController.navigate(ScreenRoutes.Auth.route) {
-                    popUpTo(0) { inclusive = true }
-                    launchSingleTop = true
-                }
-            },
-            onNavigateToDebug = {
-                navController.navigate("debug_main")
-            }
-        )
-
-        // 디버그 플로우
-        debugGraph(navController = navController)
-    }
-
-    // 개발용 네비게이션 오버레이 (모든 화면 위에 표시)
-    DevNavigationOverlay(navController = navController)
     }
 }

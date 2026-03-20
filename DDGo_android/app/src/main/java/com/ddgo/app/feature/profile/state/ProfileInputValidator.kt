@@ -1,35 +1,30 @@
 package com.ddgo.app.feature.profile.state
 
+import com.ddgo.app.core.validation.AuthInputPolicy
+import com.ddgo.app.core.validation.ValidationResult
 import com.ddgo.app.feature.profile.ProfileStrings
 import com.ddgo.app.feature.profile.model.ProfileBodyProfileEditorUiState
 import com.ddgo.app.feature.profile.model.ProfilePasswordEditorUiState
 import com.ddgo.app.feature.profile.model.ProfileSexOption
 
-/**
- * 프로필 편집 화면에서 사용하는 입력 검증 도우미입니다.
- *
- * 역할:
- * - ViewModel에서 반복되는 입력 검증 로직을 분리합니다.
- * - 닉네임과 신체 정보 검증 기준을 한 곳에서 유지합니다.
- */
 internal object ProfileInputValidator {
 
-    /** 닉네임 입력값을 저장 가능한 형태로 검증합니다. */
     fun validateNickname(
         rawInput: String,
         currentNickname: String?
     ): ProfileValidation<String> {
-        val nickname = rawInput.trim()
+        val nickname = when (val validation = AuthInputPolicy.validateNickname(rawInput)) {
+            is ValidationResult.Invalid -> return ProfileValidation.Invalid(validation.message)
+            is ValidationResult.Valid -> validation.value
+        }
 
         return when {
-            nickname.isBlank() -> ProfileValidation.Invalid(ProfileStrings.NicknameRequired)
             !currentNickname.isNullOrBlank() && nickname == currentNickname ->
                 ProfileValidation.Invalid(ProfileStrings.NicknameSameAsCurrent)
             else -> ProfileValidation.Valid(nickname)
         }
     }
 
-    /** 신체 정보 입력값을 API 요청에 바로 사용할 수 있는 값으로 검증합니다. */
     fun validateBodyProfile(
         editor: ProfileBodyProfileEditorUiState
     ): ProfileValidation<ValidatedBodyProfile> {
@@ -61,9 +56,10 @@ internal object ProfileInputValidator {
         )
     }
 
-    /** 비밀번호 변경 입력값을 검증합니다. */
     fun validatePasswordChange(
-        editor: ProfilePasswordEditorUiState
+        editor: ProfilePasswordEditorUiState,
+        currentUsername: String?,
+        currentNickname: String?
     ): ProfileValidation<ValidatedPasswordChange> {
         val currentPassword = editor.currentPasswordInput
         val newPassword = editor.newPasswordInput
@@ -77,16 +73,26 @@ internal object ProfileInputValidator {
                 ProfileValidation.Invalid(ProfileStrings.NewPasswordSameAsCurrent)
             newPassword != confirmPassword ->
                 ProfileValidation.Invalid(ProfileStrings.PasswordConfirmMismatch)
-            else -> ProfileValidation.Valid(
-                ValidatedPasswordChange(
-                    oldPassword = currentPassword,
-                    newPassword = newPassword
-                )
-            )
+            else -> {
+                when (
+                    val validation = AuthInputPolicy.validatePassword(
+                        rawPassword = newPassword,
+                        normalizedUsername = currentUsername?.let(AuthInputPolicy::normalizeUsername).orEmpty(),
+                        nickname = currentNickname
+                    )
+                ) {
+                    is ValidationResult.Invalid -> ProfileValidation.Invalid(validation.message)
+                    is ValidationResult.Valid -> ProfileValidation.Valid(
+                        ValidatedPasswordChange(
+                            oldPassword = currentPassword,
+                            newPassword = validation.value
+                        )
+                    )
+                }
+            }
         }
     }
 
-    /** 숫자 입력 칸에는 숫자와 소수점만 남기도록 정리합니다. */
     fun sanitizeNumberInput(input: String): String {
         val filtered = input.filter { it.isDigit() || it == '.' }
         val dotIndex = filtered.indexOf('.')
@@ -97,7 +103,6 @@ internal object ProfileInputValidator {
         return beforeDot + afterDot
     }
 
-    /** 0보다 큰 숫자만 허용되는 입력값을 검증합니다. */
     private fun parsePositiveNumber(
         rawValue: String,
         fieldLabel: String
@@ -119,13 +124,11 @@ internal object ProfileInputValidator {
     }
 }
 
-/** 입력 검증 결과를 표현하는 공통 타입입니다. */
 internal sealed interface ProfileValidation<out T> {
     data class Valid<T>(val value: T) : ProfileValidation<T>
     data class Invalid(val message: String) : ProfileValidation<Nothing>
 }
 
-/** 검증을 통과한 신체 정보 입력값입니다. */
 internal data class ValidatedBodyProfile(
     val sex: ProfileSexOption,
     val heightCm: Float,
@@ -133,7 +136,6 @@ internal data class ValidatedBodyProfile(
     val wingspanCm: Float
 )
 
-/** 검증을 통과한 비밀번호 변경 입력값입니다. */
 internal data class ValidatedPasswordChange(
     val oldPassword: String,
     val newPassword: String

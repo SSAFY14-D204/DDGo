@@ -57,6 +57,7 @@ internal fun ProfileDialogScaffold(
     confirmLabel: String,
     dismissLabel: String,
     confirmTone: ProfileActionTone,
+    message: String? = null,
     isProcessing: Boolean,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -99,6 +100,16 @@ internal fun ProfileDialogScaffold(
 
                     content?.let {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp), content = it)
+                    }
+
+                    message?.takeIf { it.isNotBlank() }?.let { errorMessage ->
+                        Text(
+                            text = errorMessage,
+                            color = ProfilePalette.Danger,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
 
                     ProfileDialogActions(

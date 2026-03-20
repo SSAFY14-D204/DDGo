@@ -33,18 +33,19 @@ class AuthInterceptor @Inject constructor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
+        val path = originalRequest.url.encodedPath
         val token = runBlocking { tokenDataStore.accessToken.first() }
         val hasToken = !token.isNullOrEmpty()
 
         if (BuildConfig.DEBUG) {
             Log.d(
                 TAG,
-                "intercept: method=${originalRequest.method}, path=${originalRequest.url.encodedPath}, " +
+                "intercept: method=${originalRequest.method}, path=$path, " +
                     "hasToken=$hasToken, tokenLength=${token?.length ?: 0}"
             )
         }
 
-        val request = if (hasToken) {
+        val request = if (hasToken && !isAuthExcludedPath(path)) {
             originalRequest.newBuilder()
                 .header("Authorization", "Bearer $token")
                 .build()
@@ -96,10 +97,13 @@ class AuthInterceptor @Inject constructor(
         if (request.header(AUTH_RETRY_HEADER) != null) return false
         if (request.header("Authorization").isNullOrEmpty()) return false
 
-        val path = request.url.encodedPath
-        return path != "/api/v1/users/login" &&
-            path != "/api/v1/users/register" &&
-            path != "/api/v1/users/refresh"
+        return !isAuthExcludedPath(request.url.encodedPath)
+    }
+
+    private fun isAuthExcludedPath(path: String): Boolean {
+        return path == "/v1/users/login" ||
+            path == "/v1/users/register" ||
+            path == "/v1/users/refresh"
     }
 
     private suspend fun refreshAccessToken(): String? {
@@ -113,6 +117,7 @@ class AuthInterceptor @Inject constructor(
         }
 
         if (refreshToken.isNullOrEmpty()) {
+            tokenDataStore.clearTokensBySessionExpiry()
             return null
         }
 
@@ -133,14 +138,14 @@ class AuthInterceptor @Inject constructor(
                 )
                 refreshResponse.data.accessToken
             } else {
-                tokenDataStore.clearTokens()
+                tokenDataStore.clearTokensBySessionExpiry()
                 null
             }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) {
                 Log.e(TAG, "refreshAccessToken: refresh failed", e)
             }
-            tokenDataStore.clearTokens()
+            tokenDataStore.clearTokensBySessionExpiry()
             null
         }
     }

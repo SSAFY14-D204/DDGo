@@ -5,6 +5,7 @@ import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
 import com.ssafy.DDGo.users.dao.UserRepository;
 import com.ssafy.DDGo.users.dao.UserProfileRepository;
+import com.ssafy.DDGo.users.domain.PasswordPolicy;
 import com.ssafy.DDGo.users.domain.User;
 import com.ssafy.DDGo.users.domain.UserProfile;
 import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
@@ -41,8 +42,10 @@ public class UserService {
 
     @Transactional
     public void registerUser(UserRegisterRequest request) {
-        if (userRepository.countByUsernameIncludingDeleted(request.getUsername()) > 0) {
-            if (userRepository.existsByUsername(request.getUsername())) {
+        String normalizedUsername = request.getUsername().trim().toLowerCase(java.util.Locale.ROOT);
+
+        if (userRepository.countByUsernameIncludingDeleted(normalizedUsername) > 0) {
+            if (userRepository.existsByUsername(normalizedUsername)) {
                 throw new CustomException(ErrorCode.USER_ALREADY_EXISTS, "이미 존재하는 아이디입니다.");
             } else {
                 throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "탈퇴한 회원의 아이디는 재사용이 불가능합니다.");
@@ -57,8 +60,10 @@ public class UserService {
             }
         }
 
+        PasswordPolicy.validatePasswordRules(normalizedUsername, request.getNickname(), request.getPassword());
+
         User user = User.builder()
-                .username(request.getUsername())
+                .username(normalizedUsername)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .nickname(request.getNickname())
                 .build();
@@ -67,13 +72,18 @@ public class UserService {
     }
 
     @Transactional
-    public UserLoginResponse login(UserLoginRequest request) {
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "가입되지 않은 회원입니다."));
+    public UserLoginResponse login(UserLoginRequest request, String clientIp) {
+        String normalizedUsername = request.getUsername().trim().toLowerCase(java.util.Locale.ROOT);
+        checkLoginLimit(normalizedUsername, clientIp);
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new CustomException(ErrorCode.INVALID_PASSWORD, "비밀번호가 일치하지 않습니다.");
+        User user = userRepository.findByUsername(normalizedUsername).orElse(null);
+
+        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            handleLoginFailure(normalizedUsername, clientIp);
+            throw new CustomException(ErrorCode.INVALID_PASSWORD, "아이디 또는 비밀번호가 올바르지 않습니다.");
         }
+
+        redisTemplate.delete("LOGIN_FAIL:" + normalizedUsername + ":" + clientIp);
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 user.getUsername(), "", Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")));
@@ -155,6 +165,12 @@ public class UserService {
             throw new CustomException(ErrorCode.INVALID_PASSWORD, "기존 비밀번호가 일치하지 않습니다.");
         }
 
+        if (request.getOldPassword().equals(request.getNewPassword())) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, PasswordPolicy.SAME_AS_OLD_MESSAGE);
+        }
+
+        PasswordPolicy.validatePasswordRules(user.getUsername(), user.getNickname(), request.getNewPassword());
+
         user.updatePassword(passwordEncoder.encode(request.getNewPassword()));
 
         // 기존 모든 기기에서의 세션(Refresh Token) 무효화
@@ -225,5 +241,33 @@ public class UserService {
                 "logout",
                 expiration,
                 TimeUnit.MILLISECONDS);
+    }
+
+    private void handleLoginFailure(String username, String clientIp) {
+        String userIpKey = "LOGIN_FAIL:" + username + ":" + clientIp;
+        String ipKey = "LOGIN_FAIL_IP:" + clientIp;
+
+        incrementFailCount(userIpKey, 15, TimeUnit.MINUTES);
+        incrementFailCount(ipKey, 15, TimeUnit.MINUTES);
+    }
+
+    private void incrementFailCount(String key, long timeout, TimeUnit unit) {
+        String val = redisTemplate.opsForValue().get(key);
+        int count = val == null ? 1 : Integer.parseInt(val) + 1;
+        redisTemplate.opsForValue().set(key, String.valueOf(count), timeout, unit);
+    }
+
+    private void checkLoginLimit(String username, String clientIp) {
+        String ipKey = "LOGIN_FAIL_IP:" + clientIp;
+        String ipVal = redisTemplate.opsForValue().get(ipKey);
+        if (ipVal != null && Integer.parseInt(ipVal) >= 20) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "비정상적인 로그인 요청이 감지되어 IP 접속이 15분간 제한됩니다.");
+        }
+
+        String userIpKey = "LOGIN_FAIL:" + username + ":" + clientIp;
+        String userIpVal = redisTemplate.opsForValue().get(userIpKey);
+        if (userIpVal != null && Integer.parseInt(userIpVal) >= 5) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "5회 이상 로그인에 실패하여 임시 잠금 처리되었습니다. 15분 후 다시 시도해주세요.");
+        }
     }
 }

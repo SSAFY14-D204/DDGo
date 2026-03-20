@@ -37,10 +37,12 @@ class TokenAuthenticator @Inject constructor(
 ) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
+        val path = response.request.url.encodedPath
+
         if (BuildConfig.DEBUG) {
             Log.d(
                 TAG,
-                "authenticate: code=${response.code}, path=${response.request.url.encodedPath}"
+                "authenticate: code=${response.code}, path=$path"
             )
         }
 
@@ -48,6 +50,20 @@ class TokenAuthenticator @Inject constructor(
         if (response.priorResponse?.code == 401) {
             if (BuildConfig.DEBUG) {
                 Log.d(TAG, "authenticate: prior 401 exists, skip retry")
+            }
+            return null
+        }
+
+        if (response.request.header("Authorization").isNullOrEmpty()) {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "authenticate: no Authorization header, skip refresh")
+            }
+            return null
+        }
+
+        if (isAuthExcludedPath(path)) {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "authenticate: auth endpoint response, skip refresh")
             }
             return null
         }
@@ -62,7 +78,10 @@ class TokenAuthenticator @Inject constructor(
         }
 
         // RefreshToken 없으면 로그인 화면으로 보내야 함 (재시도 없음)
-        if (refreshToken.isNullOrEmpty()) return null
+        if (refreshToken.isNullOrEmpty()) {
+            runBlocking { tokenDataStore.clearTokensBySessionExpiry() }
+            return null
+        }
 
         return runBlocking {
             try {
@@ -90,7 +109,7 @@ class TokenAuthenticator @Inject constructor(
                     if (BuildConfig.DEBUG) {
                         Log.d(TAG, "authenticate: refresh failed, clear tokens")
                     }
-                    tokenDataStore.clearTokens()
+                    tokenDataStore.clearTokensBySessionExpiry()
                     null
                 }
             } catch (e: Exception) {
@@ -98,9 +117,15 @@ class TokenAuthenticator @Inject constructor(
                 if (BuildConfig.DEBUG) {
                     Log.e(TAG, "authenticate: refresh exception", e)
                 }
-                tokenDataStore.clearTokens()
+                tokenDataStore.clearTokensBySessionExpiry()
                 null
             }
         }
+    }
+
+    private fun isAuthExcludedPath(path: String): Boolean {
+        return path == "/v1/users/login" ||
+            path == "/v1/users/register" ||
+            path == "/v1/users/refresh"
     }
 }
