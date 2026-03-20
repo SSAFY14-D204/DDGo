@@ -36,6 +36,7 @@ sealed class ScreenRoutes(val route: String) {
             const val ATTEMPT_UPLOAD = "attempt_upload"
             const val CHALLENGE_CREATE = "challenge_create"
             const val CHALLENGE_COLOR = "challenge_color"
+            const val DEV_IMAGE_PICKER = "dev_image_picker"
             const val CHALLENGE_HOLD = "challenge_hold"
             const val ADDITIONAL_UPLOAD = "additional_upload"
             const val HOLD_SELECT = "hold_select"

@@ -2,6 +2,7 @@ package com.ddgo.app.feature.climbing.upload
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
@@ -95,6 +96,11 @@ private data class AttemptPoseAnalysis(
     val poseSequenceDto: PoseSequenceDto,
     val poses: List<Pose>,
     val polygonHoldContactDebugResult: PolygonHoldContactDebugResult
+)
+
+private data class HoldDetectionFrameResult(
+    val allHolds: List<Hold>,
+    val filteredHolds: List<Hold>
 )
 
 @HiltViewModel
@@ -275,6 +281,10 @@ class UploadViewModel @Inject constructor(
     // --- 3. ChallengeHoldScreen (홀드 탐지 결과) ---
     /** PersonDetector가 선택한 최적 프레임 (홀드 탐지에 사용된 실제 이미지) */
     var bestFrameBitmap by mutableStateOf<Bitmap?>(null)
+        private set
+
+    /** 디버그용으로 수동 선택한 best frame 이미지 URI */
+    var debugBestFrameImageUri by mutableStateOf<String?>(null)
         private set
 
     /** YOLO가 탐지한 전체 홀드 (색상 필터링 전). 수동 추가 후보 풀로 사용 */
@@ -526,6 +536,7 @@ class UploadViewModel @Inject constructor(
     fun beginNewChallengeUploadFlow() {
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
+        debugBestFrameImageUri = null
         resetAllSelectionPreparationJobs()
         attemptOnlyVideoUris = emptyList()
         additionalVideoUris = emptyList()
@@ -571,6 +582,7 @@ class UploadViewModel @Inject constructor(
         captureCurrentAttemptResultSession()
         uploadFlowMode = UploadFlowMode.AttemptOnly
         allowLocalAnalysisWithoutChallenge = false
+        debugBestFrameImageUri = null
         resetAllSelectionPreparationJobs()
         attemptOnlyVideoUris = emptyList()
         attemptOnlyManagedVideos = emptyList()
@@ -604,6 +616,7 @@ class UploadViewModel @Inject constructor(
         )
         uploadFlowMode = UploadFlowMode.AttemptOnly
         allowLocalAnalysisWithoutChallenge = false
+        debugBestFrameImageUri = null
         resetAllSelectionPreparationJobs()
         videoUri = null
         primaryManagedVideo = null
@@ -629,6 +642,7 @@ class UploadViewModel @Inject constructor(
     fun cancelAttemptOnlyUploadMode() {
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
+        debugBestFrameImageUri = null
         resetAllSelectionPreparationJobs()
         attemptOnlyVideoUris = emptyList()
         attemptOnlyManagedVideos = emptyList()
@@ -668,6 +682,7 @@ class UploadViewModel @Inject constructor(
     fun updateVideoUri(uri: String) {
         val generation = beginSelectionUpdate()
         uploadFlowMode = UploadFlowMode.FullChallenge
+        debugBestFrameImageUri = null
         attemptOnlyVideoUris = emptyList()
         attemptOnlyManagedVideos = emptyList()
         additionalManagedVideos = emptyList()
@@ -697,6 +712,17 @@ class UploadViewModel @Inject constructor(
                 extractVideoMetadata(Uri.parse(managedVideo.playbackUri))
             }
         }
+    }
+
+    fun useDebugBestFrameImage(uri: String) {
+        debugBestFrameImageUri = uri
+        bestFrameBitmap = null
+        allRawHolds = emptyList()
+        detectedHolds = emptyList()
+        candidateHolds = emptyList()
+        showCandidatePopup = false
+        clearSelectedHoldSelection()
+        _uiState.value = UploadUiState.Idle
     }
 
     /** 선택한 URI를 분석/재생용 managed video로 정규화합니다. */
@@ -1548,11 +1574,15 @@ class UploadViewModel @Inject constructor(
     // ====== 비즈니스 로직 ======
 
     /**
-     * PersonDetector → 최적 프레임 탐색 → HoldDetector → 홀드 탐지 전체 파이프라인.
+     * PersonDetector 기반 최적 프레임 탐색 또는 디버그 이미지 선택 후
+     * HoldDetector → 색상 필터링까지 수행하는 전체 파이프라인.
      */
     fun runHoldDetection() {
-        val uri = videoUri ?: run {
-            Log.e(TAG, "❌ videoUri 없음 - 홀드 탐지 불가")
+        val debugImageUri = debugBestFrameImageUri
+        val sourceVideoUri = videoUri
+
+        if (debugImageUri == null && sourceVideoUri == null) {
+            Log.e(TAG, "❌ videoUri/debugBestFrameImageUri 없음 - 홀드 탐지 불가")
             _uiState.value = UploadUiState.Error("영상을 먼저 선택해주세요.")
             return
         }
@@ -1562,48 +1592,36 @@ class UploadViewModel @Inject constructor(
 
             runCatching {
                 withContext(Dispatchers.IO) {
-                    Log.d(TAG, "▶ [1/3] PersonDetector 시작")
-                    val bestTimeUs = personDetector.findBestFrameTime(uri)
-                    Log.d(TAG, "✅ [1/3] 최적 프레임: ${bestTimeUs / 1000}ms")
-
-                    Log.d(TAG, "▶ [2/3] 프레임 추출 시작 (PTS=${bestTimeUs / 1000}ms, uri=${uri})")
-                    val retriever = FFmpegMediaMetadataRetriever()
-                    val bitmap = try {
-                        val parsedUri = Uri.parse(uri)
-                        if (!setRetrieverDataSource(retriever, parsedUri)) {
-                            throw IllegalStateException("setDataSource 실패 (scheme=${parsedUri.scheme})")
-                        }
-                        retriever.getFrameAtTime(
-                            bestTimeUs,
-                            FFmpegMediaMetadataRetriever.OPTION_CLOSEST
-                        ) ?: throw IllegalStateException("getFrameAtTime 반환 null (PTS=${bestTimeUs / 1000}ms)")
-                    } finally {
-                        retriever.release()
-                    }
-                    Log.d(TAG, "✅ [2/3] 프레임 추출 성공 (${bitmap.width}x${bitmap.height})")
-
-                    Log.d(TAG, "▶ [3/4] HoldDetector 시작")
-                    val rawHolds = holdDetector.detectFromFrame(bitmap)
-                    Log.d(TAG, "✅ [3/4] 홀드 탐지 완료: ${rawHolds.size}개")
-
-                    // 전체 홀드에 색상 분류 적용 (수동 추가 후보 풀용)
-                    val classifiedAll = rawHolds.map { holdColorClassifier.classifySingle(bitmap, it) }
-
-                    val detectionTargetColor = resolveDetectionTargetHoldColor()
-                    Log.d(TAG, "▶ [4/4] 색상 필터링 시작 (목표 색: '$detectionTargetColor')")
-                    val holds = if (detectionTargetColor.isBlank()) {
-                        holdColorClassifier.classifyAll(bitmap, rawHolds)
+                    val bitmap = if (debugImageUri != null) {
+                        Log.d(TAG, "▶ [DEBUG] 선택한 이미지를 best frame으로 사용: uri=$debugImageUri")
+                        loadBitmapFromUri(Uri.parse(debugImageUri))
                     } else {
-                        holdColorClassifier.classifyAndFilter(
-                            bitmap          = bitmap,
-                            holds           = rawHolds,
-                            targetColorName = detectionTargetColor,
-                            scoreThreshold  = 0.25f
-                        )
-                    }
-                    Log.d(TAG, "✅ [4/4] 색상 필터 완료: ${rawHolds.size}개 → ${holds.size}개")
+                        val uri = sourceVideoUri
+                            ?: throw IllegalStateException("videoUri 없음")
 
-                    Triple(bitmap, classifiedAll, holds)
+                        Log.d(TAG, "▶ [1/3] PersonDetector 시작")
+                        val bestTimeUs = personDetector.findBestFrameTime(uri)
+                        Log.d(TAG, "✅ [1/3] 최적 프레임: ${bestTimeUs / 1000}ms")
+
+                        Log.d(TAG, "▶ [2/3] 프레임 추출 시작 (PTS=${bestTimeUs / 1000}ms, uri=$uri)")
+                        val retriever = FFmpegMediaMetadataRetriever()
+                        try {
+                            val parsedUri = Uri.parse(uri)
+                            if (!setRetrieverDataSource(retriever, parsedUri)) {
+                                throw IllegalStateException("setDataSource 실패 (scheme=${parsedUri.scheme})")
+                            }
+                            retriever.getFrameAtTime(
+                                bestTimeUs,
+                                FFmpegMediaMetadataRetriever.OPTION_CLOSEST
+                            ) ?: throw IllegalStateException("getFrameAtTime 반환 null (PTS=${bestTimeUs / 1000}ms)")
+                        } finally {
+                            retriever.release()
+                        }
+                    }
+                    Log.d(TAG, "✅ best frame 준비 성공 (${bitmap.width}x${bitmap.height})")
+
+                    val detectionResult = detectHoldsFromBestFrame(bitmap)
+                    Triple(bitmap, detectionResult.allHolds, detectionResult.filteredHolds)
                 }
             }.onSuccess { (bitmap, allHolds, filteredHolds) ->
                 bestFrameBitmap = bitmap
@@ -1616,6 +1634,47 @@ class UploadViewModel @Inject constructor(
                 _uiState.value = UploadUiState.Error(e.message ?: "홀드 탐지 중 오류가 발생했습니다.")
             }
         }
+    }
+
+    private fun loadBitmapFromUri(uri: Uri): Bitmap {
+        if (uri.scheme == "file") {
+            return BitmapFactory.decodeFile(uri.path)
+                ?: throw IllegalStateException("선택한 이미지를 읽을 수 없습니다.")
+        }
+
+        val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input)
+        }
+
+        return bitmap ?: throw IllegalStateException("선택한 이미지를 읽을 수 없습니다.")
+    }
+
+    private suspend fun detectHoldsFromBestFrame(bitmap: Bitmap): HoldDetectionFrameResult {
+        Log.d(TAG, "▶ [3/4] HoldDetector 시작")
+        val rawHolds = holdDetector.detectFromFrame(bitmap)
+        Log.d(TAG, "✅ [3/4] 홀드 탐지 완료: ${rawHolds.size}개")
+
+        // 전체 홀드에 색상 분류 적용 (수동 추가 후보 풀용)
+        val classifiedAll = rawHolds.map { holdColorClassifier.classifySingle(bitmap, it) }
+
+        val detectionTargetColor = resolveDetectionTargetHoldColor()
+        Log.d(TAG, "▶ [4/4] 색상 필터링 시작 (목표 색: '$detectionTargetColor')")
+        val filteredHolds = if (detectionTargetColor.isBlank()) {
+            holdColorClassifier.classifyAll(bitmap, rawHolds)
+        } else {
+            holdColorClassifier.classifyAndFilter(
+                bitmap = bitmap,
+                holds = rawHolds,
+                targetColorName = detectionTargetColor,
+                scoreThreshold = 0.25f
+            )
+        }
+        Log.d(TAG, "✅ [4/4] 색상 필터 완료: ${rawHolds.size}개 → ${filteredHolds.size}개")
+
+        return HoldDetectionFrameResult(
+            allHolds = classifiedAll,
+            filteredHolds = filteredHolds
+        )
     }
 
     /**

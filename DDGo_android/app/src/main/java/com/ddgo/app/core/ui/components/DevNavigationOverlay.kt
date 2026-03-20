@@ -145,6 +145,7 @@ private val devRoutes = listOf(
     DevRoute("1. 영상 선택", ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD),
     DevRoute("2. 챌린지 생성", ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE),
     DevRoute("2-1. 색상 선택", ScreenRoutes.Climbing.Upload.CHALLENGE_COLOR),
+    DevRoute("dev.이미지 선택", ScreenRoutes.Climbing.Upload.DEV_IMAGE_PICKER),
     DevRoute("3. 홀드 탐지", ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD),
     DevRoute("3-1. 추가 업로드", ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD),
     DevRoute("4. 홀드 선택", ScreenRoutes.Climbing.Upload.HOLD_SELECT),
@@ -161,7 +162,7 @@ private val sectionLabels = mapOf(
     0 to "Auth",
     5 to "Main",
     6 to "Upload Flow",
-    16 to "Record",
+    17 to "Record",
 )
 
 @Composable

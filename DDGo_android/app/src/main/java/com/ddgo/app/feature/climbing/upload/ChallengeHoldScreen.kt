@@ -82,6 +82,7 @@ fun ChallengeHoldScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val videoUri = viewModel.videoUri
+    val debugBestFrameImageUri = viewModel.debugBestFrameImageUri
     var showDialog by remember { mutableStateOf(false) }
 
     if (showDialog) {
@@ -130,8 +131,10 @@ fun ChallengeHoldScreen(
         )
     }
 
-    LaunchedEffect(videoUri) {
-        if (videoUri != null) viewModel.runHoldDetection()
+    LaunchedEffect(videoUri, debugBestFrameImageUri) {
+        if (videoUri != null || debugBestFrameImageUri != null) {
+            viewModel.runHoldDetection()
+        }
     }
 
     Box(
