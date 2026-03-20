@@ -21,17 +21,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ddgo.app.feature.climbing.upload.AnalysisAttemptSummary
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
 import com.ddgo.app.feature.climbing.upload.AnalysisSuccess
 import com.ddgo.app.feature.climbing.upload.AnalysisText
+import com.ddgo.app.feature.climbing.upload.FinalAnalysisAttemptSummary
 
 @Composable
 internal fun FailureCausePanel(
-    summary: AnalysisAttemptSummary,
+    summary: FinalAnalysisAttemptSummary,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -69,7 +69,7 @@ internal fun FailureCausePanel(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (summary.analysisPoints.isEmpty()) {
                     Text(
-                        text = "현재 시도에는 분석 포인트가 아직 없어요.",
+                        text = "아직 이 시도에 대한 AI 분석 포인트가 없어요.",
                         color = AnalysisMuted,
                         fontSize = 14.sp
                     )
@@ -99,11 +99,7 @@ internal fun FailureCausePanel(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = if (summary.isSuccess) {
-                "완등한 시도이지만 반복해서 잘 먹힌 리듬을 다음 시도에도 유지해보세요."
-            } else {
-                "같은 포인트에서 반복해서 흔들리면 미션 탭의 교정 포인트를 먼저 적용하는 편이 좋습니다."
-            },
+            text = summary.failureNarrative,
             color = AnalysisMuted,
             fontSize = 14.sp,
             lineHeight = 22.sp

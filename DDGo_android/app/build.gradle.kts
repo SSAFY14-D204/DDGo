@@ -39,7 +39,7 @@ android {
         buildConfigField(
             "String",
             "AI_SERVER_BASE_URL",
-            "\"${localProperties.getProperty("ai.server.base.url") ?: "http://10.0.2.2:8000/"}\""
+            "\"${localProperties.getProperty("ai.server.base.url") ?: "https://j14d204.p.ssafy.io/ai/"}\""
         )
 
         // 카카오맵 API 환경변수 주입

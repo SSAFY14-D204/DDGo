@@ -17,15 +17,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ddgo.app.feature.climbing.upload.AnalysisAttemptSummary
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
 import com.ddgo.app.feature.climbing.upload.AnalysisText
+import com.ddgo.app.feature.climbing.upload.FinalAnalysisAttemptSummary
 import com.ddgo.app.feature.climbing.upload.StabilityLineChart
 
 @Composable
 internal fun StabilityPanel(
-    currentSummary: AnalysisAttemptSummary,
+    currentSummary: FinalAnalysisAttemptSummary,
     timeline: List<Float>,
     focusFraction: Float?,
     modifier: Modifier = Modifier
@@ -40,13 +40,13 @@ internal fun StabilityPanel(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             DetailStatCard(
-                title = "현재 시도 안정도",
-                value = "${currentSummary.balanceRatio}%",
+                title = "지지면 내부 비율",
+                value = currentSummary.insideSupportRatioText,
                 modifier = Modifier.weight(1f)
             )
             DetailStatCard(
-                title = "분석 포인트",
-                value = "${currentSummary.analysisPoints.size}개",
+                title = "안정 접촉 비율",
+                value = currentSummary.stableContactRatioText,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -62,7 +62,7 @@ internal fun StabilityPanel(
         ) {
             Column {
                 Text(
-                    text = "시도 흐름",
+                    text = "안정성 흐름",
                     color = AnalysisText,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
@@ -81,11 +81,7 @@ internal fun StabilityPanel(
         Spacer(modifier = Modifier.height(18.dp))
 
         Text(
-            text = if (currentSummary.isSuccess) {
-                "선택한 시도는 후반 안정도가 평균보다 높고 마지막 동작의 흔들림이 적었습니다."
-            } else {
-                "선택한 시도는 중반 이후 급격한 흔들림이 커졌습니다. 실패 원인 탭에서 해당 포인트를 확인해보세요."
-            },
+            text = currentSummary.stabilityNarrative,
             color = AnalysisMuted,
             fontSize = 14.sp,
             lineHeight = 22.sp

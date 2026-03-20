@@ -1,21 +1,23 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.route
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.feature.climbing.upload.DefaultFinalAnalysisTimeline
+import com.ddgo.app.feature.climbing.upload.FinalAnalysisUnknownMetricText
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
-import com.ddgo.app.feature.climbing.upload.buildAttemptSummaries
+import com.ddgo.app.feature.climbing.upload.buildFinalAnalysisAttemptSummaries
 import com.ddgo.app.feature.climbing.upload.formatAnalysisDate
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPage
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPageState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisTab
-import com.ddgo.app.domain.usecase.AttemptHoldReachResult
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 @Composable
@@ -24,20 +26,25 @@ fun FinalAnalysisRoute(
     onNavigateBack: () -> Unit = {},
     onNavigateToMain: () -> Unit = {}
 ) {
-    val totalHolds = viewModel.totalSelectedHoldCount.takeIf { it > 0 } ?: 14
-    val attemptResults = viewModel.attemptPresentationResults
+    val totalHolds = viewModel.totalSelectedHoldCount
+        .takeIf { it > 0 }
+        ?: viewModel.detectedHolds.size.takeIf { it > 0 }
+        ?: 0
+    val attemptCount = max(
+        viewModel.playbackAttemptUris.size,
+        viewModel.attemptAiAnalysisResults.size
+    ).coerceAtLeast(1)
     val attemptSummaries = remember(
-        attemptResults,
+        attemptCount,
         totalHolds,
-        viewModel.attemptHoldReachResults
+        viewModel.attemptAiAnalysisResults
     ) {
-        buildAttemptSummaries(
-            attemptResults = attemptResults,
+        buildFinalAnalysisAttemptSummaries(
+            attemptCount = attemptCount,
             totalHolds = totalHolds,
-            holdReachResults = viewModel.attemptHoldReachResults
+            aiResults = viewModel.attemptAiAnalysisResults
         )
     }
-    val attemptCount = attemptSummaries.size.coerceAtLeast(1)
 
     var selectedAttempt by rememberSaveable(attemptCount) {
         mutableIntStateOf(attemptCount)
@@ -48,37 +55,50 @@ fun FinalAnalysisRoute(
 
     val safeSelectedAttempt = selectedAttempt.coerceIn(1, attemptCount)
     val currentSummary = attemptSummaries[(safeSelectedAttempt - 1).coerceIn(0, attemptSummaries.lastIndex)]
-    val averageReachedHolds = remember(viewModel.attemptHoldReachResults, attemptSummaries) {
-        if (viewModel.attemptHoldReachResults.isNotEmpty()) {
-            viewModel.attemptHoldReachResults
-                .map(AttemptHoldReachResult::highestReachedHoldNo)
-                .average()
-                .roundToInt()
+    val averageReachedHoldsText = remember(attemptSummaries) {
+        val values = attemptSummaries.mapNotNull { it.reachedHolds }
+        if (values.isEmpty()) {
+            FinalAnalysisUnknownMetricText
         } else {
-            attemptSummaries.map { it.reachedHolds }.average().roundToInt()
+            values.average().roundToInt().toString()
         }
     }
-    val averageBalanceRatio = remember(attemptSummaries) {
-        attemptSummaries.map { it.balanceRatio }.average().roundToInt()
-    }
-    val overallSuccess = remember(viewModel.attemptHoldReachResults, attemptSummaries, totalHolds) {
-        if (viewModel.attemptHoldReachResults.isNotEmpty()) {
-            viewModel.attemptHoldReachResults.any { it.highestReachedHoldNo >= totalHolds }
+    val averageReachedHoldsSuffix = remember(averageReachedHoldsText, totalHolds) {
+        if (averageReachedHoldsText == FinalAnalysisUnknownMetricText || totalHolds <= 0) {
+            null
         } else {
-            attemptSummaries.any { it.isSuccess }
+            "/$totalHolds"
         }
+    }
+    val averageInsideSupportRatioText = remember(attemptSummaries) {
+        val values = attemptSummaries.mapNotNull { it.insideSupportRatio }
+        if (values.isEmpty()) {
+            FinalAnalysisUnknownMetricText
+        } else {
+            "${values.average().roundToInt()}%"
+        }
+    }
+    val overallSuccess = remember(attemptSummaries) {
+        attemptSummaries.any { it.isSuccess }
     }
     val combinedTimeline = remember(attemptSummaries) {
-        val maxLength = attemptSummaries.maxOfOrNull { it.stabilityTimeline.size } ?: 0
+        val aiTimelines = attemptSummaries
+            .filter { it.hasAiResult }
+            .map { it.stabilityTimeline }
+            .filter { it.isNotEmpty() }
+        val maxLength = aiTimelines.maxOfOrNull { it.size } ?: 0
+        if (maxLength == 0) {
+            return@remember DefaultFinalAnalysisTimeline
+        }
         List(maxLength) { index ->
-            attemptSummaries.map { summary ->
-                summary.stabilityTimeline.getOrElse(index) {
-                    summary.stabilityTimeline.lastOrNull() ?: 0.5f
+            aiTimelines.map { timeline ->
+                timeline.getOrElse(index) {
+                    timeline.lastOrNull() ?: 0.5f
                 }
             }.average().toFloat()
         }
     }
-    val focusFraction = remember(safeSelectedAttempt, attemptCount) {
+    val statsFocusFraction = remember(safeSelectedAttempt, attemptCount) {
         if (attemptCount <= 1) {
             null
         } else {
@@ -99,11 +119,11 @@ fun FinalAnalysisRoute(
         attemptCount,
         currentSummary,
         overallSuccess,
-        averageReachedHolds,
-        totalHolds,
-        averageBalanceRatio,
+        averageReachedHoldsText,
+        averageReachedHoldsSuffix,
+        averageInsideSupportRatioText,
         combinedTimeline,
-        focusFraction
+        statsFocusFraction
     ) {
         FinalAnalysisPageState(
             heroState = AttemptPreviewHeroState(
@@ -113,6 +133,8 @@ fun FinalAnalysisRoute(
                 holdColorLabel = viewModel.holdColor,
                 selectedAttempt = safeSelectedAttempt,
                 isSuccess = currentSummary.isSuccess,
+                analysisModeLabel = currentSummary.effectiveModeLabel.takeIf { it.isNotBlank() },
+                fallbackLabel = currentSummary.fallbackLabel,
                 previewBitmap = viewModel.bestFrameBitmap,
                 previewHolds = viewModel.detectedHolds
             ),
@@ -120,15 +142,15 @@ fun FinalAnalysisRoute(
             totalAttempts = attemptCount,
             currentSummary = currentSummary,
             overallSuccess = overallSuccess,
-            averageReachedHolds = averageReachedHolds,
-            totalHolds = totalHolds,
-            averageBalanceRatio = averageBalanceRatio,
+            averageReachedHoldsText = averageReachedHoldsText,
+            averageReachedHoldsSuffix = averageReachedHoldsSuffix,
+            averageInsideSupportRatioText = averageInsideSupportRatioText,
             combinedTimeline = combinedTimeline,
-            focusFraction = focusFraction,
+            statsFocusFraction = statsFocusFraction,
             actionText = if (attemptCount > 1 && safeSelectedAttempt < attemptCount) {
-                "다음 시도들과 비교분석 하기"
+                "다음 시도"
             } else {
-                "분석 완료"
+                "홈으로"
             }
         )
     }

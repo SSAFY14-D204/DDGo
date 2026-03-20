@@ -23,11 +23,15 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
 
 class AiAnalysisRepositoryImplTest {
 
@@ -108,11 +112,86 @@ class AiAnalysisRepositoryImplTest {
         )
     }
 
+    @Test
+    fun `large payload is sampled before request body is built`() = runBlocking {
+        val api = FakeAiAnalysisApi()
+        val repository = AiAnalysisRepositoryImpl(api)
+
+        repository.analyze(
+            sampleContext(
+                mode = AiAnalysisMode.FAST,
+                frameCount = 240,
+                frameStep = 2
+            )
+        ).getOrThrow()
+
+        val request = requireNotNull(api.lastFastRequest)
+        val frames = request.pose3dSequenceJson.getArray("frames")
+        val metadata = request.pose3dSequenceJson.getObject("video_metadata")
+
+        assertEquals(4, request.frameStep)
+        assertEquals(60, frames.size)
+        assertEquals(60, metadata.getInt("processed_frames"))
+    }
+
+    @Test
+    fun `invalid pose frames are removed before request is sent`() = runBlocking {
+        val api = FakeAiAnalysisApi()
+        val repository = AiAnalysisRepositoryImpl(api)
+
+        repository.analyze(
+            sampleContext(
+                mode = AiAnalysisMode.FAST,
+                frameCount = 4,
+                frameStep = 1,
+                invalidFrameIndexes = setOf(0, 2)
+            )
+        ).getOrThrow()
+
+        val request = requireNotNull(api.lastFastRequest)
+        val frames = request.pose3dSequenceJson.getArray("frames")
+        val metadata = request.pose3dSequenceJson.getObject("video_metadata")
+
+        assertEquals(2, frames.size)
+        assertEquals(2, metadata.getInt("processed_frames"))
+        assertEquals(1, frames[0].jsonObject.getInt("frame_index"))
+        assertEquals(3, frames[1].jsonObject.getInt("frame_index"))
+    }
+
+    @Test
+    fun `request entity too large retries with fewer sampled frames`() = runBlocking {
+        val api = FakeAiAnalysisApi().apply {
+            enqueueFastFailure(requestEntityTooLargeException())
+        }
+        val repository = AiAnalysisRepositoryImpl(api)
+
+        val result = repository.analyze(
+            sampleContext(
+                mode = AiAnalysisMode.FAST,
+                frameCount = 200,
+                frameStep = 2
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(2, api.fastCallCount)
+        assertEquals(2, api.fastRequests.size)
+        assertEquals(4, api.fastRequests[0].frameStep)
+        assertEquals(6, api.fastRequests[1].frameStep)
+        assertTrue(
+            api.fastRequests[1].pose3dSequenceJson.getArray("frames").size <
+                api.fastRequests[0].pose3dSequenceJson.getArray("frames").size
+        )
+    }
+
     private fun sampleContext(
         mode: AiAnalysisMode,
         heightCm: Float = 180f,
         weightKg: Float? = null,
-        wingspanCm: Float? = null
+        wingspanCm: Float? = null,
+        frameCount: Int = 1,
+        frameStep: Int = 2,
+        invalidFrameIndexes: Set<Int> = emptySet()
     ): AiAnalysisRequestContext {
         return AiAnalysisRequestContext(
             mode = mode,
@@ -143,37 +222,28 @@ class AiAnalysisRepositoryImplTest {
                     frameWidth = 1920,
                     frameHeight = 1080,
                     fps = 30f,
-                    totalFrames = 120,
-                    processedFrames = 60,
+                    totalFrames = frameCount,
+                    processedFrames = frameCount,
                     analysisFpsLimit = 10
                 ),
-                frames = listOf(
+                frames = List(frameCount) { frameIndex ->
+                    val isInvalidFrame = frameIndex in invalidFrameIndexes
                     AiPoseFrame(
-                        frameIndex = 0,
-                        timestampMs = 1234L,
-                        poseDetected = true,
-                        poseLandmarks = listOf(
-                            AiLandmark3D(
-                                index = 0,
-                                x = 0.1f,
-                                y = 0.2f,
-                                z = 0.3f,
-                                visibility = 0.9f,
-                                presence = 0.8f
-                            )
-                        ),
-                        poseWorldLandmarks = listOf(
-                            AiLandmark3D(
-                                index = 0,
-                                x = 1.1f,
-                                y = 1.2f,
-                                z = 1.3f,
-                                visibility = 0.7f,
-                                presence = 0.6f
-                            )
-                        )
+                        frameIndex = frameIndex,
+                        timestampMs = 1234L + (frameIndex * 33L),
+                        poseDetected = !isInvalidFrame,
+                        poseLandmarks = if (isInvalidFrame) {
+                            emptyList()
+                        } else {
+                            sampleLandmarks(offset = 0f)
+                        },
+                        poseWorldLandmarks = if (isInvalidFrame) {
+                            emptyList()
+                        } else {
+                            sampleLandmarks(offset = 1f)
+                        }
                     )
-                )
+                }
             ),
             frameWidthPx = 1000,
             frameHeightPx = 500,
@@ -181,7 +251,7 @@ class AiAnalysisRepositoryImplTest {
             weightKg = weightKg,
             wingspanCm = wingspanCm,
             topKCrux = 3,
-            frameStep = 2
+            frameStep = frameStep
         )
     }
 
@@ -190,10 +260,20 @@ class AiAnalysisRepositoryImplTest {
         var physicsCallCount = 0
         var lastFastRequest: AiAnalysisRequestDto? = null
         var lastPhysicsRequest: AiAnalysisRequestDto? = null
+        val fastRequests = mutableListOf<AiAnalysisRequestDto>()
+        private val fastFailures = ArrayDeque<Throwable>()
+
+        fun enqueueFastFailure(throwable: Throwable) {
+            fastFailures.addLast(throwable)
+        }
 
         override suspend fun analyzeFast(request: AiAnalysisRequestDto): AiAnalysisResponseDto {
             fastCallCount += 1
             lastFastRequest = request
+            fastRequests += request
+            if (fastFailures.isNotEmpty()) {
+                throw fastFailures.removeFirst()
+            }
             return successResponse(mode = "fast", includePhysicsPayload = false)
         }
 
@@ -202,6 +282,19 @@ class AiAnalysisRepositoryImplTest {
             lastPhysicsRequest = request
             return successResponse(mode = "physics", includePhysicsPayload = true)
         }
+    }
+}
+
+private fun sampleLandmarks(offset: Float): List<AiLandmark3D> {
+    return List(33) { index ->
+        AiLandmark3D(
+            index = index,
+            x = offset + (index * 0.01f),
+            y = offset + (index * 0.02f),
+            z = offset + (index * 0.03f),
+            visibility = 0.9f,
+            presence = 0.8f
+        )
     }
 }
 
@@ -266,3 +359,13 @@ private fun JsonObject.getInt(key: String): Int = getValue(key).jsonPrimitive.in
 private fun JsonObject.getObject(key: String): JsonObject = getValue(key).jsonObject
 
 private fun JsonObject.getString(key: String): String = getValue(key).jsonPrimitive.content
+
+private fun requestEntityTooLargeException(): HttpException {
+    return HttpException(
+        Response.error<AiAnalysisResponseDto>(
+            413,
+            "<html><body>413 Request Entity Too Large</body></html>"
+                .toResponseBody("text/html".toMediaType())
+        )
+    )
+}
