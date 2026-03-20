@@ -142,6 +142,71 @@ class UploadViewModelTest {
     }
 
     @Test
+    fun `submitUpload ignores duplicate calls while loading`() = runTest {
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        val saveChallengeHoldsUseCase = mockk<SaveChallengeHoldsUseCase>(relaxed = true)
+        val uploadAttemptVideoUseCase = mockk<UploadAttemptVideoUseCase>(relaxed = true)
+        val endAttemptUseCase = mockk<EndAttemptUseCase>(relaxed = true)
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = listOf(
+                poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)),
+                poseAt(500L, handLandmark(index = 20, x = 0.62f, y = 0.34f))
+            ),
+            processedFrames = listOf(
+                processedFrame(0L, true),
+                processedFrame(100L, true),
+                processedFrame(200L, true)
+            )
+        )
+
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            saveChallengeHoldsUseCase = saveChallengeHoldsUseCase,
+            uploadAttemptVideoUseCase = uploadAttemptVideoUseCase,
+            endAttemptUseCase = endAttemptUseCase
+        )
+
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(false)
+        setPrivateField(viewModel, "challengeId", 42L)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true))
+        setPrivateField(
+            viewModel,
+            "detectedHolds",
+            listOf(
+                hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1),
+                hold(centerX = 0.62f, centerY = 0.34f, holdNo = 2)
+            )
+        )
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(
+                numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START),
+                numberedHold(holdNo = 2, centerX = 0.62f, centerY = 0.34f, role = HoldRole.END)
+            )
+        )
+        setPrivateField(viewModel, "videoUri", "file:///duplicate_submit.mp4")
+        setPrivateField(
+            viewModel,
+            "_uploadSubmissionUiState",
+            UploadSubmissionUiState.Loading("이미 제출 중입니다.")
+        )
+
+        viewModel.submitUpload()
+        viewModel.submitUpload()
+
+        assertEquals(
+            UploadSubmissionUiState.Loading("이미 제출 중입니다."),
+            viewModel.uploadSubmissionUiState.value
+        )
+        coVerify(exactly = 0) { saveChallengeHoldsUseCase.invoke(any(), any()) }
+        coVerify(exactly = 0) { uploadAttemptVideoUseCase.invoke(any(), any()) }
+        coVerify(exactly = 0) { endAttemptUseCase.invoke(any(), any(), any()) }
+    }
+
+    @Test
     fun `pre-pose 실패 후 submitUpload에서도 estimator를 자동 재호출하지 않는다`() = runTest {
         val poseEstimator = mockk<PoseEstimator>(relaxed = true)
         val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
@@ -323,13 +388,118 @@ class UploadViewModelTest {
 
         @Suppress("UNCHECKED_CAST")
         val restoredCache = getPrivateField(viewModel, "prePoseCacheEntries") as Map<String, PrePoseCacheEntry>
+        @Suppress("UNCHECKED_CAST")
+        val restoredUploadedVideos =
+            getPrivateField(viewModel, "uploadedAttemptVideos") as List<UploadedAttemptVideo>
+        val restoredSummary =
+            getPrivateField(viewModel, "overallHoldReachSummary") as OverallHoldReachSummary?
 
         assertFalse(viewModel.isAttemptOnlyUploadMode)
         assertEquals(publishedUris, viewModel.playbackAttemptUris)
         assertEquals(1, viewModel.currentAttemptIndex)
         assertEquals(publishedResults[1], viewModel.currentAttemptHoldReachResult)
         assertEquals(publishedPoses.getValue(publishedUris[1]).poses, viewModel.currentAttemptPoseSequence)
+        assertEquals(publishedUris, restoredUploadedVideos.map { it.videoUri })
+        assertEquals(publishedSummary, restoredSummary)
         assertFalse(restoredCache.containsKey(draftUri))
+    }
+
+    @Test
+    fun `cleanupUnusedManagedTempFiles preserves referenced temp files and deletes orphan`() = runTest {
+        val context = mockContext()
+        val viewModel = createViewModel(
+            context = context,
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
+        val cacheDir = context.cacheDir
+        val selectedTemp = File(cacheDir, "selected.mp4").apply { writeText("selected") }
+        val resultTemp = File(cacheDir, "result.mp4").apply { writeText("result") }
+        val publishedTemp = File(cacheDir, "published.mp4").apply { writeText("published") }
+        val activePrePoseTemp = File(cacheDir, "active_prepose.mp4").apply { writeText("active") }
+        val orphanTemp = File(cacheDir, "orphan.mp4").apply { writeText("orphan") }
+
+        val selectedPlaybackUri = "file:///selected.mp4"
+        val resultPlaybackUri = "file:///result.mp4"
+        val publishedPlaybackUri = "file:///published.mp4"
+        val activePrePosePlaybackUri = "file:///active_prepose.mp4"
+        val orphanPlaybackUri = "file:///orphan.mp4"
+
+        setPrivateField(
+            viewModel,
+            "primaryManagedVideo",
+            managedAttemptVideo(
+                sourceUri = "content://selected",
+                playbackUri = selectedPlaybackUri,
+                tempFile = selectedTemp
+            )
+        )
+        setPrivateField(viewModel, "resultPlaybackUris", listOf(publishedPlaybackUri))
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "captureCurrentAttemptResultSession"
+        )
+
+        setPrivateField(viewModel, "resultPlaybackUris", listOf(resultPlaybackUri))
+
+        @Suppress("UNCHECKED_CAST")
+        val managedVideosByPlaybackUri =
+            getPrivateField(viewModel, "managedVideosByPlaybackUri") as MutableMap<String, ManagedAttemptVideo>
+        managedVideosByPlaybackUri += mapOf(
+            resultPlaybackUri to managedAttemptVideo(
+                sourceUri = "content://result",
+                playbackUri = resultPlaybackUri,
+                tempFile = resultTemp
+            ),
+            publishedPlaybackUri to managedAttemptVideo(
+                sourceUri = "content://published",
+                playbackUri = publishedPlaybackUri,
+                tempFile = publishedTemp
+            ),
+            activePrePosePlaybackUri to managedAttemptVideo(
+                sourceUri = "content://active",
+                playbackUri = activePrePosePlaybackUri,
+                tempFile = activePrePoseTemp
+            ),
+            orphanPlaybackUri to managedAttemptVideo(
+                sourceUri = "content://orphan",
+                playbackUri = orphanPlaybackUri,
+                tempFile = orphanTemp
+            )
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val managedTempFilePaths =
+            getPrivateField(viewModel, "managedTempFilePaths") as MutableSet<String>
+        managedTempFilePaths += listOf(
+            selectedTemp.absolutePath,
+            resultTemp.absolutePath,
+            publishedTemp.absolutePath,
+            activePrePoseTemp.absolutePath,
+            orphanTemp.absolutePath
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val activePrePosePlaybackUris =
+            getPrivateField(viewModel, "activePrePosePlaybackUris") as MutableSet<String>
+        activePrePosePlaybackUris += activePrePosePlaybackUri
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "cleanupUnusedManagedTempFiles"
+        )
+
+        assertTrue(selectedTemp.exists())
+        assertTrue(resultTemp.exists())
+        assertTrue(publishedTemp.exists())
+        assertTrue(activePrePoseTemp.exists())
+        assertFalse(orphanTemp.exists())
+        assertFalse(managedTempFilePaths.contains(orphanTemp.absolutePath))
+        assertFalse(managedVideosByPlaybackUri.containsKey(orphanPlaybackUri))
+        assertTrue(managedVideosByPlaybackUri.containsKey(resultPlaybackUri))
+        assertTrue(managedVideosByPlaybackUri.containsKey(publishedPlaybackUri))
+        assertTrue(managedVideosByPlaybackUri.containsKey(activePrePosePlaybackUri))
     }
 
     @Test
@@ -394,6 +564,9 @@ class UploadViewModelTest {
         context: Context = mockContext(),
         poseEstimator: PoseEstimator,
         prePoseVideoAnalysisProvider: PrePoseVideoAnalysisProvider,
+        saveChallengeHoldsUseCase: SaveChallengeHoldsUseCase? = null,
+        uploadAttemptVideoUseCase: UploadAttemptVideoUseCase? = null,
+        endAttemptUseCase: EndAttemptUseCase? = null,
         analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase = AnalyzeHandPeakAndEndUseCase(),
         personDetector: PersonDetector = mockk(relaxed = true),
         holdDetector: HoldDetector = mockk(relaxed = true)
@@ -403,6 +576,11 @@ class UploadViewModelTest {
         val gymRepository = mockk<GymRepository>(relaxed = true)
         val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
         val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val resolvedSaveChallengeHoldsUseCase =
+            saveChallengeHoldsUseCase ?: SaveChallengeHoldsUseCase(challengeRepository)
+        val resolvedUploadAttemptVideoUseCase =
+            uploadAttemptVideoUseCase ?: UploadAttemptVideoUseCase(attemptRepository)
+        val resolvedEndAttemptUseCase = endAttemptUseCase ?: EndAttemptUseCase(attemptRepository)
 
         coEvery { getMyInfoUseCase.invoke() } returns Result.success(
             User(
@@ -454,9 +632,9 @@ class UploadViewModelTest {
             searchNearbyClimbingGymsUseCase = SearchNearbyClimbingGymsUseCase(gymRepository),
             resolveGymUseCase = ResolveGymUseCase(gymRepository),
             createChallengeUseCase = CreateChallengeUseCase(challengeRepository),
-            saveChallengeHoldsUseCase = SaveChallengeHoldsUseCase(challengeRepository),
-            uploadAttemptVideoUseCase = UploadAttemptVideoUseCase(attemptRepository),
-            endAttemptUseCase = EndAttemptUseCase(attemptRepository),
+            saveChallengeHoldsUseCase = resolvedSaveChallengeHoldsUseCase,
+            uploadAttemptVideoUseCase = resolvedUploadAttemptVideoUseCase,
+            endAttemptUseCase = resolvedEndAttemptUseCase,
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
             detectStablePersonObservationUseCase = DetectStablePersonObservationUseCase(),
             getMyInfoUseCase = getMyInfoUseCase,
@@ -601,6 +779,18 @@ class UploadViewModelTest {
         attemptNo = attemptNo,
         videoUri = videoUri,
         objectKey = "attempt/$attemptId"
+    )
+
+    private fun managedAttemptVideo(
+        sourceUri: String,
+        playbackUri: String,
+        tempFile: File,
+        realtimeSessionId: String? = null
+    ): ManagedAttemptVideo = ManagedAttemptVideo(
+        sourceUri = sourceUri,
+        playbackUri = playbackUri,
+        tempFilePath = tempFile.absolutePath,
+        realtimeSessionId = realtimeSessionId
     )
 }
 

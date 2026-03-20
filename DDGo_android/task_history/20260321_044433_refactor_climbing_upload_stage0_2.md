@@ -41,6 +41,13 @@ Workspace baseline captured on this branch:
   - baseline docs
   - regression gates
   - shared boundary rules
+- Added regression gates:
+  - `submitUpload` loading-guard regression remains pinned in `UploadViewModelTest`
+  - `cleanupUnusedManagedTempFiles` now verifies referenced temp-file preservation and orphan deletion
+  - record-to-upload handoff codec is pinned with `ClimbingUploadEntryArgsTest`
+- Notes:
+  - upload graph-scoped `UploadViewModel` sharing is still verified structurally in `UploadNavigation.kt`
+  - automated navigation-scope verification is deferred until a dedicated test harness is worth the churn
 
 ### Stage 1
 
