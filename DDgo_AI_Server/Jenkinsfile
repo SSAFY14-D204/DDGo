@@ -1,0 +1,352 @@
+def aiChanged = false
+def deployBranch = ""
+def deployCommitMsg = ""
+def deployCommitAuthor = ""
+def shortHash = ""
+def tag = ""
+
+pipeline {
+  agent any
+
+  options {
+    skipDefaultCheckout(true)
+    disableConcurrentBuilds()
+    timestamps()
+  }
+
+  environment {
+    IMAGE = "flipped0412/ddgo-ai-server"
+    DEPLOY_DIR = "/opt/ddgo/ai-server"
+    SERVICE_NAME = "ddgo-ai-server"
+    REGISTRY = "https://index.docker.io/v1/"
+    DOCKER_BUILDKIT = "1"
+    COMPOSE_DOCKER_CLI_BUILD = "1"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        echo "===== [1/5] Checkout Start ====="
+        checkout scm
+        echo "===== [1/5] Checkout Complete ====="
+
+        script {
+          def gitBranch = sh(
+            script: "git rev-parse --abbrev-ref HEAD || true",
+            returnStdout: true
+          ).trim()
+
+          def gitMsg = sh(
+            script: "git log -1 --pretty=%s || true",
+            returnStdout: true
+          ).trim()
+
+          def webhookBranch = env.gitlabSourceBranch?.trim() ?:
+                              env.gitlabBranch?.trim() ?:
+                              env.BRANCH_NAME?.trim()
+
+          def webhookUser = env.gitlabUserName?.trim() ?:
+                            env.gitlabUserUsername?.trim()
+
+          deployBranch = webhookBranch ?: (gitBranch ?: "HEAD")
+          deployCommitMsg = gitMsg ?: "(no commit message)"
+          deployCommitAuthor = webhookUser ?: "(unknown)"
+
+          echo "Deploy branch: ${deployBranch}"
+          echo "Commit message: ${deployCommitMsg}"
+          echo "Commit author: ${deployCommitAuthor}"
+        }
+      }
+    }
+
+    stage('Check Changed Paths') {
+      steps {
+        script {
+          echo "===== [2/5] Changed Paths Check Start ====="
+
+          def beforeSha = env.gitlabBefore
+          def afterSha = env.gitlabAfter
+          def changedFilesRaw = ""
+
+          echo "gitlabBefore: ${beforeSha}"
+          echo "gitlabAfter : ${afterSha}"
+
+          if (beforeSha?.trim() &&
+              afterSha?.trim() &&
+              beforeSha != "0000000000000000000000000000000000000000" &&
+              afterSha != "0000000000000000000000000000000000000000") {
+
+            changedFilesRaw = sh(
+              script: "git diff --name-only ${beforeSha} ${afterSha} || true",
+              returnStdout: true
+            ).trim()
+
+          } else {
+            echo "Webhook SHAs are missing, falling back to HEAD diff"
+
+            changedFilesRaw = sh(
+              script: """
+                if git rev-parse HEAD~1 >/dev/null 2>&1; then
+                  git diff --name-only HEAD~1 HEAD || true
+                else
+                  git ls-tree -r --name-only HEAD || true
+                fi
+              """,
+              returnStdout: true
+            ).trim()
+          }
+
+          def changedFiles = changedFilesRaw ? changedFilesRaw.split('\n') : []
+
+          echo "Changed files:"
+          changedFiles.each { echo "- ${it}" }
+
+          def aiRootFiles = [
+            '.dockerignore',
+            '.env.example',
+            '.gitignore',
+            'Dockerfile',
+            'Jenkinsfile',
+            'MUJOCO_COMPLETE_GUIDE.md',
+            'README.md',
+            'deploy.env.example',
+            'docker-compose.yml',
+            'requirements.txt',
+            'validate_fastapi_live.py',
+          ] as Set
+
+          def aiCheckoutRoot = fileExists('DDgo_AI_Server/Dockerfile') ? 'repo-root' :
+                              (fileExists('Dockerfile') && fileExists('app/main.py') ? 'ai-root' : 'unknown')
+
+          echo "AI checkout root mode: ${aiCheckoutRoot}"
+
+          aiChanged = changedFiles.any { file ->
+            if (file.startsWith('DDgo_AI_Server/')) {
+              return true
+            }
+
+            if (aiCheckoutRoot == 'ai-root') {
+              return file.startsWith('app/') || aiRootFiles.contains(file)
+            }
+
+            return false
+          }
+
+          currentBuild.description = """
+Branch: ${deployBranch}
+Commit: ${deployCommitMsg}
+Author: ${deployCommitAuthor}
+Status: ${aiChanged ? 'DDgo_AI_Server changed' : 'No DDgo_AI_Server changes'}
+""".trim()
+
+          echo aiChanged ? "DDgo_AI_Server changes detected" : "No DDgo_AI_Server changes detected, skipping build/deploy"
+          echo "===== [2/5] Changed Paths Check Complete ====="
+        }
+      }
+    }
+
+    stage('Docker Build') {
+      when {
+        expression { aiChanged }
+      }
+      steps {
+        script {
+          echo "===== [3/5] Docker Build Start ====="
+
+          shortHash = sh(
+            script: "git rev-parse --short HEAD",
+            returnStdout: true
+          ).trim()
+
+          tag = "${env.BUILD_NUMBER}-${shortHash}"
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${tag}"
+
+          echo "Build image tag: ${env.IMAGE}:${tag}"
+          sh "docker pull ${env.IMAGE}:latest || true"
+
+          dir('DDgo_AI_Server') {
+            sh """
+              docker build \
+                --cache-from ${env.IMAGE}:latest \
+                -t ${env.IMAGE}:${tag} \
+                -t ${env.IMAGE}:latest \
+                .
+            """
+          }
+
+          echo "===== [3/5] Docker Build Complete ====="
+        }
+      }
+    }
+
+    stage('Docker Push') {
+      when {
+        expression { aiChanged }
+      }
+      steps {
+        script {
+          echo "===== [4/5] Docker Push Start ====="
+
+          docker.withRegistry("${env.REGISTRY}", 'dockerhub-cred') {
+            sh "docker push ${env.IMAGE}:${tag}"
+            sh "docker push ${env.IMAGE}:latest"
+          }
+
+          echo "Pushed image: ${env.IMAGE}:${tag}"
+          echo "===== [4/5] Docker Push Complete ====="
+        }
+      }
+    }
+
+    stage('Deploy + HealthCheck + Rollback') {
+      when {
+        expression { aiChanged }
+      }
+      steps {
+        script {
+          echo "===== [5/5] Deploy Start ====="
+
+          def prevImage = sh(
+            script: """
+              cd ${env.DEPLOY_DIR}
+              if [ -f deploy.env ]; then
+                grep '^DDGO_DOCKER_IMAGE=' deploy.env | cut -d'=' -f2-
+              fi
+            """,
+            returnStdout: true
+          ).trim()
+
+          def prevAppVersion = sh(
+            script: """
+              cd ${env.DEPLOY_DIR}
+              if [ -f deploy.env ]; then
+                grep '^DDGO_APP_VERSION=' deploy.env | cut -d'=' -f2-
+              fi
+            """,
+            returnStdout: true
+          ).trim()
+
+          echo "Previous image: ${prevImage ?: '(none)'}"
+          echo "Previous app version: ${prevAppVersion ?: '(none)'}"
+          echo "New image: ${env.IMAGE}:${tag}"
+
+          try {
+            sh """
+              set -e
+              docker image inspect ${env.IMAGE}:${tag} >/dev/null 2>&1 || docker pull ${env.IMAGE}:${tag}
+              cd ${env.DEPLOY_DIR}
+
+              if [ ! -f deploy.env ]; then
+                echo "deploy.env not found in ${env.DEPLOY_DIR}"
+                exit 1
+              fi
+
+              if grep -q '^DDGO_DOCKER_IMAGE=' deploy.env; then
+                sed -i 's|^DDGO_DOCKER_IMAGE=.*|DDGO_DOCKER_IMAGE=${env.IMAGE}:${tag}|' deploy.env
+              else
+                echo 'DDGO_DOCKER_IMAGE=${env.IMAGE}:${tag}' >> deploy.env
+              fi
+
+              if grep -q '^DDGO_APP_VERSION=' deploy.env; then
+                sed -i 's|^DDGO_APP_VERSION=.*|DDGO_APP_VERSION=${tag}|' deploy.env
+              else
+                echo 'DDGO_APP_VERSION=${tag}' >> deploy.env
+              fi
+
+              docker compose --env-file deploy.env pull ${env.SERVICE_NAME}
+              docker compose --env-file deploy.env up -d --force-recreate ${env.SERVICE_NAME}
+              docker compose --env-file deploy.env ps ${env.SERVICE_NAME}
+            """
+
+            def ok = false
+            def healthPaths = ['/ai/health', '/health']
+            for (int i = 1; i <= 12; i++) {
+              sleep 5
+              for (String healthPath : healthPaths) {
+                def code = sh(
+                  script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000${healthPath} || true",
+                  returnStdout: true
+                ).trim()
+
+                echo "Health Check ${i}/12 ${healthPath} -> HTTP ${code}"
+
+                if (code == "200") {
+                  ok = true
+                  echo "Health check succeeded via ${healthPath}"
+                  break
+                }
+              }
+
+              if (ok) {
+                break
+              }
+            }
+
+            if (!ok) {
+              sh "cd ${env.DEPLOY_DIR} && docker compose --env-file deploy.env logs --tail=100 ${env.SERVICE_NAME} || true"
+              error("Health check failed after deploy")
+            }
+
+            currentBuild.description = """
+Branch: ${deployBranch}
+Commit: ${deployCommitMsg}
+Author: ${deployCommitAuthor}
+Status: AI deploy success
+Image: ${env.IMAGE}:${tag}
+""".trim()
+
+            echo "===== Deploy Success ====="
+
+          } catch (e) {
+            echo "===== Deploy Failed, Starting Rollback ====="
+
+            if (prevImage) {
+              sh """
+                set -e
+                docker image inspect ${prevImage} >/dev/null 2>&1 || docker pull ${prevImage}
+                cd ${env.DEPLOY_DIR}
+
+                if grep -q '^DDGO_DOCKER_IMAGE=' deploy.env; then
+                  sed -i 's|^DDGO_DOCKER_IMAGE=.*|DDGO_DOCKER_IMAGE=${prevImage}|' deploy.env
+                else
+                  echo 'DDGO_DOCKER_IMAGE=${prevImage}' >> deploy.env
+                fi
+
+                if [ -n "${prevAppVersion}" ]; then
+                  if grep -q '^DDGO_APP_VERSION=' deploy.env; then
+                    sed -i 's|^DDGO_APP_VERSION=.*|DDGO_APP_VERSION=${prevAppVersion}|' deploy.env
+                  else
+                    echo 'DDGO_APP_VERSION=${prevAppVersion}' >> deploy.env
+                  fi
+                fi
+
+                docker compose --env-file deploy.env pull ${env.SERVICE_NAME} || true
+                docker compose --env-file deploy.env up -d --force-recreate ${env.SERVICE_NAME}
+                docker compose --env-file deploy.env ps ${env.SERVICE_NAME}
+              """
+
+              sh "cd ${env.DEPLOY_DIR} && docker compose --env-file deploy.env logs --tail=100 ${env.SERVICE_NAME} || true"
+            }
+
+            currentBuild.description = """
+Branch: ${deployBranch}
+Commit: ${deployCommitMsg}
+Author: ${deployCommitAuthor}
+Status: AI deploy failed${prevImage ? ' (rollback complete)' : ''}
+""".trim()
+
+            throw e
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      echo "Skipping docker image prune to preserve build cache"
+      echo "Cleaning workspace"
+      cleanWs()
+    }
+  }
+}
