@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+__pycache__/
+app/**/__pycache__/
+cache/
+*.pyc
+*.pyo
+*.pyd
+benchmark_service_comparison.json
+fastapi_live_validation.json
+service_fast_result.json
+service_physics_result.json

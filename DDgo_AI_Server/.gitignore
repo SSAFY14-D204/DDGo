@@ -1,4 +1,5 @@
 cache/
+deploy.env
 app/**/__pycache__/
 *.pyc
 service_fast_result.json

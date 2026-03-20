@@ -173,14 +173,12 @@ def landmarks_to_arrays(landmarks: list[dict[str, Any]]) -> tuple[np.ndarray, np
     ]
     return coords, reliability, extras
 
-
 def normalize_landmarks_input(landmarks: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
     if landmarks is None:
         return None
     if len(landmarks) < MIN_POSE_LANDMARK_COUNT:
         return None
     return landmarks
-
 
 def arrays_to_landmarks(coords: np.ndarray, extras: list[dict[str, float]]) -> list[dict[str, float]]:
     output: list[dict[str, float]] = []
