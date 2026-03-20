@@ -552,6 +552,7 @@ internal fun StabilityLineChart(
         val topPadding = 12.dp.toPx()
         val bottomPadding = 12.dp.toPx()
         val chartHeight = size.height - topPadding - bottomPadding
+        val bandHeight = chartHeight / 3f
         val visibleCount = (data.size * animatedProgress).roundToInt().coerceIn(2, data.size)
         val minValue = data.min()
         val maxValue = data.max()
@@ -560,6 +561,24 @@ internal fun StabilityLineChart(
         fun xOf(index: Int): Float = index.toFloat() / (data.size - 1).toFloat() * size.width
         fun yOf(value: Float): Float =
             topPadding + chartHeight * (1f - ((value - minValue) / valueRange))
+
+        drawRoundRect(
+            color = AnalysisSuccess.copy(alpha = 0.08f),
+            topLeft = Offset(0f, topPadding),
+            size = Size(size.width, bandHeight),
+            cornerRadius = CornerRadius(18.dp.toPx(), 18.dp.toPx())
+        )
+        drawRect(
+            color = Color.White.copy(alpha = 0.02f),
+            topLeft = Offset(0f, topPadding + bandHeight),
+            size = Size(size.width, bandHeight)
+        )
+        drawRoundRect(
+            color = AnalysisFailure.copy(alpha = 0.08f),
+            topLeft = Offset(0f, topPadding + bandHeight * 2f),
+            size = Size(size.width, bandHeight),
+            cornerRadius = CornerRadius(18.dp.toPx(), 18.dp.toPx())
+        )
 
         repeat(3) { lineIndex ->
             val y = topPadding + chartHeight * (lineIndex / 2f)

@@ -35,15 +35,21 @@ internal data class FinalAnalysisAttemptSummary(
     val stableContactRatioText: String,
     val stabilityTimeline: List<Float>,
     val stabilityFocusFraction: Float?,
+    val stabilityHighlights: List<String>,
     val stabilityNarrative: String,
+    val failureHighlights: List<String>,
     val failureNarrative: String,
+    val feedbackTypes: List<String>,
+    val loadFocusLabel: String?,
+    val feedbackLine: String,
+    val coachingLine: String,
     val effectiveModeLabel: String,
     val fallbackLabel: String?
 )
 
 internal const val FinalAnalysisUnknownMetricText = "정보 없음"
 private const val StabilityTimelineSampleCount = 28
-private const val NoAiNarrative = "아직 이 시도에 대한 AI 응답이 없어요."
+private const val NoAiNarrative = "AI 분석 응답이 아직 없습니다."
 internal val DefaultFinalAnalysisTimeline = List(StabilityTimelineSampleCount) { 0.5f }
 
 internal fun buildFinalAnalysisAttemptSummaries(
@@ -83,8 +89,14 @@ private fun emptyFinalAnalysisAttemptSummary(
         stableContactRatioText = FinalAnalysisUnknownMetricText,
         stabilityTimeline = DefaultFinalAnalysisTimeline,
         stabilityFocusFraction = null,
+        stabilityHighlights = listOf(NoAiNarrative),
         stabilityNarrative = NoAiNarrative,
+        failureHighlights = listOf(NoAiNarrative),
         failureNarrative = NoAiNarrative,
+        feedbackTypes = emptyList(),
+        loadFocusLabel = null,
+        feedbackLine = "AI 분석 결과가 아직 충분하지 않아 종합 피드백을 만들지 못했습니다.",
+        coachingLine = "영상과 홀드 정보가 충분해지면 더 구체적인 코칭을 제공할 수 있습니다.",
         effectiveModeLabel = "",
         fallbackLabel = null
     )
@@ -104,10 +116,22 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         processedFrames = processedFrames,
         stableContactFrameCount = stableContactFrameCount
     )
+    val stabilityHighlights = buildStabilityHighlights(
+        highConfidenceRatio = highConfidenceRatio,
+        insideSupportRatio = insideSupportRatio,
+        stableContactRatio = stableContactRatio
+    )
+    val failureHighlights = buildFailureHighlights()
+    val isSuccess = totalHolds > 0 && (reachedHolds ?: 0) >= totalHolds
+    val loadFocusLabel = extractPeakBodyLoadGroupLabel()
+    val feedbackTypes = buildFeedbackTypes(
+        insideSupportRatio = insideSupportRatio,
+        stableContactRatio = stableContactRatio
+    )
     return FinalAnalysisAttemptSummary(
         attemptNo = attemptNo,
         hasAiResult = true,
-        isSuccess = totalHolds > 0 && (reachedHolds ?: 0) >= totalHolds,
+        isSuccess = isSuccess,
         analysisPoints = analysisPoints,
         reachedHolds = reachedHolds,
         reachedHoldsText = reachedHolds?.toString() ?: FinalAnalysisUnknownMetricText,
@@ -123,12 +147,23 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         stableContactRatioText = stableContactRatio?.let { "$it%" } ?: FinalAnalysisUnknownMetricText,
         stabilityTimeline = extractStabilityTimeline(),
         stabilityFocusFraction = extractStabilityFocusFraction(),
-        stabilityNarrative = buildStabilityNarrative(
-            highConfidenceRatio = highConfidenceRatio,
+        stabilityHighlights = stabilityHighlights,
+        stabilityNarrative = stabilityHighlights.joinToString(" "),
+        failureHighlights = failureHighlights,
+        failureNarrative = failureHighlights.joinToString(" "),
+        feedbackTypes = feedbackTypes,
+        loadFocusLabel = loadFocusLabel,
+        feedbackLine = buildFeedbackLine(
+            isSuccess = isSuccess,
+            reachedHolds = reachedHolds,
+            totalHolds = totalHolds,
             insideSupportRatio = insideSupportRatio,
             stableContactRatio = stableContactRatio
         ),
-        failureNarrative = buildFailureNarrative(),
+        coachingLine = buildCoachingLine(
+            feedbackTypes = feedbackTypes,
+            loadFocusLabel = loadFocusLabel
+        ),
         effectiveModeLabel = mode.toDisplayLabel(),
         fallbackLabel = if (requestedMode != mode) "${mode.toDisplayLabel()} 대체" else null
     )
@@ -158,26 +193,29 @@ private fun AiAnalysisResult.toFinalAnalysisPoints(): List<AnalysisPoint> {
             candidate.bestSegment
                 ?.meanCoreLoad
                 ?.takeIf { it > 0.0 }
-                ?.let { add("코어 부하 ${it.formatOneDecimal()}") }
+                ?.let(::formatCoreLoadInsight)
+                ?.let(::add)
             candidate.bestSegment
                 ?.meanNegativeMarginCm
                 ?.takeIf { it != 0.0 }
-                ?.let { add("음수 마진 ${it.roundToInt()}cm") }
+                ?.let { add("균형 이탈 ${it.roundToInt()}cm") }
             candidate.bestSegment
                 ?.okFraction
                 ?.let { ratio ->
-                    add("안정 접촉 ${(ratio * 100.0).roundToInt().coerceIn(0, 100)}%")
+                    add("손발 지지 안정도 ${(ratio * 100.0).roundToInt().coerceIn(0, 100)}%")
                 }
         }
+
+        val displayDetails = details.take(3)
 
         AnalysisPoint(
             index = index + 1,
             timeMs = candidate.bestSegment?.startTimeMs ?: ((index + 1) * 15_000L),
             description = buildString {
                 append("${candidate.holdId}번 홀드")
-                if (details.isNotEmpty()) {
+                if (displayDetails.isNotEmpty()) {
                     append(": ")
-                    append(details.joinToString(" / "))
+                    append(displayDetails.joinToString(" / "))
                 }
             }
         )
@@ -311,30 +349,24 @@ private fun AiAnalysisResult.extractStabilityFocusFraction(): Float? {
     return normalizedSegmentFraction(segment.startTimeMs, segment.endTimeMs)
 }
 
-private fun AiAnalysisResult.buildStabilityNarrative(
+private fun AiAnalysisResult.buildStabilityHighlights(
     highConfidenceRatio: Int?,
     insideSupportRatio: Int?,
     stableContactRatio: Int?
-): String {
-    val statements = buildList {
+): List<String> {
+    return buildList {
         fallbackNarrativePrefix()?.let(::add)
-        highConfidenceRatio?.let { add("고신뢰 프레임 비율은 ${it}%였어요.") }
-        insideSupportRatio?.let { add("지지면 내부 유지 비율은 ${it}%였어요.") }
-        stableContactRatio?.let { add("안정 접촉 비율은 ${it}%였어요.") }
-        extractPointSupportFrameCount()?.takeIf { it > 0 }?.let { add("점 지지 프레임은 ${it}개였어요.") }
-        extractFallbackAllLimbsFrameCount()?.takeIf { it > 0 }
-            ?.let { add("${it}개 프레임은 전체 사지 보정 지지를 사용했어요.") }
-        extractDominantPhaseLabel()?.let { add("가장 많이 나타난 구간은 ${it}였어요.") }
-        extractRecoveryRatioPercent()?.let { add("회복 구간 비율은 ${it}%였어요.") }
-        extractFitMeanErrorCm()?.let { add("포즈 피팅 평균 오차는 ${it}cm였어요.") }
-    }
-
-    return statements.ifEmpty {
+        insideSupportRatio?.let { add("균형 유지율 ${it}%") }
+        stableContactRatio?.let { add("손발 지지 안정도 ${it}%") }
+        extractDominantPhaseLabel()?.let { add("주요 구간: $it") }
+        extractPointSupportFrameCount()?.takeIf { it > 0 }?.let { add("한 곳에만 의존한 구간이 반복됨") }
+        highConfidenceRatio?.takeIf { it < 70 }?.let { add("분석 신뢰도 ${it}%") }
+    }.distinct().take(4).ifEmpty {
         listOf("안정성을 요약하기에 충분한 물리 분석 데이터가 아직 없어요.")
-    }.joinToString(" ")
+    }
 }
 
-private fun AiAnalysisResult.buildFailureNarrative(): String {
+private fun AiAnalysisResult.buildFailureHighlights(): List<String> {
     val topCandidate = cruxResult.topCandidates.firstOrNull()
         ?: cruxResult.allCandidates.firstOrNull()
 
@@ -342,45 +374,162 @@ private fun AiAnalysisResult.buildFailureNarrative(): String {
         return listOfNotNull(
             fallbackNarrativePrefix(),
             "크럭스 후보가 없어 실패 원인을 충분히 요약하지 못했어요."
-        ).joinToString(" ")
+        ).ifEmpty {
+            listOf(NoAiNarrative)
+        }
     }
 
-    val statements = buildList {
+    return buildList {
         fallbackNarrativePrefix()?.let(::add)
-        add("가장 강한 크럭스 신호는 ${topCandidate.holdId}번 홀드에서 나타났어요.")
+        add("크럭스 홀드 ${topCandidate.holdId}번")
         cleanedReasonText(topCandidate.reasonTags.ifEmpty { topCandidate.bestSegment?.reasonTags.orEmpty() })
-            ?.let { add("주요 원인은 ${it}였어요.") }
+            ?.let { add("핵심 원인: $it") }
         topCandidate.bestSegment
             ?.dominantLimbs
             ?.map(::formatToken)
             ?.takeIf { it.isNotEmpty() }
             ?.joinToString(", ")
-            ?.let { add("주로 사용한 부위는 ${it}였어요.") }
+            ?.let { add("주요 사용 부위: $it") }
         topCandidate.bestSegment
             ?.dominantModes
             ?.map(::formatToken)
             ?.takeIf { it.isNotEmpty() }
             ?.joinToString(", ")
-            ?.let { add("주요 동작은 ${it}였어요.") }
+            ?.let { add("주요 동작: $it") }
         topCandidate.bestSegment?.meanNegativeMarginCm
             ?.roundToInt()
-            ?.takeIf { it != 0 }
-            ?.let { add("평균 음수 마진은 ${it}cm였어요.") }
-        topCandidate.bestSegment?.meanTotalBodyLoad
-            ?.takeIf { it > 0.0 }
-            ?.let { add("평균 전신 부하는 ${it.formatOneDecimal()}였어요.") }
-        topCandidate.bestSegment?.meanCoreLoad
-            ?.takeIf { it > 0.0 }
-            ?.let { add("평균 코어 부하는 ${it.formatOneDecimal()}였어요.") }
+            ?.takeIf { abs(it) >= 5 }
+            ?.let { add("균형 이탈 ${it}cm") }
         topCandidate.bestSegment?.okFraction
-            ?.let { add("안정 접촉 비율은 ${(it * 100.0).roundToInt().coerceIn(0, 100)}%였어요.") }
-        extractPeakBodyLoadGroupLabel()?.let { add("가장 큰 부하가 집중된 부위는 ${it}였어요.") }
-        extractDominantPhaseLabel()?.let { add("주된 프레임 구간은 ${it}였어요.") }
+            ?.let { add("손발 지지 안정도 ${(it * 100.0).roundToInt().coerceIn(0, 100)}%") }
+        extractPeakBodyLoadGroupLabel()?.let { add("부담 집중 부위: $it") }
         extractPointSupportFrameCount()?.takeIf { it > 0 }
-            ?.let { add("점 지지 프레임이 ${it}개 있어 흔들림이 있었어요.") }
-    }
+            ?.let { add("한 곳 의존 구간이 자주 나타남") }
+    }.distinct().take(4)
+}
 
-    return statements.joinToString(" ")
+private fun AiAnalysisResult.buildFeedbackTypes(
+    insideSupportRatio: Int?,
+    stableContactRatio: Int?
+): List<String> {
+    val topCandidate = cruxResult.topCandidates.firstOrNull()
+        ?: cruxResult.allCandidates.firstOrNull()
+    val dominantLimbTokens = topCandidate?.bestSegment?.dominantLimbs.orEmpty().map { it.lowercase() }
+    val reasonTokens = (
+        topCandidate?.reasonTags.orEmpty() +
+            topCandidate?.bestSegment?.reasonTags.orEmpty()
+        ).map { it.lowercase() }
+    val peakLoadGroup = extractPeakBodyLoadGroupToken()
+    val pointSupportFrameCount = extractPointSupportFrameCount() ?: 0
+    val negativeMargin = topCandidate?.bestSegment?.meanNegativeMarginCm ?: 0.0
+    val centerSway = (insideSupportRatio ?: 100) < 55 ||
+        abs(negativeMargin) >= 10.0 ||
+        pointSupportFrameCount > 0
+    val footUnderuse = dominantLimbTokens.any { it.contains("hand") } &&
+        dominantLimbTokens.none { it.contains("foot") } &&
+        (
+            peakLoadGroup == "left_arm" ||
+                peakLoadGroup == "right_arm" ||
+                (stableContactRatio ?: 100) < 60
+            )
+    val overHolding = reasonTokens.any {
+        it == "long_dwell" || it == "longest_dwell" || it == "high_total_dwell"
+    } || extractDominantPhaseToken() == "static_support"
+    val armOveruse = peakLoadGroup == "left_arm" ||
+        peakLoadGroup == "right_arm" ||
+        (
+            dominantLimbTokens.count { it.contains("hand") } >= 2 &&
+                dominantLimbTokens.none { it.contains("foot") }
+            )
+
+    return buildList {
+        if (footUnderuse) add("발 사용 부족")
+        if (centerSway) add("중심 흔들림")
+        if (armOveruse) add("팔 사용 과다")
+        if (overHolding) add("과한 버티기")
+    }.take(3)
+}
+
+private fun AiAnalysisResult.buildFeedbackLine(
+    isSuccess: Boolean,
+    reachedHolds: Int?,
+    totalHolds: Int,
+    insideSupportRatio: Int?,
+    stableContactRatio: Int?
+): String {
+    val topCandidate = cruxResult.topCandidates.firstOrNull()
+        ?: cruxResult.allCandidates.firstOrNull()
+    val holdLabel = topCandidate?.holdId?.takeIf { it > 0 }?.let { "${it}번 홀드" }
+    val reasonLabel = cleanedReasonText(
+        topCandidate?.reasonTags.orEmpty().ifEmpty {
+            topCandidate?.bestSegment?.reasonTags.orEmpty()
+        }
+    )
+    val feedbackTypes = buildFeedbackTypes(
+        insideSupportRatio = insideSupportRatio,
+        stableContactRatio = stableContactRatio
+    )
+    val peakLoadLabel = extractPeakBodyLoadGroupLabel()
+
+    return when {
+        isSuccess && (insideSupportRatio ?: 0) >= 70 && (stableContactRatio ?: 0) >= 70 ->
+            "전반적으로 균형과 손발 지지가 안정적이어서 흐름을 잘 이어갔습니다."
+
+        isSuccess ->
+            "완등에는 성공했지만 일부 난구간에서 균형과 손발 지지가 잠시 흔들렸습니다."
+
+        "발 사용 부족" in feedbackTypes && "팔 사용 과다" in feedbackTypes && holdLabel != null ->
+            "${holdLabel} 부근에서 발 사용이 줄고 상체 의존이 커지며 흐름이 끊겼습니다."
+
+        "중심 흔들림" in feedbackTypes && holdLabel != null ->
+            "${holdLabel} 부근에서 중심이 흔들리며 다음 동작 연결이 끊겼습니다."
+
+        "과한 버티기" in feedbackTypes && holdLabel != null ->
+            "${holdLabel} 부근에서 오래 버티며 리듬이 끊겼습니다."
+
+        "팔 사용 과다" in feedbackTypes && holdLabel != null && peakLoadLabel != null ->
+            "${holdLabel} 부근에서 ${peakLoadLabel}에 부담이 몰리며 상체 의존이 커졌습니다."
+
+        reasonLabel != null && holdLabel != null ->
+            "${holdLabel} 부근에서 ${reasonLabel}이 두드러져 난이도가 크게 올라갔습니다."
+
+        reachedHolds != null && totalHolds > 0 ->
+            "${reachedHolds}번 홀드까지는 비교적 안정적이었지만 이후 구간 연결이 어려웠습니다."
+
+        else ->
+            "핵심 구간에서 균형 유지와 다음 동작 연결이 동시에 어려웠습니다."
+    }
+}
+
+private fun buildCoachingLine(
+    feedbackTypes: List<String>,
+    loadFocusLabel: String?
+): String {
+    return when {
+        "발 사용 부족" in feedbackTypes ->
+            "다음 홀드로 가기 전 발을 먼저 올려 몸을 세운 뒤 손을 보내보세요."
+
+        "중심 흔들림" in feedbackTypes ->
+            "손보다 중심을 먼저 옮기고 엉덩이를 벽에 붙인 채 다음 동작을 이어가 보세요."
+
+        "과한 버티기" in feedbackTypes ->
+            "한 자세에서 오래 멈추기보다 시선을 먼저 보내고 리듬 있게 다음 홀드로 연결해 보세요."
+
+        "팔 사용 과다" in feedbackTypes ->
+            "팔로 버티기보다 발로 밀어 올리고 팔은 균형만 잡는 느낌으로 써보세요."
+
+        loadFocusLabel == "몸통" ->
+            "복부 힘을 먼저 잡고 발을 디딘 뒤 손을 움직이면 흔들림을 줄일 수 있습니다."
+
+        loadFocusLabel == "왼팔" || loadFocusLabel == "오른팔" ->
+            "한쪽 팔로만 버티지 말고 발을 먼저 세워 상체 부담을 나눠보세요."
+
+        loadFocusLabel == "왼다리" || loadFocusLabel == "오른다리" ->
+            "한쪽 발에만 체중을 싣기보다 반대 발도 빨리 세워 하중을 분산해보세요."
+
+        else ->
+            "가장 어려운 구간에서는 중심을 먼저 옮기고 손발을 함께 연결하는 연습이 도움이 됩니다."
+    }
 }
 
 private fun AiAnalysisResult.fallbackNarrativePrefix(): String? {
@@ -388,11 +537,11 @@ private fun AiAnalysisResult.fallbackNarrativePrefix(): String? {
 
     return when (fallbackReason) {
         AiAnalysisFallbackReason.MISSING_WEIGHT ->
-            "체중 정보가 없어 ${mode.toDisplayLabel()} 모드로 대체했어요."
+            "체중 정보 없음 · ${mode.toDisplayLabel()} 사용"
         AiAnalysisFallbackReason.PHYSICS_REQUEST_FAILED ->
-            "물리 분석 요청이 실패해 ${mode.toDisplayLabel()} 모드로 대체했어요."
+            "물리 분석 실패 · ${mode.toDisplayLabel()} 사용"
         null ->
-            "${requestedMode.toDisplayLabel()} 요청이 ${mode.toDisplayLabel()} 모드로 대체됐어요."
+            "${requestedMode.toDisplayLabel()} 요청 대체 · ${mode.toDisplayLabel()} 사용"
     }
 }
 
@@ -437,6 +586,12 @@ private fun AiAnalysisResult.extractDominantPhaseLabel(): String? {
         ?.let(::formatPhaseToken)
 }
 
+private fun AiAnalysisResult.extractDominantPhaseToken(): String? {
+    return physicsResult
+        ?.getObjectOrNull("phase_counts")
+        ?.maxCountKeyOrNull()
+}
+
 private fun AiAnalysisResult.extractRecoveryRatioPercent(): Int? {
     val ratio = physicsResult
         ?.getObjectOrNull("dynamic_sequence_gate")
@@ -456,6 +611,11 @@ private fun AiAnalysisResult.extractFitMeanErrorCm(): Int? {
 }
 
 private fun AiAnalysisResult.extractPeakBodyLoadGroupLabel(): String? {
+    return extractPeakBodyLoadGroupToken()
+        ?.let(::formatBodyLoadGroupToken)
+}
+
+private fun AiAnalysisResult.extractPeakBodyLoadGroupToken(): String? {
     return physicsResult
         ?.getObjectOrNull("body_load_summary")
         ?.entries
@@ -463,7 +623,6 @@ private fun AiAnalysisResult.extractPeakBodyLoadGroupLabel(): String? {
             payload.asObjectOrNull()?.getDoubleOrNull("max_abs_load_proxy") ?: Double.NEGATIVE_INFINITY
         }
         ?.key
-        ?.let(::formatBodyLoadGroupToken)
 }
 
 private fun AiAnalysisResult.normalizedSegmentFraction(
@@ -487,43 +646,72 @@ private fun AiAnalysisResult.normalizedSegmentFraction(
 }
 
 private fun cleanedReasonText(reasonTags: List<String>): String? {
-    return reasonTags.firstOrNull()
-        ?.let(::formatToken)
+    return reasonTags
+        .asSequence()
+        .map(::formatToken)
+        .firstOrNull { formatted ->
+            formatted.isNotBlank() && !formatted.contains(Regex("[A-Za-z]"))
+        }
         ?.takeIf { it.isNotBlank() }
 }
 
 private fun formatToken(token: String): String {
-    return when (token.lowercase()) {
-        "left_hand" -> "왼손"
-        "right_hand" -> "오른손"
-        "left_foot" -> "왼발"
-        "right_foot" -> "오른발"
-        "pull" -> "당기기"
-        "push" -> "밀기"
-        "stabilize" -> "버티기"
-        "long_dwell" -> "오래 머무름"
-        "load_spike" -> "하중 급증"
-        "instability" -> "불안정"
-        "negative_margin" -> "음수 마진"
-        "loss_of_balance" -> "균형 붕괴"
-        "contact_loss" -> "접촉 손실"
+    val normalized = token.lowercase()
+
+    return when {
+        normalized == "left_hand" -> "왼손"
+        normalized == "right_hand" -> "오른손"
+        normalized == "left_foot" -> "왼발"
+        normalized == "right_foot" -> "오른발"
+        normalized == "grip" -> "손으로 잡고 버티기"
+        normalized == "step" -> "발로 디디기"
+        normalized == "reach" -> "다음 홀드로 뻗기"
+        normalized == "free" -> "이동 준비"
+        normalized == "release" -> "놓기"
+        normalized == "pull" -> "당기기"
+        normalized == "push" -> "밀기"
+        normalized == "stabilize" -> "버티기"
+        normalized == "long_dwell" -> "오래 머무름"
+        normalized == "longest_dwell" -> "가장 오래 머문 구간"
+        normalized == "high_total_dwell" -> "머문 시간이 긴 구간"
+        normalized == "load_spike" -> "부담 급증"
+        normalized == "instability" -> "흔들림"
+        normalized == "negative_margin" -> "균형 이탈"
+        normalized == "loss_of_balance" -> "균형 붕괴"
+        normalized == "contact_loss" -> "손발 지지 끊김"
+        normalized == "high_load" || normalized == "high_total_load" || normalized == "peak_load" ->
+            "힘이 많이 들어간 구간"
+        normalized.contains("core") && normalized.contains("load") ->
+            "몸통 힘 사용이 큰 구간"
+        normalized.contains("arm") && normalized.contains("load") ->
+            "팔에 힘이 많이 들어간 구간"
+        normalized.contains("hand") && normalized.contains("load") ->
+            "손으로 버티는 비중이 큰 구간"
+        normalized.contains("foot") && normalized.contains("underuse") ->
+            "발 사용이 부족한 구간"
+        normalized.contains("arm") && normalized.contains("overuse") ->
+            "팔 사용이 많은 구간"
+        normalized.contains("balance") || normalized.contains("stability") || normalized.contains("margin") ->
+            "균형이 흔들린 구간"
+        normalized.contains("dwell") || normalized.contains("stall") || normalized.contains("pause") ->
+            "동작이 잠시 멈춘 구간"
         else -> token.replace('_', ' ').replace('-', ' ').trim()
     }
 }
 
 private fun formatPhaseToken(token: String): String {
     return when (token.lowercase()) {
-        "static_support" -> "정적 지지"
-        "loaded_transition" -> "하중 전이"
-        "dynamic_transition" -> "동적 전이"
-        "recovery" -> "회복"
+        "static_support" -> "버티는 구간"
+        "loaded_transition" -> "힘이 실리는 구간"
+        "dynamic_transition" -> "움직이는 구간"
+        "recovery" -> "회복 구간"
         else -> token.replace('_', ' ').trim()
     }
 }
 
 private fun formatBodyLoadGroupToken(token: String): String {
     return when (token.lowercase()) {
-        "core" -> "코어"
+        "core" -> "몸통"
         "left_arm" -> "왼팔"
         "right_arm" -> "오른팔"
         "left_leg" -> "왼다리"
@@ -540,6 +728,14 @@ private fun formatTimingToken(token: String): String {
         "physics_pipeline_s" -> "물리 파이프라인"
         "total_s" -> "전체 분석"
         else -> token.replace('_', ' ').trim()
+    }
+}
+
+private fun formatCoreLoadInsight(coreLoad: Double): String {
+    return when {
+        coreLoad >= 80.0 -> "몸통에 부담이 큰 구간"
+        coreLoad >= 40.0 -> "몸통 힘 사용이 많아진 구간"
+        else -> "몸통 힘을 사용한 구간"
     }
 }
 

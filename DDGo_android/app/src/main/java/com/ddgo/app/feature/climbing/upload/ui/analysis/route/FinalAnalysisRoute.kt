@@ -1,4 +1,4 @@
-package com.ddgo.app.feature.climbing.upload.ui.analysis.route
+﻿package com.ddgo.app.feature.climbing.upload.ui.analysis.route
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -78,6 +78,14 @@ fun FinalAnalysisRoute(
             "${values.average().roundToInt()}%"
         }
     }
+    val averageStableContactRatioText = remember(attemptSummaries) {
+        val values = attemptSummaries.mapNotNull { it.stableContactRatio }
+        if (values.isEmpty()) {
+            FinalAnalysisUnknownMetricText
+        } else {
+            "${values.average().roundToInt()}%"
+        }
+    }
     val overallSuccess = remember(attemptSummaries) {
         attemptSummaries.any { it.isSuccess }
     }
@@ -98,12 +106,17 @@ fun FinalAnalysisRoute(
             }.average().toFloat()
         }
     }
-    val statsFocusFraction = remember(safeSelectedAttempt, attemptCount) {
-        if (attemptCount <= 1) {
-            null
-        } else {
-            (safeSelectedAttempt - 1).toFloat() / (attemptCount - 1).toFloat()
-        }
+    val statsFocusFraction = remember(currentSummary) {
+        currentSummary.stabilityFocusFraction
+    }
+    val focusReasonText = remember(
+        currentSummary.feedbackTypes,
+        currentSummary.loadFocusLabel
+    ) {
+        buildFocusReasonText(
+            feedbackTypes = currentSummary.feedbackTypes,
+            loadFocusLabel = currentSummary.loadFocusLabel
+        )
     }
     val displayDate = remember(viewModel.createdChallenge?.startedAt) {
         formatAnalysisDate(viewModel.createdChallenge?.startedAt)
@@ -122,6 +135,12 @@ fun FinalAnalysisRoute(
         averageReachedHoldsText,
         averageReachedHoldsSuffix,
         averageInsideSupportRatioText,
+        averageStableContactRatioText,
+        currentSummary.feedbackTypes,
+        currentSummary.loadFocusLabel,
+        currentSummary.feedbackLine,
+        currentSummary.coachingLine,
+        focusReasonText,
         combinedTimeline,
         statsFocusFraction
     ) {
@@ -145,6 +164,12 @@ fun FinalAnalysisRoute(
             averageReachedHoldsText = averageReachedHoldsText,
             averageReachedHoldsSuffix = averageReachedHoldsSuffix,
             averageInsideSupportRatioText = averageInsideSupportRatioText,
+            averageStableContactRatioText = averageStableContactRatioText,
+            feedbackTypes = currentSummary.feedbackTypes,
+            loadFocusLabel = currentSummary.loadFocusLabel,
+            feedbackLine = currentSummary.feedbackLine,
+            coachingLine = currentSummary.coachingLine,
+            focusReasonText = focusReasonText,
             combinedTimeline = combinedTimeline,
             statsFocusFraction = statsFocusFraction,
             actionText = if (attemptCount > 1 && safeSelectedAttempt < attemptCount) {
@@ -170,3 +195,47 @@ fun FinalAnalysisRoute(
         }
     )
 }
+
+private fun buildFocusReasonText(
+    feedbackTypes: List<String>,
+    loadFocusLabel: String?
+): String? {
+    val causeKeywords = feedbackTypes
+        .take(2)
+        .map(::toFocusReasonKeyword)
+    val causeSentence = when {
+        causeKeywords.size >= 2 ->
+            "${causeKeywords.joinToString("\uACFC ")}\uC774 \uD568\uAED8 \uB098\uD0C0\uB09C \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+
+        causeKeywords.size == 1 ->
+            "${causeKeywords.first()}\uC774 \uB450\uB4DC\uB7EC\uC9C4 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+
+        else ->
+            null
+    }
+
+    return when {
+        causeSentence != null && loadFocusLabel != null ->
+            "$causeSentence \uD2B9\uD788 $loadFocusLabel\uC5D0 \uBD80\uB2F4\uC774 \uD06C\uAC8C \uC2E4\uB9B0 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+
+        causeSentence != null ->
+            causeSentence
+
+        loadFocusLabel != null ->
+            "$loadFocusLabel\uC5D0 \uBD80\uB2F4\uC774 \uD06C\uAC8C \uC2E4\uB9B0 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+
+        else ->
+            null
+    }
+}
+
+private fun toFocusReasonKeyword(type: String): String {
+    return when (type) {
+        "발 사용 부족" -> "\uBC1C \uD65C\uC6A9 \uBD80\uC871"
+        "중심 흔들림" -> "\uC911\uC2EC \uD754\uB4E4\uB9BC"
+        "팔 사용 과다" -> "\uD314 \uD798 \uC758\uC874"
+        "과한 버티기" -> "\uC624\uB798 \uBC84\uD2F0\uAE30"
+        else -> type
+    }
+}
+
