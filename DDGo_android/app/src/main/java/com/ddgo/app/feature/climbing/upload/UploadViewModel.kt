@@ -2287,22 +2287,6 @@ private data class ResolvedAiProfile(
     val weightKg: Float?,
     val wingspanCm: Float?
 )
-private fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = TerminalPrePoseEntry(
-    playbackUri = playbackUri,
-    selectionGeneration = selectionGeneration,
-    status = status,
-    poses = poses,
-    personObservationStartTimeMs = personObservationStartTimeMs,
-    climbEndDetection = climbEndDetection,
-    handPeakAnnotation = handPeakAnnotation,
-    timelinePoints = timelinePoints,
-    errorMessage = errorMessage
-)
-
-private data class PrePoseTask(
-    val playbackUri: String,
-    val taskId: Long
-)
 
 private enum class UploadFlowMode {
     FullChallenge,

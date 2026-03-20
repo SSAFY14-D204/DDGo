@@ -65,10 +65,18 @@ Workspace baseline captured on this branch:
 
 ### Stage 2
 
-- Planned focus:
+- Status: completed
+- Focus:
   - `PrePoseSessionManager`
   - `AttemptResultSessionStore`
   - temp-file cleanup keep-set preservation
+- Added:
+  - delegated media normalization, pre-pose queue/cache/worker, and temp-file retention kernel to `PrePoseSessionManager`
+  - delegated current result playback + published result snapshot ownership to `AttemptResultSessionStore`
+  - kept `beginSelectionUpdate()`, `awaitPrePoseTerminal()`, `publish/capture/restore`, and `_uploadSubmissionUiState` as `UploadViewModel` wrappers
+- Current branch effect:
+  - `UploadViewModel.kt` reduced from `2321` lines after Stage 1 to `2037` lines at Stage 2 checkpoint
+  - Checkpoint C is now the last known good refactor point before any UI route/page split or submission orchestration split
 
 ## Risks To Watch
 

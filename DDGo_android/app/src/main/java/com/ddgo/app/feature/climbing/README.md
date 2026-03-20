@@ -19,6 +19,7 @@ The current priority is not architectural cleanup for its own sake. The priority
 - The upload nav graph keeps a graph-scoped `UploadViewModel`.
 - `submitUpload()` stays in `UploadViewModel` until the last refactor stage.
 - `_uploadSubmissionUiState` is owned by `UploadViewModel`, then later by an orchestrator entrypoint if one is introduced.
+- `beginSelectionUpdate()`, `awaitPrePoseTerminal()`, and result `publish/capture/restore` stay as `UploadViewModel` wrappers even after Stage 2.
 
 ## Session Seam Rules
 
