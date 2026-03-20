@@ -5,7 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.feature.climbing.upload.AnalysisBgColor
+import com.ddgo.app.feature.climbing.upload.AnalysisMuted
+import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
 import com.ddgo.app.feature.climbing.upload.AnalysisGradientButton
 import com.ddgo.app.feature.climbing.upload.AnalysisSectionTabs
 import com.ddgo.app.feature.climbing.upload.AnalysisText
@@ -56,6 +61,12 @@ internal data class FinalAnalysisPageState(
     val averageReachedHoldsText: String,
     val averageReachedHoldsSuffix: String?,
     val averageInsideSupportRatioText: String,
+    val averageStableContactRatioText: String,
+    val feedbackTypes: List<String>,
+    val loadFocusLabel: String?,
+    val feedbackLine: String,
+    val coachingLine: String,
+    val focusReasonText: String?,
     val combinedTimeline: List<Float>,
     val statsFocusFraction: Float?,
     val actionText: String
@@ -84,6 +95,14 @@ internal fun FinalAnalysisPage(
 
         AttemptPreviewHero(state = state.heroState)
 
+        FinalAnalysisFeedbackCard(
+            feedbackTypes = state.feedbackTypes,
+            loadFocusLabel = state.loadFocusLabel,
+            feedbackLine = state.feedbackLine,
+            coachingLine = state.coachingLine,
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp)
+        )
+
         AnalysisSectionTabs(
             labels = FinalAnalysisTab.entries.map { it.label },
             selectedIndex = selectedTab.ordinal,
@@ -97,8 +116,10 @@ internal fun FinalAnalysisPage(
                     averageReachedHoldsText = state.averageReachedHoldsText,
                     averageReachedHoldsSuffix = state.averageReachedHoldsSuffix,
                     averageInsideSupportRatioText = state.averageInsideSupportRatioText,
+                    averageStableContactRatioText = state.averageStableContactRatioText,
                     timeline = state.combinedTimeline,
-                    focusFraction = state.statsFocusFraction
+                    focusFraction = state.statsFocusFraction,
+                    focusReasonText = state.focusReasonText
                 )
             }
 
@@ -106,7 +127,8 @@ internal fun FinalAnalysisPage(
                 StabilityPanel(
                     currentSummary = state.currentSummary,
                     timeline = state.currentSummary.stabilityTimeline,
-                    focusFraction = state.currentSummary.stabilityFocusFraction
+                    focusFraction = state.currentSummary.stabilityFocusFraction,
+                    focusReasonText = state.focusReasonText
                 )
             }
 
@@ -139,6 +161,89 @@ internal fun FinalAnalysisPage(
                 .height(24.dp)
                 .navigationBarsPadding()
         )
+    }
+}
+
+@Composable
+private fun FinalAnalysisFeedbackCard(
+    feedbackTypes: List<String>,
+    loadFocusLabel: String?,
+    feedbackLine: String,
+    coachingLine: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(AnalysisPanelColor)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "종합 피드백",
+                color = AnalysisMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+            if (feedbackTypes.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    feedbackTypes.forEach { type ->
+                        FeedbackTypeChip(text = feedbackTypeChipLabel(type))
+                    }
+                }
+            }
+            loadFocusLabel?.let { focus ->
+                Text(
+                    text = "부담이 큰 부위: $focus",
+                    color = AnalysisMuted,
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp
+                )
+            }
+            Text(
+                text = feedbackLine,
+                color = AnalysisText,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "코칭: $coachingLine",
+                color = AnalysisMuted,
+                fontSize = 13.sp,
+                lineHeight = 20.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeedbackTypeChip(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(AnalysisMuted.copy(alpha = 0.14f))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text = text,
+            color = AnalysisText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+private fun feedbackTypeChipLabel(type: String): String {
+    return when (type) {
+        "발 사용 부족" -> "발 활용 부족"
+        "팔 사용 과다" -> "팔 의존 큼"
+        "과한 버티기" -> "오래 버팀"
+        else -> type
     }
 }
 
