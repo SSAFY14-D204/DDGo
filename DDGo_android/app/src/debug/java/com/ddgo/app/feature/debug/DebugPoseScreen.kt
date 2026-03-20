@@ -33,6 +33,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -88,7 +89,8 @@ import kotlin.math.abs
 fun DebugPoseScreen(
     viewModel: DebugPoseViewModel = hiltViewModel(),
     onNavigateToSplash: () -> Unit = {},
-    onNavigateToPrePose: () -> Unit = {}
+    onNavigateToPrePose: () -> Unit = {},
+    onNavigateToSmoothFilter: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -300,6 +302,16 @@ fun DebugPoseScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("pre-pose-landmarker")
+            }
+
+            OutlinedButton(
+                onClick = onNavigateToSmoothFilter,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("smooth-filter")
             }
         }
     }
