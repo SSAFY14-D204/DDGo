@@ -2571,33 +2571,6 @@ private data class ResolvedAiProfile(
     val weightKg: Float?,
     val wingspanCm: Float?
 )
-data class ManagedAttemptVideo(
-    val sourceUri: String,
-    val playbackUri: String,
-    val tempFilePath: String?,
-    val realtimeSessionId: String? = null
-)
-
-enum class PrePoseStatus {
-    Pending,
-    Running,
-    Ready,
-    Failed
-}
-
-data class PrePoseCacheEntry(
-    val playbackUri: String,
-    val selectionGeneration: Long,
-    val status: PrePoseStatus,
-    val poses: List<Pose> = emptyList(),
-    val personObservationStartTimeMs: Long? = null,
-    val climbEndDetection: ClimbEndDetection? = null,
-    val handPeakAnnotation: HandPeakAnnotation? = null,
-    val timelinePoints: List<AnalysisPoint> = emptyList(),
-    val errorMessage: String? = null,
-    val taskId: Long? = null
-)
-
 private fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = TerminalPrePoseEntry(
     playbackUri = playbackUri,
     selectionGeneration = selectionGeneration,
@@ -2609,35 +2582,6 @@ private fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = Terminal
     timelinePoints = timelinePoints,
     errorMessage = errorMessage
 )
-
-data class TerminalPrePoseSnapshot(
-    val generation: Long,
-    val entriesByPlaybackUri: Map<String, TerminalPrePoseEntry>
-)
-
-data class TerminalPrePoseEntry(
-    val playbackUri: String,
-    val selectionGeneration: Long,
-    val status: PrePoseStatus,
-    val poses: List<Pose>,
-    val personObservationStartTimeMs: Long?,
-    val climbEndDetection: ClimbEndDetection?,
-    val handPeakAnnotation: HandPeakAnnotation?,
-    val timelinePoints: List<AnalysisPoint>,
-    val errorMessage: String?
-)
-
-data class PrePoseBatchState(
-    val generation: Long = 0L,
-    val totalCount: Int = 0,
-    val pendingCount: Int = 0,
-    val runningCount: Int = 0,
-    val readyCount: Int = 0,
-    val failedCount: Int = 0
-) {
-    val isTerminal: Boolean
-        get() = totalCount > 0 && pendingCount == 0 && runningCount == 0
-}
 
 private data class PrePoseTask(
     val playbackUri: String,
@@ -2655,103 +2599,8 @@ private data class PublishedAttemptResultSession(
     val overallHoldReachSummary: OverallHoldReachSummary?
 )
 
-sealed class UploadUiState {
-    object Idle : UploadUiState()
-    object Loading : UploadUiState()
-    // TODO: 결과 화면 (AttemptResultScreen)에서 보여줄 분석 결과를 파라미터로 넣을 수도 있습니다.
-    object Success : UploadUiState()
-    data class Error(val message: String) : UploadUiState()
-}
-
-/**
- * 주변 암장 검색 UI 상태.
- */
-sealed class GymSearchUiState {
-    object Idle : GymSearchUiState()
-    object Loading : GymSearchUiState()
-    data class Success(val places: List<NearbyPlace>) : GymSearchUiState()
-    data class Error(val message: String) : GymSearchUiState()
-}
-
-/**
- * gym resolve UI 상태.
- */
-sealed class GymResolveUiState {
-    object Idle : GymResolveUiState()
-    object Loading : GymResolveUiState()
-    data class Success(val resolvedGym: ResolvedGym) : GymResolveUiState()
-    data class Error(val message: String) : GymResolveUiState()
-}
-
-/** 챌린지 생성 UI 상태입니다. */
-sealed class ChallengeCreationUiState {
-    object Idle : ChallengeCreationUiState()
-    object Loading : ChallengeCreationUiState()
-    data class Success(val challenge: ChallengeSession) : ChallengeCreationUiState()
-    data class Error(val message: String) : ChallengeCreationUiState()
-}
-
-/**
- * 업로드 제출 UI 상태입니다.
- *
- * 역할:
- * - 홀드 선택 이후 로딩 화면을 구동합니다.
- * - 홀드 저장과 시도 영상 업로드 단계를 함께 표현합니다.
- */
-sealed class UploadSubmissionUiState {
-    object Idle : UploadSubmissionUiState()
-    data class Loading(val  message: String) : UploadSubmissionUiState()
-    data class Success(val uploadedAttempts: List<UploadedAttemptVideo>) : UploadSubmissionUiState()
-    data class Error(val message: String) : UploadSubmissionUiState()
-}
-
 private enum class UploadFlowMode {
     FullChallenge,
     AttemptOnly
-}
-
-private fun defaultUploadAnalysisPoints(): List<AnalysisPoint> = listOf(
-    AnalysisPoint(1, 21_000L, "2지점 상태가 길었어요"),
-    AnalysisPoint(2, 48_000L, "오른쪽 팔에 과도한\n무게가 실렸어요"),
-    AnalysisPoint(3, 66_000L, "무게 이동이 늦어졌어요")
-)
-
-private fun AiAnalysisResult.toAnalysisPoints(): List<AnalysisPoint> {
-    val candidates = cruxResult.topCandidates.ifEmpty {
-        cruxResult.allCandidates.take(3)
-    }
-
-    return candidates.take(3).mapIndexed { index, candidate ->
-        val reasonText = candidate.reasonTags
-            .firstOrNull()
-            ?.replace('_', ' ')
-            ?.replace('-', ' ')
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-        val description = buildString {
-            append("홀드 ${candidate.holdId}")
-            append(": ")
-            append(
-                reasonText ?: when (mode) {
-                    AiAnalysisMode.FAST -> "머무는 시간이 길었어요"
-                    AiAnalysisMode.PHYSICS -> "부하가 크게 걸렸어요"
-                }
-            )
-        }
-
-        AnalysisPoint(
-            index = index + 1,
-            timeMs = candidate.bestSegment?.startTimeMs ?: ((index + 1) * 15_000L),
-            description = description
-        )
-    }
-}
-
-internal fun normalizeVideoRotationDegrees(rotationDegrees: Int): Int {
-    val normalized = ((rotationDegrees % 360) + 360) % 360
-    return when (normalized) {
-        90, 180, 270 -> normalized
-        else -> 0
-    }
 }
 
