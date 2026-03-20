@@ -1,6 +1,7 @@
 package com.ddgo.app.domain.usecase
 
 import com.ddgo.app.domain.model.AiAnalysisMode
+import com.ddgo.app.domain.model.AiAnalysisFallbackReason
 import com.ddgo.app.domain.model.AiAnalysisRequestContext
 import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.Hold
@@ -37,10 +38,6 @@ class AnalyzeAttemptWithAiUseCase @Inject constructor(
         if (heightCm <= 0f) {
             return Result.failure(IllegalArgumentException("Body profile height is required for AI analysis."))
         }
-        if (mode == AiAnalysisMode.PHYSICS && (weightKg == null || weightKg <= 0f)) {
-            return Result.failure(IllegalArgumentException("Physics analysis requires body weight."))
-        }
-
         val poseSequence = runCatching {
             aiPoseSequenceProvider.analyzePoseSequence(
                 videoUri = videoUri,
@@ -50,19 +47,40 @@ class AnalyzeAttemptWithAiUseCase @Inject constructor(
             return Result.failure(throwable)
         }
 
-        return aiAnalysisRepository.analyze(
-            AiAnalysisRequestContext(
-                mode = mode,
-                holds = holds,
-                poseSequence = poseSequence,
-                frameWidthPx = frameWidthPx,
-                frameHeightPx = frameHeightPx,
-                heightCm = heightCm,
-                weightKg = weightKg,
-                wingspanCm = wingspanCm,
-                topKCrux = topKCrux,
-                frameStep = frameStep
-            )
+        val requestContext = AiAnalysisRequestContext(
+            mode = mode,
+            holds = holds,
+            poseSequence = poseSequence,
+            frameWidthPx = frameWidthPx,
+            frameHeightPx = frameHeightPx,
+            heightCm = heightCm,
+            weightKg = weightKg,
+            wingspanCm = wingspanCm,
+            topKCrux = topKCrux,
+            frameStep = frameStep
         )
+
+        if (mode == AiAnalysisMode.PHYSICS && (weightKg == null || weightKg <= 0f)) {
+            return aiAnalysisRepository.analyze(requestContext.copy(mode = AiAnalysisMode.FAST))
+                .map { result ->
+                    result.copy(
+                        requestedMode = AiAnalysisMode.PHYSICS,
+                        fallbackReason = AiAnalysisFallbackReason.MISSING_WEIGHT
+                    )
+                }
+        }
+
+        val primaryResult = aiAnalysisRepository.analyze(requestContext)
+        if (mode != AiAnalysisMode.PHYSICS || primaryResult.isSuccess) {
+            return primaryResult
+        }
+
+        return aiAnalysisRepository.analyze(requestContext.copy(mode = AiAnalysisMode.FAST))
+            .map { result ->
+                result.copy(
+                    requestedMode = AiAnalysisMode.PHYSICS,
+                    fallbackReason = AiAnalysisFallbackReason.PHYSICS_REQUEST_FAILED
+                )
+            }
     }
 }

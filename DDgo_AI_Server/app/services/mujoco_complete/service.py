@@ -99,6 +99,8 @@ class MujocoCompleteService:
             frame_index = int(raw_frame["frame_index"])
             if frame_step > 1 and frame_index % frame_step != 0:
                 continue
+            if not bool(raw_frame.get("pose_detected")):
+                continue
             pose_landmarks_2d = bench.landmark_payload_to_objects(raw_frame.get("pose_landmarks"))
             contact_points = compute_contact_points_px(pose_landmarks_2d, frame_width, frame_height)
             limb_states = tracker.update_frame(contact_points, int(raw_frame["timestamp_ms"]))

@@ -35,6 +35,8 @@ internal data class AttemptPreviewHeroState(
     val holdColorLabel: String,
     val selectedAttempt: Int,
     val isSuccess: Boolean,
+    val analysisModeLabel: String? = null,
+    val fallbackLabel: String? = null,
     val previewBitmap: Bitmap?,
     val previewHolds: List<Hold>
 )
@@ -44,6 +46,9 @@ internal fun AttemptPreviewHero(
     state: AttemptPreviewHeroState,
     modifier: Modifier = Modifier
 ) {
+    val holdChipBackground = holdColorToUiColor(state.holdColorLabel)
+    val holdChipIsBright = (holdChipBackground.red + holdChipBackground.green + holdChipBackground.blue) / 3f > 0.7f
+
     Column(modifier = modifier) {
         Row(
             modifier = Modifier
@@ -57,7 +62,7 @@ internal fun AttemptPreviewHero(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = state.gymName.ifBlank { "클라이밍장" },
+                    text = state.gymName.ifBlank { "암장 정보 없음" },
                     color = AnalysisText,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
@@ -78,12 +83,22 @@ internal fun AttemptPreviewHero(
                     if (state.holdColorLabel.isNotBlank()) {
                         HeaderChip(
                             text = state.holdColorLabel,
-                            background = holdColorToUiColor(state.holdColorLabel),
-                            contentColor = if (state.holdColorLabel == "흰색") {
-                                Color.Black
-                            } else {
-                                Color.White
-                            }
+                            background = holdChipBackground,
+                            contentColor = if (holdChipIsBright) Color.Black else Color.White
+                        )
+                    }
+                    state.analysisModeLabel?.let { modeLabel ->
+                        HeaderChip(
+                            text = modeLabel,
+                            background = Color(0xFF2C3E50),
+                            contentColor = Color.White
+                        )
+                    }
+                    state.fallbackLabel?.let { fallbackLabel ->
+                        HeaderChip(
+                            text = fallbackLabel,
+                            background = Color(0xFF5C2B35),
+                            contentColor = Color.White
                         )
                     }
                 }

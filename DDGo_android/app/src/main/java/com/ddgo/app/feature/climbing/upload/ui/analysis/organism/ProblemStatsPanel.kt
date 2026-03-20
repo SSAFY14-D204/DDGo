@@ -22,9 +22,9 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.MetricHeadline
 @Composable
 internal fun ProblemStatsPanel(
     overallSuccess: Boolean,
-    averageReachedHolds: Int,
-    totalHolds: Int,
-    averageBalanceRatio: Int,
+    averageReachedHoldsText: String,
+    averageReachedHoldsSuffix: String?,
+    averageInsideSupportRatioText: String,
     timeline: List<Float>,
     focusFraction: Float?,
     modifier: Modifier = Modifier
@@ -36,7 +36,7 @@ internal fun ProblemStatsPanel(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         MetricHeadline(
-            title = "문제 풀이 여부",
+            title = "완등 여부",
             value = if (overallSuccess) "성공" else "실패",
             valueColor = if (overallSuccess) AnalysisSuccess else AnalysisFailure
         )
@@ -45,16 +45,16 @@ internal fun ProblemStatsPanel(
 
         MetricHeadline(
             title = "평균 도달 홀드",
-            value = "$averageReachedHolds",
-            suffix = "/${totalHolds}번"
+            value = averageReachedHoldsText,
+            suffix = averageReachedHoldsSuffix
         )
 
         Spacer(modifier = Modifier.height(34.dp))
 
         MetricHeadline(
-            caption = "평균 안정도",
-            title = "무게중심 안정 비율",
-            value = "$averageBalanceRatio%"
+            caption = "평균 안정성",
+            title = "지지면 내부 비율",
+            value = averageInsideSupportRatioText
         )
 
         Spacer(modifier = Modifier.height(18.dp))

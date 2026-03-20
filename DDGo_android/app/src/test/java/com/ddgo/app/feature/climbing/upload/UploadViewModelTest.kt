@@ -17,12 +17,14 @@ import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
+import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.HoldRole
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
+import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import com.ddgo.app.domain.usecase.summarizeHoldReachResults
 import io.mockk.coEvery
@@ -320,7 +322,9 @@ class UploadViewModelTest {
             createChallengeUseCase = CreateChallengeUseCase(challengeRepository),
             saveChallengeHoldsUseCase = SaveChallengeHoldsUseCase(challengeRepository),
             uploadAttemptVideoUseCase = UploadAttemptVideoUseCase(attemptRepository),
-            endAttemptUseCase = EndAttemptUseCase(attemptRepository)
+            endAttemptUseCase = EndAttemptUseCase(attemptRepository),
+            getMyInfoUseCase = mockk<GetMyInfoUseCase>(relaxed = true),
+            analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>(relaxed = true)
         )
     }
 

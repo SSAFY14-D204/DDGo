@@ -1,9 +1,11 @@
 package com.ddgo.app.data.repository
 
+import android.util.Log
 import com.ddgo.app.data.remote.ai.AiAnalysisApi
 import com.ddgo.app.data.remote.ai.AiAnalysisRequestDto
 import com.ddgo.app.data.remote.ai.AiAnalysisResponseDto
 import com.ddgo.app.data.remote.ai.toJsonObject
+import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisRequestContext
 import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AiAnalysisVideoMetadata
@@ -11,15 +13,16 @@ import com.ddgo.app.domain.model.AiCruxCandidate
 import com.ddgo.app.domain.model.AiCruxResult
 import com.ddgo.app.domain.model.AiCruxSegment
 import com.ddgo.app.domain.model.AiLandmark3D
-import com.ddgo.app.domain.model.AiAnalysisMode
-import com.ddgo.app.domain.repository.AiAnalysisRepository
+import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.Hold
+import com.ddgo.app.domain.repository.AiAnalysisRepository
 import javax.inject.Inject
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import retrofit2.HttpException
 
 class AiAnalysisRepositoryImpl @Inject constructor(
     private val aiAnalysisApi: AiAnalysisApi
@@ -27,25 +30,110 @@ class AiAnalysisRepositoryImpl @Inject constructor(
 
     override suspend fun analyze(context: AiAnalysisRequestContext): Result<AiAnalysisResult> {
         return runCatching {
-            val request = AiAnalysisRequestDto(
+            val primaryRequest = buildPreparedRequest(
+                context = context,
+                maxFrameCount = DEFAULT_MAX_REQUEST_FRAME_COUNT
+            )
+            val response = try {
+                executeRequest(context.mode, primaryRequest.request)
+            } catch (throwable: Throwable) {
+                if (!throwable.isRequestEntityTooLarge()) {
+                    throw throwable
+                }
+
+                val retryRequest = buildPreparedRequest(
+                    context = context,
+                    maxFrameCount = RETRY_MAX_REQUEST_FRAME_COUNT
+                )
+                if (retryRequest.frameCount >= primaryRequest.frameCount) {
+                    throw throwable
+                }
+
+                Log.w(
+                    TAG,
+                    "AI request hit 413. Retrying with fewer frames: " +
+                        "mode=${context.mode}, originalFrames=${context.poseSequence.frames.size}, " +
+                        "primaryFrames=${primaryRequest.frameCount}, retryFrames=${retryRequest.frameCount}, " +
+                        "primaryStep=${primaryRequest.frameStep}, retryStep=${retryRequest.frameStep}"
+                )
+                executeRequest(context.mode, retryRequest.request)
+            }
+
+            response.toDomain(mode = context.mode)
+        }
+    }
+
+    private suspend fun executeRequest(
+        mode: AiAnalysisMode,
+        request: AiAnalysisRequestDto
+    ): AiAnalysisResponseDto {
+        return when (mode) {
+            AiAnalysisMode.FAST -> aiAnalysisApi.analyzeFast(request)
+            AiAnalysisMode.PHYSICS -> aiAnalysisApi.analyzePhysics(request)
+        }
+    }
+
+    private fun buildPreparedRequest(
+        context: AiAnalysisRequestContext,
+        maxFrameCount: Int
+    ): PreparedAiAnalysisRequest {
+        val filteredPoseSequence = context.poseSequence.filterValidRequestFrames()
+        require(filteredPoseSequence.frames.isNotEmpty()) {
+            "No valid pose-detected frames with complete landmarks available for AI analysis."
+        }
+
+        val effectiveFrameStep = resolveEffectiveFrameStep(
+            totalFrameCount = filteredPoseSequence.frames.size,
+            baseFrameStep = context.frameStep,
+            maxFrameCount = maxFrameCount
+        )
+        val sampledPoseSequence = filteredPoseSequence.sampleFrames(effectiveFrameStep)
+        if (filteredPoseSequence.frames.size < context.poseSequence.frames.size) {
+            Log.d(
+                TAG,
+                "Dropping invalid AI pose frames: originalFrames=${context.poseSequence.frames.size}, " +
+                    "validFrames=${filteredPoseSequence.frames.size}"
+            )
+        }
+        if (sampledPoseSequence.frames.size < filteredPoseSequence.frames.size) {
+            Log.d(
+                TAG,
+                "Sampling AI pose request: mode=${context.mode}, originalFrames=${filteredPoseSequence.frames.size}, " +
+                    "sampledFrames=${sampledPoseSequence.frames.size}, frameStep=$effectiveFrameStep"
+            )
+        }
+
+        return PreparedAiAnalysisRequest(
+            request = AiAnalysisRequestDto(
                 holdsJson = buildHoldsJson(
                     holds = context.holds,
                     frameWidthPx = context.frameWidthPx,
                     frameHeightPx = context.frameHeightPx
                 ),
-                pose3dSequenceJson = buildPoseSequenceJson(context),
+                pose3dSequenceJson = buildPoseSequenceJson(sampledPoseSequence),
                 userBodyJson = buildUserBodyJson(context),
                 topKCrux = context.topKCrux,
-                frameStep = context.frameStep
-            )
+                frameStep = effectiveFrameStep
+            ),
+            frameCount = sampledPoseSequence.frames.size,
+            frameStep = effectiveFrameStep
+        )
+    }
 
-            val response = when (context.mode) {
-                AiAnalysisMode.FAST -> aiAnalysisApi.analyzeFast(request)
-                AiAnalysisMode.PHYSICS -> aiAnalysisApi.analyzePhysics(request)
-            }
-
-            response.toDomain(mode = context.mode)
+    private fun resolveEffectiveFrameStep(
+        totalFrameCount: Int,
+        baseFrameStep: Int,
+        maxFrameCount: Int
+    ): Int {
+        val normalizedBaseStep = baseFrameStep.coerceAtLeast(1)
+        val normalizedMaxFrameCount = maxFrameCount.coerceAtLeast(1)
+        if (totalFrameCount <= normalizedMaxFrameCount) {
+            return normalizedBaseStep
         }
+
+        val requiredStride = ((totalFrameCount - 1) / normalizedMaxFrameCount) + 1
+        val strideMultiplier = ((requiredStride - 1) / normalizedBaseStep) + 1
+        return normalizedBaseStep * strideMultiplier
     }
 
     private fun buildHoldsJson(
@@ -99,33 +187,33 @@ class AiAnalysisRepositoryImpl @Inject constructor(
     }
 
     private fun buildPoseSequenceJson(
-        context: AiAnalysisRequestContext
+        poseSequence: AiPoseSequence
     ): JsonObject = buildJsonObject {
         put(
             "source",
             buildJsonObject {
-                put("video_uri", JsonPrimitive(context.poseSequence.source.videoUri))
-                put("generator", JsonPrimitive(context.poseSequence.source.generator))
-                put("exported_at", JsonPrimitive(context.poseSequence.source.exportedAtIso))
+                put("video_uri", JsonPrimitive(poseSequence.source.videoUri))
+                put("generator", JsonPrimitive(poseSequence.source.generator))
+                put("exported_at", JsonPrimitive(poseSequence.source.exportedAtIso))
             }
         )
         put(
             "video_metadata",
             buildJsonObject {
-                put("frame_width", JsonPrimitive(context.poseSequence.videoMetadata.frameWidth))
-                put("frame_height", JsonPrimitive(context.poseSequence.videoMetadata.frameHeight))
-                context.poseSequence.videoMetadata.fps?.let { fps ->
+                put("frame_width", JsonPrimitive(poseSequence.videoMetadata.frameWidth))
+                put("frame_height", JsonPrimitive(poseSequence.videoMetadata.frameHeight))
+                poseSequence.videoMetadata.fps?.let { fps ->
                     put("fps", JsonPrimitive(fps))
                 }
-                put("total_frames", JsonPrimitive(context.poseSequence.videoMetadata.totalFrames))
-                put("processed_frames", JsonPrimitive(context.poseSequence.videoMetadata.processedFrames))
-                put("analysis_fps_limit", JsonPrimitive(context.poseSequence.videoMetadata.analysisFpsLimit))
+                put("total_frames", JsonPrimitive(poseSequence.videoMetadata.totalFrames))
+                put("processed_frames", JsonPrimitive(poseSequence.videoMetadata.processedFrames))
+                put("analysis_fps_limit", JsonPrimitive(poseSequence.videoMetadata.analysisFpsLimit))
             }
         )
         put(
             "frames",
             JsonArray(
-                context.poseSequence.frames.map { frame ->
+                poseSequence.frames.map { frame ->
                     buildJsonObject {
                         put("frame_index", JsonPrimitive(frame.frameIndex))
                         put("timestamp_ms", JsonPrimitive(frame.timestampMs))
@@ -268,5 +356,50 @@ class AiAnalysisRepositoryImpl @Inject constructor(
             segmentCruxScore = segmentCruxScore,
             reasonTags = reasonTags
         )
+    }
+
+    private fun AiPoseSequence.sampleFrames(frameStep: Int): AiPoseSequence {
+        val normalizedStep = frameStep.coerceAtLeast(1)
+        val sampledFrames = if (normalizedStep == 1) {
+            frames
+        } else {
+            frames.filter { frame -> frame.frameIndex % normalizedStep == 0 }
+                .ifEmpty { frames.firstOrNull()?.let(::listOf).orEmpty() }
+        }
+
+        return copy(
+            videoMetadata = videoMetadata.copy(processedFrames = sampledFrames.size),
+            frames = sampledFrames
+        )
+    }
+
+    private fun AiPoseSequence.filterValidRequestFrames(): AiPoseSequence {
+        val validFrames = frames.filter { frame ->
+            frame.poseDetected &&
+                frame.poseLandmarks.size >= MIN_REQUIRED_LANDMARK_COUNT &&
+                frame.poseWorldLandmarks.size >= MIN_REQUIRED_LANDMARK_COUNT
+        }
+
+        return copy(
+            videoMetadata = videoMetadata.copy(processedFrames = validFrames.size),
+            frames = validFrames
+        )
+    }
+
+    private fun Throwable.isRequestEntityTooLarge(): Boolean =
+        (this as? HttpException)?.code() == REQUEST_ENTITY_TOO_LARGE
+
+    private data class PreparedAiAnalysisRequest(
+        val request: AiAnalysisRequestDto,
+        val frameCount: Int,
+        val frameStep: Int
+    )
+
+    companion object {
+        private const val TAG = "AiAnalysisRepository"
+        private const val REQUEST_ENTITY_TOO_LARGE = 413
+        private const val DEFAULT_MAX_REQUEST_FRAME_COUNT = 90
+        private const val RETRY_MAX_REQUEST_FRAME_COUNT = 48
+        private const val MIN_REQUIRED_LANDMARK_COUNT = 33
     }
 }

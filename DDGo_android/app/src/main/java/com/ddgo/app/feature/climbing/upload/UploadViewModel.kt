@@ -87,6 +87,8 @@ import wseemann.media.FFmpegMediaMetadataRetriever
 private const val TAG = "UploadViewModel"
 private const val HOLD_CONTACT_ANALYSIS_TAG = "HoldContactAnalysis"
 private const val HOLD_CONTACT_LOG_PREFIX = "[DDGO_HOLD_CONTACT]"
+private const val DEFAULT_AI_ANALYSIS_FPS_LIMIT = 10
+private const val DEFAULT_AI_REQUEST_FRAME_STEP = 1
 
 private data class AttemptPoseAnalysis(
     val holdReachResult: AttemptHoldReachResult,
@@ -2004,7 +2006,9 @@ class UploadViewModel @Inject constructor(
                 frameHeightPx = frameBitmap.height,
                 heightCm = profile.heightCm,
                 weightKg = profile.weightKg,
-                wingspanCm = profile.wingspanCm
+                wingspanCm = profile.wingspanCm,
+                analysisFpsLimit = DEFAULT_AI_ANALYSIS_FPS_LIMIT,
+                frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
             )
 
             if (result.isFailure) {
@@ -2043,7 +2047,7 @@ class UploadViewModel @Inject constructor(
             )
         }
 
-        if (mode == AiAnalysisMode.PHYSICS && weightKg == null) {
+        if (false && mode == AiAnalysisMode.PHYSICS && weightKg == null) {
             return Result.failure(
                 IllegalStateException("Physics 분석을 위해 프로필에 몸무게가 필요합니다.")
             )

@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 
 data class AiAnalysisResult(
     val mode: AiAnalysisMode,
+    val requestedMode: AiAnalysisMode = mode,
     val schemaVersion: String,
     val videoMetadata: AiAnalysisVideoMetadata?,
     val timingsSeconds: Map<String, Double>,
@@ -13,8 +14,14 @@ data class AiAnalysisResult(
     val physicsSummary: JsonObject? = null,
     val physicsPipelineBenchmarkTimingsSeconds: JsonObject? = null,
     val physicsResult: JsonObject? = null,
+    val fallbackReason: AiAnalysisFallbackReason? = null,
     val rawResponse: JsonObject
 )
+
+enum class AiAnalysisFallbackReason {
+    MISSING_WEIGHT,
+    PHYSICS_REQUEST_FAILED
+}
 
 data class AiAnalysisVideoMetadata(
     val frameWidth: Int,

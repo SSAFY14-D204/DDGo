@@ -1,5 +1,6 @@
 package com.ddgo.app.domain.usecase
 
+import com.ddgo.app.domain.model.AiAnalysisFallbackReason
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisRequestContext
 import com.ddgo.app.domain.model.AiAnalysisResult
@@ -23,7 +24,7 @@ import org.junit.Test
 class AnalyzeAttemptWithAiUseCaseTest {
 
     @Test
-    fun `physics mode without weight fails before provider call`() = runBlocking {
+    fun `physics mode without weight falls back to fast`() = runBlocking {
         val provider = FakeAiPoseSequenceProvider()
         val repository = FakeAiAnalysisRepository()
         val useCase = AnalyzeAttemptWithAiUseCase(provider, repository)
@@ -37,11 +38,48 @@ class AnalyzeAttemptWithAiUseCaseTest {
             heightCm = 180f,
             weightKg = null,
             wingspanCm = 181f
-        )
+        ).getOrThrow()
 
-        assertTrue(result.isFailure)
-        assertEquals(0, provider.callCount)
-        assertNull(repository.lastContext)
+        assertEquals(1, provider.callCount)
+        assertEquals(1, repository.callCount)
+        assertEquals(AiAnalysisMode.FAST, repository.contexts.single().mode)
+        assertEquals(AiAnalysisMode.FAST, result.mode)
+        assertEquals(AiAnalysisMode.PHYSICS, result.requestedMode)
+        assertEquals(AiAnalysisFallbackReason.MISSING_WEIGHT, result.fallbackReason)
+    }
+
+    @Test
+    fun `physics failure falls back to fast`() = runBlocking {
+        val provider = FakeAiPoseSequenceProvider()
+        val repository = FakeAiAnalysisRepository().apply {
+            enqueue(
+                AiAnalysisMode.PHYSICS,
+                Result.failure(IllegalStateException("physics failed"))
+            )
+            enqueue(
+                AiAnalysisMode.FAST,
+                Result.success(sampleResult(mode = AiAnalysisMode.FAST))
+            )
+        }
+        val useCase = AnalyzeAttemptWithAiUseCase(provider, repository)
+
+        val result = useCase(
+            mode = AiAnalysisMode.PHYSICS,
+            videoUri = "file:///attempt.mp4",
+            holds = listOf(sampleHold()),
+            frameWidthPx = 1000,
+            frameHeightPx = 500,
+            heightCm = 180f,
+            weightKg = 70f,
+            wingspanCm = 181f
+        ).getOrThrow()
+
+        assertEquals(1, provider.callCount)
+        assertEquals(2, repository.callCount)
+        assertEquals(listOf(AiAnalysisMode.PHYSICS, AiAnalysisMode.FAST), repository.contexts.map { it.mode })
+        assertEquals(AiAnalysisMode.FAST, result.mode)
+        assertEquals(AiAnalysisMode.PHYSICS, result.requestedMode)
+        assertEquals(AiAnalysisFallbackReason.PHYSICS_REQUEST_FAILED, result.fallbackReason)
     }
 
     @Test
@@ -70,7 +108,7 @@ class AnalyzeAttemptWithAiUseCaseTest {
         assertEquals(12, provider.lastAnalysisFpsLimit)
         assertEquals(1, repository.callCount)
 
-        val context = requireNotNull(repository.lastContext)
+        val context = repository.contexts.single()
         assertEquals(AiAnalysisMode.FAST, context.mode)
         assertEquals(1000, context.frameWidthPx)
         assertEquals(500, context.frameHeightPx)
@@ -124,23 +162,40 @@ private class FakeAiPoseSequenceProvider : AiPoseSequenceProvider {
 
 private class FakeAiAnalysisRepository : AiAnalysisRepository {
     var callCount = 0
-    var lastContext: AiAnalysisRequestContext? = null
+    val contexts = mutableListOf<AiAnalysisRequestContext>()
+    private val queuedResults = mutableMapOf<AiAnalysisMode, ArrayDeque<Result<AiAnalysisResult>>>()
+
+    fun enqueue(mode: AiAnalysisMode, result: Result<AiAnalysisResult>) {
+        val queue = queuedResults.getOrPut(mode) { ArrayDeque() }
+        queue.addLast(result)
+    }
 
     override suspend fun analyze(context: AiAnalysisRequestContext): Result<AiAnalysisResult> {
         callCount += 1
-        lastContext = context
-        return Result.success(
-            AiAnalysisResult(
-                mode = context.mode,
-                schemaVersion = "2026-03-19",
-                videoMetadata = null,
-                timingsSeconds = emptyMap(),
-                correctionSummary = null,
-                cruxResult = AiCruxResult(candidateCount = 0, topCandidates = emptyList(), allCandidates = emptyList()),
-                rawResponse = JsonObject(emptyMap())
-            )
-        )
+        contexts += context
+        val queued = queuedResults[context.mode]
+        return if (queued != null && queued.isNotEmpty()) {
+            queued.removeFirst()
+        } else {
+            Result.success(sampleResult(mode = context.mode))
+        }
     }
+}
+
+private fun sampleResult(mode: AiAnalysisMode): AiAnalysisResult {
+    return AiAnalysisResult(
+        mode = mode,
+        schemaVersion = "2026-03-19",
+        videoMetadata = null,
+        timingsSeconds = emptyMap(),
+        correctionSummary = null,
+        cruxResult = AiCruxResult(
+            candidateCount = 0,
+            topCandidates = emptyList(),
+            allCandidates = emptyList()
+        ),
+        rawResponse = JsonObject(emptyMap())
+    )
 }
 
 private fun sampleHold(): Hold {

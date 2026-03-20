@@ -50,6 +50,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.domain.model.AiAnalysisFallbackReason
+import com.ddgo.app.domain.model.AiAnalysisMode
+import com.ddgo.app.domain.model.AiAnalysisResult
+import com.ddgo.app.domain.model.AiAnalysisVideoMetadata
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
@@ -57,7 +61,14 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.format.DateTimeParseException
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.roundToInt

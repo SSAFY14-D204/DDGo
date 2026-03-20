@@ -29,12 +29,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ddgo.app.feature.climbing.upload.AnalysisAttemptSummary
 import com.ddgo.app.feature.climbing.upload.AnalysisBgColor
 import com.ddgo.app.feature.climbing.upload.AnalysisGradientButton
 import com.ddgo.app.feature.climbing.upload.AnalysisSectionTabs
 import com.ddgo.app.feature.climbing.upload.AnalysisText
 import com.ddgo.app.feature.climbing.upload.AttemptChipRow
+import com.ddgo.app.feature.climbing.upload.FinalAnalysisAttemptSummary
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHero
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.FailureCausePanel
@@ -42,8 +42,8 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.ProblemStatsPan
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.StabilityPanel
 
 internal enum class FinalAnalysisTab(val label: String) {
-    Stats("문제 통계"),
-    Stability("안정도"),
+    Stats("통계"),
+    Stability("안정성"),
     Failure("실패 원인")
 }
 
@@ -51,13 +51,13 @@ internal data class FinalAnalysisPageState(
     val heroState: AttemptPreviewHeroState,
     val selectedAttempt: Int,
     val totalAttempts: Int,
-    val currentSummary: AnalysisAttemptSummary,
+    val currentSummary: FinalAnalysisAttemptSummary,
     val overallSuccess: Boolean,
-    val averageReachedHolds: Int,
-    val totalHolds: Int,
-    val averageBalanceRatio: Int,
+    val averageReachedHoldsText: String,
+    val averageReachedHoldsSuffix: String?,
+    val averageInsideSupportRatioText: String,
     val combinedTimeline: List<Float>,
-    val focusFraction: Float?,
+    val statsFocusFraction: Float?,
     val actionText: String
 )
 
@@ -94,19 +94,19 @@ internal fun FinalAnalysisPage(
             FinalAnalysisTab.Stats -> {
                 ProblemStatsPanel(
                     overallSuccess = state.overallSuccess,
-                    averageReachedHolds = state.averageReachedHolds,
-                    totalHolds = state.totalHolds,
-                    averageBalanceRatio = state.averageBalanceRatio,
+                    averageReachedHoldsText = state.averageReachedHoldsText,
+                    averageReachedHoldsSuffix = state.averageReachedHoldsSuffix,
+                    averageInsideSupportRatioText = state.averageInsideSupportRatioText,
                     timeline = state.combinedTimeline,
-                    focusFraction = state.focusFraction
+                    focusFraction = state.statsFocusFraction
                 )
             }
 
             FinalAnalysisTab.Stability -> {
                 StabilityPanel(
                     currentSummary = state.currentSummary,
-                    timeline = state.combinedTimeline,
-                    focusFraction = state.focusFraction
+                    timeline = state.currentSummary.stabilityTimeline,
+                    focusFraction = state.currentSummary.stabilityFocusFraction
                 )
             }
 
@@ -171,7 +171,7 @@ private fun FinalAnalysisTopBar(
         }
 
         Text(
-            text = "문제 분석",
+            text = "분석 리포트",
             modifier = Modifier.align(Alignment.Center),
             color = AnalysisText,
             fontSize = 18.sp,

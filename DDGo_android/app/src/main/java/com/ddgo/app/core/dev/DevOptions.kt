@@ -6,5 +6,5 @@ import androidx.compose.runtime.setValue
 import com.ddgo.app.domain.model.AiAnalysisMode
 
 object DevOptions {
-    var aiAnalysisMode by mutableStateOf(AiAnalysisMode.FAST)
+    var aiAnalysisMode by mutableStateOf(AiAnalysisMode.PHYSICS)
 }
