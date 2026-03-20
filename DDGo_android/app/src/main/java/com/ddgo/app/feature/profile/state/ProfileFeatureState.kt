@@ -97,7 +97,10 @@ internal data class ProfileFeatureState(
         if (editor.isSaving) return this
 
         return copy(
-            nicknameEditor = editor.copy(nicknameInput = input)
+            nicknameEditor = editor.copy(
+                nicknameInput = input,
+                errorMessage = null
+            )
         )
     }
 
@@ -107,6 +110,7 @@ internal data class ProfileFeatureState(
         return copy(
             nicknameEditor = editor.copy(
                 nicknameInput = nickname,
+                errorMessage = null,
                 isSaving = true
             )
         )
@@ -118,6 +122,18 @@ internal data class ProfileFeatureState(
         return copy(
             nicknameEditor = editor.copy(
                 nicknameInput = nickname,
+                errorMessage = null,
+                isSaving = false
+            )
+        )
+    }
+
+    /** 닉네임 편집 다이얼로그에 즉시 확인 가능한 오류 메시지를 표시합니다. */
+    fun showNicknameEditorError(message: String): ProfileFeatureState {
+        val editor = nicknameEditor ?: return this
+        return copy(
+            nicknameEditor = editor.copy(
+                errorMessage = message,
                 isSaving = false
             )
         )
@@ -158,20 +174,43 @@ internal data class ProfileFeatureState(
         val editor = bodyProfileEditor ?: return this
         if (editor.isSaving) return this
 
-        return copy(bodyProfileEditor = transform(editor))
+        return copy(
+            bodyProfileEditor = transform(editor).copy(errorMessage = null)
+        )
     }
 
     /** 신체 정보 저장 중 상태를 반영합니다. */
     fun markBodyProfileSaving(): ProfileFeatureState {
         val editor = bodyProfileEditor ?: return this
-        return copy(bodyProfileEditor = editor.copy(isSaving = true))
+        return copy(
+            bodyProfileEditor = editor.copy(
+                errorMessage = null,
+                isSaving = true
+            )
+        )
     }
 
     /** 신체 정보 저장 실패 후 편집 상태를 복구합니다. */
     fun restoreBodyProfileEditor(
         editor: ProfileBodyProfileEditorUiState
     ): ProfileFeatureState {
-        return copy(bodyProfileEditor = editor.copy(isSaving = false))
+        return copy(
+            bodyProfileEditor = editor.copy(
+                errorMessage = null,
+                isSaving = false
+            )
+        )
+    }
+
+    /** 신체 정보 편집 다이얼로그에 즉시 확인 가능한 오류 메시지를 표시합니다. */
+    fun showBodyProfileEditorError(message: String): ProfileFeatureState {
+        val editor = bodyProfileEditor ?: return this
+        return copy(
+            bodyProfileEditor = editor.copy(
+                errorMessage = message,
+                isSaving = false
+            )
+        )
     }
 
     /** 신체 정보 저장 성공 값을 로컬 상태에 즉시 반영합니다. */
@@ -226,20 +265,43 @@ internal data class ProfileFeatureState(
         val editor = passwordEditor ?: return this
         if (editor.isSaving) return this
 
-        return copy(passwordEditor = transform(editor))
+        return copy(
+            passwordEditor = transform(editor).copy(errorMessage = null)
+        )
     }
 
     /** 비밀번호 저장 진행 중 상태로 전환합니다. */
     fun markPasswordSaving(): ProfileFeatureState {
         val editor = passwordEditor ?: return this
-        return copy(passwordEditor = editor.copy(isSaving = true))
+        return copy(
+            passwordEditor = editor.copy(
+                errorMessage = null,
+                isSaving = true
+            )
+        )
     }
 
     /** 비밀번호 저장 실패 후 편집 상태를 복원합니다. */
     fun restorePasswordEditor(
         editor: ProfilePasswordEditorUiState
     ): ProfileFeatureState {
-        return copy(passwordEditor = editor.copy(isSaving = false))
+        return copy(
+            passwordEditor = editor.copy(
+                errorMessage = null,
+                isSaving = false
+            )
+        )
+    }
+
+    /** 비밀번호 변경 다이얼로그에 즉시 확인 가능한 오류 메시지를 표시합니다. */
+    fun showPasswordEditorError(message: String): ProfileFeatureState {
+        val editor = passwordEditor ?: return this
+        return copy(
+            passwordEditor = editor.copy(
+                errorMessage = message,
+                isSaving = false
+            )
+        )
     }
 
     /** 비밀번호 변경 성공 후 편집 상태를 정리합니다. */

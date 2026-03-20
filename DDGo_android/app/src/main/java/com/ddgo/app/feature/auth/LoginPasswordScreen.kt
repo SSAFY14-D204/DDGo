@@ -10,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,18 +25,13 @@ import com.ddgo.app.core.ui.theme.PretendardFamily
 @Composable
 fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val errorMessage = viewModel.errorMessage
 
     LaunchedEffect(uiState) {
-        when (val state = uiState) {
+        when (uiState) {
             is AuthUiState.Success -> {
                 viewModel.resetUiState()
                 onLoginComplete()
-            }
-
-            is AuthUiState.Error -> {
-                snackbarHostState.showSnackbar(state.message)
-                viewModel.resetUiState()
             }
 
             else -> Unit
@@ -100,6 +94,11 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
                         unfocusedIndicatorColor = Color(0xFF1DA1F2),
                     )
                 )
+
+                errorMessage?.let { message ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AuthInlineErrorMessage(message = message)
+                }
             }
 
             Column(
@@ -140,14 +139,5 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
                 }
             }
         }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 24.dp, vertical = 24.dp)
-        )
     }
 }

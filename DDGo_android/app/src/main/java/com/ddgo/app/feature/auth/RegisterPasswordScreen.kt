@@ -1,6 +1,5 @@
 package com.ddgo.app.feature.auth
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,7 +13,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -27,19 +25,13 @@ import com.ddgo.app.core.ui.theme.PretendardFamily
 @Composable
 fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
+    val errorMessage = viewModel.errorMessage
 
     LaunchedEffect(uiState) {
         when (uiState) {
             is AuthUiState.Success -> {
-                Toast.makeText(context, "\uD68C\uC6D0\uAC00\uC785\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.", Toast.LENGTH_SHORT).show()
                 viewModel.resetUiState()
                 onRegComplete()
-            }
-
-            is AuthUiState.Error -> {
-                Toast.makeText(context, (uiState as AuthUiState.Error).message, Toast.LENGTH_SHORT).show()
-                viewModel.resetUiState()
             }
 
             else -> {}
@@ -106,8 +98,13 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            errorMessage?.let { message ->
+                AuthInlineErrorMessage(message = message)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             Text(
-                text = "\u2715 \uC601\uBB38/\uC22B\uC790/\uD2B9\uC218\uBB38\uC790 2\uAC00\uC9C0 \uC774\uC0C1 \uC870\uD569 (8~20\uC790)",
+                text = AuthStrings.RegisterPasswordRule,
                 style = TextStyle(
                     color = Color(0xFFFF3B30),
                     fontSize = 12.sp,

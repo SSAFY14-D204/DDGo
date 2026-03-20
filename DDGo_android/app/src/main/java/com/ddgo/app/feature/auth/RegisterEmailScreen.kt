@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,6 +21,12 @@ import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
 fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: () -> Unit = {}) {
+    val errorMessage = viewModel.errorMessage
+
+    LaunchedEffect(Unit) {
+        viewModel.clearErrorState()
+    }
+
     SafeAreaScreen(
         modifier = Modifier
             .background(Color.White)
@@ -73,10 +80,19 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
                     unfocusedIndicatorColor = Color(0xFF1DA1F2),
                 )
             )
+
+            errorMessage?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                AuthInlineErrorMessage(message = message)
+            }
         }
 
         Button(
-            onClick = onNext,
+            onClick = {
+                if (viewModel.validateUsernameStep() == null) {
+                    onNext()
+                }
+            },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()

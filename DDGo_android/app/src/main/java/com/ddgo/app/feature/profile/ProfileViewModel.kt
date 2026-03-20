@@ -105,7 +105,9 @@ class ProfileViewModel @Inject constructor(
                 currentNickname = featureState.resolveNickname()
             )
         ) {
-            is ProfileValidation.Invalid -> emitMessage(validation.message)
+            is ProfileValidation.Invalid -> updateState {
+                it.showNicknameEditorError(validation.message)
+            }
             is ProfileValidation.Valid -> submitNicknameInternal(validation.value)
         }
     }
@@ -160,7 +162,9 @@ class ProfileViewModel @Inject constructor(
         if (editor.isSaving) return
 
         when (val validation = ProfileInputValidator.validateBodyProfile(editor)) {
-            is ProfileValidation.Invalid -> emitMessage(validation.message)
+            is ProfileValidation.Invalid -> updateState {
+                it.showBodyProfileEditorError(validation.message)
+            }
             is ProfileValidation.Valid -> submitBodyProfileInternal(
                 originalEditor = editor,
                 validated = validation.value
@@ -198,8 +202,16 @@ class ProfileViewModel @Inject constructor(
         val editor = featureState.passwordEditor ?: return
         if (editor.isSaving) return
 
-        when (val validation = ProfileInputValidator.validatePasswordChange(editor)) {
-            is ProfileValidation.Invalid -> emitMessage(validation.message)
+        when (
+            val validation = ProfileInputValidator.validatePasswordChange(
+                editor = editor,
+                currentUsername = featureState.currentUser?.username,
+                currentNickname = featureState.resolveNickname()
+            )
+        ) {
+            is ProfileValidation.Invalid -> updateState {
+                it.showPasswordEditorError(validation.message)
+            }
             is ProfileValidation.Valid -> submitPasswordChangeInternal(
                 originalEditor = editor,
                 validated = validation.value
@@ -313,8 +325,10 @@ class ProfileViewModel @Inject constructor(
                 }
                 .onFailure { throwable ->
                     featureState = featureState.restoreNicknameEditor(nickname)
+                        .showNicknameEditorError(
+                            throwable.message ?: ProfileStrings.NicknameSaveFailed
+                        )
                     publishState()
-                    emitMessage(throwable.message ?: ProfileStrings.NicknameSaveFailed)
                 }
         }
     }
@@ -346,8 +360,10 @@ class ProfileViewModel @Inject constructor(
                 emitMessage(ProfileStrings.BodyProfileSaved)
             }.onFailure { throwable ->
                 featureState = featureState.restoreBodyProfileEditor(originalEditor)
+                    .showBodyProfileEditorError(
+                        throwable.message ?: ProfileStrings.BodyProfileSaveFailed
+                    )
                 publishState()
-                emitMessage(throwable.message ?: ProfileStrings.BodyProfileSaveFailed)
             }
         }
     }
@@ -370,8 +386,10 @@ class ProfileViewModel @Inject constructor(
                 emitMessage(ProfileStrings.PasswordChanged)
             }.onFailure { throwable ->
                 featureState = featureState.restorePasswordEditor(originalEditor)
+                    .showPasswordEditorError(
+                        throwable.message ?: ProfileStrings.PasswordChangeFailed
+                    )
                 publishState()
-                emitMessage(throwable.message ?: ProfileStrings.PasswordChangeFailed)
             }
         }
     }
