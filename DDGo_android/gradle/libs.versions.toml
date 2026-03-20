@@ -34,6 +34,7 @@ hiltWork                = "1.2.0"
 # ─── Media ──────────────────────────────────────────────────────────────────
 media3                  = "1.4.1"
 coil                    = "2.6.0"
+cameraX                 = "1.4.1"
 
 # ─── Desugaring ─────────────────────────────────────────────────────────────
 desugarJdkLibs          = "2.0.4"
@@ -95,6 +96,11 @@ media3-exoplayer                    = { group = "androidx.media3",              
 media3-ui                           = { group = "androidx.media3",              name = "media3-ui",                     version.ref = "media3" }
 coil-compose                        = { group = "io.coil-kt",                   name = "coil-compose",                  version.ref = "coil" }
 coil-video                          = { group = "io.coil-kt",                   name = "coil-video",                    version.ref = "coil" }
+androidx-camera-core                = { group = "androidx.camera",              name = "camera-core",                   version.ref = "cameraX" }
+androidx-camera-camera2             = { group = "androidx.camera",              name = "camera-camera2",                version.ref = "cameraX" }
+androidx-camera-lifecycle           = { group = "androidx.camera",              name = "camera-lifecycle",              version.ref = "cameraX" }
+androidx-camera-video               = { group = "androidx.camera",              name = "camera-video",                  version.ref = "cameraX" }
+androidx-camera-view                = { group = "androidx.camera",              name = "camera-view",                   version.ref = "cameraX" }
 
 # Desugaring
 desugar-jdk-libs                    = { group = "com.android.tools",            name = "desugar_jdk_libs",              version.ref = "desugarJdkLibs" }

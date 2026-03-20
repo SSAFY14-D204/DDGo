@@ -4,9 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,18 +27,28 @@ import com.ddgo.app.core.ui.components.SafeAreaScreen
 @Composable
 fun AttemptUploadScreen(
     viewModel: UploadViewModel = hiltViewModel(),
+    initialRecordedVideoUri: String? = null,
+    initialRealtimeSessionId: String? = null,
     onNavigateToNext: () -> Unit = {}
 ) {
-    LaunchedEffect(Unit) {
+    LaunchedEffect(initialRecordedVideoUri, initialRealtimeSessionId) {
         viewModel.beginNewChallengeUploadFlow()
+        initialRecordedVideoUri
+            ?.takeIf { it.isNotBlank() }
+            ?.let { recordedUri ->
+                viewModel.updateVideoUri(
+                    uri = recordedUri,
+                    realtimeSessionId = initialRealtimeSessionId
+                )
+                onNavigateToNext()
+            }
     }
 
-    // 선택 완료 즉시 → ViewModel에 URI 저장 + 다음 화면 이동
     val videoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.updateVideoUri(uri.toString()) // 썸네일 추출은 ViewModel에서 백그라운드 처리
+            viewModel.updateVideoUri(uri = uri.toString())
             onNavigateToNext()
         }
     }
@@ -52,29 +60,24 @@ fun AttemptUploadScreen(
                 .padding(horizontal = 24.dp, vertical = 48.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // 안내 텍스트
             Column {
                 Text(
-                    text = "분석하고 싶은 문제의",
+                    text = "Upload a climbing video for analysis.",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
                 Text(
-                    text = "첫번째 시도 영상을 골라주세요",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    text = "Pick a saved attempt video, or continue automatically with the video you just recorded.",
+                    fontSize = 16.sp,
+                    color = Color(0xFFB8B8B8)
                 )
             }
 
-            // 갤러리 선택 버튼
             Button(
                 onClick = {
                     videoPickerLauncher.launch(
-                        PickVisualMediaRequest(
-                            ActivityResultContracts.PickVisualMedia.VideoOnly
-                        )
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                     )
                 },
                 modifier = Modifier
@@ -87,7 +90,7 @@ fun AttemptUploadScreen(
                 )
             ) {
                 Text(
-                    text = "동영상 선택",
+                    text = "Choose video",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )

@@ -19,8 +19,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.core.dev.DevOptions
 import com.ddgo.app.data.mapper.toPoseSequenceDto
+import com.ddgo.app.domain.model.AiAnalysisFallbackReason
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisResult
+import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.HoldPoint
@@ -42,10 +44,14 @@ import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
 import com.ddgo.app.domain.repository.PoseEstimator
+import com.ddgo.app.domain.repository.AiRealtimeSessionContextRequest
+import com.ddgo.app.domain.repository.AiRealtimeSessionHandle
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
+import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
 import com.ddgo.app.domain.usecase.ClimbEndDetection
+import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
@@ -127,7 +133,9 @@ class UploadViewModel @Inject constructor(
     private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase,
     private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
     private val getMyInfoUseCase: GetMyInfoUseCase,
-    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase
+    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase,
+    private val attachAiRealtimeContextUseCase: AttachAiRealtimeContextUseCase,
+    private val finalizeAiRealtimeSessionUseCase: FinalizeAiRealtimeSessionUseCase
 ) : ViewModel() {
 
     // UI 레이어에 노출할 상태 (로딩, 성공, 실패 등)
@@ -697,7 +705,10 @@ class UploadViewModel @Inject constructor(
      *   1. MediaExtractor.advance()로 컨테이너를 순서대로 순회 → 첫 번째 실제 PTS 수집
      *   2. 수집한 PTS를 FFmpegMediaMetadataRetriever.OPTION_CLOSEST 에 전달
      */
-    fun updateVideoUri(uri: String) {
+    fun updateVideoUri(
+        uri: String,
+        realtimeSessionId: String? = null
+    ) {
         val generation = beginSelectionUpdate()
         uploadFlowMode = UploadFlowMode.FullChallenge
         debugBestFrameImageUri = null
@@ -710,7 +721,8 @@ class UploadViewModel @Inject constructor(
         primarySelectionJob = viewModelScope.launch(Dispatchers.IO) {
             val managedVideo = normalizeToManagedVideo(
                 uri = Uri.parse(uri),
-                filePrefix = "primary"
+                filePrefix = "primary",
+                realtimeSessionId = realtimeSessionId
             )
 
             withContext(Dispatchers.Main) {
@@ -751,20 +763,23 @@ class UploadViewModel @Inject constructor(
         return uris.mapIndexed { index, uriString ->
             normalizeToManagedVideo(
                 uri = Uri.parse(uriString),
-                filePrefix = "${filePrefix}_${index + 1}"
+                filePrefix = "${filePrefix}_${index + 1}",
+                realtimeSessionId = null
             )
         }
     }
 
     private fun normalizeToManagedVideo(
         uri: Uri,
-        filePrefix: String
+        filePrefix: String,
+        realtimeSessionId: String?
     ): ManagedAttemptVideo {
         if (uri.scheme == "file") {
             return ManagedAttemptVideo(
                 sourceUri = uri.toString(),
                 playbackUri = uri.toString(),
-                tempFilePath = null
+                tempFilePath = null,
+                realtimeSessionId = realtimeSessionId
             )
         }
 
@@ -790,14 +805,16 @@ class UploadViewModel @Inject constructor(
             ManagedAttemptVideo(
                 sourceUri = uri.toString(),
                 playbackUri = Uri.fromFile(tempFile).toString(),
-                tempFilePath = tempFile.absolutePath
+                tempFilePath = tempFile.absolutePath,
+                realtimeSessionId = realtimeSessionId
             )
         } catch (e: Exception) {
             Log.e(TAG, "캐시 복사 실패, 원본 URI 사용: ${e.message}")
             ManagedAttemptVideo(
                 sourceUri = uri.toString(),
                 playbackUri = uri.toString(),
-                tempFilePath = null
+                tempFilePath = null,
+                realtimeSessionId = realtimeSessionId
             )
         }
     }
@@ -2172,24 +2189,31 @@ class UploadViewModel @Inject constructor(
 
         val results = mutableListOf<AiAnalysisResult>()
         val analysisHolds = holds.toHolds()
+        val primaryRealtimeSessionId = primaryManagedVideo?.realtimeSessionId?.takeIf { it.isNotBlank() }
 
         attemptUris.forEachIndexed { index, uri ->
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
                 "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${attemptUris.size})"
             )
 
-            val result = analyzeAttemptWithAiUseCase(
-                mode = mode,
-                videoUri = uri,
-                holds = analysisHolds,
-                frameWidthPx = frameBitmap.width,
-                frameHeightPx = frameBitmap.height,
-                heightCm = profile.heightCm,
-                weightKg = profile.weightKg,
-                wingspanCm = profile.wingspanCm,
-                analysisFpsLimit = DEFAULT_AI_ANALYSIS_FPS_LIMIT,
-                frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
-            )
+            val result = if (index == 0 && primaryRealtimeSessionId != null) {
+                finalizeRealtimeAttemptOrFallback(
+                    sessionId = primaryRealtimeSessionId,
+                    requestedMode = mode,
+                    videoUri = uri,
+                    holds = analysisHolds,
+                    frameBitmap = frameBitmap,
+                    profile = profile
+                )
+            } else {
+                analyzeAttemptWithBatchAi(
+                    mode = mode,
+                    videoUri = uri,
+                    holds = analysisHolds,
+                    frameBitmap = frameBitmap,
+                    profile = profile
+                )
+            }
 
             if (result.isFailure) {
                 return Result.failure(
@@ -2206,6 +2230,122 @@ class UploadViewModel @Inject constructor(
         attemptAiAnalysisResults = results
         syncDisplayedAnalysisPoints()
         return Result.success(results)
+    }
+
+    private suspend fun finalizeRealtimeAttemptOrFallback(
+        sessionId: String,
+        requestedMode: AiAnalysisMode,
+        videoUri: String,
+        holds: List<Hold>,
+        frameBitmap: Bitmap,
+        profile: ResolvedAiProfile
+    ): Result<AiAnalysisResult> {
+        val sessionHandle = buildRealtimeSessionHandle(
+            sessionId = sessionId,
+            requestedMode = requestedMode,
+            profile = profile
+        )
+
+        val attachResult = attachAiRealtimeContextUseCase(
+            session = sessionHandle,
+            request = AiRealtimeSessionContextRequest(
+                holds = holds,
+                videoMetadata = buildRealtimeVideoMetadata(frameBitmap)
+            )
+        )
+
+        if (attachResult.isSuccess) {
+            val finalizeResult = finalizeAiRealtimeSessionUseCase(sessionHandle)
+                .map { result ->
+                    val fallbackReason = when {
+                        requestedMode == AiAnalysisMode.PHYSICS &&
+                            sessionHandle.effectiveMode != AiAnalysisMode.PHYSICS -> {
+                            AiAnalysisFallbackReason.MISSING_WEIGHT
+                        }
+
+                        else -> result.fallbackReason
+                    }
+
+                    result.copy(
+                        requestedMode = requestedMode,
+                        fallbackReason = fallbackReason
+                    )
+                }
+
+            if (finalizeResult.isSuccess) {
+                return finalizeResult
+            }
+
+            Log.w(
+                TAG,
+                "Realtime finalize failed. Falling back to local batch analysis.",
+                finalizeResult.exceptionOrNull()
+            )
+        } else {
+            Log.w(
+                TAG,
+                "Realtime context attach failed. Falling back to local batch analysis.",
+                attachResult.exceptionOrNull()
+            )
+        }
+
+        return analyzeAttemptWithBatchAi(
+            mode = requestedMode,
+            videoUri = videoUri,
+            holds = holds,
+            frameBitmap = frameBitmap,
+            profile = profile
+        )
+    }
+
+    private suspend fun analyzeAttemptWithBatchAi(
+        mode: AiAnalysisMode,
+        videoUri: String,
+        holds: List<Hold>,
+        frameBitmap: Bitmap,
+        profile: ResolvedAiProfile
+    ): Result<AiAnalysisResult> {
+        return analyzeAttemptWithAiUseCase(
+            mode = mode,
+            videoUri = videoUri,
+            holds = holds,
+            frameWidthPx = frameBitmap.width,
+            frameHeightPx = frameBitmap.height,
+            heightCm = profile.heightCm,
+            weightKg = profile.weightKg,
+            wingspanCm = profile.wingspanCm,
+            analysisFpsLimit = DEFAULT_AI_ANALYSIS_FPS_LIMIT,
+            frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
+        )
+    }
+
+    private fun buildRealtimeSessionHandle(
+        sessionId: String,
+        requestedMode: AiAnalysisMode,
+        profile: ResolvedAiProfile
+    ): AiRealtimeSessionHandle {
+        val effectiveMode = if (
+            requestedMode == AiAnalysisMode.PHYSICS &&
+            (profile.weightKg == null || profile.weightKg <= 0f)
+        ) {
+            AiAnalysisMode.FAST
+        } else {
+            requestedMode
+        }
+
+        return AiRealtimeSessionHandle(
+            sessionId = sessionId,
+            requestedMode = requestedMode,
+            effectiveMode = effectiveMode
+        )
+    }
+
+    private fun buildRealtimeVideoMetadata(frameBitmap: Bitmap): AiVideoMetadata {
+        return AiVideoMetadata(
+            frameWidth = frameBitmap.width,
+            frameHeight = frameBitmap.height,
+            frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
+        )
     }
 
     private suspend fun resolveAiProfile(
@@ -2434,7 +2574,8 @@ private data class ResolvedAiProfile(
 data class ManagedAttemptVideo(
     val sourceUri: String,
     val playbackUri: String,
-    val tempFilePath: String?
+    val tempFilePath: String?,
+    val realtimeSessionId: String? = null
 )
 
 enum class PrePoseStatus {
