@@ -14,6 +14,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
+import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
 
@@ -72,6 +73,10 @@ object NetworkModule {
         }
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .callTimeout(150, TimeUnit.SECONDS)
             .build()
     }
 
@@ -191,6 +196,14 @@ object NetworkModule {
         @Named("AiServerRetrofit") retrofit: Retrofit
     ): com.ddgo.app.data.remote.ai.AiAnalysisApi {
         return retrofit.create(com.ddgo.app.data.remote.ai.AiAnalysisApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAiRealtimeSessionApi(
+        @Named("AiServerRetrofit") retrofit: Retrofit
+    ): com.ddgo.app.data.remote.ai.AiRealtimeSessionApi {
+        return retrofit.create(com.ddgo.app.data.remote.ai.AiRealtimeSessionApi::class.java)
     }
 
     /**

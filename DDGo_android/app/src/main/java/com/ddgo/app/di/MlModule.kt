@@ -1,11 +1,13 @@
 package com.ddgo.app.di
 
 import com.ddgo.app.data.ml.mediapipe.PoseEstimatorImpl
+import com.ddgo.app.data.ml.mediapipe.LivePoseLandmarkerAnalyzer
 import com.ddgo.app.data.ml.mediapipe.SequentialPoseVideoAnalyzer
 import com.ddgo.app.data.ml.persondetect.PersonDetectorImpl
 import com.ddgo.app.data.ml.yolo.HoldDetectorImpl
 import com.ddgo.app.domain.repository.AiPoseSequenceProvider
 import com.ddgo.app.domain.repository.HoldDetector
+import com.ddgo.app.domain.repository.LivePoseAnalyzerRepository
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
@@ -43,6 +45,12 @@ abstract class MlModule {
     abstract fun bindAiPoseSequenceProvider(
         impl: SequentialPoseVideoAnalyzer
     ): AiPoseSequenceProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindLivePoseAnalyzerRepository(
+        impl: LivePoseLandmarkerAnalyzer
+    ): LivePoseAnalyzerRepository
 
     @Binds
     @Singleton

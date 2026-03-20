@@ -8,7 +8,7 @@ python-dotenv>=1.0.0
 numpy>=1.26.0
 mujoco>=3.0.0
 
-# 현재 MuJoCo Complete 런타임 파일이 직접 import하고 있는 패키지
-# 서버가 raw JSON만 받더라도, runtime 모듈 import 과정에서 필요합니다.
+# Runtime dependencies imported directly by the MuJoCo complete pipeline.
+# These are used by the JSON/runtime modules even when they are not obvious from the API layer.
 mediapipe>=0.10.14
 opencv-python>=4.9.0

@@ -11,11 +11,18 @@ import javax.inject.Inject
  */
 class BuildAiUserBodyProfileUseCase @Inject constructor() {
 
-    operator fun invoke(user: User): Result<AiUserBodyProfile> {
+    operator fun invoke(
+        user: User,
+        allowMissingWeight: Boolean = false
+    ): Result<AiUserBodyProfile> {
         val heightCm = user.heightCm
             ?: return Result.failure(IllegalStateException("heightCm is required for AI analysis."))
         val weightKg = user.weightKg
-            ?: return Result.failure(IllegalStateException("weightKg is required for AI analysis."))
+            ?: if (allowMissingWeight) {
+                null
+            } else {
+                return Result.failure(IllegalStateException("weightKg is required for AI analysis."))
+            }
         val wingspanCm = user.wingspanCm ?: heightCm
 
         val heightM = heightCm / 100.0
@@ -44,7 +51,7 @@ class BuildAiUserBodyProfileUseCase @Inject constructor() {
             rightThighM = thighM,
             leftShinM = shinM,
             rightShinM = shinM,
-            bodyMassKg = weightKg.toDouble()
+            bodyMassKg = weightKg?.toDouble()
         )
 
         return Result.success(

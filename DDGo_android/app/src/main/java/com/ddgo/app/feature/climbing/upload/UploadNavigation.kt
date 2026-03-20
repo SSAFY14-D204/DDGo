@@ -1,26 +1,18 @@
 package com.ddgo.app.feature.climbing.upload
 
-import androidx.compose.runtime.remember
+import android.net.Uri
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import androidx.navigation.navigation
 import com.ddgo.app.feature.climbing.upload.ui.analysis.route.FinalAnalysisRoute
 import com.ddgo.app.navigation.ScreenRoutes
 
-/**
- * 영상 업로드 플로우를 담당하는 서브 네비게이션 그래프.
- *
- * 플로우:
- *   시도 업로드 → 챌린지 생성(이름→레벨→컬러) → 홀드 탐지+누락 추가 → 시작/끝 홀드 선택 → 결과 확인
- *
- * 진입: [ScreenRoutes.Climbing.Upload.route]
- * 시작 화면: [ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD]
- *
- * 모든 화면이 동일한 UploadViewModel 인스턴스를 공유합니다 (uploadGraph 스코프).
- */
 fun NavGraphBuilder.uploadGraph(
     navController: NavController
 ) {
@@ -28,22 +20,42 @@ fun NavGraphBuilder.uploadGraph(
         startDestination = ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD,
         route = ScreenRoutes.Climbing.Upload.route
     ) {
-        // 1. 영상 선택 화면
-        composable(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD) { backStackEntry ->
+        composable(
+            route = ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD_WITH_ARGS,
+            arguments = listOf(
+                navArgument(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
             }
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
+            val initialRecordedVideoUri = backStackEntry.arguments
+                ?.getString(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
+                ?.let(Uri::decode)
+            val initialRealtimeSessionId = backStackEntry.arguments
+                ?.getString(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID)
+                ?.takeIf { it.isNotBlank() }
 
             AttemptUploadScreen(
                 viewModel = viewModel,
+                initialRecordedVideoUri = initialRecordedVideoUri,
+                initialRealtimeSessionId = initialRealtimeSessionId,
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE)
                 }
             )
         }
 
-        // 2. 챌린지 생성 (이름 → 레벨 → 컬러 3단계 내부 처리)
         composable(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
@@ -55,15 +67,14 @@ fun NavGraphBuilder.uploadGraph(
             }
 
             ChallengeCreateScreen(
-                viewModel        = viewModel,
+                viewModel = viewModel,
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD)
                 },
-                onNavigateBack   = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // 2-1. 색상 선택 바로 진입 (dev navigation 용)
         composable(ScreenRoutes.Climbing.Upload.CHALLENGE_COLOR) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
@@ -113,7 +124,7 @@ fun NavGraphBuilder.uploadGraph(
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
 
             ChallengeHoldScreen(
-                viewModel        = viewModel,
+                viewModel = viewModel,
                 onNavigateToAdditional = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD)
                 },
@@ -123,7 +134,6 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        // 추가 3-1. 추가 영상 다중 업로드 화면
         composable(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
@@ -144,7 +154,6 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        // 4. 시작/끝 홀드 선택
         composable(ScreenRoutes.Climbing.Upload.HOLD_SELECT) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
@@ -152,14 +161,13 @@ fun NavGraphBuilder.uploadGraph(
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
 
             HoldSelectScreen(
-                viewModel        = viewModel,
+                viewModel = viewModel,
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING)
                 }
             )
         }
 
-        // 추가 3-2. 로딩 화면
         composable(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
@@ -176,7 +184,6 @@ fun NavGraphBuilder.uploadGraph(
                     }
 
                     navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) {
-                        // 결과 화면 진입 시 직전 업로드 스택을 정리해 뒤로 가기 동선을 단순하게 유지합니다.
                         popUpTo(popUpRoute) {
                             inclusive = true
                         }
@@ -185,7 +192,6 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        // 5. 결과 화면
         composable(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
@@ -217,7 +223,6 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        // 5. 최종 분석 결과 화면
         composable(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
@@ -227,7 +232,7 @@ fun NavGraphBuilder.uploadGraph(
             FinalAnalysisRoute(
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToMain = { 
+                onNavigateToMain = {
                     navController.navigate(ScreenRoutes.Main.route) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -235,4 +240,24 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
     }
+}
+
+fun NavController.navigateToUpload(
+    recordedVideoUri: String? = null,
+    realtimeSessionId: String? = null
+) {
+    val route = buildString {
+        append(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD)
+        if (!recordedVideoUri.isNullOrBlank() || !realtimeSessionId.isNullOrBlank()) {
+            append("?")
+            append(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
+            append("=")
+            append(Uri.encode(recordedVideoUri.orEmpty()))
+            append("&")
+            append(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID)
+            append("=")
+            append(Uri.encode(realtimeSessionId.orEmpty()))
+        }
+    }
+    navigate(route)
 }

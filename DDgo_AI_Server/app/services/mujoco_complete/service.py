@@ -46,6 +46,11 @@ from polygon_hold_contact_state import (  # noqa: E402
     polygon_centroid,
 )
 from pose_sequence_correction import correct_pose_sequence_payload  # noqa: E402
+from app.services.mujoco_complete.realtime_session_store import (  # noqa: E402
+    RealtimeSessionNotFoundError,
+    RealtimeSessionStateError,
+    realtime_session_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +62,7 @@ class MujocoCompleteService:
         self.default_xml = ARTIC_ROOT / "custom_articulated_human.xml"
         self.cache_dir = SERVER_ROOT / "cache" / "mujoco_complete"
         self.physics_cache_dir = self.cache_dir / "physics"
+        self.realtime_session_store = realtime_session_store
 
     @staticmethod
     def _hold_state_summary(frames: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
@@ -67,6 +73,98 @@ class MujocoCompleteService:
                 state = str(payload.get("state", "FREE"))
                 bucket[state] = bucket.get(state, 0) + 1
         return summary
+
+    def start_realtime_session(
+        self,
+        user_body_payload: dict[str, Any],
+        video_metadata: dict[str, Any],
+        top_k_crux: int = 3,
+        frame_step: int = 1,
+        mode: str | None = None,
+    ) -> dict[str, Any]:
+        session = self.realtime_session_store.start_session(
+            user_body_json=user_body_payload,
+            video_metadata=video_metadata,
+            top_k_crux=top_k_crux,
+            frame_step=frame_step,
+            mode=mode,
+        )
+        return self._build_ack_response(
+            session=session,
+            message="Realtime session started.",
+            accepted_frame_count=0,
+        )
+
+    def append_realtime_pose_chunks(
+        self,
+        session_id: str,
+        frames: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        session, accepted_frame_count = self.realtime_session_store.append_pose_frames(
+            session_id=session_id,
+            frames=frames,
+        )
+        return self._build_ack_response(
+            session=session,
+            message="Realtime pose chunk accepted.",
+            accepted_frame_count=accepted_frame_count,
+        )
+
+    def attach_realtime_context(
+        self,
+        session_id: str,
+        holds_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        session = self.realtime_session_store.attach_context(session_id=session_id, holds_json=holds_payload)
+        return self._build_ack_response(
+            session=session,
+            message="Realtime context attached.",
+            accepted_frame_count=0,
+        )
+
+    def finalize_realtime_session(self, session_id: str) -> dict[str, Any]:
+        cached_result = self.realtime_session_store.load_final_result(session_id)
+        if cached_result is not None:
+            return cached_result
+
+        analysis_inputs = self.realtime_session_store.build_analysis_payload(session_id)
+        mode = self._resolve_effective_mode(
+            requested_mode=analysis_inputs["mode"],
+            user_body_payload=analysis_inputs["user_body_json"],
+        )
+
+        if mode == "physics":
+            result = self.analyze_physics(
+                holds_payload=analysis_inputs["holds_json"],
+                pose_payload=analysis_inputs["pose_payload"],
+                user_body_payload=analysis_inputs["user_body_json"],
+                top_k_crux=analysis_inputs["top_k_crux"],
+                frame_step=analysis_inputs["frame_step"],
+            )
+        else:
+            result = self.analyze_fast(
+                holds_payload=analysis_inputs["holds_json"],
+                pose_payload=analysis_inputs["pose_payload"],
+                user_body_payload=analysis_inputs["user_body_json"],
+                top_k_crux=analysis_inputs["top_k_crux"],
+                frame_step=analysis_inputs["frame_step"],
+            )
+
+        self.realtime_session_store.mark_finalized(session_id, final_result=result)
+        return result
+
+    def delete_realtime_session(self, session_id: str) -> dict[str, Any]:
+        session = self.realtime_session_store.get_session(session_id)
+        self.realtime_session_store.delete_session(session_id)
+        return {
+            "session_id": session_id,
+            "status": "DELETED",
+            "message": "Realtime session deleted.",
+            "mode": session.get("analysis_mode", "physics"),
+            "frame_count": int(session.get("frame_count", 0)),
+            "last_frame_index": session.get("last_frame_index"),
+            "accepted_frame_count": 0,
+        }
 
     def analyze_fast(
         self,
@@ -229,6 +327,65 @@ class MujocoCompleteService:
             "physics_result": physics_report,
         }
         return report
+
+    def _resolve_effective_mode(
+        self,
+        *,
+        requested_mode: str | None,
+        user_body_payload: dict[str, Any],
+    ) -> str:
+        normalized_mode = str(requested_mode or "physics").lower()
+        if normalized_mode not in {"fast", "physics"}:
+            normalized_mode = "physics"
+
+        if normalized_mode != "physics":
+            return normalized_mode
+
+        weight_kg = self._extract_weight_kg(user_body_payload)
+        if weight_kg is None or weight_kg <= 0.0:
+            logger.info("Realtime physics mode downgraded to fast due to missing weight.")
+            return "fast"
+        return "physics"
+
+    @staticmethod
+    def _extract_weight_kg(user_body_payload: dict[str, Any]) -> float | None:
+        candidate_paths = (
+            ("user_profile", "weight_kg"),
+            ("user_profile", "weightKg"),
+            ("weight_kg",),
+            ("weightKg",),
+        )
+        for path in candidate_paths:
+            value: Any = user_body_payload
+            try:
+                for key in path:
+                    value = value[key]
+            except (KeyError, TypeError):
+                continue
+            try:
+                weight = float(value)
+            except (TypeError, ValueError):
+                continue
+            if weight > 0.0:
+                return weight
+        return None
+
+    @staticmethod
+    def _build_ack_response(
+        *,
+        session: dict[str, Any],
+        message: str,
+        accepted_frame_count: int,
+    ) -> dict[str, Any]:
+        return {
+            "session_id": session["session_id"],
+            "status": session.get("status", "ACTIVE"),
+            "message": message,
+            "mode": session.get("analysis_mode", "physics"),
+            "frame_count": int(session.get("frame_count", 0)),
+            "last_frame_index": session.get("last_frame_index"),
+            "accepted_frame_count": int(accepted_frame_count),
+        }
 
 
 def load_polygon_service_holds_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
