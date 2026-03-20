@@ -1,6 +1,5 @@
 package com.ddgo.app.feature.climbing.upload
 
-import android.net.Uri
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -10,6 +9,9 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import com.ddgo.app.feature.climbing.shared.navigation.ClimbingUploadEntryArgs
+import com.ddgo.app.feature.climbing.shared.navigation.buildClimbingUploadRoute
+import com.ddgo.app.feature.climbing.shared.navigation.toClimbingUploadEntryArgs
 import com.ddgo.app.feature.climbing.upload.ui.analysis.route.FinalAnalysisRoute
 import com.ddgo.app.navigation.ScreenRoutes
 
@@ -39,17 +41,15 @@ fun NavGraphBuilder.uploadGraph(
                 navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
             }
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
-            val initialRecordedVideoUri = backStackEntry.arguments
-                ?.getString(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
-                ?.let(Uri::decode)
-            val initialRealtimeSessionId = backStackEntry.arguments
-                ?.getString(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID)
-                ?.takeIf { it.isNotBlank() }
+            val initialEntryArgs = backStackEntry.arguments.toClimbingUploadEntryArgs(
+                recordedVideoUriArgName = ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI,
+                realtimeSessionIdArgName = ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID
+            )
 
             AttemptUploadScreen(
                 viewModel = viewModel,
-                initialRecordedVideoUri = initialRecordedVideoUri,
-                initialRealtimeSessionId = initialRealtimeSessionId,
+                initialRecordedVideoUri = initialEntryArgs.recordedVideoUri,
+                initialRealtimeSessionId = initialEntryArgs.realtimeSessionId,
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE)
                 }
@@ -243,21 +243,14 @@ fun NavGraphBuilder.uploadGraph(
 }
 
 fun NavController.navigateToUpload(
-    recordedVideoUri: String? = null,
-    realtimeSessionId: String? = null
+    entryArgs: ClimbingUploadEntryArgs = ClimbingUploadEntryArgs()
 ) {
-    val route = buildString {
-        append(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD)
-        if (!recordedVideoUri.isNullOrBlank() || !realtimeSessionId.isNullOrBlank()) {
-            append("?")
-            append(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
-            append("=")
-            append(Uri.encode(recordedVideoUri.orEmpty()))
-            append("&")
-            append(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID)
-            append("=")
-            append(Uri.encode(realtimeSessionId.orEmpty()))
-        }
-    }
-    navigate(route)
+    navigate(
+        buildClimbingUploadRoute(
+            baseRoute = ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD,
+            recordedVideoUriArgName = ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI,
+            realtimeSessionIdArgName = ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID,
+            entryArgs = entryArgs
+        )
+    )
 }

@@ -2,22 +2,11 @@ package com.ddgo.app.feature.climbing.record.presentation
 
 import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.repository.LivePoseAnalysisSummary
+import com.ddgo.app.feature.climbing.shared.model.ClimbingRecordThumbnailFrame
+import com.ddgo.app.feature.climbing.shared.model.ClimbingRecordedAttemptDraft
 
-data class RecordThumbnailFrame(
-    val frameIndex: Int,
-    val timestampMs: Long,
-    val width: Int,
-    val height: Int,
-    val rotationDegrees: Int
-)
-
-data class RecordedAttemptDraft(
-    val videoUri: String,
-    val thumbnailFrame: RecordThumbnailFrame? = null,
-    val realtimeSessionId: String? = null,
-    val frameWidthPx: Int? = null,
-    val frameHeightPx: Int? = null
-)
+typealias RecordThumbnailFrame = ClimbingRecordThumbnailFrame
+typealias RecordedAttemptDraft = ClimbingRecordedAttemptDraft
 
 data class RecordUiState(
     val hasCameraPermission: Boolean = false,

@@ -40,9 +40,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.domain.repository.LivePoseFrameInput
-import com.ddgo.app.feature.climbing.record.presentation.RecordThumbnailFrame
 import com.ddgo.app.feature.climbing.record.presentation.RecordViewModel
-import com.ddgo.app.feature.climbing.record.presentation.RecordedAttemptDraft
+import com.ddgo.app.feature.climbing.shared.model.ClimbingRecordThumbnailFrame
+import com.ddgo.app.feature.climbing.shared.model.ClimbingRecordedAttemptDraft
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -57,7 +57,7 @@ private const val CAMERA_FRAME_THROTTLE_MS = 100L
 @Composable
 fun RecordRoute(
     onNavigateBack: () -> Unit,
-    onRecordedDraftReady: (RecordedAttemptDraft) -> Unit = {}
+    onRecordedDraftReady: (ClimbingRecordedAttemptDraft) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -81,7 +81,7 @@ fun RecordRoute(
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     val nextFrameIndex = remember { AtomicInteger(0) }
     val lastSubmittedFrameTimestampMs = remember { AtomicLong(0L) }
-    val latestThumbnailFrame = remember { AtomicReference<RecordThumbnailFrame?>(null) }
+    val latestThumbnailFrame = remember { AtomicReference<ClimbingRecordThumbnailFrame?>(null) }
 
     LaunchedEffect(Unit) {
         val granted = ContextCompat.checkSelfPermission(
@@ -208,7 +208,7 @@ fun RecordRoute(
                                     .takeIf { it != Uri.EMPTY }
                                     ?: Uri.fromFile(outputFile)
                                 viewModel.onRecordingStopped(
-                                    RecordedAttemptDraft(
+                                    ClimbingRecordedAttemptDraft(
                                         videoUri = outputUri.toString(),
                                         thumbnailFrame = latestThumbnailFrame.get()
                                     )
@@ -231,7 +231,7 @@ private fun handleImageFrame(
     viewModel: RecordViewModel,
     lastSubmittedFrameTimestampMs: AtomicLong,
     nextFrameIndex: AtomicInteger,
-    latestThumbnailFrame: AtomicReference<RecordThumbnailFrame?>
+    latestThumbnailFrame: AtomicReference<ClimbingRecordThumbnailFrame?>
 ) {
     try {
         val timestampMs = imageProxy.imageInfo.timestamp.let { timestampNs ->
@@ -254,7 +254,7 @@ private fun handleImageFrame(
 
         lastSubmittedFrameTimestampMs.set(timestampMs)
         latestThumbnailFrame.set(
-            RecordThumbnailFrame(
+            ClimbingRecordThumbnailFrame(
                 frameIndex = frameIndex,
                 timestampMs = timestampMs,
                 width = frame.width,
