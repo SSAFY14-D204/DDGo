@@ -84,6 +84,27 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
+        // 2-2. 디버그용 이미지 선택 (베스트 프레임 선택 단계 우회)
+        composable(ScreenRoutes.Climbing.Upload.DEV_IMAGE_PICKER) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
+            }
+            val viewModel: UploadViewModel = hiltViewModel(parentEntry)
+
+            DevImagePickScreen(
+                viewModel = viewModel,
+                onNavigateToNext = {
+                    navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD) {
+                        popUpTo(ScreenRoutes.Climbing.Upload.DEV_IMAGE_PICKER) {
+                            inclusive = true
+                        }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         // 3. 홀드 탐지 대기 + 누락 홀드 추가
         composable(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
