@@ -19,6 +19,7 @@ The current priority is not architectural cleanup for its own sake. The priority
 - The upload nav graph keeps a graph-scoped `UploadViewModel`.
 - `submitUpload()` stays in `UploadViewModel` until the last refactor stage.
 - `_uploadSubmissionUiState` is owned by `UploadViewModel`, then later by an orchestrator entrypoint if one is introduced.
+- `_uploadSubmissionUiState` is a `MutableStateFlow`; tests and seam code should update `.value` instead of replacing the flow.
 - `beginSelectionUpdate()`, `awaitPrePoseTerminal()`, and result `publish/capture/restore` stay as `UploadViewModel` wrappers even after Stage 2.
 
 ## Session Seam Rules
@@ -50,11 +51,14 @@ The current priority is not architectural cleanup for its own sake. The priority
 ## Shared Contracts
 
 - Shared climbing contracts belong under `feature/climbing/shared/*`.
-- Candidate shared artifacts:
-  - record-to-upload draft payloads
-  - realtime session handoff payloads
-  - upload entry args
-  - shared upload navigator entrypoints such as `navigateToClimbingUpload`
+- Current shared artifacts in use:
+  - `shared/model/ClimbingRecordThumbnailFrame`
+  - `shared/model/ClimbingRecordedAttemptDraft`
+  - `shared/navigation/ClimbingUploadEntryArgs`
+  - `shared/navigation/buildClimbingUploadRoute`
+  - `shared/navigation/toClimbingUploadEntryArgs`
+- `RecordContract.kt` bridges the shared model types with `typealias` so older record consumers stay stable during the transition.
+- The record-facing upload entry helper is `navigateToUpload(entryArgs)` in `upload/UploadNavigation.kt`.
 - Do not move upload-only session managers or orchestration into `shared`.
 
 ## QA Gates
@@ -62,6 +66,8 @@ The current priority is not architectural cleanup for its own sake. The priority
 - Stage 0/1:
   - graph-scoped `UploadViewModel` is preserved
   - `AnalysisLoadingScreen` still triggers upload exactly once
+  - the exact-once guard is pinned in `UploadViewModelTest`
+  - `AnalysisLoadingScreen` also has a targeted Compose UI regression test in `androidTest`
 - Stage 2:
   - pre-pose reuse works
   - pre-pose failure does not auto-retry

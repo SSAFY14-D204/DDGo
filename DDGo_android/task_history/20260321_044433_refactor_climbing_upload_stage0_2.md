@@ -1,86 +1,98 @@
-# Upload Refactor Stage 0~2 Task History
+# Upload Refactor Stage 0-2 Stabilization Log
 
 ## Summary
 
-- Goal: refactor upload safely through Stage 2 while keeping behavior unchanged.
-- Strategy: keep `UploadViewModel` as the graph-scoped single flow-shell, then extract stateful seams before UI-heavy restructuring.
-- Default stop point: Stage 2.
+- Goal: keep upload behavior unchanged while hardening Stage 0 regression coverage and extracting the Stage 1 shared handoff contract.
+- Scope in this workspace: Stage 0 test stabilization, Stage 1 shared contract extraction, plus climbing docs.
+- `UploadViewModel.kt` remains untouched in this phase.
 
 ## Baseline
 
-Workspace baseline captured on this branch:
+Current workspace baseline:
 
-- `UploadViewModel.kt`: 2456 lines
-- `ChallengeCreateScreen.kt`: 2038 lines
-- `AttemptResultScreen.kt`: 696 lines
-- `AnalysisLoadingScreen.kt`: 151 lines
+- `UploadViewModel.kt`: 2757 lines
+- `ChallengeCreateScreen.kt`: 2214 lines
+- `AttemptResultScreen.kt`: 742 lines
+- `AnalysisLoadingScreen.kt`: 163 lines
 
-## Core Decisions
+## What Was Stabilized
 
-- `record` and `upload` do not share a `ViewModel`.
-- Cross-feature sharing is limited to `feature/climbing/shared/*`.
-- `PrePoseSessionManager` and `AttemptResultSessionStore` must ship in the same stage.
-- `submitUpload()` remains in `UploadViewModel` through Stage 2.
-- `Route` owns player/seek/listener/polling side effects.
+- `UploadViewModelTest` helper now matches the current upload ViewModel state shape.
+  - `MutableStateFlow` fields are updated via `.value`
+  - `MutableState` fields are still supported
+- Duplicate-submit regression is now pinned in unit tests.
+  - `submitUpload()` must no-op when `_uploadSubmissionUiState` is already `Loading`
+  - the test verifies zero calls to save/upload/end submission use cases
+- Temp-file cleanup regression remains pinned in unit tests.
+  - referenced selection/result/pre-pose files are preserved
+  - orphan temp files are removed
+- Existing selection/reselection tests continue to guard pre-pose and session reuse behavior.
+- A targeted Compose UI regression test was added for `AnalysisLoadingScreen`.
+  - it verifies the `Idle -> submitUpload()` path stays exactly-once across re-entry
+  - it uses a mocked `UploadViewModel` and a real Compose rule
+- Stage 1 shared handoff contracts were extracted into `feature/climbing/shared/*`.
+  - `ClimbingRecordThumbnailFrame`
+  - `ClimbingRecordedAttemptDraft`
+  - `ClimbingUploadEntryArgs`
+  - upload route building and parsing helpers
+  - record/upload consumers were updated to use the shared contract while keeping behavior identical
+
+## Current Decisions
+
+- `UploadViewModel` stays a single graph-scoped shell.
+- `record` and `upload` do not share a ViewModel.
+- Cross-feature sharing is limited to `feature/climbing/shared/*` contracts and handoff payloads.
+- `Stage 2` production seam extraction remains planned, not implemented here.
 
 ## Checkpoints
 
 - Checkpoint A
-  - baseline docs and regression guards
+  - Stage 0 test hardening in place
+  - duplicate-submit guard pinned
+  - temp cleanup guard pinned
+
 - Checkpoint B
-  - upload type/contract extraction only
+  - Stage 1 shared handoff contract extraction completed
+
 - Checkpoint C
-  - session seam extracted through Stage 2
+  - reserved for Stage 2 session seam extraction
 
 ## Stage Log
 
 ### Stage 0
 
-- Status: in progress
-- Focus:
-  - baseline docs
-  - regression gates
-  - shared boundary rules
-- Added regression gates:
-  - `submitUpload` loading-guard regression remains pinned in `UploadViewModelTest`
-  - `cleanupUnusedManagedTempFiles` now verifies referenced temp-file preservation and orphan deletion
-  - record-to-upload handoff codec is pinned with `ClimbingUploadEntryArgsTest`
+- Status: completed for test/docs stabilization
+- Added:
+  - duplicate-submit regression in `UploadViewModelTest`
+  - `MutableStateFlow`-aware test helper
+  - targeted `AnalysisLoadingScreen` Compose UI regression test
+  - climbing feature guide refresh
 - Notes:
-  - upload graph-scoped `UploadViewModel` sharing is still verified structurally in `UploadNavigation.kt`
-  - automated navigation-scope verification is deferred until a dedicated test harness is worth the churn
+  - `AnalysisLoadingScreen` exactly-once behavior is still guarded at unit-test level
+  - the Compose UI test lives in `androidTest` so the screen-level exact-once contract is covered in addition to the unit guard
 
 ### Stage 1
 
 - Status: completed
 - Focus:
-  - shared record-upload handoff contract
-  - upload contract/type extraction
-- Added:
-  - `ClimbingUploadNavigator` to remove `record -> upload.navigateToUpload` direct dependency
-  - extracted pure upload types/helpers into `upload/presentation/*`
-  - kept moved files on the existing root package to minimize import churn during Stage 1
-- Current branch effect:
-  - `UploadViewModel.kt` reduced from `2456` lines to `2321` lines before Stage 2 seam work
-  - Checkpoint B is now the last known good refactor point before session seam extraction
+  - shared record-upload contract
+  - upload type/contract extraction
+- Notes:
+  - implemented via `ClimbingRecordThumbnailFrame`, `ClimbingRecordedAttemptDraft`, and `ClimbingUploadEntryArgs`
+  - record/upload navigation now share a single route-arg contract
+  - `RecordContract.kt` uses `typealias` bridges so existing record callers remain stable
 
 ### Stage 2
 
-- Status: completed
+- Status: planned
 - Focus:
   - `PrePoseSessionManager`
   - `AttemptResultSessionStore`
-  - temp-file cleanup keep-set preservation
-- Added:
-  - delegated media normalization, pre-pose queue/cache/worker, and temp-file retention kernel to `PrePoseSessionManager`
-  - delegated current result playback + published result snapshot ownership to `AttemptResultSessionStore`
-  - kept `beginSelectionUpdate()`, `awaitPrePoseTerminal()`, `publish/capture/restore`, and `_uploadSubmissionUiState` as `UploadViewModel` wrappers
-- Current branch effect:
-  - `UploadViewModel.kt` reduced from `2321` lines after Stage 1 to `2037` lines at Stage 2 checkpoint
-  - Checkpoint C is now the last known good refactor point before any UI route/page split or submission orchestration split
+  - temp-file retention and published result session preservation
 
 ## Risks To Watch
 
-- duplicate submit from loading screen recomposition
-- pre-pose cache invalidation drift
-- published result playback loss during cleanup
+- duplicate submit from loading-screen recomposition
+- stale selection-generation overwriting current session state
+- temp-file cleanup accidentally dropping referenced playback files
 - accidental `record` -> `UploadViewModel` coupling
