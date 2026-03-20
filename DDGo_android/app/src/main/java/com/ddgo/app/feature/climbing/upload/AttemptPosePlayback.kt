@@ -13,6 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +39,12 @@ internal data class PoseScrubberColors(
     val progressColor: Color,
     val thumbColor: Color,
     val textColor: Color
+)
+
+internal data class PoseScrubberMarker(
+    val index: Int,
+    val timeMs: Long,
+    val isSelected: Boolean = false
 )
 
 private val SHARED_POSE_CONNECTIONS = listOf(
@@ -95,6 +104,14 @@ internal fun Long.toVideoTimeString(): String {
     } else {
         "%d:%02d".format(minutes, seconds)
     }
+}
+
+internal fun markerPositionFraction(
+    timeMs: Long,
+    durationMs: Long
+): Float {
+    if (durationMs <= 0L) return 0f
+    return (timeMs.coerceIn(0L, durationMs).toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
 }
 
 internal fun resolveDisplayedVideoAspectRatio(videoSize: VideoSize): Float {
@@ -216,6 +233,7 @@ internal fun PoseVideoScrubber(
     currentPositionMs: Long,
     durationMs: Long,
     enabled: Boolean,
+    markers: List<PoseScrubberMarker>,
     colors: PoseScrubberColors,
     modifier: Modifier = Modifier,
     onTapSeek: (Long) -> Unit,
@@ -284,6 +302,50 @@ internal fun PoseVideoScrubber(
                 strokeWidth = trackHeight,
                 cap = StrokeCap.Round
             )
+            val markerCenterY = centerY - 12.dp.toPx()
+            markers
+                .distinctBy { marker -> marker.index to marker.timeMs }
+                .forEach { marker ->
+                    val markerX = size.width * markerPositionFraction(marker.timeMs, durationMs)
+                    val badgeRadius = 8.dp.toPx()
+                    val fillColor = colors.progressColor.copy(
+                        alpha = if (marker.isSelected) 1f else 0.58f
+                    )
+                    val textColor = if (fillColor.luminance() > 0.45f) {
+                        android.graphics.Color.BLACK
+                    } else {
+                        android.graphics.Color.WHITE
+                    }
+
+                    drawLine(
+                        color = fillColor,
+                        start = Offset(markerX, markerCenterY + badgeRadius + 2.dp.toPx()),
+                        end = Offset(markerX, centerY - trackHeight),
+                        strokeWidth = 1.5.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                    drawCircle(
+                        color = fillColor,
+                        radius = badgeRadius,
+                        center = Offset(markerX, markerCenterY)
+                    )
+                    drawIntoCanvas { canvas ->
+                        val paint = android.graphics.Paint().apply {
+                            isAntiAlias = true
+                            color = textColor
+                            textAlign = android.graphics.Paint.Align.CENTER
+                            textSize = 10.sp.toPx()
+                            typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        }
+                        val baseline = markerCenterY - ((paint.descent() + paint.ascent()) / 2f)
+                        canvas.nativeCanvas.drawText(
+                            marker.index.toString(),
+                            markerX,
+                            baseline,
+                            paint
+                        )
+                    }
+                }
             drawCircle(
                 color = colors.thumbColor.copy(alpha = if (enabled) 1f else 0.55f),
                 radius = thumbRadius,

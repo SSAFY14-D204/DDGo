@@ -4,18 +4,29 @@ import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.runtime.MutableState
 import com.ddgo.app.data.ml.color.HoldColorClassifier
+import com.ddgo.app.domain.model.AiAnalysisMode
+import com.ddgo.app.domain.model.AiAnalysisResult
+import com.ddgo.app.domain.model.AiCruxResult
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.domain.model.PrePoseVideoAnalysisResult
+import com.ddgo.app.domain.model.ProcessedPoseDetectionFrame
 import com.ddgo.app.domain.model.UploadedAttemptVideo
+import com.ddgo.app.domain.model.User
+import com.ddgo.app.domain.poseanalysis.HandPeakAnnotation
 import com.ddgo.app.domain.repository.AttemptRepository
 import com.ddgo.app.domain.repository.ChallengeRepository
 import com.ddgo.app.domain.repository.GymRepository
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
+import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
 import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
+import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
+import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
+import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
@@ -24,7 +35,6 @@ import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
-import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import com.ddgo.app.domain.usecase.summarizeHoldReachResults
 import io.mockk.coEvery
@@ -48,6 +58,7 @@ import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import java.io.File
 import kotlin.io.path.createTempDirectory
+import kotlinx.serialization.json.JsonObject
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UploadViewModelTest {
@@ -65,13 +76,26 @@ class UploadViewModelTest {
 
     @Test
     fun `submitUpload은 첫 pre-pose 결과를 재사용하고 estimator를 다시 호출하지 않는다`() = runTest {
-        val poseEstimator = mockk<PoseEstimator>()
-        coEvery { poseEstimator.estimateFromVideo(any()) } returns listOf(
-            poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)),
-            poseAt(500L, handLandmark(index = 20, x = 0.62f, y = 0.34f))
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = listOf(
+                poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)),
+                poseAt(500L, handLandmark(index = 20, x = 0.62f, y = 0.34f))
+            ),
+            processedFrames = listOf(
+                processedFrame(0L, true),
+                processedFrame(100L, true),
+                processedFrame(200L, true),
+                processedFrame(300L, true),
+                processedFrame(400L, true)
+            )
         )
 
-        val viewModel = createViewModel(poseEstimator = poseEstimator)
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider
+        )
         val videoUri = "file:///single_attempt.mp4"
 
         viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
@@ -111,18 +135,22 @@ class UploadViewModelTest {
             viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Success
         }
 
-        coVerify(exactly = 1) { poseEstimator.estimateFromVideo(videoUri) }
+        coVerify(exactly = 1) { prePoseVideoAnalysisProvider.analyze(videoUri, any()) }
         assertEquals(listOf(videoUri), viewModel.playbackAttemptUris)
         assertEquals(1, viewModel.attemptHoldReachResults.size)
-        assertEquals(2, viewModel.currentAttemptHoldReachResult?.highestReachedHoldNo)
+        assertEquals(2, viewModel.currentAttemptPoseSequence.size)
     }
 
     @Test
     fun `pre-pose 실패 후 submitUpload에서도 estimator를 자동 재호출하지 않는다`() = runTest {
-        val poseEstimator = mockk<PoseEstimator>()
-        coEvery { poseEstimator.estimateFromVideo(any()) } throws IllegalStateException("boom")
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } throws IllegalStateException("boom")
 
-        val viewModel = createViewModel(poseEstimator = poseEstimator)
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider
+        )
         val videoUri = "file:///failed_prepose.mp4"
 
         viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
@@ -152,7 +180,7 @@ class UploadViewModelTest {
             viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Success
         }
 
-        coVerify(exactly = 1) { poseEstimator.estimateFromVideo(videoUri) }
+        coVerify(exactly = 1) { prePoseVideoAnalysisProvider.analyze(videoUri, any()) }
         assertTrue(viewModel.currentAttemptPoseSequence.isEmpty())
         assertEquals(PrePoseStatus.Failed, viewModel.currentAttemptPrePoseEntry?.status)
         assertEquals(0, viewModel.attemptHoldReachResults.single().highestReachedHoldNo)
@@ -161,7 +189,8 @@ class UploadViewModelTest {
     @Test
     fun `홀드 재선택은 pre-pose를 유지하고 hold reach만 초기화한다`() = runTest {
         val viewModel = createViewModel(
-            poseEstimator = mockk<PoseEstimator>(relaxed = true)
+            poseEstimator = mockk<PoseEstimator>(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
         )
         val playbackUri = "file:///hold_reselect.mp4"
         val readyPoses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)))
@@ -208,9 +237,11 @@ class UploadViewModelTest {
 
     @Test
     fun `AttemptResult에서 추가 시도 업로드를 취소하면 기존 결과 세션을 복구한다`() = runTest {
-        val poseEstimator = mockk<PoseEstimator>()
-        coEvery { poseEstimator.estimateFromVideo(any()) } returns emptyList()
-        val viewModel = createViewModel(poseEstimator = poseEstimator)
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
 
         val publishedUris = listOf("file:///published_1.mp4", "file:///published_2.mp4")
         val publishedResults = listOf(
@@ -301,21 +332,124 @@ class UploadViewModelTest {
         assertFalse(restoredCache.containsKey(draftUri))
     }
 
+    @Test
+    fun `pre-pose success caches raw hand endpoint timeline when hand peak end is detected`() = runTest {
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
+        val poses = listOf(poseAt(0L, handLandmark(index = 15, x = 0.20f, y = 0.60f)))
+        val annotation = HandPeakAnnotation(
+            globalTopTimeMs = 6_000L,
+            globalTopHeight = 0.71,
+            selectedTopTimeMs = 5_500L,
+            selectedTopHeight = 0.69,
+            supportCount = 12,
+            endTimeMs = 4_000L,
+            endHeight = 0.67,
+            validTopFound = true
+        )
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = poses,
+            processedFrames = listOf(
+                processedFrame(1_000L, false),
+                processedFrame(2_000L, true),
+                processedFrame(2_100L, true),
+                processedFrame(2_200L, true),
+                processedFrame(2_300L, true),
+                processedFrame(2_400L, true)
+            )
+        )
+        every { analyzeHandPeakAndEndUseCase(any(), any()) } returns annotation
+
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase
+        )
+        val videoUri = "file:///detected_end.mp4"
+
+        setPrivateField(viewModel, "videoUri", videoUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.prePoseBatchState.readyCount == 1
+        }
+
+        val entry = viewModel.currentAttemptPrePoseEntry
+        assertEquals(PrePoseStatus.Ready, entry?.status)
+        assertTrue(entry?.poses?.isNotEmpty() == true)
+        assertEquals(2_000L, entry?.personObservationStartTimeMs)
+        assertEquals(2, entry?.timelinePoints?.size)
+        assertEquals(2_000L, entry?.timelinePoints?.get(0)?.timeMs)
+        assertEquals(4_000L, entry?.timelinePoints?.get(1)?.timeMs)
+        assertEquals(1, entry?.timelinePoints?.get(0)?.index)
+        assertEquals(2, entry?.timelinePoints?.get(1)?.index)
+    }
+
     private fun createViewModel(
         context: Context = mockContext(),
         poseEstimator: PoseEstimator,
+        prePoseVideoAnalysisProvider: PrePoseVideoAnalysisProvider,
+        analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase = AnalyzeHandPeakAndEndUseCase(),
         personDetector: PersonDetector = mockk(relaxed = true),
         holdDetector: HoldDetector = mockk(relaxed = true)
     ): UploadViewModel {
         val challengeRepository = mockk<ChallengeRepository>(relaxed = true)
         val attemptRepository = mockk<AttemptRepository>(relaxed = true)
         val gymRepository = mockk<GymRepository>(relaxed = true)
+        val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+
+        coEvery { getMyInfoUseCase.invoke() } returns Result.success(
+            User(
+                id = 1L,
+                username = "tester",
+                nickname = "tester",
+                heightCm = 175f,
+                wingspanCm = 176f,
+                weightKg = 70f
+            )
+        )
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } returns Result.success(
+            AiAnalysisResult(
+                mode = AiAnalysisMode.FAST,
+                schemaVersion = "test",
+                videoMetadata = null,
+                timingsSeconds = emptyMap(),
+                correctionSummary = null,
+                cruxResult = AiCruxResult(
+                    candidateCount = 0,
+                    topCandidates = emptyList(),
+                    allCandidates = emptyList()
+                ),
+                rawResponse = JsonObject(emptyMap())
+            )
+        )
 
         return UploadViewModel(
             context = context,
             personDetector = personDetector,
             holdDetector = holdDetector,
             poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
             holdColorClassifier = HoldColorClassifier(),
             searchNearbyClimbingGymsUseCase = SearchNearbyClimbingGymsUseCase(gymRepository),
             resolveGymUseCase = ResolveGymUseCase(gymRepository),
@@ -323,8 +457,10 @@ class UploadViewModelTest {
             saveChallengeHoldsUseCase = SaveChallengeHoldsUseCase(challengeRepository),
             uploadAttemptVideoUseCase = UploadAttemptVideoUseCase(attemptRepository),
             endAttemptUseCase = EndAttemptUseCase(attemptRepository),
-            getMyInfoUseCase = mockk<GetMyInfoUseCase>(relaxed = true),
-            analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>(relaxed = true)
+            analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
+            detectStablePersonObservationUseCase = DetectStablePersonObservationUseCase(),
+            getMyInfoUseCase = getMyInfoUseCase,
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase
         )
     }
 
@@ -392,12 +528,42 @@ class UploadViewModelTest {
         landmarks = landmarks.toList()
     )
 
+    private fun prePoseAnalysisResult(
+        poses: List<Pose>,
+        processedFrames: List<ProcessedPoseDetectionFrame>
+    ): PrePoseVideoAnalysisResult = PrePoseVideoAnalysisResult(
+        poses = poses,
+        processedFrames = processedFrames
+    )
+
+    private fun processedFrame(timestampMs: Long, poseDetected: Boolean): ProcessedPoseDetectionFrame =
+        ProcessedPoseDetectionFrame(
+            timestampMs = timestampMs,
+            poseDetected = poseDetected
+        )
+
     private fun handLandmark(index: Int, x: Float, y: Float): PoseLandmark = PoseLandmark(
         index = index,
         x = x,
         y = y,
         z = 0f
     )
+
+    private fun torsoPoseAt(frameTimeMs: Long, torsoY: Float, wristY: Float): Pose {
+        val shoulderY = torsoY - 0.10f
+        val hipY = torsoY + 0.10f
+        return Pose(
+            frameTimeMs = frameTimeMs,
+            landmarks = listOf(
+                PoseLandmark(index = 11, x = 0.65f, y = shoulderY, z = 0f, visibility = 0.99f, presence = 0.99f),
+                PoseLandmark(index = 12, x = 0.35f, y = shoulderY, z = 0f, visibility = 0.99f, presence = 0.99f),
+                PoseLandmark(index = 23, x = 0.64f, y = hipY, z = 0f, visibility = 0.99f, presence = 0.99f),
+                PoseLandmark(index = 24, x = 0.36f, y = hipY, z = 0f, visibility = 0.99f, presence = 0.99f),
+                PoseLandmark(index = 15, x = 0.62f, y = wristY, z = 0f, visibility = 0.99f, presence = 0.99f),
+                PoseLandmark(index = 16, x = 0.38f, y = wristY, z = 0f, visibility = 0.99f, presence = 0.99f)
+            )
+        )
+    }
 
     private fun hold(centerX: Float, centerY: Float, holdNo: Int): Hold = Hold(
         holdNo = holdNo,
