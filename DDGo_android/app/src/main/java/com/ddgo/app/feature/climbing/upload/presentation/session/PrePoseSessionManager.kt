@@ -29,7 +29,8 @@ class PrePoseSessionManager(
     private val coroutineScope: CoroutineScope,
     private val prePoseVideoAnalysisProvider: PrePoseVideoAnalysisProvider,
     private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase,
-    private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase
+    private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
+    private val onActivePrePoseSetChanged: (() -> Unit)? = null
 ) {
 
     val selectionGenerationState: MutableState<Long> = mutableStateOf(0L)
@@ -85,15 +86,15 @@ class PrePoseSessionManager(
             .orEmpty()
     }
 
-    fun setPrimaryManagedVideo(video: ManagedAttemptVideo?) {
+    fun replacePrimaryManagedVideo(video: ManagedAttemptVideo?) {
         primaryManagedVideo = video
     }
 
-    fun setAdditionalManagedVideos(videos: List<ManagedAttemptVideo>) {
+    fun replaceAdditionalManagedVideos(videos: List<ManagedAttemptVideo>) {
         additionalManagedVideos = videos
     }
 
-    fun setAttemptOnlyManagedVideos(videos: List<ManagedAttemptVideo>) {
+    fun replaceAttemptOnlyManagedVideos(videos: List<ManagedAttemptVideo>) {
         attemptOnlyManagedVideos = videos
     }
 
@@ -381,7 +382,7 @@ class PrePoseSessionManager(
                         currentEntry.copy(status = PrePoseStatus.Running)
                     )
                 }
-                activePrePosePlaybackUris += task.playbackUri
+                addActivePrePosePlaybackUri(task.playbackUri)
                 updatePrePoseBatchState()
 
                 val result = runCatching {
@@ -390,7 +391,7 @@ class PrePoseSessionManager(
 
                 val latestEntry = prePoseCacheEntries[task.playbackUri]
                 if (latestEntry?.taskId != task.taskId) {
-                    activePrePosePlaybackUris -= task.playbackUri
+                    removeActivePrePosePlaybackUri(task.playbackUri)
                     continue
                 }
 
@@ -439,7 +440,7 @@ class PrePoseSessionManager(
                         }
                     )
                 }
-                activePrePosePlaybackUris -= task.playbackUri
+                removeActivePrePosePlaybackUri(task.playbackUri)
                 updatePrePoseBatchState()
             }
         }
@@ -460,6 +461,18 @@ class PrePoseSessionManager(
             readyCount = entries.count { it.status == PrePoseStatus.Ready },
             failedCount = entries.count { it.status == PrePoseStatus.Failed }
         )
+    }
+
+    private fun addActivePrePosePlaybackUri(playbackUri: String) {
+        if (activePrePosePlaybackUris.add(playbackUri)) {
+            onActivePrePoseSetChanged?.invoke()
+        }
+    }
+
+    private fun removeActivePrePosePlaybackUri(playbackUri: String) {
+        if (activePrePosePlaybackUris.remove(playbackUri)) {
+            onActivePrePoseSetChanged?.invoke()
+        }
     }
 
     private fun deleteManagedTempFile(path: String) {

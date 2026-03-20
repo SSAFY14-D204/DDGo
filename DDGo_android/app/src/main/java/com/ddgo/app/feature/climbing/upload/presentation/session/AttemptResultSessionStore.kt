@@ -31,7 +31,7 @@ class AttemptResultSessionStore {
 
     private var publishedSnapshot: AttemptResultSnapshot? = null
 
-    fun setCurrentPlaybackUris(playbackUris: List<String>) {
+    fun replaceCurrentPlaybackUris(playbackUris: List<String>) {
         currentPlaybackUris = playbackUris
     }
 
