@@ -63,5 +63,7 @@ class AttemptResultSessionStore {
         publishedSnapshot = null
     }
 
+    fun publishedSnapshot(): AttemptResultSnapshot? = publishedSnapshot
+
     fun publishedPlaybackUris(): Set<String> = publishedSnapshot?.resultPlaybackUris?.toSet().orEmpty()
 }

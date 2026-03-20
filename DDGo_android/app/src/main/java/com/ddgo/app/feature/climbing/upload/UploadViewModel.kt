@@ -155,6 +155,8 @@ class UploadViewModel @Inject constructor(
     private var uploadFlowMode by mutableStateOf(UploadFlowMode.FullChallenge)
     private var allowLocalAnalysisWithoutChallenge by mutableStateOf(false)
 
+    private val attemptResultSessionStore = AttemptResultSessionStore()
+
     // 전체 시도 영상 (초기 + 추가 영상 리스트)
     val allAttemptUris: List<String>
         get() = when (uploadFlowMode) {
@@ -166,7 +168,7 @@ class UploadViewModel @Inject constructor(
      * Result screen playback should stay on the original local files used for upload.
      * This avoids switching playback to any backend/object-storage URL after upload succeeds.
      */
-    var resultPlaybackUris by mutableStateOf<List<String>>(emptyList())
+    var resultPlaybackUris by attemptResultSessionStore.currentPlaybackUrisState
         private set
 
     val playbackAttemptUris: List<String>
@@ -246,8 +248,6 @@ class UploadViewModel @Inject constructor(
     private val managedTempFilePaths = prePoseSessionManager.managedTempFilePaths
     private val managedVideosByPlaybackUri = prePoseSessionManager.managedVideosByPlaybackUri
     private val activePrePosePlaybackUris = prePoseSessionManager.activePrePosePlaybackUris
-    private var publishedAttemptResultSession: PublishedAttemptResultSession? = null
-
     /**
      * 주변 암장 검색 UI 상태.
      *
@@ -586,7 +586,7 @@ class UploadViewModel @Inject constructor(
         lastSearchLongitude = null
         uploadedAttemptVideos = emptyList()
         currentAttemptIndex = 0
-        publishedAttemptResultSession = null
+        attemptResultSessionStore.clearPublished()
         clearChallengeFlowState()
         clearHoldReachAnalysis()
         clearAiAnalysisState()
@@ -658,7 +658,7 @@ class UploadViewModel @Inject constructor(
         resultPlaybackUris = emptyList()
         uploadedAttemptVideos = emptyList()
         currentAttemptIndex = 0
-        publishedAttemptResultSession = null
+        attemptResultSessionStore.clearPublished()
         clearHoldReachAnalysis()
         clearAiAnalysisState()
         clearPosePrecomputeState()
@@ -796,7 +796,8 @@ class UploadViewModel @Inject constructor(
     ): Long {
         selectionGeneration += 1
         if (preservePublishedResult) {
-            currentAttemptIndex = publishedAttemptResultSession?.currentAttemptIndex ?: currentAttemptIndex
+            currentAttemptIndex =
+                attemptResultSessionStore.publishedSnapshot()?.currentAttemptIndex ?: currentAttemptIndex
             currentPoseLandmarks = emptyList()
             syncDisplayedAnalysisPoints()
         } else {
@@ -1806,7 +1807,7 @@ class UploadViewModel @Inject constructor(
         clearHoldReachAnalysis()
         clearAiAnalysisState()
         resultPlaybackUris = emptyList()
-        publishedAttemptResultSession = null
+        attemptResultSessionStore.clearPublished()
         _challengeCreationUiState.value = ChallengeCreationUiState.Idle
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
     }
@@ -2149,7 +2150,7 @@ class UploadViewModel @Inject constructor(
         clearHoldReachAnalysis()
         clearAiAnalysisState()
         if (clearPublishedSession) {
-            publishedAttemptResultSession = null
+            attemptResultSessionStore.clearPublished()
         }
     }
 
@@ -2175,7 +2176,8 @@ class UploadViewModel @Inject constructor(
         attemptPolygonHoldContactDebugResults = polygonHoldContactDebugResults
         overallHoldReachSummary = overallSummary
         syncDisplayedAnalysisPoints()
-        publishedAttemptResultSession = PublishedAttemptResultSession(
+        attemptResultSessionStore.publish(
+            AttemptResultSnapshot(
             resultPlaybackUris = playbackUris,
             uploadedAttemptVideos = uploadedVideos,
             currentAttemptIndex = this.currentAttemptIndex,
@@ -2184,12 +2186,14 @@ class UploadViewModel @Inject constructor(
             attemptAnalyzedPoses = analyzedPoses,
             attemptPolygonHoldContactDebugResults = polygonHoldContactDebugResults,
             overallHoldReachSummary = overallSummary
+            )
         )
     }
 
     private fun captureCurrentAttemptResultSession() {
         val playbackUris = resultPlaybackUris.takeIf { it.isNotEmpty() } ?: return
-        publishedAttemptResultSession = PublishedAttemptResultSession(
+        attemptResultSessionStore.capture(
+            AttemptResultSnapshot(
             resultPlaybackUris = playbackUris,
             uploadedAttemptVideos = uploadedAttemptVideos,
             currentAttemptIndex = currentAttemptIndex.coerceIn(
@@ -2201,11 +2205,12 @@ class UploadViewModel @Inject constructor(
             attemptAnalyzedPoses = attemptAnalyzedPoses,
             attemptPolygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
             overallHoldReachSummary = overallHoldReachSummary
+            )
         )
     }
 
     private fun restorePublishedAttemptResultSession() {
-        val session = publishedAttemptResultSession ?: run {
+        val session = attemptResultSessionStore.restorePublished() ?: run {
             clearAttemptResultState(clearPublishedSession = false)
             return
         }
@@ -2226,7 +2231,7 @@ class UploadViewModel @Inject constructor(
     }
 
     private fun publishedResultPlaybackUris(): Set<String> =
-        publishedAttemptResultSession?.resultPlaybackUris?.toSet().orEmpty()
+        attemptResultSessionStore.publishedPlaybackUris()
 
     private fun buildChallengeHoldCoordinates(): List<ChallengeHoldCoordinate> {
         return detectedHolds.mapIndexed { index, hold ->
@@ -2297,17 +2302,6 @@ private fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = Terminal
 private data class PrePoseTask(
     val playbackUri: String,
     val taskId: Long
-)
-
-private data class PublishedAttemptResultSession(
-    val resultPlaybackUris: List<String>,
-    val uploadedAttemptVideos: List<UploadedAttemptVideo>,
-    val currentAttemptIndex: Int,
-    val holdReachResults: List<AttemptHoldReachResult>,
-    val attemptPoseDtos: List<PoseSequenceDto>,
-    val attemptAnalyzedPoses: List<List<Pose>>,
-    val attemptPolygonHoldContactDebugResults: List<PolygonHoldContactDebugResult>,
-    val overallHoldReachSummary: OverallHoldReachSummary?
 )
 
 private enum class UploadFlowMode {
