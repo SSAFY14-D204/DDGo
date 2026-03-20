@@ -1,4 +1,4 @@
-// [DEBUG ONLY] 이 파일은 디버그 전용 기능(포즈 분석 및 JSON 내보내기)을 위해 작성되었습니다.
+// [DEBUG ONLY] 파일 업로드 기반 pre-pose 디버그 및 JSON 내보내기용 ViewModel입니다.
 package com.ddgo.app.feature.debug
 
 import android.content.Context
@@ -8,6 +8,12 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.domain.poseanalysis.HandPeakAnnotation
+import com.ddgo.app.domain.poseanalysis.Landmark
+import com.ddgo.app.domain.poseanalysis.toPoseFrame
+import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
+import com.ddgo.app.feature.climbing.upload.toAnalysisPoints
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +32,8 @@ private val SUPPORTED_ANALYSIS_FPS_LIMITS = setOf(10, 20, 30)
 @HiltViewModel
 class PrePoseLandmarkerViewModel @Inject constructor(
     private val prePoseVideoAnalyzer: PrePoseVideoAnalyzer,
-    private val optimizedPrePoseVideoAnalyzer: OptimizedPrePoseVideoAnalyzer
+    private val optimizedPrePoseVideoAnalyzer: OptimizedPrePoseVideoAnalyzer,
+    private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PrePoseUiState())
@@ -46,6 +53,8 @@ class PrePoseLandmarkerViewModel @Inject constructor(
             isAnalyzing = true,
             analysisProgress = 0f,
             poseFrames = emptyList(),
+            handPeakAnnotation = null,
+            analysisPoints = emptyList(),
             errorMessage = null,
             analysisTimeMs = 0L,
             isOptimized = useOptimized,
@@ -53,7 +62,8 @@ class PrePoseLandmarkerViewModel @Inject constructor(
         )
 
         viewModelScope.launch {
-            var poses: List<DebugPoseFrameResult> = emptyList()
+            var poseFrames: List<DebugPoseFrameResult> = emptyList()
+            var handPeakAnnotation: HandPeakAnnotation? = null
             val time = measureTimeMillis {
                 val result = if (useOptimized) {
                     optimizedPrePoseVideoAnalyzer(
@@ -70,20 +80,30 @@ class PrePoseLandmarkerViewModel @Inject constructor(
                         _uiState.value = _uiState.value.copy(analysisProgress = progress)
                     }
                 }
-                
-                result.onSuccess { poses = it }
+
+                result.onSuccess { poseFrames = it }
                     .onFailure { error ->
                         _uiState.value = _uiState.value.copy(
                             isAnalyzing = false,
+                            handPeakAnnotation = null,
+                            analysisPoints = emptyList(),
                             errorMessage = error.message ?: "분석 중 오류가 발생했습니다."
                         )
                         return@launch
                     }
+
+                handPeakAnnotation = runCatching {
+                    analyzeHandPeakAndEndUseCase(
+                        poseFrames.map { frame -> frame.toHandPeakPoseFrame() }
+                    )
+                }.getOrNull()
             }
 
             _uiState.value = _uiState.value.copy(
                 isAnalyzing = false,
-                poseFrames = poses,
+                poseFrames = poseFrames,
+                handPeakAnnotation = handPeakAnnotation,
+                analysisPoints = handPeakAnnotation.toAnalysisPoints(),
                 analysisTimeMs = time,
                 errorMessage = null
             )
@@ -107,11 +127,10 @@ class PrePoseLandmarkerViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                // 1. DTO 변환 (Bitmap 제외)
                 val exportData = currentPoseFrames.map { frame ->
                     PoseExportDto(
                         frameTimeMs = frame.pose.frameTimeMs,
-                        landmarks = frame.pose.landmarks.map { 
+                        landmarks = frame.pose.landmarks.map {
                             LandmarkDto(
                                 index = it.index,
                                 x = it.x,
@@ -119,9 +138,9 @@ class PrePoseLandmarkerViewModel @Inject constructor(
                                 z = it.z,
                                 visibility = it.visibility,
                                 presence = it.presence
-                            ) 
+                            )
                         },
-                        worldLandmarks = frame.worldLandmarks.map { 
+                        worldLandmarks = frame.worldLandmarks.map {
                             LandmarkDto(
                                 index = it.index,
                                 x = it.x,
@@ -129,24 +148,21 @@ class PrePoseLandmarkerViewModel @Inject constructor(
                                 z = it.z,
                                 visibility = it.visibility,
                                 presence = it.presence
-                            ) 
+                            )
                         }
                     )
                 }
 
-                // 2. JSON 직렬화 (Pretty Print)
                 val json = Json { prettyPrint = true }
                 val jsonString = json.encodeToString(exportData)
 
-                // 3. 파일 저장 (export_{video_name}_{timestamp}.json)
                 val videoName = _uiState.value.selectedVideoName?.substringBeforeLast(".") ?: "unknown"
                 val timestamp = System.currentTimeMillis()
                 val fileName = "export_${videoName}_$timestamp.json"
-                
+
                 val cacheFile = File(context.cacheDir, fileName)
                 cacheFile.writeText(jsonString)
 
-                // 4. FileProvider를 통한 공유 Intent 실행
                 val contentUri = FileProvider.getUriForFile(
                     context,
                     "${context.packageName}.fileprovider",
@@ -158,9 +174,8 @@ class PrePoseLandmarkerViewModel @Inject constructor(
                     putExtra(Intent.EXTRA_STREAM, contentUri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                
+
                 context.startActivity(Intent.createChooser(shareIntent, "Pose 데이터 내보내기"))
-                
             } catch (e: Exception) {
                 Toast.makeText(context, "내보내기 실패: ${e.message}", Toast.LENGTH_SHORT).show()
             }
@@ -174,6 +189,8 @@ data class PrePoseUiState(
     val isAnalyzing: Boolean = false,
     val analysisProgress: Float = 0f,
     val poseFrames: List<DebugPoseFrameResult> = emptyList(),
+    val handPeakAnnotation: HandPeakAnnotation? = null,
+    val analysisPoints: List<AnalysisPoint> = emptyList(),
     val errorMessage: String? = null,
     val analysisTimeMs: Long = 0L,
     val isOptimized: Boolean = false,
@@ -195,4 +212,17 @@ data class LandmarkDto(
     val z: Float,
     val visibility: Float? = null,
     val presence: Float? = null
+)
+
+private fun DebugPoseFrameResult.toHandPeakPoseFrame() = pose.toPoseFrame(
+    worldLandmarks = worldLandmarks.map { landmark ->
+        Landmark(
+            index = landmark.index,
+            x = landmark.x.toDouble(),
+            y = landmark.y.toDouble(),
+            z = landmark.z.toDouble(),
+            visibility = landmark.visibility?.toDouble(),
+            presence = landmark.presence?.toDouble()
+        )
+    }
 )

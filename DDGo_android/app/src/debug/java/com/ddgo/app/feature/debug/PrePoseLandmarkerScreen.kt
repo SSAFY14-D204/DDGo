@@ -48,13 +48,17 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
+import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.feature.climbing.upload.PoseOverlay
 import com.ddgo.app.feature.climbing.upload.PoseScrubberColors
+import com.ddgo.app.feature.climbing.upload.PoseScrubberMarker
 import com.ddgo.app.feature.climbing.upload.PoseVideoScrubber
 import com.ddgo.app.feature.climbing.upload.calculateVideoContentRect
 import com.ddgo.app.feature.climbing.upload.findNearestPoseForPlayback
 import com.ddgo.app.feature.climbing.upload.findNearestTimestamp
+import com.ddgo.app.feature.climbing.upload.resolveAnalysisSeekTimeMs
+import com.ddgo.app.feature.climbing.upload.toVideoTimeString
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -210,6 +214,11 @@ fun PrePoseLandmarkerScreen(
                         Text("모드: ${if (uiState.isOptimized) "최적화 (Option B)" else "일반 (Option A)"}")
                         Text("소요 시간: ${uiState.analysisTimeMs}ms")
                         Text("검출된 포즈 수: ${uiState.poseFrames.size}")
+                        Text(
+                            text = uiState.handPeakAnnotation?.endTimeMs?.toVideoTimeString()
+                                ?.let { endPointTime -> "종료 지점: $endPointTime" }
+                                ?: "종료 지점을 찾지 못함"
+                        )
                         
                         if (uiState.poseFrames.isNotEmpty()) {
                             HorizontalDivider(
@@ -241,7 +250,8 @@ fun PrePoseLandmarkerScreen(
                 PrePoseResultView(
                     videoUri = selectedVideoUri,
                     videoName = selectedVideoName,
-                    poseFrames = uiState.poseFrames
+                    poseFrames = uiState.poseFrames,
+                    analysisPoints = uiState.analysisPoints
                 )
                 
                 SampleFramesSection(poseFrames = uiState.poseFrames)
@@ -254,7 +264,8 @@ fun PrePoseLandmarkerScreen(
 private fun PrePoseResultView(
     videoUri: Uri,
     videoName: String?,
-    poseFrames: List<DebugPoseFrameResult>
+    poseFrames: List<DebugPoseFrameResult>,
+    analysisPoints: List<AnalysisPoint>
 ) {
     val context = LocalContext.current
     val exoPlayer = remember(videoUri) {
@@ -278,6 +289,20 @@ private fun PrePoseResultView(
     }
     val displayedPositionMs = if (isScrubbing) scrubPositionMs else currentPositionMs
     val canScrub = durationMs > 0L && poseTimestamps.isNotEmpty()
+    val activeIdx by remember(analysisPoints, displayedPositionMs) {
+        derivedStateOf {
+            analysisPoints.indexOfLast { point -> point.timeMs <= displayedPositionMs }
+        }
+    }
+    val scrubberMarkers = remember(analysisPoints, activeIdx) {
+        analysisPoints.mapIndexed { index, point ->
+            PoseScrubberMarker(
+                index = point.index,
+                timeMs = point.timeMs,
+                isSelected = index == activeIdx
+            )
+        }
+    }
 
     LaunchedEffect(exoPlayer, videoUri) {
         exoPlayer.setMediaItem(MediaItem.fromUri(videoUri))
@@ -411,6 +436,7 @@ private fun PrePoseResultView(
                 currentPositionMs = displayedPositionMs,
                 durationMs = durationMs,
                 enabled = canScrub,
+                markers = scrubberMarkers,
                 colors = PoseScrubberColors(
                     trackColor = MaterialTheme.colorScheme.outlineVariant.copy(
                         alpha = if (canScrub) 0.9f else 0.4f
@@ -459,6 +485,26 @@ private fun PrePoseResultView(
                     }
                 }
             )
+
+            analysisPoints.firstOrNull()?.let { endPoint ->
+                TextButton(
+                    onClick = {
+                        val seekStartMs = resolveAnalysisSeekTimeMs(
+                            point = endPoint,
+                            usesPoseDetectorTimeline = true
+                        )
+                        seekToNearestPoseFrame(seekStartMs)?.let { snappedTimeMs ->
+                            currentPositionMs = snappedTimeMs
+                            scrubPositionMs = snappedTimeMs
+                            exoPlayer.play()
+                        }
+                    },
+                    enabled = canScrub,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("종료 지점 보기 (${endPoint.timeMs.toVideoTimeString()})")
+                }
+            }
 
             Text(
                 text = "미리 계산된 ${poseFrames.size}개의 포즈 데이터를 사용하여 실시간으로 렌더링 중입니다.",

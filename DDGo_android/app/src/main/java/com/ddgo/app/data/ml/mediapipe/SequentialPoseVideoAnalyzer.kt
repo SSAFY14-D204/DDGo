@@ -20,10 +20,13 @@ import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.model.PrePoseVideoAnalysisResult
+import com.ddgo.app.domain.model.ProcessedPoseDetectionFrame
 import com.ddgo.app.domain.repository.AiPoseSequenceProvider
 import com.ddgo.app.domain.model.PoseLandmark
 import com.ddgo.app.domain.model.PosePixelPoint
 import com.ddgo.app.domain.model.PoseWorldPoint
+import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.components.containers.Landmark
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
@@ -50,7 +53,7 @@ import kotlinx.coroutines.withContext
  */
 class SequentialPoseVideoAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context
-) : AiPoseSequenceProvider {
+) : AiPoseSequenceProvider, PrePoseVideoAnalysisProvider {
 
     suspend operator fun invoke(
         videoUri: String,
@@ -63,6 +66,19 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
                 coroutineContext.ensureActive()
             }
         ).poses
+    }
+
+    override suspend fun analyze(
+        videoUri: String,
+        analysisFpsLimit: Int
+    ): PrePoseVideoAnalysisResult = withContext(Dispatchers.IO) {
+        analyzeInternal(
+            videoUri = videoUri,
+            analysisFpsLimit = analysisFpsLimit,
+            cancellationCheckpoint = {
+                coroutineContext.ensureActive()
+            }
+        ).toPrePoseVideoAnalysisResult()
     }
 
     override suspend fun analyzePoseSequence(
@@ -714,6 +730,18 @@ private data class PoseSequenceAnalysisResult(
     val sequence: AiPoseSequence,
     val poses: List<Pose>
 )
+
+private fun PoseSequenceAnalysisResult.toPrePoseVideoAnalysisResult(): PrePoseVideoAnalysisResult {
+    return PrePoseVideoAnalysisResult(
+        poses = poses,
+        processedFrames = sequence.frames.map { frame ->
+            ProcessedPoseDetectionFrame(
+                timestampMs = frame.timestampMs,
+                poseDetected = frame.poseDetected
+            )
+        }
+    )
+}
 
 private fun emptyAnalysisResult(
     videoUri: String,

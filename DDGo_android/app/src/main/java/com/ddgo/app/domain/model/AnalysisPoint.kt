@@ -13,5 +13,12 @@ package com.ddgo.app.domain.model
 data class AnalysisPoint(
     val index: Int,
     val timeMs: Long,
-    val description: String
+    val description: String,
+    val kind: AnalysisPointKind = AnalysisPointKind.GENERIC
 )
+
+enum class AnalysisPointKind {
+    GENERIC,
+    PERSON_OBSERVATION_START,
+    CLIMB_END
+}

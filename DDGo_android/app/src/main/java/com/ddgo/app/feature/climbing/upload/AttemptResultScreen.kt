@@ -105,7 +105,7 @@ fun AttemptResultScreen(
     val currentAttemptResult = presentationResults.getOrElse(
         currentAttemptIndex.coerceAtLeast(0)
     ) {
-        presentationResults.firstOrNull() ?: (false to viewModel.analysisPoints)
+        presentationResults.firstOrNull() ?: (false to emptyList())
     }
     val currentAttemptHoldReachResult = viewModel.currentAttemptHoldReachResult
     val totalSelectedHoldCount = viewModel.totalSelectedHoldCount
@@ -115,7 +115,22 @@ fun AttemptResultScreen(
     val currentAnalysisPoints = currentAttemptResult.second
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
+    val personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs
+    val usesPoseDetectorTimeline = currentAttemptPrePoseEntry != null
     val numberedHolds = viewModel.numberedHolds
+    val endpointStatusMessage = remember(currentAttemptPrePoseEntry, currentAnalysisPoints) {
+        when {
+            currentAttemptPrePoseEntry == null -> null
+            currentAttemptPrePoseEntry.status == PrePoseStatus.Pending ||
+                currentAttemptPrePoseEntry.status == PrePoseStatus.Running -> "분석 포인트를 계산 중입니다"
+
+            currentAttemptPrePoseEntry.status == PrePoseStatus.Failed -> "pre-pose 분석에 실패했습니다"
+            currentAttemptPrePoseEntry.status == PrePoseStatus.Ready &&
+                currentAnalysisPoints.isEmpty() -> "분석 포인트를 찾지 못함"
+
+            else -> null
+        }
+    }
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
@@ -131,6 +146,7 @@ fun AttemptResultScreen(
     var playbackState by remember(currentVideoUri) { mutableStateOf(Player.STATE_IDLE) }
     var isScrubbing by rememberSaveable(currentVideoUri) { mutableStateOf(false) }
     var scrubPositionMs by rememberSaveable(currentVideoUri) { mutableLongStateOf(0L) }
+    var hasInitialAutoSeekApplied by rememberSaveable(currentVideoUri) { mutableStateOf(false) }
     var wasPlayingBeforeScrub by remember(currentVideoUri) { mutableStateOf(false) }
 
     val poseTimestamps = remember(currentAttemptPoses) {
@@ -164,6 +180,15 @@ fun AttemptResultScreen(
             currentAnalysisPoints.indexOfLast { point -> point.timeMs <= displayedPositionMs }
         }
     }
+    val scrubberMarkers = remember(currentAnalysisPoints, activeIdx) {
+        currentAnalysisPoints.mapIndexed { index, point ->
+            PoseScrubberMarker(
+                index = point.index,
+                timeMs = point.timeMs,
+                isSelected = index == activeIdx
+            )
+        }
+    }
 
     LaunchedEffect(currentVideoUri) {
         currentPositionMs = 0L
@@ -176,6 +201,18 @@ fun AttemptResultScreen(
             exoPlayer.playWhenReady = true
             playerVideoSize = exoPlayer.videoSize
         }
+    }
+
+    LaunchedEffect(currentVideoUri, personObservationStartTimeMs, poseTimestamps, hasInitialAutoSeekApplied) {
+        if (currentVideoUri == null || hasInitialAutoSeekApplied) return@LaunchedEffect
+        val initialStartMs = resolveInitialAttemptPlaybackStartTimeMs(
+            personObservationStartTimeMs = personObservationStartTimeMs,
+            poseTimestamps = poseTimestamps
+        ) ?: return@LaunchedEffect
+        exoPlayer.seekTo(initialStartMs)
+        currentPositionMs = initialStartMs
+        scrubPositionMs = initialStartMs
+        hasInitialAutoSeekApplied = true
     }
 
     LaunchedEffect(exoPlayer, currentVideoUri, isScrubbing) {
@@ -351,6 +388,7 @@ fun AttemptResultScreen(
                 currentPositionMs = displayedPositionMs,
                 durationMs = durationMs,
                 enabled = canScrub,
+                markers = scrubberMarkers,
                 colors = PoseScrubberColors(
                     trackColor = Color.White.copy(alpha = if (canScrub) 0.18f else 0.08f),
                     progressColor = C_ACCENT_GLOW,
@@ -417,25 +455,39 @@ fun AttemptResultScreen(
             )
             Spacer(Modifier.height(14.dp))
 
-            LazyRow(
-                state = cardListState,
-                contentPadding = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                itemsIndexed(currentAnalysisPoints) { idx, point ->
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn(tween(400, delayMillis = idx * 120)) +
-                            slideInVertically(tween(400, delayMillis = idx * 120)) { it / 2 }
-                    ) {
-                        AnalysisCard(
-                            point = point,
-                            isSelected = idx == activeIdx,
-                            onClick = {
-                                exoPlayer.seekTo(point.timeMs)
-                                exoPlayer.play()
-                            }
-                        )
+            if (currentAnalysisPoints.isEmpty() && endpointStatusMessage != null) {
+                Text(
+                    text = endpointStatusMessage,
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+            } else {
+                LazyRow(
+                    state = cardListState,
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(currentAnalysisPoints) { idx, point ->
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = fadeIn(tween(400, delayMillis = idx * 120)) +
+                                slideInVertically(tween(400, delayMillis = idx * 120)) { it / 2 }
+                        ) {
+                            AnalysisCard(
+                                point = point,
+                                isSelected = idx == activeIdx,
+                                onClick = {
+                                    exoPlayer.seekTo(
+                                        resolveAnalysisSeekTimeMs(
+                                            point = point,
+                                            usesPoseDetectorTimeline = usesPoseDetectorTimeline
+                                        )
+                                    )
+                                    exoPlayer.play()
+                                }
+                            )
+                        }
                     }
                 }
             }

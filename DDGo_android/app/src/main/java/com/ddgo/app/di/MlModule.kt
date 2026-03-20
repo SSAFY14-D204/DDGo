@@ -8,6 +8,7 @@ import com.ddgo.app.domain.repository.AiPoseSequenceProvider
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
+import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -42,6 +43,12 @@ abstract class MlModule {
     abstract fun bindAiPoseSequenceProvider(
         impl: SequentialPoseVideoAnalyzer
     ): AiPoseSequenceProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindPrePoseVideoAnalysisProvider(
+        impl: SequentialPoseVideoAnalyzer
+    ): PrePoseVideoAnalysisProvider
 
     @Binds
     @Singleton

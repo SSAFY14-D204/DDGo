@@ -57,6 +57,13 @@ class AttemptPosePlaybackTest {
         assertEquals(100L, result)
     }
 
+    @Test
+    fun `marker position fraction uses timestamp ratio within duration`() {
+        assertEquals(0f, markerPositionFraction(timeMs = -100L, durationMs = 1_000L))
+        assertEquals(0.25f, markerPositionFraction(timeMs = 250L, durationMs = 1_000L))
+        assertEquals(1f, markerPositionFraction(timeMs = 1_500L, durationMs = 1_000L))
+    }
+
     private fun poseAt(frameTimeMs: Long): Pose = Pose(
         frameTimeMs = frameTimeMs,
         landmarks = listOf(

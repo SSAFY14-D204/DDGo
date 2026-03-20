@@ -2,6 +2,7 @@ package com.ddgo.app.feature.climbing.upload
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.BitmapFactory
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -33,18 +34,24 @@ import com.ddgo.app.domain.model.PoseLandmark
 import com.ddgo.app.domain.model.ResolvedGym
 import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.model.UploadedAttemptVideo
+import com.ddgo.app.domain.poseanalysis.HandPeakAnnotation
+import com.ddgo.app.domain.poseanalysis.toPoseFrame
 import com.ddgo.app.data.ml.color.HoldColorClassifier
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
+import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
 import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
+import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
+import com.ddgo.app.domain.usecase.ClimbEndDetection
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
 import com.ddgo.app.domain.usecase.analyzePolygonHoldContacts
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
+import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
@@ -109,6 +116,7 @@ class UploadViewModel @Inject constructor(
     private val personDetector: PersonDetector,
     private val holdDetector: HoldDetector,
     private val poseEstimator: PoseEstimator,
+    private val prePoseVideoAnalysisProvider: PrePoseVideoAnalysisProvider,
     private val holdColorClassifier: HoldColorClassifier,
     private val searchNearbyClimbingGymsUseCase: SearchNearbyClimbingGymsUseCase,
     private val resolveGymUseCase: ResolveGymUseCase,
@@ -116,6 +124,8 @@ class UploadViewModel @Inject constructor(
     private val saveChallengeHoldsUseCase: SaveChallengeHoldsUseCase,
     private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase,
     private val endAttemptUseCase: EndAttemptUseCase,
+    private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase,
+    private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
     private val getMyInfoUseCase: GetMyInfoUseCase,
     private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase
 ) : ViewModel() {
@@ -407,6 +417,9 @@ class UploadViewModel @Inject constructor(
 
             return List(attemptCount) { index ->
                 val fallback = fallbackResults[index % fallbackResults.size]
+                val prePoseEntry = playbackAttemptUris
+                    .getOrNull(index)
+                    ?.let(prePoseCacheEntries::get)
                 val aiPoints = attemptAiAnalysisResults
                     .getOrNull(index)
                     ?.toAnalysisPoints()
@@ -415,10 +428,15 @@ class UploadViewModel @Inject constructor(
                 resolveAttemptSuccess(
                     index = index,
                     fallback = fallback.first
-                ) to if (aiPoints.isNotEmpty()) {
-                    aiPoints
-                } else {
-                    fallback.second.ifEmpty { defaultUploadAnalysisPoints() }
+                ) to when {
+                    prePoseEntry == null -> if (aiPoints.isNotEmpty()) {
+                        aiPoints
+                    } else {
+                        fallback.second.ifEmpty { defaultUploadAnalysisPoints() }
+                    }
+
+                    prePoseEntry.status == PrePoseStatus.Ready -> prePoseEntry.timelinePoints
+                    else -> emptyList()
                 }
             }
         }
@@ -930,7 +948,7 @@ class UploadViewModel @Inject constructor(
                 updatePrePoseBatchState()
 
                 val result = runCatching {
-                    poseEstimator.estimateFromVideo(task.playbackUri)
+                    prePoseVideoAnalysisProvider.analyze(task.playbackUri)
                 }
 
                 val latestEntry = prePoseCacheEntries[task.playbackUri]
@@ -943,9 +961,26 @@ class UploadViewModel @Inject constructor(
                     put(
                         task.playbackUri,
                         if (result.isSuccess) {
+                            val prePoseAnalysis = result.getOrNull()
+                            val poses = prePoseAnalysis?.poses.orEmpty()
+                            val personObservationStartTimeMs = detectStablePersonObservationUseCase(
+                                prePoseAnalysis?.processedFrames.orEmpty()
+                            )
+                            val handPeakAnnotation = runCatching {
+                                analyzeHandPeakAndEndUseCase(poses.map { pose -> pose.toPoseFrame() })
+                            }.onFailure { error ->
+                                Log.w(TAG, "Pre-pose hand peak analysis failed: ${task.playbackUri}", error)
+                            }.getOrNull()
                             latestEntry.copy(
                                 status = PrePoseStatus.Ready,
-                                poses = result.getOrDefault(emptyList()),
+                                poses = poses,
+                                personObservationStartTimeMs = personObservationStartTimeMs,
+                                climbEndDetection = null,
+                                handPeakAnnotation = handPeakAnnotation,
+                                timelinePoints = buildAttemptTimelinePoints(
+                                    personObservationStartTimeMs = personObservationStartTimeMs,
+                                    endTimeMs = handPeakAnnotation?.endTimeMs
+                                ),
                                 errorMessage = null,
                                 taskId = null
                             )
@@ -953,6 +988,10 @@ class UploadViewModel @Inject constructor(
                             latestEntry.copy(
                                 status = PrePoseStatus.Failed,
                                 poses = emptyList(),
+                                personObservationStartTimeMs = null,
+                                climbEndDetection = null,
+                                handPeakAnnotation = null,
+                                timelinePoints = emptyList(),
                                 errorMessage = result.exceptionOrNull()?.message,
                                 taskId = null
                             )
@@ -1002,6 +1041,10 @@ class UploadViewModel @Inject constructor(
                                 selectionGeneration = selectionGeneration,
                                 status = PrePoseStatus.Failed,
                                 poses = emptyList(),
+                                personObservationStartTimeMs = null,
+                                climbEndDetection = null,
+                                handPeakAnnotation = null,
+                                timelinePoints = emptyList(),
                                 errorMessage = "Missing pre-pose cache entry."
                             )
                     }
@@ -1128,12 +1171,25 @@ class UploadViewModel @Inject constructor(
                         .extractMetadata(FFmpegMediaMetadataRetriever.METADATA_KEY_DURATION)
                         ?.toLong() ?: 0L
                     val duration = "%d:%02d".format(durationMs / 1000 / 60, (durationMs / 1000) % 60)
+                    val rotationDegrees = readVideoRotationDegrees(uri)
 
                     val bitmap = retriever.getFrameAtTime(
                         firstPts,
                         FFmpegMediaMetadataRetriever.OPTION_CLOSEST
+                    )?.let { rawBitmap ->
+                        orientBitmapForVideoRotation(
+                            bitmap = rawBitmap,
+                            rotationDegrees = rotationDegrees
+                        )
+                    }
+                    Log.d(
+                        TAG,
+                        if (bitmap != null) {
+                            "   ✅ 썸네일 추출 성공 (${bitmap.width}x${bitmap.height}, rotation=$rotationDegrees)"
+                        } else {
+                            "   ⚠️ 썸네일 null"
+                        }
                     )
-                    Log.d(TAG, if (bitmap != null) "   ✅ 썸네일 추출 성공" else "   ⚠️ 썸네일 null")
 
                     Pair(duration, bitmap)
                 } finally {
@@ -1202,6 +1258,65 @@ class UploadViewModel @Inject constructor(
             0L
         } finally {
             extractor.release()
+        }
+    }
+
+    private fun readVideoRotationDegrees(uri: Uri): Int {
+        val extractor = MediaExtractor()
+        return try {
+            if (uri.scheme == "file") {
+                extractor.setDataSource(uri.path ?: return 0)
+            } else {
+                val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return 0
+                extractor.setDataSource(pfd.fileDescriptor)
+                pfd.close()
+            }
+
+            for (trackIndex in 0 until extractor.trackCount) {
+                val trackFormat = extractor.getTrackFormat(trackIndex)
+                val mime = trackFormat.getString(MediaFormat.KEY_MIME)
+                if (mime?.startsWith("video/") == true) {
+                    return if (trackFormat.containsKey(MediaFormat.KEY_ROTATION)) {
+                        normalizeVideoRotationDegrees(trackFormat.getInteger(MediaFormat.KEY_ROTATION))
+                    } else {
+                        0
+                    }
+                }
+            }
+
+            0
+        } catch (error: Exception) {
+            Log.w(TAG, "Failed to read video rotation metadata: ${error.message}", error)
+            0
+        } finally {
+            extractor.release()
+        }
+    }
+
+    private fun orientBitmapForVideoRotation(
+        bitmap: Bitmap,
+        rotationDegrees: Int
+    ): Bitmap {
+        val normalizedRotationDegrees = normalizeVideoRotationDegrees(rotationDegrees)
+        if (normalizedRotationDegrees == 0) {
+            return bitmap
+        }
+
+        val matrix = Matrix().apply {
+            postRotate(normalizedRotationDegrees.toFloat())
+        }
+        return Bitmap.createBitmap(
+            bitmap,
+            0,
+            0,
+            bitmap.width,
+            bitmap.height,
+            matrix,
+            true
+        ).also { orientedBitmap ->
+            if (orientedBitmap !== bitmap && !bitmap.isRecycled) {
+                bitmap.recycle()
+            }
         }
     }
 
@@ -1605,15 +1720,21 @@ class UploadViewModel @Inject constructor(
 
                         Log.d(TAG, "▶ [2/3] 프레임 추출 시작 (PTS=${bestTimeUs / 1000}ms, uri=$uri)")
                         val retriever = FFmpegMediaMetadataRetriever()
+                        val parsedUri = Uri.parse(uri)
+                        val rotationDegrees = readVideoRotationDegrees(parsedUri)
                         try {
-                            val parsedUri = Uri.parse(uri)
                             if (!setRetrieverDataSource(retriever, parsedUri)) {
                                 throw IllegalStateException("setDataSource 실패 (scheme=${parsedUri.scheme})")
                             }
                             retriever.getFrameAtTime(
                                 bestTimeUs,
                                 FFmpegMediaMetadataRetriever.OPTION_CLOSEST
-                            ) ?: throw IllegalStateException("getFrameAtTime 반환 null (PTS=${bestTimeUs / 1000}ms)")
+                            )?.let { rawBitmap ->
+                                orientBitmapForVideoRotation(
+                                    bitmap = rawBitmap,
+                                    rotationDegrees = rotationDegrees
+                                )
+                            } ?: throw IllegalStateException("getFrameAtTime 반환 null (PTS=${bestTimeUs / 1000}ms)")
                         } finally {
                             retriever.release()
                         }
@@ -2157,8 +2278,8 @@ class UploadViewModel @Inject constructor(
         analysisPoints = attemptPresentationResults
             .getOrNull(currentAttemptIndex)
             ?.second
-            .orEmpty()
-            .ifEmpty { defaultUploadAnalysisPoints() }
+            ?: attemptPresentationResults.firstOrNull()?.second
+            ?: defaultUploadAnalysisPoints()
     }
 
     private fun clearHoldReachAnalysis() {
@@ -2328,6 +2449,10 @@ data class PrePoseCacheEntry(
     val selectionGeneration: Long,
     val status: PrePoseStatus,
     val poses: List<Pose> = emptyList(),
+    val personObservationStartTimeMs: Long? = null,
+    val climbEndDetection: ClimbEndDetection? = null,
+    val handPeakAnnotation: HandPeakAnnotation? = null,
+    val timelinePoints: List<AnalysisPoint> = emptyList(),
     val errorMessage: String? = null,
     val taskId: Long? = null
 )
@@ -2337,6 +2462,10 @@ private fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = Terminal
     selectionGeneration = selectionGeneration,
     status = status,
     poses = poses,
+    personObservationStartTimeMs = personObservationStartTimeMs,
+    climbEndDetection = climbEndDetection,
+    handPeakAnnotation = handPeakAnnotation,
+    timelinePoints = timelinePoints,
     errorMessage = errorMessage
 )
 
@@ -2350,6 +2479,10 @@ data class TerminalPrePoseEntry(
     val selectionGeneration: Long,
     val status: PrePoseStatus,
     val poses: List<Pose>,
+    val personObservationStartTimeMs: Long?,
+    val climbEndDetection: ClimbEndDetection?,
+    val handPeakAnnotation: HandPeakAnnotation?,
+    val timelinePoints: List<AnalysisPoint>,
     val errorMessage: String?
 )
 
@@ -2426,7 +2559,7 @@ sealed class ChallengeCreationUiState {
  */
 sealed class UploadSubmissionUiState {
     object Idle : UploadSubmissionUiState()
-    data class Loading(val message: String) : UploadSubmissionUiState()
+    data class Loading(val  message: String) : UploadSubmissionUiState()
     data class Success(val uploadedAttempts: List<UploadedAttemptVideo>) : UploadSubmissionUiState()
     data class Error(val message: String) : UploadSubmissionUiState()
 }
@@ -2470,6 +2603,14 @@ private fun AiAnalysisResult.toAnalysisPoints(): List<AnalysisPoint> {
             timeMs = candidate.bestSegment?.startTimeMs ?: ((index + 1) * 15_000L),
             description = description
         )
+    }
+}
+
+internal fun normalizeVideoRotationDegrees(rotationDegrees: Int): Int {
+    val normalized = ((rotationDegrees % 360) + 360) % 360
+    return when (normalized) {
+        90, 180, 270 -> normalized
+        else -> 0
     }
 }
 
