@@ -220,27 +220,32 @@ class UploadViewModel @Inject constructor(
         MutableStateFlow<UploadSubmissionUiState>(UploadSubmissionUiState.Idle)
     val uploadSubmissionUiState = _uploadSubmissionUiState.asStateFlow()
 
-    var selectionGeneration by mutableStateOf(0L)
+    private val prePoseSessionManager = PrePoseSessionManager(
+        context = context,
+        coroutineScope = viewModelScope,
+        prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+        analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
+        detectStablePersonObservationUseCase = detectStablePersonObservationUseCase
+    )
+
+    var selectionGeneration by prePoseSessionManager.selectionGenerationState
         private set
 
-    var prePoseBatchState by mutableStateOf(PrePoseBatchState())
+    var prePoseBatchState by prePoseSessionManager.prePoseBatchStateState
         private set
 
-    private var primaryManagedVideo by mutableStateOf<ManagedAttemptVideo?>(null)
-    private var additionalManagedVideos by mutableStateOf<List<ManagedAttemptVideo>>(emptyList())
-    private var attemptOnlyManagedVideos by mutableStateOf<List<ManagedAttemptVideo>>(emptyList())
+    private var primaryManagedVideo by prePoseSessionManager.primaryManagedVideoState
+    private var additionalManagedVideos by prePoseSessionManager.additionalManagedVideosState
+    private var attemptOnlyManagedVideos by prePoseSessionManager.attemptOnlyManagedVideosState
 
     private var primarySelectionJob: Job? = null
     private var additionalSelectionJob: Job? = null
     private var attemptOnlySelectionJob: Job? = null
 
-    private var prePoseCacheEntries by mutableStateOf<Map<String, PrePoseCacheEntry>>(emptyMap())
-    private val prePoseTaskQueue = ArrayDeque<PrePoseTask>()
-    private var prePoseWorkerJob: Job? = null
-    private var nextPrePoseTaskId = 0L
-    private val managedTempFilePaths = mutableSetOf<String>()
-    private val managedVideosByPlaybackUri = mutableMapOf<String, ManagedAttemptVideo>()
-    private val activePrePosePlaybackUris = mutableSetOf<String>()
+    private var prePoseCacheEntries by prePoseSessionManager.prePoseCacheEntriesState
+    private val managedTempFilePaths = prePoseSessionManager.managedTempFilePaths
+    private val managedVideosByPlaybackUri = prePoseSessionManager.managedVideosByPlaybackUri
+    private val activePrePosePlaybackUris = prePoseSessionManager.activePrePosePlaybackUris
     private var publishedAttemptResultSession: PublishedAttemptResultSession? = null
 
     /**
@@ -759,111 +764,32 @@ class UploadViewModel @Inject constructor(
     private suspend fun prepareManagedVideos(
         uris: List<String>,
         filePrefix: String
-    ): List<ManagedAttemptVideo> {
-        return uris.mapIndexed { index, uriString ->
-            normalizeToManagedVideo(
-                uri = Uri.parse(uriString),
-                filePrefix = "${filePrefix}_${index + 1}",
-                realtimeSessionId = null
-            )
-        }
-    }
+    ): List<ManagedAttemptVideo> = prePoseSessionManager.prepareManagedVideos(
+        uris = uris,
+        filePrefix = filePrefix
+    )
 
     private fun normalizeToManagedVideo(
         uri: Uri,
         filePrefix: String,
         realtimeSessionId: String?
-    ): ManagedAttemptVideo {
-        if (uri.scheme == "file") {
-            return ManagedAttemptVideo(
-                sourceUri = uri.toString(),
-                playbackUri = uri.toString(),
-                tempFilePath = null,
-                realtimeSessionId = realtimeSessionId
-            )
-        }
+    ): ManagedAttemptVideo = prePoseSessionManager.normalizeToManagedVideo(
+        uri = uri,
+        filePrefix = filePrefix,
+        realtimeSessionId = realtimeSessionId
+    )
 
-        return try {
-            val displayName = resolveDisplayName(uri)
-            val extension = displayName.substringAfterLast('.', "mp4")
-                .takeIf { it.isNotBlank() }
-                ?.let { ".${it.lowercase()}" }
-                ?: ".mp4"
-            val tempFile = File(
-                context.cacheDir,
-                "${filePrefix}_${UUID.randomUUID()}$extension"
-            )
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
+    private fun deleteManagedVideo(video: ManagedAttemptVideo?) =
+        prePoseSessionManager.deleteManagedVideo(video)
 
-            managedTempFilePaths += tempFile.absolutePath
-            Log.d(TAG, "영상 캐시 복사 완료: ${tempFile.absolutePath}")
+    private fun deleteManagedVideos(videos: List<ManagedAttemptVideo>) =
+        prePoseSessionManager.deleteManagedVideos(videos)
 
-            ManagedAttemptVideo(
-                sourceUri = uri.toString(),
-                playbackUri = Uri.fromFile(tempFile).toString(),
-                tempFilePath = tempFile.absolutePath,
-                realtimeSessionId = realtimeSessionId
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "캐시 복사 실패, 원본 URI 사용: ${e.message}")
-            ManagedAttemptVideo(
-                sourceUri = uri.toString(),
-                playbackUri = uri.toString(),
-                tempFilePath = null,
-                realtimeSessionId = realtimeSessionId
-            )
-        }
-    }
+    private fun registerManagedVideo(video: ManagedAttemptVideo) =
+        prePoseSessionManager.registerManagedVideo(video)
 
-    private fun resolveDisplayName(uri: Uri): String {
-        val fallback = uri.lastPathSegment?.substringAfterLast('/') ?: "selected_video"
-        return context.contentResolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0) else fallback
-        } ?: fallback
-    }
-
-    private fun deleteManagedVideo(video: ManagedAttemptVideo?) {
-        deleteManagedVideos(listOfNotNull(video))
-    }
-
-    private fun deleteManagedVideos(videos: List<ManagedAttemptVideo>) {
-        videos.mapNotNull { it.tempFilePath }.forEach(::deleteManagedTempFile)
-    }
-
-    private fun deleteManagedTempFile(path: String) {
-        managedTempFilePaths.remove(path)
-        managedVideosByPlaybackUri.entries.removeAll { (_, video) ->
-            video.tempFilePath == path
-        }
-        runCatching {
-            val file = File(path)
-            if (file.exists()) {
-                file.delete()
-            }
-        }.onFailure { error ->
-            Log.w(TAG, "임시 영상 삭제 실패: $path", error)
-        }
-    }
-
-    private fun registerManagedVideo(video: ManagedAttemptVideo) {
-        if (video.tempFilePath != null) {
-            managedVideosByPlaybackUri[video.playbackUri] = video
-        }
-    }
-
-    private fun registerManagedVideos(videos: List<ManagedAttemptVideo>) {
-        videos.forEach(::registerManagedVideo)
-    }
+    private fun registerManagedVideos(videos: List<ManagedAttemptVideo>) =
+        prePoseSessionManager.registerManagedVideos(videos)
 
     private fun beginSelectionUpdate(
         preservePublishedResult: Boolean = false
@@ -882,144 +808,11 @@ class UploadViewModel @Inject constructor(
     }
 
     private fun refreshCurrentSelectionPrePoseTargets(generation: Long = selectionGeneration) {
-        val currentUris = allAttemptUris.distinct()
-        val currentUriSet = currentUris.toSet()
-        val updatedEntries = prePoseCacheEntries.toMutableMap()
-
-        prePoseTaskQueue.removeAll { task -> task.playbackUri !in currentUriSet }
-
-        currentUris.forEach { playbackUri ->
-            val existingEntry = updatedEntries[playbackUri]
-            if (existingEntry == null) {
-                val taskId = nextPrePoseTaskId()
-                updatedEntries[playbackUri] = PrePoseCacheEntry(
-                    playbackUri = playbackUri,
-                    selectionGeneration = generation,
-                    status = PrePoseStatus.Pending,
-                    taskId = taskId
-                )
-                prePoseTaskQueue.addLast(
-                    PrePoseTask(
-                        playbackUri = playbackUri,
-                        taskId = taskId
-                    )
-                )
-                return@forEach
-            }
-
-            updatedEntries[playbackUri] = existingEntry.copy(
-                selectionGeneration = generation
-            )
-
-            if (
-                existingEntry.status == PrePoseStatus.Pending &&
-                existingEntry.taskId != null &&
-                prePoseTaskQueue.none { queued ->
-                    queued.playbackUri == playbackUri && queued.taskId == existingEntry.taskId
-                }
-            ) {
-                prePoseTaskQueue.addLast(
-                    PrePoseTask(
-                        playbackUri = playbackUri,
-                        taskId = existingEntry.taskId
-                    )
-                )
-            }
-        }
-
-        val keepUris = currentUriSet + resultPlaybackUris.toSet()
-        prePoseCacheEntries = updatedEntries.filter { (playbackUri, entry) ->
-            playbackUri in keepUris || entry.status == PrePoseStatus.Running
-        }
-
-        updatePrePoseBatchState()
-        ensurePrePoseWorkerRunning()
-    }
-
-    private fun ensurePrePoseWorkerRunning() {
-        if (prePoseWorkerJob?.isActive == true) return
-
-        prePoseWorkerJob = viewModelScope.launch(Dispatchers.Default) {
-            while (true) {
-                val task = if (prePoseTaskQueue.isEmpty()) {
-                    null
-                } else {
-                    prePoseTaskQueue.removeFirst()
-                } ?: break
-                val currentEntry = prePoseCacheEntries[task.playbackUri] ?: continue
-
-                if (
-                    currentEntry.status != PrePoseStatus.Pending ||
-                    currentEntry.taskId != task.taskId
-                ) {
-                    continue
-                }
-
-                prePoseCacheEntries = prePoseCacheEntries.toMutableMap().apply {
-                    put(
-                        task.playbackUri,
-                        currentEntry.copy(status = PrePoseStatus.Running)
-                    )
-                }
-                activePrePosePlaybackUris += task.playbackUri
-                updatePrePoseBatchState()
-
-                val result = runCatching {
-                    prePoseVideoAnalysisProvider.analyze(task.playbackUri)
-                }
-
-                val latestEntry = prePoseCacheEntries[task.playbackUri]
-                if (latestEntry?.taskId != task.taskId) {
-                    activePrePosePlaybackUris -= task.playbackUri
-                    continue
-                }
-
-                prePoseCacheEntries = prePoseCacheEntries.toMutableMap().apply {
-                    put(
-                        task.playbackUri,
-                        if (result.isSuccess) {
-                            val prePoseAnalysis = result.getOrNull()
-                            val poses = prePoseAnalysis?.poses.orEmpty()
-                            val personObservationStartTimeMs = detectStablePersonObservationUseCase(
-                                prePoseAnalysis?.processedFrames.orEmpty()
-                            )
-                            val handPeakAnnotation = runCatching {
-                                analyzeHandPeakAndEndUseCase(poses.map { pose -> pose.toPoseFrame() })
-                            }.onFailure { error ->
-                                Log.w(TAG, "Pre-pose hand peak analysis failed: ${task.playbackUri}", error)
-                            }.getOrNull()
-                            latestEntry.copy(
-                                status = PrePoseStatus.Ready,
-                                poses = poses,
-                                personObservationStartTimeMs = personObservationStartTimeMs,
-                                climbEndDetection = null,
-                                handPeakAnnotation = handPeakAnnotation,
-                                timelinePoints = buildAttemptTimelinePoints(
-                                    personObservationStartTimeMs = personObservationStartTimeMs,
-                                    endTimeMs = handPeakAnnotation?.endTimeMs
-                                ),
-                                errorMessage = null,
-                                taskId = null
-                            )
-                        } else {
-                            latestEntry.copy(
-                                status = PrePoseStatus.Failed,
-                                poses = emptyList(),
-                                personObservationStartTimeMs = null,
-                                climbEndDetection = null,
-                                handPeakAnnotation = null,
-                                timelinePoints = emptyList(),
-                                errorMessage = result.exceptionOrNull()?.message,
-                                taskId = null
-                            )
-                        }
-                    )
-                }
-                activePrePosePlaybackUris -= task.playbackUri
-                updatePrePoseBatchState()
-                cleanupUnusedManagedTempFiles()
-            }
-        }
+        prePoseSessionManager.refreshCurrentSelectionPrePoseTargets(
+            currentAttemptUris = allAttemptUris,
+            currentResultPlaybackUris = resultPlaybackUris.toSet(),
+            generation = generation
+        )
     }
 
     private suspend fun awaitActiveSelectionPreparation() {
@@ -1041,77 +834,21 @@ class UploadViewModel @Inject constructor(
         }
 
         refreshCurrentSelectionPrePoseTargets(selectionGeneration)
-
-        while (true) {
-            val entries = playbackUris.mapNotNull { prePoseCacheEntries[it] }
-            val activeCount = entries.count { entry ->
-                entry.status == PrePoseStatus.Pending || entry.status == PrePoseStatus.Running
-            }
-            if (entries.size == playbackUris.size && activeCount == 0) {
-                updatePrePoseBatchState()
-                return TerminalPrePoseSnapshot(
-                    generation = selectionGeneration,
-                    entriesByPlaybackUri = playbackUris.associateWith { playbackUri ->
-                        prePoseCacheEntries[playbackUri]?.toTerminalEntry()
-                            ?: TerminalPrePoseEntry(
-                                playbackUri = playbackUri,
-                                selectionGeneration = selectionGeneration,
-                                status = PrePoseStatus.Failed,
-                                poses = emptyList(),
-                                personObservationStartTimeMs = null,
-                                climbEndDetection = null,
-                                handPeakAnnotation = null,
-                                timelinePoints = emptyList(),
-                                errorMessage = "Missing pre-pose cache entry."
-                            )
-                    }
-                )
-            }
-
-            val completedCount = entries.count { entry ->
-                entry.status == PrePoseStatus.Ready || entry.status == PrePoseStatus.Failed
-            }
+        return prePoseSessionManager.awaitTerminal(playbackUris) { completedCount, totalCount ->
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
-                "pre-pose 준비 중입니다. (${completedCount}/${playbackUris.size})"
+                "pre-pose 준비 중입니다. (${completedCount}/${totalCount})"
             )
-            delay(100L)
         }
     }
 
     private fun updatePrePoseBatchState() {
-        val currentUris = allAttemptUris.distinct()
-        if (currentUris.isEmpty()) {
-            prePoseBatchState = PrePoseBatchState()
-            return
-        }
-
-        val entries = currentUris.mapNotNull { prePoseCacheEntries[it] }
-        prePoseBatchState = PrePoseBatchState(
-            generation = selectionGeneration,
-            totalCount = currentUris.size,
-            pendingCount = entries.count { it.status == PrePoseStatus.Pending },
-            runningCount = entries.count { it.status == PrePoseStatus.Running },
-            readyCount = entries.count { it.status == PrePoseStatus.Ready },
-            failedCount = entries.count { it.status == PrePoseStatus.Failed }
-        )
+        prePoseSessionManager.syncBatchState(allAttemptUris)
     }
 
     private fun clearPosePrecomputeState(
         preservePlaybackUris: Set<String> = emptySet()
     ) {
-        selectionGeneration += 1
-        if (preservePlaybackUris.isEmpty()) {
-            prePoseTaskQueue.clear()
-            prePoseCacheEntries = emptyMap()
-            prePoseBatchState = PrePoseBatchState()
-            return
-        }
-
-        prePoseTaskQueue.removeAll { task -> task.playbackUri !in preservePlaybackUris }
-        prePoseCacheEntries = prePoseCacheEntries.filterKeys { playbackUri ->
-            playbackUri in preservePlaybackUris
-        }
-        updatePrePoseBatchState()
+        prePoseSessionManager.clearPosePrecomputeState(preservePlaybackUris)
     }
 
     private fun resetAllSelectionPreparationJobs() {
@@ -1124,37 +861,11 @@ class UploadViewModel @Inject constructor(
     }
 
     private fun cleanupUnusedManagedTempFiles(forceDeleteAll: Boolean = false) {
-        val referencedTempPaths = buildSet {
-            if (!forceDeleteAll) {
-                listOfNotNull(primaryManagedVideo)
-                    .plus(additionalManagedVideos)
-                    .plus(attemptOnlyManagedVideos)
-                    .mapNotNullTo(this) { it.tempFilePath }
-
-                resultPlaybackUris.mapNotNullTo(this) { playbackUri ->
-                    managedVideosByPlaybackUri[playbackUri]?.tempFilePath
-                }
-                publishedAttemptResultSession
-                    ?.resultPlaybackUris
-                    ?.mapNotNullTo(this) { playbackUri ->
-                        managedVideosByPlaybackUri[playbackUri]?.tempFilePath
-                    }
-            }
-
-            activePrePosePlaybackUris.mapNotNullTo(this) { playbackUri ->
-                managedVideosByPlaybackUri[playbackUri]?.tempFilePath
-            }
-        }
-
-        managedTempFilePaths
-            .toList()
-            .filterNot { it in referencedTempPaths }
-            .forEach(::deleteManagedTempFile)
-    }
-
-    private fun nextPrePoseTaskId(): Long {
-        nextPrePoseTaskId += 1L
-        return nextPrePoseTaskId
+        prePoseSessionManager.cleanupUnusedManagedTempFiles(
+            currentResultPlaybackUris = resultPlaybackUris.toSet(),
+            publishedResultPlaybackUris = publishedResultPlaybackUris(),
+            forceDeleteAll = forceDeleteAll
+        )
     }
 
     private fun extractVideoMetadata(uri: Uri) {

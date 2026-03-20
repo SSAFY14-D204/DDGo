@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
@@ -23,7 +24,9 @@ data class AttemptResultSnapshot(
 
 class AttemptResultSessionStore {
 
-    var currentPlaybackUris by mutableStateOf<List<String>>(emptyList())
+    val currentPlaybackUrisState: MutableState<List<String>> = mutableStateOf(emptyList())
+
+    var currentPlaybackUris by currentPlaybackUrisState
         private set
 
     private var publishedSnapshot: AttemptResultSnapshot? = null

@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ddgo.app.domain.model.Pose
@@ -31,24 +32,35 @@ class PrePoseSessionManager(
     private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase
 ) {
 
-    var selectionGeneration by mutableStateOf(0L)
+    val selectionGenerationState: MutableState<Long> = mutableStateOf(0L)
+    var selectionGeneration by selectionGenerationState
         private set
 
-    var prePoseBatchState by mutableStateOf(PrePoseBatchState())
+    val prePoseBatchStateState: MutableState<PrePoseBatchState> = mutableStateOf(PrePoseBatchState())
+    var prePoseBatchState by prePoseBatchStateState
         private set
 
-    private var primaryManagedVideo by mutableStateOf<ManagedAttemptVideo?>(null)
-    private var additionalManagedVideos by mutableStateOf<List<ManagedAttemptVideo>>(emptyList())
-    private var attemptOnlyManagedVideos by mutableStateOf<List<ManagedAttemptVideo>>(emptyList())
+    val primaryManagedVideoState: MutableState<ManagedAttemptVideo?> = mutableStateOf(null)
+    private var primaryManagedVideo by primaryManagedVideoState
+
+    val additionalManagedVideosState: MutableState<List<ManagedAttemptVideo>> =
+        mutableStateOf(emptyList())
+    private var additionalManagedVideos by additionalManagedVideosState
+
+    val attemptOnlyManagedVideosState: MutableState<List<ManagedAttemptVideo>> =
+        mutableStateOf(emptyList())
+    private var attemptOnlyManagedVideos by attemptOnlyManagedVideosState
 
     private var trackedAttemptUris by mutableStateOf<List<String>>(emptyList())
-    private var prePoseCacheEntries by mutableStateOf<Map<String, PrePoseCacheEntry>>(emptyMap())
+    val prePoseCacheEntriesState: MutableState<Map<String, PrePoseCacheEntry>> =
+        mutableStateOf(emptyMap())
+    private var prePoseCacheEntries by prePoseCacheEntriesState
     private val prePoseTaskQueue = ArrayDeque<PrePoseTask>()
     private var prePoseWorkerJob: Job? = null
     private var nextPrePoseTaskId = 0L
-    private val managedTempFilePaths = mutableSetOf<String>()
-    private val managedVideosByPlaybackUri = mutableMapOf<String, ManagedAttemptVideo>()
-    private val activePrePosePlaybackUris = mutableSetOf<String>()
+    val managedTempFilePaths = mutableSetOf<String>()
+    val managedVideosByPlaybackUri = mutableMapOf<String, ManagedAttemptVideo>()
+    val activePrePosePlaybackUris = mutableSetOf<String>()
 
     fun beginSelectionGeneration(): Long {
         selectionGeneration += 1L
@@ -241,6 +253,11 @@ class PrePoseSessionManager(
 
         updatePrePoseBatchState()
         ensurePrePoseWorkerRunning()
+    }
+
+    fun syncBatchState(currentAttemptUris: List<String>) {
+        trackedAttemptUris = currentAttemptUris.distinct()
+        updatePrePoseBatchState()
     }
 
     suspend fun awaitTerminal(
