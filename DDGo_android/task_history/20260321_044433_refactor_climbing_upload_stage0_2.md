@@ -10,10 +10,10 @@
 
 Workspace baseline captured on this branch:
 
-- `UploadViewModel.kt`: 2757 lines
-- `ChallengeCreateScreen.kt`: 2214 lines
-- `AttemptResultScreen.kt`: 742 lines
-- `AnalysisLoadingScreen.kt`: 163 lines
+- `UploadViewModel.kt`: 2456 lines
+- `ChallengeCreateScreen.kt`: 2038 lines
+- `AttemptResultScreen.kt`: 696 lines
+- `AnalysisLoadingScreen.kt`: 151 lines
 
 ## Core Decisions
 
@@ -51,9 +51,17 @@ Workspace baseline captured on this branch:
 
 ### Stage 1
 
-- Planned focus:
+- Status: completed
+- Focus:
   - shared record-upload handoff contract
   - upload contract/type extraction
+- Added:
+  - `ClimbingUploadNavigator` to remove `record -> upload.navigateToUpload` direct dependency
+  - extracted pure upload types/helpers into `upload/presentation/*`
+  - kept moved files on the existing root package to minimize import churn during Stage 1
+- Current branch effect:
+  - `UploadViewModel.kt` reduced from `2456` lines to `2321` lines before Stage 2 seam work
+  - Checkpoint B is now the last known good refactor point before session seam extraction
 
 ### Stage 2
 

@@ -53,6 +53,7 @@ The current priority is not architectural cleanup for its own sake. The priority
   - record-to-upload draft payloads
   - realtime session handoff payloads
   - upload entry args
+  - shared upload navigator entrypoints such as `navigateToClimbingUpload`
 - Do not move upload-only session managers or orchestration into `shared`.
 
 ## QA Gates
