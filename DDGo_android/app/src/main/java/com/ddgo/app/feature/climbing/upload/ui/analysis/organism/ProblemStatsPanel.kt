@@ -31,14 +31,18 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.MetricHeadline
 
 @Composable
 internal fun ProblemStatsPanel(
-    overallSuccess: Boolean,
-    averageReachedHoldsText: String,
-    averageReachedHoldsSuffix: String?,
-    averageInsideSupportRatioText: String,
-    averageStableContactRatioText: String,
+    isSuccess: Boolean,
+    reachedHoldsTitle: String,
+    reachedHoldsText: String,
+    reachedHoldsSuffix: String?,
+    insideSupportTitle: String,
+    insideSupportRatioText: String,
+    stableContactTitle: String,
+    stableContactRatioText: String,
     timeline: List<Float>,
     focusFraction: Float?,
     focusReasonText: String?,
+    focusGuideText: String,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -49,16 +53,16 @@ internal fun ProblemStatsPanel(
     ) {
         MetricHeadline(
             title = "완등 여부",
-            value = if (overallSuccess) "성공" else "실패",
-            valueColor = if (overallSuccess) AnalysisSuccess else AnalysisFailure
+            value = if (isSuccess) "성공" else "실패",
+            valueColor = if (isSuccess) AnalysisSuccess else AnalysisFailure
         )
 
         Spacer(modifier = Modifier.height(34.dp))
 
         MetricHeadline(
-            title = "평균 도달 홀드",
-            value = averageReachedHoldsText,
-            suffix = averageReachedHoldsSuffix
+            title = reachedHoldsTitle,
+            value = reachedHoldsText,
+            suffix = reachedHoldsSuffix
         )
 
         Spacer(modifier = Modifier.height(34.dp))
@@ -78,15 +82,15 @@ internal fun ProblemStatsPanel(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             StatsSummaryCard(
-                title = "균형 유지",
+                title = insideSupportTitle,
                 description = "몸의 중심이 안정적으로 유지된 구간 비율",
-                value = averageInsideSupportRatioText,
+                value = insideSupportRatioText,
                 modifier = Modifier.weight(1f)
             )
             StatsSummaryCard(
-                title = "손발 지지 안정도",
+                title = stableContactTitle,
                 description = "손발 지지가 안정적으로 이어진 구간 비율",
-                value = averageStableContactRatioText,
+                value = stableContactRatioText,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -146,7 +150,7 @@ internal fun ProblemStatsPanel(
                 focusFraction?.let {
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "밝은 세로선은 현재 선택한 시도에서 가장 버거웠던 구간입니다.",
+                        text = focusGuideText,
                         color = AnalysisMuted,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
