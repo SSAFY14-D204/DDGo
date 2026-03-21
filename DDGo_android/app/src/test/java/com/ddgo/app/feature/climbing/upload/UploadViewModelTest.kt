@@ -25,9 +25,11 @@ import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
+import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
+import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.HoldRole
@@ -57,6 +59,7 @@ import org.junit.Test
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import java.io.File
+import java.lang.reflect.Field
 import kotlin.io.path.createTempDirectory
 import kotlinx.serialization.json.JsonObject
 
@@ -403,6 +406,8 @@ class UploadViewModelTest {
         val gymRepository = mockk<GymRepository>(relaxed = true)
         val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
         val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val attachAiRealtimeContextUseCase = mockk<AttachAiRealtimeContextUseCase>()
+        val finalizeAiRealtimeSessionUseCase = mockk<FinalizeAiRealtimeSessionUseCase>()
 
         coEvery { getMyInfoUseCase.invoke() } returns Result.success(
             User(
@@ -443,6 +448,15 @@ class UploadViewModelTest {
                 rawResponse = JsonObject(emptyMap())
             )
         )
+        coEvery {
+            attachAiRealtimeContextUseCase.invoke(
+                session = any(),
+                request = any()
+            )
+        } returns Result.failure(IllegalStateException("unused in baseline upload tests"))
+        coEvery {
+            finalizeAiRealtimeSessionUseCase.invoke(any())
+        } returns Result.failure(IllegalStateException("unused in baseline upload tests"))
 
         return UploadViewModel(
             context = context,
@@ -460,7 +474,9 @@ class UploadViewModelTest {
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
             detectStablePersonObservationUseCase = DetectStablePersonObservationUseCase(),
             getMyInfoUseCase = getMyInfoUseCase,
-            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            attachAiRealtimeContextUseCase = attachAiRealtimeContextUseCase,
+            finalizeAiRealtimeSessionUseCase = finalizeAiRealtimeSessionUseCase
         )
     }
 
@@ -487,32 +503,57 @@ class UploadViewModelTest {
     }
 
     private fun setPrivateField(target: Any, fieldName: String, value: Any?) {
-        val field = resolveField(target, fieldName)
+        val (owner, field) = resolveFieldOwner(target, fieldName)
         if (field.name.endsWith("\$delegate")) {
             @Suppress("UNCHECKED_CAST")
-            val state = field.get(target) as MutableState<Any?>
+            val state = field.get(owner) as MutableState<Any?>
             state.value = value
         } else {
-            field.set(target, value)
+            field.set(owner, value)
         }
     }
 
     private fun getPrivateField(target: Any, fieldName: String): Any? {
-        val field = resolveField(target, fieldName)
+        val (owner, field) = resolveFieldOwner(target, fieldName)
         if (field.name.endsWith("\$delegate")) {
             @Suppress("UNCHECKED_CAST")
-            val state = field.get(target) as MutableState<Any?>
+            val state = field.get(owner) as MutableState<Any?>
             return state.value
         }
-        return field.get(target)
+        return field.get(owner)
     }
 
-    private fun resolveField(target: Any, fieldName: String) = target.javaClass.declaredFields
+    private fun resolveFieldOwner(
+        target: Any,
+        fieldName: String,
+        visited: MutableSet<Any> = mutableSetOf()
+    ): Pair<Any, Field> {
+        if (!visited.add(target)) {
+            throw NoSuchFieldException(fieldName)
+        }
+
+        resolveField(target, fieldName)?.let { return target to it }
+
+        target.javaClass.declaredFields
+            .filter { field -> field.name.endsWith("Delegate") }
+            .forEach { delegateField ->
+                delegateField.isAccessible = true
+                val delegate = delegateField.get(target) ?: return@forEach
+                try {
+                    return resolveFieldOwner(delegate, fieldName, visited)
+                } catch (_: NoSuchFieldException) {
+                    // Try the next delegate field.
+                }
+            }
+
+        throw NoSuchFieldException(fieldName)
+    }
+
+    private fun resolveField(target: Any, fieldName: String): Field? = target.javaClass.declaredFields
         .firstOrNull { field ->
             field.name == fieldName || field.name == "${fieldName}\$delegate" || field.name.startsWith(fieldName)
         }
         ?.apply { isAccessible = true }
-        ?: throw NoSuchFieldException(fieldName)
 
     private fun invokePrivateMethod(target: Any, methodName: String, vararg args: Any?) {
         val method = target.javaClass.declaredMethods.firstOrNull { method ->
