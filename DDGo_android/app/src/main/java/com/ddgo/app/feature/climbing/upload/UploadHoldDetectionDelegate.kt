@@ -39,6 +39,8 @@ internal class UploadHoldDetectionDelegate(
     var selectedStartHold by mutableStateOf<Hold?>(null)
     var selectedEndHold by mutableStateOf<Hold?>(null)
     var numberedHolds by mutableStateOf<List<HoldNumbered>>(emptyList())
+    private var lastSuccessfulDetectionInput: DetectionInputKey? = null
+    private var holdDetectionPrecomputeEntry by mutableStateOf<HoldDetectionPrecomputeEntry?>(null)
 
     fun useDebugBestFrameImage(uri: String) {
         debugBestFrameImageUri = uri
@@ -49,6 +51,45 @@ internal class UploadHoldDetectionDelegate(
     fun resetHoldDetectionState(clearDebugSource: Boolean) {
         clearDetectionOutput(preserveDebugSource = !clearDebugSource)
         clearSelectedHoldSelection()
+    }
+
+    fun requestHoldPrecompute(
+        selectionGeneration: Long,
+        sourceVideoUri: String?
+    ) {
+        val sourceKey = buildPrecomputeSourceKey(sourceVideoUri) ?: return
+        val existingEntry = holdDetectionPrecomputeEntry
+
+        if (existingEntry != null && existingEntry.matches(selectionGeneration, sourceKey)) {
+            if (existingEntry.status != HoldDetectionPrecomputeStatus.Failed) {
+                return
+            }
+        }
+
+        holdDetectionPrecomputeEntry = HoldDetectionPrecomputeEntry(
+            selectionGeneration = selectionGeneration,
+            sourceVideoUri = sourceKey.sourceVideoUri,
+            debugBestFrameImageUri = sourceKey.debugBestFrameImageUri,
+            status = HoldDetectionPrecomputeStatus.Waiting
+        )
+    }
+
+    fun isPrecomputeRunning(
+        selectionGeneration: Long,
+        sourceVideoUri: String?
+    ): Boolean {
+        val sourceKey = buildPrecomputeSourceKey(sourceVideoUri) ?: return false
+        return holdDetectionPrecomputeEntry?.matches(selectionGeneration, sourceKey) == true &&
+            holdDetectionPrecomputeEntry?.status == HoldDetectionPrecomputeStatus.Running
+    }
+
+    fun isPrecomputeReady(
+        selectionGeneration: Long,
+        sourceVideoUri: String?
+    ): Boolean {
+        val sourceKey = buildPrecomputeSourceKey(sourceVideoUri) ?: return false
+        return holdDetectionPrecomputeEntry?.matches(selectionGeneration, sourceKey) == true &&
+            holdDetectionPrecomputeEntry?.status == HoldDetectionPrecomputeStatus.Ready
     }
 
     fun updateSelectedStartHold(hold: Hold) {
@@ -74,6 +115,7 @@ internal class UploadHoldDetectionDelegate(
         toAdd.forEach(::addManualHold)
         toRemove.forEach(::removeHold)
         dismissCandidatePopup()
+        syncDetectedHoldsToPrecomputeEntry()
     }
 
     fun dismissCandidatePopup() {
@@ -85,18 +127,173 @@ internal class UploadHoldDetectionDelegate(
         detectedHolds = detectedHolds.filter { existing ->
             existing.boundingBox != hold.boundingBox
         }
+        syncDetectedHoldsToPrecomputeEntry()
         clearSelectedHoldSelection()
         Log.d(TAG, "removeHold: bbox=${hold.boundingBox}, color=${hold.colorLabel}")
     }
 
+    suspend fun precomputeHoldDetection(
+        selectionGeneration: Long,
+        sourceVideoUri: String?,
+        allowRetryOnFailure: Boolean = false
+    ): Result<Unit> = runCatching {
+        val sourceKey = buildPrecomputeSourceKey(sourceVideoUri)
+            ?: throw IllegalStateException("videoUri/debugBestFrameImageUri ?놁쓬")
+        val existingEntry = holdDetectionPrecomputeEntry
+
+        if (existingEntry != null && existingEntry.matches(selectionGeneration, sourceKey)) {
+            when (existingEntry.status) {
+                HoldDetectionPrecomputeStatus.Ready -> {
+                    syncPublicDetectionState(existingEntry)
+                    return@runCatching
+                }
+
+                HoldDetectionPrecomputeStatus.Running -> {
+                    Log.d(TAG, "precomputeHoldDetection: reuse running task for identical source")
+                    return@runCatching
+                }
+
+                HoldDetectionPrecomputeStatus.Failed -> {
+                    if (!allowRetryOnFailure) {
+                        throw IllegalStateException(
+                            existingEntry.errorMessage ?: "hold detection precompute failed."
+                        )
+                    }
+                }
+
+                HoldDetectionPrecomputeStatus.Idle,
+                HoldDetectionPrecomputeStatus.Waiting -> Unit
+            }
+        }
+
+        holdDetectionPrecomputeEntry = HoldDetectionPrecomputeEntry(
+            selectionGeneration = selectionGeneration,
+            sourceVideoUri = sourceKey.sourceVideoUri,
+            debugBestFrameImageUri = sourceKey.debugBestFrameImageUri,
+            status = HoldDetectionPrecomputeStatus.Running
+        )
+
+        val precomputed = withContext(Dispatchers.IO) {
+            val preparedFrame = prepareBestFrame(sourceKey)
+            val rawHolds = detectRawHoldsFromBestFrame(preparedFrame.bitmap)
+            val classified = classifyAllHoldsFromBestFrame(
+                bitmap = preparedFrame.bitmap,
+                rawHolds = rawHolds
+            )
+            PreparedHoldPrecomputeResult(
+                bitmap = preparedFrame.bitmap,
+                bestFrameTimeUs = preparedFrame.bestFrameTimeUs,
+                rawYoloHolds = rawHolds,
+                classifiedAllRich = classified.classifiedHolds,
+                allRawHolds = classified.allHolds
+            )
+        }
+
+        val readyEntry = HoldDetectionPrecomputeEntry(
+            selectionGeneration = selectionGeneration,
+            sourceVideoUri = sourceKey.sourceVideoUri,
+            debugBestFrameImageUri = sourceKey.debugBestFrameImageUri,
+            status = HoldDetectionPrecomputeStatus.Ready,
+            bestFrameBitmap = precomputed.bitmap,
+            bestFrameTimeUs = precomputed.bestFrameTimeUs,
+            rawYoloHolds = precomputed.rawYoloHolds,
+            classifiedAllRich = precomputed.classifiedAllRich,
+            allRawHolds = precomputed.allRawHolds,
+            detectedHolds = emptyList(),
+            errorMessage = null
+        )
+        holdDetectionPrecomputeEntry = readyEntry
+        syncPublicDetectionState(readyEntry)
+    }.onFailure { throwable ->
+        val sourceKey = buildPrecomputeSourceKey(sourceVideoUri)
+        holdDetectionPrecomputeEntry = HoldDetectionPrecomputeEntry(
+            selectionGeneration = selectionGeneration,
+            sourceVideoUri = sourceKey?.sourceVideoUri,
+            debugBestFrameImageUri = sourceKey?.debugBestFrameImageUri,
+            status = HoldDetectionPrecomputeStatus.Failed,
+            errorMessage = throwable.message
+        )
+    }
+
+    fun applyHoldColorFilter(
+        selectionGeneration: Long,
+        detectionTargetColor: String
+    ): Result<Boolean> = runCatching {
+        val currentEntry = holdDetectionPrecomputeEntry
+            ?: throw IllegalStateException("hold detection precompute cache missing.")
+        val normalizedColor = detectionTargetColor.trim().lowercase()
+
+        if (
+            currentEntry.selectionGeneration != selectionGeneration ||
+            currentEntry.status != HoldDetectionPrecomputeStatus.Ready
+        ) {
+            throw IllegalStateException(
+                currentEntry.errorMessage ?: "hold detection precompute is not ready."
+            )
+        }
+
+        if (currentEntry.lastAppliedColorKey == normalizedColor) {
+            syncPublicDetectionState(currentEntry)
+            lastSuccessfulDetectionInput = DetectionInputKey(
+                sourceVideoUri = currentEntry.sourceVideoUri,
+                debugBestFrameImageUri = currentEntry.debugBestFrameImageUri,
+                normalizedDetectionTargetColor = normalizedColor
+            )
+            return@runCatching false
+        }
+
+        val filteredHolds = holdColorClassifier.filterClassifiedHolds(
+            classifiedHolds = currentEntry.classifiedAllRich,
+            targetColorName = detectionTargetColor,
+            scoreThreshold = 0.25f
+        )
+        val updatedEntry = currentEntry.copy(
+            lastAppliedColorKey = normalizedColor,
+            detectedHolds = filteredHolds,
+            errorMessage = null
+        )
+        holdDetectionPrecomputeEntry = updatedEntry
+        syncPublicDetectionState(updatedEntry)
+        clearSelectedHoldSelection()
+        lastSuccessfulDetectionInput = DetectionInputKey(
+            sourceVideoUri = updatedEntry.sourceVideoUri,
+            debugBestFrameImageUri = updatedEntry.debugBestFrameImageUri,
+            normalizedDetectionTargetColor = normalizedColor
+        )
+        true
+    }
+
     suspend fun runHoldDetection(
         sourceVideoUri: String?,
-        detectionTargetColor: String
+        detectionTargetColor: String,
+        selectionGeneration: Long = holdDetectionPrecomputeEntry?.selectionGeneration ?: 0L
     ): Result<Unit> = runCatching {
         val debugImageUri = debugBestFrameImageUri
+        val currentInput = DetectionInputKey(
+            sourceVideoUri = sourceVideoUri,
+            debugBestFrameImageUri = debugImageUri,
+            normalizedDetectionTargetColor = detectionTargetColor.trim().lowercase()
+        )
         if (debugImageUri == null && sourceVideoUri == null) {
             throw IllegalStateException("videoUri/debugBestFrameImageUri 없음")
         }
+
+        if (canReuseDetectionResult(currentInput)) {
+            Log.d(TAG, "runHoldDetection: reuse cached result for identical input")
+            return@runCatching
+        }
+
+        precomputeHoldDetection(
+            selectionGeneration = selectionGeneration,
+            sourceVideoUri = sourceVideoUri,
+            allowRetryOnFailure = true
+        ).getOrThrow()
+        applyHoldColorFilter(
+            selectionGeneration = selectionGeneration,
+            detectionTargetColor = detectionTargetColor
+        ).getOrThrow()
+        lastSuccessfulDetectionInput = currentInput
+        return@runCatching
 
         val (bitmap, allHolds, filteredHolds) = withContext(Dispatchers.IO) {
             val preparedBitmap = if (debugImageUri != null) {
@@ -158,6 +355,7 @@ internal class UploadHoldDetectionDelegate(
         bestFrameBitmap = bitmap
         allRawHolds = allHolds
         detectedHolds = filteredHolds
+        lastSuccessfulDetectionInput = currentInput
         clearSelectedHoldSelection()
     }
 
@@ -176,6 +374,39 @@ internal class UploadHoldDetectionDelegate(
         detectedHolds = emptyList()
         candidateHolds = emptyList()
         showCandidatePopup = false
+        lastSuccessfulDetectionInput = null
+        holdDetectionPrecomputeEntry = null
+    }
+
+    private fun canReuseDetectionResult(input: DetectionInputKey): Boolean {
+        return lastSuccessfulDetectionInput == input && bestFrameBitmap != null
+    }
+
+    private fun syncPublicDetectionState(entry: HoldDetectionPrecomputeEntry) {
+        bestFrameBitmap = entry.bestFrameBitmap
+        allRawHolds = entry.allRawHolds
+        detectedHolds = entry.detectedHolds
+    }
+
+    private fun syncDetectedHoldsToPrecomputeEntry() {
+        val currentEntry = holdDetectionPrecomputeEntry ?: return
+        if (currentEntry.status != HoldDetectionPrecomputeStatus.Ready) {
+            return
+        }
+        holdDetectionPrecomputeEntry = currentEntry.copy(detectedHolds = detectedHolds)
+    }
+
+    private fun buildPrecomputeSourceKey(
+        sourceVideoUri: String?
+    ): HoldDetectionPrecomputeSourceKey? {
+        val debugImageUri = debugBestFrameImageUri
+        if (debugImageUri == null && sourceVideoUri == null) {
+            return null
+        }
+        return HoldDetectionPrecomputeSourceKey(
+            sourceVideoUri = sourceVideoUri,
+            debugBestFrameImageUri = debugImageUri
+        )
     }
 
     private fun addManualHold(hold: Hold) {
@@ -184,6 +415,7 @@ internal class UploadHoldDetectionDelegate(
         }
         if (!alreadyExists) {
             detectedHolds = detectedHolds + hold
+            syncDetectedHoldsToPrecomputeEntry()
             clearSelectedHoldSelection()
             Log.d(TAG, "addManualHold: bbox=${hold.boundingBox}, color=${hold.colorLabel}")
         }
@@ -224,6 +456,7 @@ internal class UploadHoldDetectionDelegate(
         }.onSuccess { numbered ->
             numberedHolds = numbered
             detectedHolds = numbered.toHolds()
+            syncDetectedHoldsToPrecomputeEntry()
             selectedStartHold = numbered.firstOrNull { it.isStart }?.hold
             selectedEndHold = numbered.firstOrNull { it.isEnd }?.hold
             Log.d(TAG, "recomputeHoldNumbers: success, count=${numbered.size}")
@@ -246,37 +479,104 @@ internal class UploadHoldDetectionDelegate(
         return bitmap ?: throw IllegalStateException("선택한 이미지를 읽을 수 없습니다.")
     }
 
+    private suspend fun detectRawHoldsFromBestFrame(bitmap: Bitmap): List<Hold> {
+        Log.d(TAG, "detectHoldsFromBestFrame: HoldDetector start")
+        val rawHolds = holdDetector.detectFromFrame(bitmap)
+        Log.d(TAG, "detectHoldsFromBestFrame: raw hold count=${rawHolds.size}")
+        return rawHolds
+    }
+
+    private fun classifyAllHoldsFromBestFrame(
+        bitmap: Bitmap,
+        rawHolds: List<Hold>
+    ): HoldColorClassifier.ClassifiedHoldPrecomputeResult {
+        Log.d(TAG, "detectHoldsFromBestFrame: classify all colors")
+        return holdColorClassifier.classifyAllRich(
+            bitmap = bitmap,
+            holds = rawHolds,
+            relaxedRejection = true
+        )
+    }
+
+    private suspend fun prepareBestFrame(sourceKey: HoldDetectionPrecomputeSourceKey): PreparedBestFrame {
+        if (sourceKey.debugBestFrameImageUri != null) {
+            Log.d(
+                TAG,
+                "prepareBestFrame: use debug image as best frame, uri=${sourceKey.debugBestFrameImageUri}"
+            )
+            return PreparedBestFrame(
+                bitmap = loadBitmapFromUri(Uri.parse(sourceKey.debugBestFrameImageUri)),
+                bestFrameTimeUs = null
+            )
+        }
+
+        val uri = sourceKey.sourceVideoUri
+            ?: throw IllegalStateException("videoUri ?놁쓬")
+
+        Log.d(TAG, "prepareBestFrame: PersonDetector start")
+        val bestTimeUs = personDetector.findBestFrameTime(uri)
+        Log.d(TAG, "prepareBestFrame: best frame at ${bestTimeUs / 1000}ms")
+
+        val retriever = FFmpegMediaMetadataRetriever()
+        val parsedUri = Uri.parse(uri)
+        val rotationDegrees = readUploadVideoRotationDegrees(
+            context = context,
+            uri = parsedUri,
+            logTag = TAG
+        )
+        val preparedBitmap = try {
+            if (!setUploadRetrieverDataSource(
+                    context = context,
+                    retriever = retriever,
+                    uri = parsedUri,
+                    logTag = TAG
+                )
+            ) {
+                throw IllegalStateException("setDataSource ?ㅽ뙣 (scheme=${parsedUri.scheme})")
+            }
+            retriever.getFrameAtTime(
+                bestTimeUs,
+                FFmpegMediaMetadataRetriever.OPTION_CLOSEST
+            )?.let { rawBitmap ->
+                orientBitmapForUploadRotation(
+                    bitmap = rawBitmap,
+                    rotationDegrees = rotationDegrees
+                )
+            } ?: throw IllegalStateException(
+                "getFrameAtTime returned null (PTS=${bestTimeUs / 1000}ms)"
+            )
+        } finally {
+            retriever.release()
+        }
+
+        Log.d(
+            TAG,
+            "prepareBestFrame: prepared best frame (${preparedBitmap.width}x${preparedBitmap.height})"
+        )
+        return PreparedBestFrame(
+            bitmap = preparedBitmap,
+            bestFrameTimeUs = bestTimeUs
+        )
+    }
+
     private suspend fun detectHoldsFromBestFrame(
         bitmap: Bitmap,
         detectionTargetColor: String
     ): DetectedHoldFrameResult {
-        Log.d(TAG, "detectHoldsFromBestFrame: HoldDetector start")
-        val rawHolds = holdDetector.detectFromFrame(bitmap)
-        Log.d(TAG, "detectHoldsFromBestFrame: raw hold count=${rawHolds.size}")
-
-        val classifiedAll = rawHolds.map { holdColorClassifier.classifySingle(bitmap, it) }
-
-        Log.d(
-            TAG,
-            "detectHoldsFromBestFrame: color filter start, target='$detectionTargetColor'"
-        )
-        val filteredHolds = if (detectionTargetColor.isBlank()) {
-            holdColorClassifier.classifyAll(bitmap, rawHolds)
-        } else {
-            holdColorClassifier.classifyAndFilter(
+        val rawHolds = detectRawHoldsFromBestFrame(bitmap)
+        val filteredHolds = holdColorClassifier.filterClassifiedHolds(
+            classifiedHolds = classifyAllHoldsFromBestFrame(
                 bitmap = bitmap,
-                holds = rawHolds,
-                targetColorName = detectionTargetColor,
-                scoreThreshold = 0.25f
-            )
-        }
-        Log.d(
-            TAG,
-            "detectHoldsFromBestFrame: filtered ${rawHolds.size} -> ${filteredHolds.size}"
+                rawHolds = rawHolds
+            ).classifiedHolds,
+            targetColorName = detectionTargetColor,
+            scoreThreshold = 0.25f
         )
-
         return DetectedHoldFrameResult(
-            allHolds = classifiedAll,
+            allHolds = classifyAllHoldsFromBestFrame(
+                bitmap = bitmap,
+                rawHolds = rawHolds
+            ).allHolds,
             filteredHolds = filteredHolds
         )
     }
@@ -284,6 +584,62 @@ internal class UploadHoldDetectionDelegate(
     private data class DetectedHoldFrameResult(
         val allHolds: List<Hold>,
         val filteredHolds: List<Hold>
+    )
+
+    private data class DetectionInputKey(
+        val sourceVideoUri: String?,
+        val debugBestFrameImageUri: String?,
+        val normalizedDetectionTargetColor: String
+    )
+
+    internal enum class HoldDetectionPrecomputeStatus {
+        Idle,
+        Waiting,
+        Running,
+        Ready,
+        Failed
+    }
+
+    internal data class HoldDetectionPrecomputeSourceKey(
+        val sourceVideoUri: String?,
+        val debugBestFrameImageUri: String?
+    )
+
+    internal data class HoldDetectionPrecomputeEntry(
+        val selectionGeneration: Long,
+        val sourceVideoUri: String?,
+        val debugBestFrameImageUri: String?,
+        val status: HoldDetectionPrecomputeStatus,
+        val bestFrameBitmap: Bitmap? = null,
+        val bestFrameTimeUs: Long? = null,
+        val rawYoloHolds: List<Hold> = emptyList(),
+        val classifiedAllRich: List<HoldColorClassifier.ClassifiedHoldRich> = emptyList(),
+        val allRawHolds: List<Hold> = emptyList(),
+        val lastAppliedColorKey: String? = null,
+        val detectedHolds: List<Hold> = emptyList(),
+        val errorMessage: String? = null
+    ) {
+        fun matches(
+            selectionGeneration: Long,
+            sourceKey: HoldDetectionPrecomputeSourceKey
+        ): Boolean {
+            return this.selectionGeneration == selectionGeneration &&
+                sourceVideoUri == sourceKey.sourceVideoUri &&
+                debugBestFrameImageUri == sourceKey.debugBestFrameImageUri
+        }
+    }
+
+    private data class PreparedBestFrame(
+        val bitmap: Bitmap,
+        val bestFrameTimeUs: Long?
+    )
+
+    private data class PreparedHoldPrecomputeResult(
+        val bitmap: Bitmap,
+        val bestFrameTimeUs: Long?,
+        val rawYoloHolds: List<Hold>,
+        val classifiedAllRich: List<HoldColorClassifier.ClassifiedHoldRich>,
+        val allRawHolds: List<Hold>
     )
 
     companion object {

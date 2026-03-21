@@ -83,6 +83,7 @@ fun NavGraphBuilder.uploadGraph(
 
             LaunchedEffect(Unit) {
                 viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+                viewModel.markHoldPrecomputeEligibleForCurrentSelection()
             }
 
             ChallengeCreateScreen(

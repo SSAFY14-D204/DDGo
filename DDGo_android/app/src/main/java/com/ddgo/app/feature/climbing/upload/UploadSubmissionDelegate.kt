@@ -10,6 +10,7 @@ import com.ddgo.app.data.remote.pose.PoseSequenceDto
 import com.ddgo.app.domain.model.AiAnalysisFallbackReason
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisResult
+import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.Hold
@@ -41,7 +42,6 @@ import retrofit2.HttpException
 private const val SUBMISSION_TAG = "UploadSubmissionDelegate"
 private const val HOLD_CONTACT_ANALYSIS_TAG = "HoldContactAnalysis"
 private const val HOLD_CONTACT_LOG_PREFIX = "[DDGO_HOLD_CONTACT]"
-private const val DEFAULT_AI_ANALYSIS_FPS_LIMIT = 10
 private const val DEFAULT_AI_REQUEST_FRAME_STEP = 1
 
 internal data class UploadSubmissionRequest(
@@ -58,7 +58,7 @@ internal data class UploadSubmissionRequest(
 )
 
 internal interface UploadSubmissionCallbacks {
-    suspend fun awaitPrePoseTerminal(playbackUris: List<String>): TerminalPrePoseSnapshot
+    suspend fun awaitSubmitReadyPrePose(playbackUris: List<String>): TerminalPrePoseSnapshot
     fun currentAttemptIndex(): Int
     fun setCurrentAttemptIndex(index: Int)
     fun clearCurrentPoseLandmarks()
@@ -233,6 +233,21 @@ internal class UploadSubmissionDelegate(
             }
         }
 
+        val terminalSnapshot = callbacks.awaitSubmitReadyPrePose(request.attemptUris)
+        val failedPrePoseUris = request.attemptUris.filter { playbackUri ->
+            val entry = terminalSnapshot.entriesByPlaybackUri[playbackUri]
+            entry?.status != PrePoseStatus.Ready || entry?.aiPoseSequence == null
+        }
+        if (failedPrePoseUris.isNotEmpty()) {
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                buildPrePoseFailureMessage(
+                    playbackUris = failedPrePoseUris,
+                    terminalSnapshot = terminalSnapshot
+                )
+            )
+            return
+        }
+
         if (numberedHoldsForAnalysis != null) {
             _uploadSubmissionUiState.value =
                 UploadSubmissionUiState.Loading("최고 도달 홀드를 분석하고 있습니다.")
@@ -240,10 +255,9 @@ internal class UploadSubmissionDelegate(
             analyzeAllAttemptHoldReach(
                 attemptUris = request.attemptUris,
                 holds = numberedHoldsForAnalysis,
-                callbacks = callbacks
+                terminalSnapshot = terminalSnapshot
             )
         } else {
-            callbacks.awaitPrePoseTerminal(request.attemptUris)
             clearHoldReachAnalysis(callbacks)
         }
 
@@ -268,6 +282,7 @@ internal class UploadSubmissionDelegate(
                 mode = request.aiMode,
                 primaryRealtimeSessionId = request.primaryRealtimeSessionId,
                 profile = profileForAi,
+                terminalSnapshot = terminalSnapshot,
                 callbacks = callbacks
             ).onFailure { throwable ->
                 val serverDetail = throwable.extractHttpErrorDetail()
@@ -435,14 +450,16 @@ internal class UploadSubmissionDelegate(
     private suspend fun analyzeAllAttemptHoldReach(
         attemptUris: List<String>,
         holds: List<HoldNumbered>,
-        callbacks: UploadSubmissionCallbacks
+        terminalSnapshot: TerminalPrePoseSnapshot
     ) {
         if (attemptUris.isEmpty() || holds.isEmpty()) {
-            clearHoldReachAnalysis(callbacks)
+            attemptHoldReachResults = emptyList()
+            attemptPoseDtos = emptyList()
+            attemptAnalyzedPoses = emptyList()
+            attemptPolygonHoldContactDebugResults = emptyList()
+            overallHoldReachSummary = null
             return
         }
-
-        val terminalSnapshot = callbacks.awaitPrePoseTerminal(attemptUris)
 
         val analyses = attemptUris.mapIndexed { index, uri ->
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
@@ -514,6 +531,7 @@ internal class UploadSubmissionDelegate(
         mode: AiAnalysisMode,
         primaryRealtimeSessionId: String?,
         profile: ResolvedAiProfile,
+        terminalSnapshot: TerminalPrePoseSnapshot,
         callbacks: UploadSubmissionCallbacks
     ): Result<List<AiAnalysisResult>> {
         if (attemptUris.isEmpty()) {
@@ -536,15 +554,21 @@ internal class UploadSubmissionDelegate(
                     videoUri = uri,
                     holds = analysisHolds,
                     frameBitmap = frameBitmap,
-                    profile = profile
+                    profile = profile,
+                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri]?.aiPoseSequence
                 )
             } else {
+                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri]?.aiPoseSequence
+                    ?: return Result.failure(
+                        IllegalStateException("Missing cached pre-pose AI sequence for $uri")
+                    )
                 analyzeAttemptWithBatchAi(
                     mode = mode,
                     videoUri = uri,
                     holds = analysisHolds,
                     frameBitmap = frameBitmap,
-                    profile = profile
+                    profile = profile,
+                    cachedPoseSequence = cachedPoseSequence
                 )
             }
 
@@ -571,7 +595,8 @@ internal class UploadSubmissionDelegate(
         videoUri: String,
         holds: List<Hold>,
         frameBitmap: Bitmap,
-        profile: ResolvedAiProfile
+        profile: ResolvedAiProfile,
+        cachedPoseSequence: AiPoseSequence?
     ): Result<AiAnalysisResult> {
         val sessionHandle = buildRealtimeSessionHandle(
             sessionId = sessionId,
@@ -627,7 +652,11 @@ internal class UploadSubmissionDelegate(
             videoUri = videoUri,
             holds = holds,
             frameBitmap = frameBitmap,
-            profile = profile
+            profile = profile,
+            cachedPoseSequence = cachedPoseSequence
+                ?: return Result.failure(
+                    IllegalStateException("Missing cached pre-pose AI sequence for $videoUri")
+                )
         )
     }
 
@@ -636,7 +665,8 @@ internal class UploadSubmissionDelegate(
         videoUri: String,
         holds: List<Hold>,
         frameBitmap: Bitmap,
-        profile: ResolvedAiProfile
+        profile: ResolvedAiProfile,
+        cachedPoseSequence: AiPoseSequence
     ): Result<AiAnalysisResult> {
         return analyzeAttemptWithAiUseCase(
             mode = mode,
@@ -647,7 +677,8 @@ internal class UploadSubmissionDelegate(
             heightCm = profile.heightCm,
             weightKg = profile.weightKg,
             wingspanCm = profile.wingspanCm,
-            analysisFpsLimit = DEFAULT_AI_ANALYSIS_FPS_LIMIT,
+            analysisFpsLimit = UPLOAD_PREPOSE_ANALYSIS_FPS,
+            cachedPoseSequence = cachedPoseSequence,
             frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
         )
     }
@@ -724,6 +755,18 @@ internal class UploadSubmissionDelegate(
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
         }.getOrNull()
+    }
+
+    private fun buildPrePoseFailureMessage(
+        playbackUris: List<String>,
+        terminalSnapshot: TerminalPrePoseSnapshot
+    ): String {
+        return playbackUris
+            .mapNotNull { playbackUri ->
+                terminalSnapshot.entriesByPlaybackUri[playbackUri]?.errorMessage
+            }
+            .firstOrNull()
+            ?: "pre-pose 분석을 완료하지 못해 업로드를 진행할 수 없습니다."
     }
 }
 

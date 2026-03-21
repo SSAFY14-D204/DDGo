@@ -173,6 +173,24 @@ class HoldColorClassifier @Inject constructor() {
         )
     }
 
+    internal data class ClassifiedHoldRich(
+        val hold: Hold,
+        val colorLabel: String,
+        val colorScore: Float,
+        val colorStatus: String,
+        val primaryColor: String?,
+        val colorDistribution: Map<String, Float>,
+        val rawColorScore: Float,
+        val detectionReliability: Float,
+        val validPixelRatio: Float,
+        val warnings: Set<String>
+    ) {
+        fun toHold(): Hold = hold.copy(
+            colorLabel = colorLabel,
+            colorScore = colorScore
+        )
+    }
+
     private object Config {
         object Detection {
             const val HARD_REJECT_CONFIDENCE = 0.18f
@@ -368,10 +386,47 @@ class HoldColorClassifier @Inject constructor() {
         "gray" to "gray"
     )
 
+    data class DetectionClassificationResult(
+        val allHolds: List<Hold>,
+        val filteredHolds: List<Hold>
+    )
+
+    internal data class ClassifiedHoldPrecomputeResult(
+        val classifiedHolds: List<ClassifiedHoldRich>,
+        val allHolds: List<Hold>
+    )
+
     fun classifyAll(bitmap: Bitmap, holds: List<Hold>): List<Hold> {
-        val analyzed = analyzeAll(bitmap, holds)
+        val precomputed = classifyAllRich(
+            bitmap = bitmap,
+            holds = holds,
+            relaxedRejection = false
+        )
         Log.d(TAG, "색상 분류 완료: ${holds.size}개 홀드")
-        return analyzed.map { it.toHold() }
+        return precomputed.allHolds
+    }
+
+    fun classifyForDetection(
+        bitmap: Bitmap,
+        holds: List<Hold>,
+        targetColorName: String,
+        scoreThreshold: Float = 0.38f
+    ): DetectionClassificationResult {
+        val targetLabel = resolveTargetLabel(targetColorName)
+        val precomputed = classifyAllRich(
+            bitmap = bitmap,
+            holds = holds,
+            relaxedRejection = targetLabel.isNotBlank() && targetLabel != "all"
+        )
+        val filtered = filterClassifiedHolds(
+            classifiedHolds = precomputed.classifiedHolds,
+            targetColorName = targetColorName,
+            scoreThreshold = scoreThreshold
+        )
+        return DetectionClassificationResult(
+            allHolds = precomputed.allHolds,
+            filteredHolds = filtered
+        )
     }
 
     fun classifyAndFilter(
@@ -380,6 +435,17 @@ class HoldColorClassifier @Inject constructor() {
         targetColorName: String,
         scoreThreshold: Float = 0.38f
     ): List<Hold> {
+        val precomputed = classifyAllRich(
+            bitmap = bitmap,
+            holds = holds,
+            relaxedRejection = true
+        )
+        return filterClassifiedHolds(
+            classifiedHolds = precomputed.classifiedHolds,
+            targetColorName = targetColorName,
+            scoreThreshold = scoreThreshold
+        )
+
         val targetLabel = APP_COLOR_TO_LABEL[targetColorName.lowercase()] ?: targetColorName.lowercase()
         // 특정 색상을 필터링할 때는 완화된 rejection 기준 사용
         val analyzed = analyzeAll(bitmap, holds, relaxedRejection = true)
@@ -430,6 +496,116 @@ class HoldColorClassifier @Inject constructor() {
                 "${if (statusBreakdown.isNotEmpty()) ", unknown내역=$statusBreakdown" else ""})"
         )
         return filtered.map { it.toHold() }
+    }
+
+    private fun resolveTargetLabel(targetColorName: String): String {
+        return APP_COLOR_TO_LABEL[targetColorName.lowercase()] ?: targetColorName.lowercase()
+    }
+
+    internal fun classifyAllRich(
+        bitmap: Bitmap,
+        holds: List<Hold>,
+        relaxedRejection: Boolean = true
+    ): ClassifiedHoldPrecomputeResult {
+        val analyzed = analyzeAll(
+            bitmap = bitmap,
+            holds = holds,
+            relaxedRejection = relaxedRejection
+        )
+        return ClassifiedHoldPrecomputeResult(
+            classifiedHolds = analyzed.map { analyzedHold -> analyzedHold.toClassifiedHoldRich() },
+            allHolds = analyzed.map { analyzedHold -> analyzedHold.toHold() }
+        )
+    }
+
+    internal fun filterClassifiedHolds(
+        classifiedHolds: List<ClassifiedHoldRich>,
+        targetColorName: String,
+        scoreThreshold: Float = 0.38f
+    ): List<Hold> {
+        val targetLabel = resolveTargetLabel(targetColorName)
+        val analyzed = classifiedHolds.map { classifiedHold -> classifiedHold.toAnalyzedHold() }
+        return filterAnalyzedHolds(
+            analyzed = analyzed,
+            targetColorName = targetColorName,
+            targetLabel = targetLabel,
+            scoreThreshold = scoreThreshold
+        ).map { analyzedHold -> analyzedHold.toHold() }
+    }
+
+    private fun AnalyzedHold.toClassifiedHoldRich(): ClassifiedHoldRich = ClassifiedHoldRich(
+        hold = hold,
+        colorLabel = colorLabel,
+        colorScore = colorScore,
+        colorStatus = colorStatus,
+        primaryColor = primaryColor,
+        colorDistribution = colorDistribution,
+        rawColorScore = rawColorScore,
+        detectionReliability = detectionReliability,
+        validPixelRatio = validPixelRatio,
+        warnings = warnings
+    )
+
+    private fun ClassifiedHoldRich.toAnalyzedHold(): AnalyzedHold = AnalyzedHold(
+        hold = hold,
+        colorLabel = colorLabel,
+        colorScore = colorScore,
+        colorStatus = colorStatus,
+        primaryColor = primaryColor,
+        colorDistribution = colorDistribution,
+        rawColorScore = rawColorScore,
+        detectionReliability = detectionReliability,
+        validPixelRatio = validPixelRatio,
+        warnings = warnings
+    )
+
+    private fun filterAnalyzedHolds(
+        analyzed: List<AnalyzedHold>,
+        targetColorName: String,
+        targetLabel: String,
+        scoreThreshold: Float
+    ): List<AnalyzedHold> {
+        val firstPassFiltered = if (targetLabel.isBlank() || targetLabel == "all") {
+            analyzed
+        } else {
+            analyzed.filter { result ->
+                passesStrictColorFilter(result, targetLabel, scoreThreshold)
+            }
+        }
+
+        val rescued = if (targetLabel.isNotBlank() && targetLabel != "all") {
+            rescueUnknownByProximity(
+                allAnalyzed = analyzed,
+                confirmedTargetHolds = firstPassFiltered,
+                targetLabel = targetLabel
+            )
+        } else {
+            emptyList()
+        }
+
+        val filtered = firstPassFiltered + rescued
+        val classifiedCount = analyzed.count { it.colorStatus == STATUS_CLASSIFIED }
+        val weakCount = analyzed.count { it.colorStatus == STATUS_CLASSIFIED_WEAK }
+        val unknownCount = analyzed.count { it.colorLabel == "unknown" }
+        val unknownWithTarget = analyzed.count {
+            it.colorLabel == "unknown" && it.primaryColor == targetLabel
+        }
+        val statusBreakdown = analyzed
+            .filter { it.colorLabel == "unknown" }
+            .groupBy { it.colorStatus }
+            .mapValues { it.value.size }
+
+        Log.d(
+            TAG,
+            "색상 필터 결과: target='$targetColorName' -> '$targetLabel', " +
+                "${analyzed.size}개 분류 -> ${filtered.size}개 매칭 " +
+                "(1차=${firstPassFiltered.size}, 근접구제=${rescued.size}) " +
+                "(확정=$classifiedCount, 약함=$weakCount, unknown=$unknownCount" +
+                "${if (unknownWithTarget > 0) ", unknown 중 target 일치=$unknownWithTarget" else ""}" +
+                "${if (statusBreakdown.isNotEmpty()) ", unknown 내역=$statusBreakdown" else ""})"
+        )
+
+        return filtered
     }
 
     /**

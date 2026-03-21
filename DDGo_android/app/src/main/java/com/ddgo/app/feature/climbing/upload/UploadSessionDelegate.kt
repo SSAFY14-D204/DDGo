@@ -33,6 +33,7 @@ internal interface UploadSessionCallbacks {
     fun setCurrentAttemptIndex(index: Int)
     fun clearCurrentPoseLandmarks()
     fun syncDisplayedAnalysisPoints()
+    fun onPrePoseBatchStateChanged()
 }
 
 /**
@@ -70,6 +71,7 @@ internal class UploadSessionDelegate(
     var additionalSelectionJob: Job? = null
     var attemptOnlySelectionJob: Job? = null
     var prePoseWorkerJob: Job? = null
+    var latestCallbacks: UploadSessionCallbacks? = null
 
     val prePoseTaskQueue = ArrayDeque<PrePoseTask>()
     val managedTempFilePaths = mutableSetOf<String>()
@@ -203,6 +205,7 @@ internal class UploadSessionDelegate(
         callbacks: UploadSessionCallbacks,
         preservePublishedResult: Boolean = false
     ): Long {
+        latestCallbacks = callbacks
         selectionGeneration += 1
         if (preservePublishedResult) {
             callbacks.setCurrentAttemptIndex(
@@ -311,7 +314,9 @@ internal class UploadSessionDelegate(
                                 playbackUri = playbackUri,
                                 selectionGeneration = selectionGeneration,
                                 status = PrePoseStatus.Failed,
+                                aiPoseSequence = null,
                                 poses = emptyList(),
+                                processedFrames = emptyList(),
                                 personObservationStartTimeMs = null,
                                 climbEndDetection = null,
                                 handPeakAnnotation = null,
@@ -330,6 +335,29 @@ internal class UploadSessionDelegate(
             )
             delay(100L)
         }
+    }
+
+    suspend fun awaitSubmitReadyPrePose(
+        playbackUris: List<String>,
+        callbacks: UploadSessionCallbacks
+    ): TerminalPrePoseSnapshot {
+        var snapshot = awaitPrePoseTerminal(
+            playbackUris = playbackUris,
+            callbacks = callbacks
+        )
+        val retryPlaybackUris = playbackUris.filter { playbackUri ->
+            snapshot.entriesByPlaybackUri[playbackUri].isReusableForSubmission().not()
+        }
+        if (retryPlaybackUris.isEmpty()) {
+            return snapshot
+        }
+
+        retryPrePoseEntries(retryPlaybackUris)
+        snapshot = awaitPrePoseTerminal(
+            playbackUris = playbackUris,
+            callbacks = callbacks
+        )
+        return snapshot
     }
 
     fun clearPosePrecomputeState(
@@ -420,7 +448,10 @@ internal class UploadSessionDelegate(
                 updatePrePoseBatchState()
 
                 val result = runCatching {
-                    prePoseVideoAnalysisProvider.analyze(task.playbackUri)
+                    prePoseVideoAnalysisProvider.analyze(
+                        videoUri = task.playbackUri,
+                        analysisFpsLimit = UPLOAD_PREPOSE_ANALYSIS_FPS
+                    )
                 }
 
                 val latestEntry = prePoseCacheEntries[task.playbackUri]
@@ -434,9 +465,11 @@ internal class UploadSessionDelegate(
                         task.playbackUri,
                         if (result.isSuccess) {
                             val prePoseAnalysis = result.getOrNull()
+                            val aiPoseSequence = prePoseAnalysis?.aiPoseSequence
                             val poses = prePoseAnalysis?.poses.orEmpty()
+                            val processedFrames = prePoseAnalysis?.processedFrames.orEmpty()
                             val personObservationStartTimeMs = detectStablePersonObservationUseCase(
-                                prePoseAnalysis?.processedFrames.orEmpty()
+                                processedFrames
                             )
                             val handPeakAnnotation = runCatching {
                                 analyzeHandPeakAndEndUseCase(poses.map { pose -> pose.toPoseFrame() })
@@ -445,7 +478,9 @@ internal class UploadSessionDelegate(
                             }.getOrNull()
                             latestEntry.copy(
                                 status = PrePoseStatus.Ready,
+                                aiPoseSequence = aiPoseSequence,
                                 poses = poses,
+                                processedFrames = processedFrames,
                                 personObservationStartTimeMs = personObservationStartTimeMs,
                                 climbEndDetection = null,
                                 handPeakAnnotation = handPeakAnnotation,
@@ -459,7 +494,9 @@ internal class UploadSessionDelegate(
                         } else {
                             latestEntry.copy(
                                 status = PrePoseStatus.Failed,
+                                aiPoseSequence = null,
                                 poses = emptyList(),
+                                processedFrames = emptyList(),
                                 personObservationStartTimeMs = null,
                                 climbEndDetection = null,
                                 handPeakAnnotation = null,
@@ -481,6 +518,7 @@ internal class UploadSessionDelegate(
         val currentUris = allAttemptUris.distinct()
         if (currentUris.isEmpty()) {
             prePoseBatchState = PrePoseBatchState()
+            callbacksOnPrePoseBatchStateChanged()
             return
         }
 
@@ -493,6 +531,13 @@ internal class UploadSessionDelegate(
             readyCount = entries.count { it.status == PrePoseStatus.Ready },
             failedCount = entries.count { it.status == PrePoseStatus.Failed }
         )
+        callbacksOnPrePoseBatchStateChanged()
+    }
+
+    private fun callbacksOnPrePoseBatchStateChanged() {
+        scope.launch(Dispatchers.Main) {
+            latestCallbacks?.onPrePoseBatchStateChanged()
+        }
     }
 
     private suspend fun prepareManagedVideos(
@@ -609,6 +654,47 @@ internal class UploadSessionDelegate(
         return nextPrePoseTaskId
     }
 
+    private fun retryPrePoseEntries(playbackUris: List<String>) {
+        if (playbackUris.isEmpty()) {
+            return
+        }
+
+        val currentUris = allAttemptUris.toSet()
+        val updatedEntries = prePoseCacheEntries.toMutableMap()
+
+        playbackUris
+            .distinct()
+            .filter { playbackUri -> playbackUri in currentUris }
+            .forEach { playbackUri ->
+                val taskId = nextPrePoseTaskId()
+                prePoseTaskQueue.removeAll { task -> task.playbackUri == playbackUri }
+                updatedEntries[playbackUri] = PrePoseCacheEntry(
+                    playbackUri = playbackUri,
+                    selectionGeneration = selectionGeneration,
+                    status = PrePoseStatus.Pending,
+                    aiPoseSequence = null,
+                    poses = emptyList(),
+                    processedFrames = emptyList(),
+                    personObservationStartTimeMs = null,
+                    climbEndDetection = null,
+                    handPeakAnnotation = null,
+                    timelinePoints = emptyList(),
+                    errorMessage = null,
+                    taskId = taskId
+                )
+                prePoseTaskQueue.addLast(
+                    PrePoseTask(
+                        playbackUri = playbackUri,
+                        taskId = taskId
+                    )
+                )
+            }
+
+        prePoseCacheEntries = updatedEntries
+        updatePrePoseBatchState()
+        ensurePrePoseWorkerRunning()
+    }
+
     private fun extractVideoMetadata(uri: Uri) {
         scope.launch(Dispatchers.IO) {
             runCatching {
@@ -717,4 +803,8 @@ internal class UploadSessionDelegate(
     companion object {
         private const val TAG = "UploadSessionDelegate"
     }
+}
+
+private fun TerminalPrePoseEntry?.isReusableForSubmission(): Boolean {
+    return this != null && status == PrePoseStatus.Ready && aiPoseSequence != null
 }

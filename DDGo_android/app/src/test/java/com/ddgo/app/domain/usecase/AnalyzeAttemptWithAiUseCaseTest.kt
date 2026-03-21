@@ -118,6 +118,38 @@ class AnalyzeAttemptWithAiUseCaseTest {
         assertEquals(3, context.frameStep)
         assertFalse(context.poseSequence.frames.isEmpty())
     }
+
+    @Test
+    fun `cached pose sequence skips provider and is delegated as request context`() = runBlocking {
+        val provider = FakeAiPoseSequenceProvider()
+        val repository = FakeAiAnalysisRepository()
+        val useCase = AnalyzeAttemptWithAiUseCase(provider, repository)
+        val cachedPoseSequence = provider.analyzePoseSequence(
+            videoUri = "file:///cached_attempt.mp4",
+            analysisFpsLimit = 30
+        )
+        provider.callCount = 0
+        provider.lastVideoUri = null
+        provider.lastAnalysisFpsLimit = null
+
+        val result = useCase(
+            mode = AiAnalysisMode.FAST,
+            videoUri = "file:///cached_attempt.mp4",
+            holds = listOf(sampleHold()),
+            frameWidthPx = 1000,
+            frameHeightPx = 500,
+            heightCm = 180f,
+            weightKg = null,
+            wingspanCm = 181f,
+            analysisFpsLimit = 12,
+            cachedPoseSequence = cachedPoseSequence
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(0, provider.callCount)
+        assertEquals(1, repository.callCount)
+        assertEquals(cachedPoseSequence, repository.contexts.single().poseSequence)
+    }
 }
 
 private class FakeAiPoseSequenceProvider : AiPoseSequenceProvider {

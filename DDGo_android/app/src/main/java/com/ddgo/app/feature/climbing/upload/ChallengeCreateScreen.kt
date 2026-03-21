@@ -132,7 +132,10 @@ fun ChallengeCreateScreen(
     when (step) {
         CreateStep.GYM_NAME -> GymNameStep(
             viewModel = viewModel,
-            onNext = { step = CreateStep.LEVEL },
+            onNext = {
+                viewModel.markHoldPrecomputeEligibleForCurrentSelection()
+                step = CreateStep.LEVEL
+            },
             onBack = handleBack
         )
 
@@ -716,16 +719,17 @@ private fun GymColorStep(
                 }
             }
 
-            GradientActionButton(
-                text = "\uD640\uB4DC \uCC3E\uAE30",
-                enabled = (canBypassChallengeCreationForDev || selectedLevelSortOrder != null) &&
-                    selectedPaletteKey != null &&
-                    challengeCreationUiState !is ChallengeCreationUiState.Loading,
-                onClick = {
-                    if (canBypassChallengeCreationForDev) {
-                        onNext()
-                    } else {
-                        viewModel.createChallengeFromSelection()
+                GradientActionButton(
+                    text = "\uD640\uB4DC \uCC3E\uAE30",
+                    enabled = (canBypassChallengeCreationForDev || selectedLevelSortOrder != null) &&
+                        selectedPaletteKey != null &&
+                        challengeCreationUiState !is ChallengeCreationUiState.Loading,
+                    onClick = {
+                        viewModel.finalizeHoldDetectionColorSelection()
+                        if (canBypassChallengeCreationForDev) {
+                            onNext()
+                        } else {
+                            viewModel.createChallengeFromSelection()
                     }
                 },
                 modifier = Modifier
