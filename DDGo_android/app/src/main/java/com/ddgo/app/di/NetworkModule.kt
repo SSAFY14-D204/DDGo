@@ -181,6 +181,14 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideCommunityApi(
+        retrofit: Retrofit
+    ): com.ddgo.app.data.remote.community.CommunityApi {
+        return retrofit.create(com.ddgo.app.data.remote.community.CommunityApi::class.java)
+    }
+
+    @Provides
+    @Singleton
     fun provideAttemptApi(
         retrofit: Retrofit
     ): com.ddgo.app.data.remote.attempt.AttemptApi {

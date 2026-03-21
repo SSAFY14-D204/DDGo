@@ -69,4 +69,12 @@ public class SwaggerConfig {
                                 .pathsToMatch("/v1/gyms/**")
                                 .build();
         }
+
+        @Bean
+        public GroupedOpenApi communityApi() {
+                return GroupedOpenApi.builder()
+                                .group("5. Community")
+                                .pathsToMatch("/v1/community/**")
+                                .build();
+        }
 }
