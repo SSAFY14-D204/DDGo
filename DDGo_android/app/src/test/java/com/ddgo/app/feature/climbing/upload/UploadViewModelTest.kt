@@ -25,9 +25,11 @@ import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
+import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
+import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.HoldRole
@@ -41,8 +43,11 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -487,7 +492,8 @@ class UploadViewModelTest {
 
         invokePrivateMethod(
             target = viewModel,
-            methodName = "cleanupUnusedManagedTempFiles"
+            methodName = "cleanupUnusedManagedTempFiles",
+            false
         )
 
         assertTrue(selectedTemp.exists())
@@ -500,6 +506,219 @@ class UploadViewModelTest {
         assertTrue(managedVideosByPlaybackUri.containsKey(resultPlaybackUri))
         assertTrue(managedVideosByPlaybackUri.containsKey(publishedPlaybackUri))
         assertTrue(managedVideosByPlaybackUri.containsKey(activePrePosePlaybackUri))
+    }
+
+    @Test
+    fun `selection change keeps current pre-pose aligned with latest generation`() = runTest {
+        val firstAnalyzeGate = CompletableDeferred<Unit>()
+        val analyzeCallCount = AtomicInteger(0)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } coAnswers {
+            when (analyzeCallCount.incrementAndGet()) {
+                1 -> {
+                    firstAnalyzeGate.await()
+                    prePoseAnalysisResult(
+                        poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.12f, y = 0.88f))),
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    )
+                }
+
+                else -> prePoseAnalysisResult(
+                    poses = listOf(poseAt(0L, handLandmark(index = 20, x = 0.86f, y = 0.22f))),
+                    processedFrames = listOf(
+                        processedFrame(0L, true),
+                        processedFrame(100L, true),
+                        processedFrame(200L, true)
+                    )
+                )
+            }
+        }
+
+        val viewModel = createViewModel(
+            context = mockContext(),
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider
+        )
+        val firstPlaybackUri = "file:///selection_a.mp4"
+        val secondPlaybackUri = "file:///selection_b.mp4"
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "beginSelectionUpdate",
+            false
+        )
+        setPrivateField(viewModel, "videoUri", firstPlaybackUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            analyzeCallCount.get() == 1 && viewModel.prePoseBatchState.runningCount == 1
+        }
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "beginSelectionUpdate",
+            false
+        )
+        setPrivateField(viewModel, "videoUri", secondPlaybackUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        firstAnalyzeGate.complete(Unit)
+
+        waitUntil(timeoutMs = 10_000L) {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            analyzeCallCount.get() == 2
+        }
+
+        waitUntil(timeoutMs = 10_000L) {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.currentAttemptPrePoseEntry?.status == PrePoseStatus.Ready &&
+                viewModel.currentAttemptPrePoseEntry?.selectionGeneration == viewModel.selectionGeneration
+        }
+
+        assertEquals(secondPlaybackUri, viewModel.playbackAttemptUris.single())
+        assertEquals(viewModel.selectionGeneration, viewModel.currentAttemptPrePoseEntry?.selectionGeneration)
+        assertEquals(1, viewModel.prePoseBatchState.readyCount)
+        assertEquals(0.86f, viewModel.currentAttemptPoseSequence.first().landmarks.first().x, 0.0001f)
+    }
+
+    @Test
+    fun `completed stale pre-pose worker cleans orphan temp file after reselection`() = runTest {
+        val firstAnalyzeGate = CompletableDeferred<Unit>()
+        val analyzeCallCount = AtomicInteger(0)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } coAnswers {
+            when (analyzeCallCount.incrementAndGet()) {
+                1 -> {
+                    firstAnalyzeGate.await()
+                    prePoseAnalysisResult(
+                        poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.12f, y = 0.88f))),
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    )
+                }
+
+                else -> prePoseAnalysisResult(
+                    poses = listOf(poseAt(0L, handLandmark(index = 20, x = 0.86f, y = 0.22f))),
+                    processedFrames = listOf(
+                        processedFrame(0L, true),
+                        processedFrame(100L, true),
+                        processedFrame(200L, true)
+                    )
+                )
+            }
+        }
+
+        val viewModel = createViewModel(
+            context = mockContext(),
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider
+        )
+        val cacheDir = viewModel.run {
+            (getPrivateField(this, "context") as Context).cacheDir
+        }
+        val firstPlaybackUri = "file:///temp_cleanup_a.mp4"
+        val secondPlaybackUri = "file:///temp_cleanup_b.mp4"
+        val firstTempFile = File(cacheDir, "temp_cleanup_a.mp4").apply { writeText("first") }
+        val secondTempFile = File(cacheDir, "temp_cleanup_b.mp4").apply { writeText("second") }
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "beginSelectionUpdate",
+            false
+        )
+        setPrivateField(
+            viewModel,
+            "primaryManagedVideo",
+            managedAttemptVideo(
+                sourceUri = "content://temp_cleanup_a",
+                playbackUri = firstPlaybackUri,
+                tempFile = firstTempFile
+            )
+        )
+        setPrivateField(viewModel, "videoUri", firstPlaybackUri)
+
+        @Suppress("UNCHECKED_CAST")
+        val managedVideosByPlaybackUri =
+            getPrivateField(viewModel, "managedVideosByPlaybackUri") as MutableMap<String, ManagedAttemptVideo>
+        @Suppress("UNCHECKED_CAST")
+        val managedTempFilePaths =
+            getPrivateField(viewModel, "managedTempFilePaths") as MutableSet<String>
+        managedVideosByPlaybackUri[firstPlaybackUri] = managedAttemptVideo(
+            sourceUri = "content://temp_cleanup_a",
+            playbackUri = firstPlaybackUri,
+            tempFile = firstTempFile
+        )
+        managedTempFilePaths += firstTempFile.absolutePath
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            analyzeCallCount.get() == 1
+        }
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "beginSelectionUpdate",
+            false
+        )
+        setPrivateField(
+            viewModel,
+            "primaryManagedVideo",
+            managedAttemptVideo(
+                sourceUri = "content://temp_cleanup_b",
+                playbackUri = secondPlaybackUri,
+                tempFile = secondTempFile
+            )
+        )
+        setPrivateField(viewModel, "videoUri", secondPlaybackUri)
+        managedVideosByPlaybackUri[secondPlaybackUri] = managedAttemptVideo(
+            sourceUri = "content://temp_cleanup_b",
+            playbackUri = secondPlaybackUri,
+            tempFile = secondTempFile
+        )
+        managedTempFilePaths += secondTempFile.absolutePath
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "cleanupUnusedManagedTempFiles",
+            false
+        )
+        assertTrue(firstTempFile.exists())
+
+        firstAnalyzeGate.complete(Unit)
+
+        waitUntil(timeoutMs = 10_000L) {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            analyzeCallCount.get() == 2 && !firstTempFile.exists()
+        }
+
+        assertFalse(managedTempFilePaths.contains(firstTempFile.absolutePath))
+        assertFalse(managedVideosByPlaybackUri.containsKey(firstPlaybackUri))
+        assertTrue(managedVideosByPlaybackUri.containsKey(secondPlaybackUri))
     }
 
     @Test
@@ -576,6 +795,9 @@ class UploadViewModelTest {
         val gymRepository = mockk<GymRepository>(relaxed = true)
         val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
         val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val attachAiRealtimeContextUseCase = mockk<AttachAiRealtimeContextUseCase>(relaxed = true)
+        val finalizeAiRealtimeSessionUseCase =
+            mockk<FinalizeAiRealtimeSessionUseCase>(relaxed = true)
         val resolvedSaveChallengeHoldsUseCase =
             saveChallengeHoldsUseCase ?: SaveChallengeHoldsUseCase(challengeRepository)
         val resolvedUploadAttemptVideoUseCase =
@@ -638,7 +860,9 @@ class UploadViewModelTest {
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
             detectStablePersonObservationUseCase = DetectStablePersonObservationUseCase(),
             getMyInfoUseCase = getMyInfoUseCase,
-            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            attachAiRealtimeContextUseCase = attachAiRealtimeContextUseCase,
+            finalizeAiRealtimeSessionUseCase = finalizeAiRealtimeSessionUseCase
         )
     }
 
@@ -665,32 +889,66 @@ class UploadViewModelTest {
     }
 
     private fun setPrivateField(target: Any, fieldName: String, value: Any?) {
-        val field = resolveField(target, fieldName)
-        if (field.name.endsWith("\$delegate")) {
-            @Suppress("UNCHECKED_CAST")
-            val state = field.get(target) as MutableState<Any?>
-            state.value = value
-        } else {
-            field.set(target, value)
+        val field = resolveFieldOrNull(target, fieldName)
+        if (field != null) {
+            val fieldValue = field.get(target)
+            when (fieldValue) {
+                is MutableStateFlow<*> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val stateFlow = fieldValue as MutableStateFlow<Any?>
+                    stateFlow.value = value
+                }
+
+                is MutableState<*> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val state = fieldValue as MutableState<Any?>
+                    state.value = value
+                }
+
+                else -> field.set(target, value)
+            }
+            return
         }
+
+        val setter = resolveSetter(target, fieldName) ?: throw NoSuchFieldException(fieldName)
+        setter.invoke(target, value)
     }
 
     private fun getPrivateField(target: Any, fieldName: String): Any? {
-        val field = resolveField(target, fieldName)
-        if (field.name.endsWith("\$delegate")) {
-            @Suppress("UNCHECKED_CAST")
-            val state = field.get(target) as MutableState<Any?>
-            return state.value
+        val field = resolveFieldOrNull(target, fieldName)
+        if (field != null) {
+            val fieldValue = field.get(target)
+            when (fieldValue) {
+                is MutableStateFlow<*> -> return fieldValue.value
+                is MutableState<*> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val state = fieldValue as MutableState<Any?>
+                    return state.value
+                }
+            }
+            return field.get(target)
         }
-        return field.get(target)
+        val getter = resolveGetter(target, fieldName) ?: throw NoSuchFieldException(fieldName)
+        return getter.invoke(target)
     }
 
-    private fun resolveField(target: Any, fieldName: String) = target.javaClass.declaredFields
+    private fun resolveFieldOrNull(target: Any, fieldName: String) = target.javaClass.declaredFields
         .firstOrNull { field ->
             field.name == fieldName || field.name == "${fieldName}\$delegate" || field.name.startsWith(fieldName)
         }
         ?.apply { isAccessible = true }
-        ?: throw NoSuchFieldException(fieldName)
+
+    private fun resolveGetter(target: Any, fieldName: String) = target.javaClass.declaredMethods
+        .firstOrNull { method ->
+            method.parameterCount == 0 && method.name == "get${fieldName.replaceFirstChar(Char::titlecase)}"
+        }
+        ?.apply { isAccessible = true }
+
+    private fun resolveSetter(target: Any, fieldName: String) = target.javaClass.declaredMethods
+        .firstOrNull { method ->
+            method.parameterCount == 1 && method.name == "set${fieldName.replaceFirstChar(Char::titlecase)}"
+        }
+        ?.apply { isAccessible = true }
 
     private fun invokePrivateMethod(target: Any, methodName: String, vararg args: Any?) {
         val method = target.javaClass.declaredMethods.firstOrNull { method ->

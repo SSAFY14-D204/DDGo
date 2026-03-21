@@ -32,6 +32,12 @@ class PrePoseSessionManager(
     private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
     private val onActivePrePoseSetChanged: (() -> Unit)? = null
 ) {
+    private data class CleanupRequest(
+        val currentResultPlaybackUris: Set<String>,
+        val publishedResultPlaybackUris: Set<String>,
+        val forceDeleteAll: Boolean
+    )
+
 
     val selectionGenerationState: MutableState<Long> = mutableStateOf(0L)
     var selectionGeneration by selectionGenerationState
@@ -62,6 +68,7 @@ class PrePoseSessionManager(
     val managedTempFilePaths = mutableSetOf<String>()
     val managedVideosByPlaybackUri = mutableMapOf<String, ManagedAttemptVideo>()
     val activePrePosePlaybackUris = mutableSetOf<String>()
+    private var lastCleanupRequest: CleanupRequest? = null
 
     fun beginSelectionGeneration(): Long {
         selectionGeneration += 1L
@@ -331,6 +338,23 @@ class PrePoseSessionManager(
         publishedResultPlaybackUris: Set<String>,
         forceDeleteAll: Boolean = false
     ) {
+        lastCleanupRequest = CleanupRequest(
+            currentResultPlaybackUris = currentResultPlaybackUris,
+            publishedResultPlaybackUris = publishedResultPlaybackUris,
+            forceDeleteAll = forceDeleteAll
+        )
+        performCleanupUnusedManagedTempFiles(
+            currentResultPlaybackUris = currentResultPlaybackUris,
+            publishedResultPlaybackUris = publishedResultPlaybackUris,
+            forceDeleteAll = forceDeleteAll
+        )
+    }
+
+    private fun performCleanupUnusedManagedTempFiles(
+        currentResultPlaybackUris: Set<String>,
+        publishedResultPlaybackUris: Set<String>,
+        forceDeleteAll: Boolean
+    ) {
         val referencedTempPaths = buildSet {
             if (!forceDeleteAll) {
                 listOfNotNull(primaryManagedVideo)
@@ -472,6 +496,13 @@ class PrePoseSessionManager(
     private fun removeActivePrePosePlaybackUri(playbackUri: String) {
         if (activePrePosePlaybackUris.remove(playbackUri)) {
             onActivePrePoseSetChanged?.invoke()
+            lastCleanupRequest?.let { cleanupRequest ->
+                performCleanupUnusedManagedTempFiles(
+                    currentResultPlaybackUris = cleanupRequest.currentResultPlaybackUris,
+                    publishedResultPlaybackUris = cleanupRequest.publishedResultPlaybackUris,
+                    forceDeleteAll = cleanupRequest.forceDeleteAll
+                )
+            }
         }
     }
 

@@ -45,9 +45,9 @@ class FinalAnalysisSummaryTest {
         assertEquals("빠른 분석", summary.effectiveModeLabel)
         assertEquals("빠른 분석 대체", summary.fallbackLabel)
         assertTrue(summary.analysisPoints.first().description.contains("9번 홀드"))
-        assertTrue(summary.stabilityNarrative.contains("안정 접촉 비율"))
-        assertTrue(summary.failureNarrative.contains("9번 홀드"))
-        assertTrue(summary.failureNarrative.contains("코어"))
+        assertTrue(summary.stabilityHighlights.contains("손발 지지 안정도 61%"))
+        assertTrue(summary.failureHighlights.contains("크럭스 홀드 9번"))
+        assertEquals("몸통", summary.loadFocusLabel)
     }
 
     @Test
