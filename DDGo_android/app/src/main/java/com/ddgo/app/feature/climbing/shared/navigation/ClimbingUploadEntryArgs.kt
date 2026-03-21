@@ -40,12 +40,26 @@ fun buildClimbingUploadRoute(
     }
 }
 
+internal fun decodeClimbingUploadEntryArgs(
+    recordedVideoUri: String?,
+    realtimeSessionId: String?
+): ClimbingUploadEntryArgs {
+    return ClimbingUploadEntryArgs(
+        recordedVideoUri = recordedVideoUri
+            ?.let(Uri::decode)
+            ?.takeIf { it.isNotBlank() },
+        realtimeSessionId = realtimeSessionId
+            ?.let(Uri::decode)
+            ?.takeIf { it.isNotBlank() }
+    )
+}
+
 fun Bundle?.toClimbingUploadEntryArgs(
     recordedVideoUriArgName: String,
     realtimeSessionIdArgName: String
 ): ClimbingUploadEntryArgs {
-    return ClimbingUploadEntryArgs(
-        recordedVideoUri = this?.getString(recordedVideoUriArgName)?.let(Uri::decode),
-        realtimeSessionId = this?.getString(realtimeSessionIdArgName)?.takeIf { it.isNotBlank() }
+    return decodeClimbingUploadEntryArgs(
+        recordedVideoUri = this?.getString(recordedVideoUriArgName),
+        realtimeSessionId = this?.getString(realtimeSessionIdArgName)
     )
 }

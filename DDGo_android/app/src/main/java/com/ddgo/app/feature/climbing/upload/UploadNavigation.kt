@@ -9,8 +9,6 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
-import com.ddgo.app.feature.climbing.shared.navigation.ClimbingUploadEntryArgs
-import com.ddgo.app.feature.climbing.shared.navigation.buildClimbingUploadRoute
 import com.ddgo.app.feature.climbing.shared.navigation.toClimbingUploadEntryArgs
 import com.ddgo.app.feature.climbing.upload.ui.analysis.route.FinalAnalysisRoute
 import com.ddgo.app.navigation.ScreenRoutes
@@ -240,17 +238,4 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
     }
-}
-
-fun NavController.navigateToUpload(
-    entryArgs: ClimbingUploadEntryArgs = ClimbingUploadEntryArgs()
-) {
-    navigate(
-        buildClimbingUploadRoute(
-            baseRoute = ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD,
-            recordedVideoUriArgName = ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI,
-            realtimeSessionIdArgName = ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID,
-            entryArgs = entryArgs
-        )
-    )
 }

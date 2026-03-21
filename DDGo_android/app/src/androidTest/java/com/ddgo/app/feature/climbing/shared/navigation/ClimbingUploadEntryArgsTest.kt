@@ -1,17 +1,20 @@
 package com.ddgo.app.feature.climbing.shared.navigation
 
 import android.os.Bundle
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ddgo.app.feature.climbing.shared.model.ClimbingRecordThumbnailFrame
 import com.ddgo.app.feature.climbing.shared.model.ClimbingRecordedAttemptDraft
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class ClimbingUploadEntryArgsTest {
 
     @Test
-    fun `draft converts to upload entry args with recorded uri and realtime session`() {
+    fun draft_converts_to_upload_entry_args_with_recorded_uri_and_realtime_session() {
         val draft = ClimbingRecordedAttemptDraft(
             videoUri = "file:///recorded_attempt.mp4",
             thumbnailFrame = ClimbingRecordThumbnailFrame(
@@ -34,14 +37,14 @@ class ClimbingUploadEntryArgsTest {
     }
 
     @Test
-    fun `build and parse upload route preserves encoded values`() {
+    fun build_and_parse_upload_route_preserves_encoded_values() {
         val route = buildClimbingUploadRoute(
             baseRoute = "upload/attempt",
             recordedVideoUriArgName = "recordedVideoUri",
             realtimeSessionIdArgName = "realtimeSessionId",
             entryArgs = ClimbingUploadEntryArgs(
                 recordedVideoUri = "content://media/external/video/media/42?name=a b.mp4",
-                realtimeSessionId = "rt session/42"
+                realtimeSessionId = "rt session?42"
             )
         )
 
@@ -59,15 +62,17 @@ class ClimbingUploadEntryArgsTest {
         )
 
         assertTrue(route.startsWith("upload/attempt?"))
+        assertTrue(route.contains("realtimeSessionId="))
+        assertFalse(route.contains("rt session?42"))
         assertEquals(
             "content://media/external/video/media/42?name=a b.mp4",
             parsedArgs.recordedVideoUri
         )
-        assertEquals("rt session/42", parsedArgs.realtimeSessionId)
+        assertEquals("rt session?42", parsedArgs.realtimeSessionId)
     }
 
     @Test
-    fun `empty entry args keep base route without query`() {
+    fun empty_entry_args_keep_base_route_without_query() {
         val route = buildClimbingUploadRoute(
             baseRoute = "upload/attempt",
             recordedVideoUriArgName = "recordedVideoUri",
@@ -76,5 +81,20 @@ class ClimbingUploadEntryArgsTest {
 
         assertEquals("upload/attempt", route)
         assertFalse(ClimbingUploadEntryArgs().hasAnyValue)
+    }
+
+    @Test
+    fun parse_normalizes_blank_encoded_values_back_to_null() {
+        val parsedArgs = Bundle().apply {
+            putString("recordedVideoUri", "")
+            putString("realtimeSessionId", "rt-session-42")
+        }.toClimbingUploadEntryArgs(
+            recordedVideoUriArgName = "recordedVideoUri",
+            realtimeSessionIdArgName = "realtimeSessionId"
+        )
+
+        assertEquals(null, parsedArgs.recordedVideoUri)
+        assertEquals("rt-session-42", parsedArgs.realtimeSessionId)
+        assertTrue(parsedArgs.hasAnyValue)
     }
 }
