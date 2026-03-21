@@ -2,97 +2,75 @@
 
 ## Summary
 
-- Goal: keep upload behavior unchanged while hardening Stage 0 regression coverage and extracting the Stage 1 shared handoff contract.
-- Scope in this workspace: Stage 0 test stabilization, Stage 1 shared contract extraction, plus climbing docs.
-- `UploadViewModel.kt` remains untouched in this phase.
+- Goal: recover a buildable Stage 2 checkpoint and lock the regression surface before any Stage 3 UI split.
+- Scope in this pass: shared navigation contract fix, pre-pose/session lifecycle stabilization, Stage 2 regression test hardening, and climbing guide/task history sync.
+- Out of scope: Stage 3 route/page split, submission orchestration extraction, deeper manager/store encapsulation.
 
-## Baseline
+## Current Checkpoint
 
-Current workspace baseline:
+Current workspace counts after this stabilization pass:
 
-- `UploadViewModel.kt`: 2757 lines
+- `UploadViewModel.kt`: 2286 lines
 - `ChallengeCreateScreen.kt`: 2214 lines
 - `AttemptResultScreen.kt`: 742 lines
 - `AnalysisLoadingScreen.kt`: 163 lines
+- `PrePoseSessionManager.kt`: 558 lines
+- `AttemptResultSessionStore.kt`: 69 lines
 
-## What Was Stabilized
+## What Changed In This Pass
 
-- `UploadViewModelTest` helper now matches the current upload ViewModel state shape.
-  - `MutableStateFlow` fields are updated via `.value`
-  - `MutableState` fields are still supported
-- Duplicate-submit regression is now pinned in unit tests.
-  - `submitUpload()` must no-op when `_uploadSubmissionUiState` is already `Loading`
-  - the test verifies zero calls to save/upload/end submission use cases
-- Temp-file cleanup regression remains pinned in unit tests.
-  - referenced selection/result/pre-pose files are preserved
-  - orphan temp files are removed
-- Existing selection/reselection tests continue to guard pre-pose and session reuse behavior.
-- A targeted Compose UI regression test was added for `AnalysisLoadingScreen`.
-  - it verifies the `Idle -> submitUpload()` path stays exactly-once across re-entry
-  - it uses a mocked `UploadViewModel` and a real Compose rule
-- Stage 1 shared handoff contracts were extracted into `feature/climbing/shared/*`.
-  - `ClimbingRecordThumbnailFrame`
-  - `ClimbingRecordedAttemptDraft`
-  - `ClimbingUploadEntryArgs`
-  - upload route building and parsing helpers
-  - record/upload consumers were updated to use the shared contract while keeping behavior identical
+- Shared upload entry parsing now decodes both `recordedVideoUri` and `realtimeSessionId` consistently.
+- Blank route values are normalized back to `null` before they reach upload entry state.
+- The upload-local `navigateToUpload()` helper was removed.
+  - the only public record-to-upload entrypoint is now `navigateToClimbingUpload()` under `feature/climbing/shared/navigation/*`
+- `PrePoseSessionManager` now remembers the latest cleanup keep-set.
+  - when an active pre-pose worker leaves the retention set, cleanup is re-evaluated immediately
+  - orphan temp files are no longer left behind waiting for a later cleanup trigger
+- `UploadViewModelTest` was hardened to match the current constructor and delegated state shape.
+  - AI realtime use cases are now mocked in the test factory
+  - delegated `MutableStateFlow` / `MutableState` properties are updated through helpers instead of replacing backing objects
+- Stage 2 regression tests were extended.
+  - duplicate submit guard
+  - stale selection generation keeps the latest pre-pose entry active
+  - stale worker completion cleans orphan temp files after reselection
+- `AnalysisLoadingScreenTest` was added in `androidTest`.
+  - it locks the screen-level `Idle -> submitUpload()` exactly-once behavior across re-entry
+- `ClimbingUploadEntryArgsTest` was moved to `androidTest`.
+  - route encoding/decoding depends on Android `Uri`/`Bundle`, so instrumentation is the correct layer for that contract
+- `FinalAnalysisSummaryTest` was updated to assert the current summary contract instead of stale narrative substrings.
 
-## Current Decisions
+## Validation
 
-- `UploadViewModel` stays a single graph-scoped shell.
-- `record` and `upload` do not share a ViewModel.
-- Cross-feature sharing is limited to `feature/climbing/shared/*` contracts and handoff payloads.
-- `Stage 2` production seam extraction remains planned, not implemented here.
+Commands successfully completed in this pass:
+
+- `./gradlew.bat :app:compileDebugKotlin --no-daemon`
+- `./gradlew.bat :app:compileDebugAndroidTestKotlin --no-daemon "-Pksp.incremental=false"`
+- `./gradlew.bat testDebugUnitTest --no-daemon "-Pksp.incremental=false" --tests "com.ddgo.app.feature.climbing.upload.UploadViewModelTest" --tests "com.ddgo.app.feature.climbing.upload.FinalAnalysisSummaryTest"`
+- `./gradlew.bat :app:assembleDebug --no-daemon "-Pksp.incremental=false"`
+
+Instrumentation execution status:
+
+- `connectedDebugAndroidTest` reached device install but failed before execution with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`.
+- Cause: the connected device already had `com.ddgo.app` installed with a different signing key.
+- Result: `AnalysisLoadingScreenTest` and `ClimbingUploadEntryArgsTest` were compiled but not executed on-device in this pass.
 
 ## Checkpoints
 
 - Checkpoint A
-  - Stage 0 test hardening in place
-  - duplicate-submit guard pinned
-  - temp cleanup guard pinned
-
+  - baseline upload regression guards are in place
 - Checkpoint B
-  - Stage 1 shared handoff contract extraction completed
-
+  - shared handoff contract and extracted upload/session types are in place
 - Checkpoint C
-  - reserved for Stage 2 session seam extraction
+  - Stage 2 session seam is stabilized, buildable, and ready for QA review
 
-## Stage Log
+## Risks Still Deferred
 
-### Stage 0
+- Stage 3 route/page split is intentionally not started here.
+- `PrePoseSessionManager` / `AttemptResultSessionStore` still expose some mutable state through `UploadViewModel` delegation.
+- On-device instrumentation execution still needs either uninstall/reinstall approval or a matching-signed debug build on the connected device.
 
-- Status: completed for test/docs stabilization
-- Added:
-  - duplicate-submit regression in `UploadViewModelTest`
-  - `MutableStateFlow`-aware test helper
-  - targeted `AnalysisLoadingScreen` Compose UI regression test
-  - climbing feature guide refresh
-- Notes:
-  - `AnalysisLoadingScreen` exactly-once behavior is still guarded at unit-test level
-  - the Compose UI test lives in `androidTest` so the screen-level exact-once contract is covered in addition to the unit guard
+## Next Recommended Step
 
-### Stage 1
-
-- Status: completed
-- Focus:
-  - shared record-upload contract
-  - upload type/contract extraction
-- Notes:
-  - implemented via `ClimbingRecordThumbnailFrame`, `ClimbingRecordedAttemptDraft`, and `ClimbingUploadEntryArgs`
-  - record/upload navigation now share a single route-arg contract
-  - `RecordContract.kt` uses `typealias` bridges so existing record callers remain stable
-
-### Stage 2
-
-- Status: planned
-- Focus:
-  - `PrePoseSessionManager`
-  - `AttemptResultSessionStore`
-  - temp-file retention and published result session preservation
-
-## Risks To Watch
-
-- duplicate submit from loading-screen recomposition
-- stale selection-generation overwriting current session state
-- temp-file cleanup accidentally dropping referenced playback files
-- accidental `record` -> `UploadViewModel` coupling
+- Stop at Stage 2.
+- Run manual app QA on the current checkpoint.
+- Only after QA approval, begin Stage 3 route/page separation.

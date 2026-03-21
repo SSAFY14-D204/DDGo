@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This guide documents the working rules for `feature/climbing/*` so upload and record can evolve safely without reintroducing cross-feature coupling.
+This guide documents the working rules for `feature/climbing/*` so `record` and `upload` can evolve without reintroducing cross-feature coupling or Stage 2 regressions.
 
-The current priority is not architectural cleanup for its own sake. The priority is preserving behavior while separating responsibilities in ways that are easy to review, test, and bisect.
+The current priority is preserving behavior while separating responsibilities in ways that are easy to review, test, and bisect.
 
 ## Feature Boundaries
 
@@ -35,6 +35,7 @@ The current priority is not architectural cleanup for its own sake. The priority
   - published result session capture/restore
   - cleanup keep-set participation
 - `PrePoseSessionManager` and `AttemptResultSessionStore` must be introduced together because temp-file cleanup depends on both active pre-pose work and published result playback.
+- When active pre-pose retention changes, cleanup must be re-evaluated against the latest result/session keep-set.
 
 ## UI Rules
 
@@ -46,7 +47,7 @@ The current priority is not architectural cleanup for its own sake. The priority
   - seek side effects
 - `Page`, `Organism`, `Molecule`, and `Atom` receive only `UiState` and callbacks.
 - Grouped `UiState` is introduced only when the corresponding screen is actually split.
-- Do not introduce micro-state files early if the screen still has a single source of truth in the ViewModel.
+- Do not introduce micro-state files early if the screen still has a single source of truth in the `ViewModel`.
 
 ## Shared Contracts
 
@@ -57,8 +58,9 @@ The current priority is not architectural cleanup for its own sake. The priority
   - `shared/navigation/ClimbingUploadEntryArgs`
   - `shared/navigation/buildClimbingUploadRoute`
   - `shared/navigation/toClimbingUploadEntryArgs`
-- `RecordContract.kt` bridges the shared model types with `typealias` so older record consumers stay stable during the transition.
-- The record-facing upload entry helper is `navigateToUpload(entryArgs)` in `upload/UploadNavigation.kt`.
+  - `shared/navigation/navigateToClimbingUpload`
+- `RecordContract.kt` bridges shared model types with `typealias` so existing record consumers stay stable during the transition.
+- Do not reintroduce upload-local navigation helpers as a second public entrypoint.
 - Do not move upload-only session managers or orchestration into `shared`.
 
 ## QA Gates
@@ -67,15 +69,14 @@ The current priority is not architectural cleanup for its own sake. The priority
   - graph-scoped `UploadViewModel` is preserved
   - `AnalysisLoadingScreen` still triggers upload exactly once
   - the exact-once guard is pinned in `UploadViewModelTest`
-  - `AnalysisLoadingScreen` also has a targeted Compose UI regression test in `androidTest`
+  - `AnalysisLoadingScreenTest` locks the screen-level regression in `androidTest`
 - Stage 2:
   - pre-pose reuse works
   - pre-pose failure does not auto-retry
   - attempt-only cancel restores published result session
   - temp files are kept for active pre-pose, result playback, and published result playback
-- Later stages:
-  - player side effects remain route-owned
-  - hold reselection keeps pre-pose and resets hold reach only
+  - stale worker completion does not override the latest selection
+- Android-dependent route encoding/decoding tests belong in `androidTest`, not local unit tests.
 
 ## Refactor Stop Points
 
