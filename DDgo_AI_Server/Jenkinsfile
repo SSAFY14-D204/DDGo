@@ -187,7 +187,7 @@ Status: ${aiChanged ? 'DDgo_AI_Server changed' : 'No DDgo_AI_Server changes'}
         script {
           echo "===== [4/5] Docker Push Start ====="
 
-          docker.withRegistry("${env.REGISTRY}", 'dockerhub-cred') {
+          docker.withRegistry("${env.REGISTRY}", 'dockerhub-cred-flipped0412') {
             sh "docker push ${env.IMAGE}:${tag}"
             sh "docker push ${env.IMAGE}:latest"
           }
