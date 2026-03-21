@@ -357,7 +357,7 @@ private fun AiAnalysisResult.buildStabilityHighlights(
     return buildList {
         fallbackNarrativePrefix()?.let(::add)
         insideSupportRatio?.let { add("균형 유지율 ${it}%") }
-        stableContactRatio?.let { add("손발 지지 안정도 ${it}%") }
+        stableContactRatio?.let { add("안정 접촉 비율 ${it}%") }
         extractDominantPhaseLabel()?.let { add("주요 구간: $it") }
         extractPointSupportFrameCount()?.takeIf { it > 0 }?.let { add("한 곳에만 의존한 구간이 반복됨") }
         highConfidenceRatio?.takeIf { it < 70 }?.let { add("분석 신뢰도 ${it}%") }
@@ -381,7 +381,8 @@ private fun AiAnalysisResult.buildFailureHighlights(): List<String> {
 
     return buildList {
         fallbackNarrativePrefix()?.let(::add)
-        add("크럭스 홀드 ${topCandidate.holdId}번")
+        add("${topCandidate.holdId}번 홀드")
+        extractPeakBodyLoadGroupLabel()?.let { add("부담 집중 부위: $it") }
         cleanedReasonText(topCandidate.reasonTags.ifEmpty { topCandidate.bestSegment?.reasonTags.orEmpty() })
             ?.let { add("핵심 원인: $it") }
         topCandidate.bestSegment
@@ -401,7 +402,7 @@ private fun AiAnalysisResult.buildFailureHighlights(): List<String> {
             ?.takeIf { abs(it) >= 5 }
             ?.let { add("균형 이탈 ${it}cm") }
         topCandidate.bestSegment?.okFraction
-            ?.let { add("손발 지지 안정도 ${(it * 100.0).roundToInt().coerceIn(0, 100)}%") }
+            ?.let { add("안정 접촉 비율 ${(it * 100.0).roundToInt().coerceIn(0, 100)}%") }
         extractPeakBodyLoadGroupLabel()?.let { add("부담 집중 부위: $it") }
         extractPointSupportFrameCount()?.takeIf { it > 0 }
             ?.let { add("한 곳 의존 구간이 자주 나타남") }
@@ -711,7 +712,7 @@ private fun formatPhaseToken(token: String): String {
 
 private fun formatBodyLoadGroupToken(token: String): String {
     return when (token.lowercase()) {
-        "core" -> "몸통"
+        "core" -> "코어"
         "left_arm" -> "왼팔"
         "right_arm" -> "오른팔"
         "left_leg" -> "왼다리"
