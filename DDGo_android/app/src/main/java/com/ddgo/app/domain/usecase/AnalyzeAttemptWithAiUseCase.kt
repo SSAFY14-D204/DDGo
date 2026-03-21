@@ -4,6 +4,7 @@ import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisFallbackReason
 import com.ddgo.app.domain.model.AiAnalysisRequestContext
 import com.ddgo.app.domain.model.AiAnalysisResult
+import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.repository.AiAnalysisRepository
 import com.ddgo.app.domain.repository.AiPoseSequenceProvider
@@ -23,6 +24,7 @@ class AnalyzeAttemptWithAiUseCase @Inject constructor(
         weightKg: Float?,
         wingspanCm: Float?,
         analysisFpsLimit: Int = 30,
+        cachedPoseSequence: AiPoseSequence? = null,
         topKCrux: Int = 3,
         frameStep: Int = 1
     ): Result<AiAnalysisResult> {
@@ -38,7 +40,7 @@ class AnalyzeAttemptWithAiUseCase @Inject constructor(
         if (heightCm <= 0f) {
             return Result.failure(IllegalArgumentException("Body profile height is required for AI analysis."))
         }
-        val poseSequence = runCatching {
+        val poseSequence = cachedPoseSequence ?: runCatching {
             aiPoseSequenceProvider.analyzePoseSequence(
                 videoUri = videoUri,
                 analysisFpsLimit = analysisFpsLimit

@@ -133,7 +133,7 @@ fun ChallengeHoldScreen(
 
     LaunchedEffect(videoUri, debugBestFrameImageUri) {
         if (videoUri != null || debugBestFrameImageUri != null) {
-            viewModel.runHoldDetection()
+            viewModel.ensureHoldDetectionReadyForCurrentColor()
         }
     }
 

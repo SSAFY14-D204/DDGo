@@ -733,6 +733,7 @@ private data class PoseSequenceAnalysisResult(
 
 private fun PoseSequenceAnalysisResult.toPrePoseVideoAnalysisResult(): PrePoseVideoAnalysisResult {
     return PrePoseVideoAnalysisResult(
+        aiPoseSequence = sequence,
         poses = poses,
         processedFrames = sequence.frames.map { frame ->
             ProcessedPoseDetectionFrame(
