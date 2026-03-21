@@ -32,7 +32,15 @@ public enum ErrorCode {
 
     // Attempt
     ATTEMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "AT001", "Attempt Not Found"),
-    INVALID_ATTEMPT_STATUS(HttpStatus.BAD_REQUEST, "AT002", "Invalid Attempt Status");
+    INVALID_ATTEMPT_STATUS(HttpStatus.BAD_REQUEST, "AT002", "Invalid Attempt Status"),
+
+    // Community
+    POST_NOT_FOUND(HttpStatus.NOT_FOUND, "CM001", "Community Post Not Found"),
+    POST_ACCESS_DENIED(HttpStatus.FORBIDDEN, "CM002", "Community Post Access Denied"),
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "CM003", "Community Comment Not Found"),
+    COMMENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, "CM004", "Community Comment Access Denied"),
+    INVALID_COMMENT_DEPTH(HttpStatus.BAD_REQUEST, "CM005", "Invalid Community Comment Depth"),
+    INVALID_COMMUNITY_MEDIA(HttpStatus.BAD_REQUEST, "CM006", "Invalid Community Media");
 
     private final HttpStatus status;
     private final String code;

@@ -13,6 +13,12 @@ USE `ddgo_db`;
 -- 1) Drop (트리거 -> 자식 -> 부모)
 DROP TRIGGER IF EXISTS `trg_challenges_init_attempt_counter`;
 
+DROP TABLE IF EXISTS `community_comment_likes`;
+DROP TABLE IF EXISTS `community_post_likes`;
+DROP TABLE IF EXISTS `community_comments`;
+DROP TABLE IF EXISTS `community_post_videos`;
+DROP TABLE IF EXISTS `community_posts`;
+
 DROP TABLE IF EXISTS `challenge_attempt_counters`;
 DROP TABLE IF EXISTS `attempt_metrics`;
 DROP TABLE IF EXISTS `attempt_video`;
@@ -359,8 +365,204 @@ CREATE TABLE `attempt_metrics` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
+-- 13) community_posts
+--   - 커뮤니티 게시글
+--   - gym 만 선택적으로 연결
+--   - challenge 는 저장하지 않음
+-- =========================================================
+CREATE TABLE `community_posts` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `user_id` INT NOT NULL,
+  `gym_id` INT NULL,
+
+  `title` VARCHAR(150) NOT NULL,
+  `content` TEXT NOT NULL,
+  `author_nickname_snapshot` VARCHAR(30) NOT NULL,
+
+  `view_count` INT NOT NULL DEFAULT 0,
+  `comment_count` INT NOT NULL DEFAULT 0,
+  `like_count` INT NOT NULL DEFAULT 0,
+  `video_count` INT NOT NULL DEFAULT 0,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+
+  PRIMARY KEY (`id`),
+
+  KEY `ix_community_posts_user_id` (`user_id`),
+  KEY `ix_community_posts_gym_id` (`gym_id`),
+  KEY `ix_community_posts_deleted_at` (`deleted_at`),
+  KEY `ix_community_posts_deleted_created` (`deleted_at`, `created_at`),
+  KEY `ix_community_posts_gym_deleted_created` (`gym_id`, `deleted_at`, `created_at`),
+  KEY `ix_community_posts_deleted_like_created` (`deleted_at`, `like_count`, `created_at`),
+  KEY `ix_community_posts_user_deleted_created` (`user_id`, `deleted_at`, `created_at`),
+
+  CONSTRAINT `ck_community_posts_comment_count` CHECK (`comment_count` >= 0),
+  CONSTRAINT `ck_community_posts_like_count` CHECK (`like_count` >= 0),
+  CONSTRAINT `ck_community_posts_view_count` CHECK (`view_count` >= 0),
+  CONSTRAINT `ck_community_posts_video_count` CHECK (`video_count` BETWEEN 0 AND 3)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 14) community_post_videos
+--   - 게시글당 최대 3개 영상
+--   - sort_order 0~2 로 제한
+-- =========================================================
+CREATE TABLE `community_post_videos` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `post_id` INT NOT NULL,
+
+  `original_file_name` VARCHAR(255) NULL,
+  `bucket` VARCHAR(100) NULL,
+  `object_key` VARCHAR(1024) NULL,
+  `content_type` VARCHAR(100) NULL,
+  `file_size` BIGINT NULL,
+  `duration_ms` INT NULL,
+  `etag` VARCHAR(64) NULL,
+  `sort_order` INT NOT NULL,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_community_post_videos_post_sort_order` (`post_id`, `sort_order`),
+  KEY `ix_community_post_videos_post_id` (`post_id`),
+  KEY `ix_community_post_videos_deleted_at` (`deleted_at`),
+  KEY `ix_community_post_videos_post_deleted_sort` (`post_id`, `deleted_at`, `sort_order`),
+
+  CONSTRAINT `ck_community_post_videos_sort_order` CHECK (`sort_order` BETWEEN 0 AND 2)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 15) community_comments
+--   - depth 0: 루트 댓글
+--   - depth 1: 대댓글
+-- =========================================================
+CREATE TABLE `community_comments` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `post_id` INT NOT NULL,
+  `user_id` INT NOT NULL,
+  `parent_comment_id` INT NULL,
+
+  `depth` TINYINT NOT NULL DEFAULT 0,
+  `content` VARCHAR(1000) NOT NULL,
+  `author_nickname_snapshot` VARCHAR(30) NOT NULL,
+  `like_count` INT NOT NULL DEFAULT 0,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+
+  PRIMARY KEY (`id`),
+  KEY `ix_community_comments_post_id` (`post_id`),
+  KEY `ix_community_comments_user_id` (`user_id`),
+  KEY `ix_community_comments_parent_comment_id` (`parent_comment_id`),
+  KEY `ix_community_comments_deleted_at` (`deleted_at`),
+  KEY `ix_community_comments_deleted_created` (`deleted_at`, `created_at`),
+  KEY `ix_community_comments_post_deleted_created` (`post_id`, `deleted_at`, `created_at`),
+  KEY `ix_community_comments_parent_deleted_created` (`parent_comment_id`, `deleted_at`, `created_at`),
+  KEY `ix_community_comments_user_deleted_created` (`user_id`, `deleted_at`, `created_at`),
+
+  CONSTRAINT `ck_community_comments_depth` CHECK (`depth` IN (0, 1)),
+  CONSTRAINT `ck_community_comments_like_count` CHECK (`like_count` >= 0),
+  CONSTRAINT `ck_community_comments_parent_depth` CHECK (
+    (`depth` = 0 AND `parent_comment_id` IS NULL)
+    OR
+    (`depth` = 1 AND `parent_comment_id` IS NOT NULL)
+  )
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 16) community_post_likes
+--   - 게시글 좋아요는 hard delete 로 토글
+-- =========================================================
+CREATE TABLE `community_post_likes` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `post_id` INT NOT NULL,
+  `user_id` INT NOT NULL,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_community_post_likes_post_user` (`post_id`, `user_id`),
+  KEY `ix_community_post_likes_post_id` (`post_id`),
+  KEY `ix_community_post_likes_user_id` (`user_id`)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 17) community_comment_likes
+--   - 댓글 좋아요는 hard delete 로 토글
+-- =========================================================
+CREATE TABLE `community_comment_likes` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `comment_id` INT NOT NULL,
+  `user_id` INT NOT NULL,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_community_comment_likes_comment_user` (`comment_id`, `user_id`),
+  KEY `ix_community_comment_likes_comment_id` (`comment_id`),
+  KEY `ix_community_comment_likes_user_id` (`user_id`)
+) ENGINE=InnoDB;
+
+-- =========================================================
 -- FK 설정 (Soft delete 운영 전제: ON DELETE CASCADE 사용 X)
 -- =========================================================
+ALTER TABLE `community_posts`
+  ADD CONSTRAINT `fk_community_posts_users`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_posts_climbing_gyms`
+  FOREIGN KEY (`gym_id`) REFERENCES `climbing_gyms` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_post_videos`
+  ADD CONSTRAINT `fk_community_post_videos_community_posts`
+  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_comments`
+  ADD CONSTRAINT `fk_community_comments_community_posts`
+  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_comments_users`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_comments_parent_comment`
+  FOREIGN KEY (`parent_comment_id`) REFERENCES `community_comments` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_post_likes`
+  ADD CONSTRAINT `fk_community_post_likes_community_posts`
+  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_post_likes_users`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_comment_likes`
+  ADD CONSTRAINT `fk_community_comment_likes_community_comments`
+  FOREIGN KEY (`comment_id`) REFERENCES `community_comments` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_comment_likes_users`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
 ALTER TABLE `user_profiles`
   ADD CONSTRAINT `fk_user_profiles_users`
   FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
