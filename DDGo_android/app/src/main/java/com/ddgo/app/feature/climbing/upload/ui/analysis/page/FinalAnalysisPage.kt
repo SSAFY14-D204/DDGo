@@ -3,11 +3,11 @@ package com.ddgo.app.feature.climbing.upload.ui.analysis.page
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,9 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.feature.climbing.upload.AnalysisBgColor
+import com.ddgo.app.feature.climbing.upload.AnalysisGradientButton
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
-import com.ddgo.app.feature.climbing.upload.AnalysisGradientButton
 import com.ddgo.app.feature.climbing.upload.AnalysisSectionTabs
 import com.ddgo.app.feature.climbing.upload.AnalysisText
 import com.ddgo.app.feature.climbing.upload.AttemptChipRow
@@ -47,9 +47,9 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.ProblemStatsPan
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.StabilityPanel
 
 internal enum class FinalAnalysisTab(val label: String) {
-    Stats("통계"),
-    Stability("안정성"),
-    Failure("실패 원인")
+    Stats("\uD1B5\uACC4"),
+    Stability("\uC548\uC815\uC131"),
+    Failure("\uC2E4\uD328 \uC6D0\uC778")
 }
 
 internal data class FinalAnalysisPageState(
@@ -57,17 +57,13 @@ internal data class FinalAnalysisPageState(
     val selectedAttempt: Int,
     val totalAttempts: Int,
     val currentSummary: FinalAnalysisAttemptSummary,
-    val overallSuccess: Boolean,
-    val averageReachedHoldsText: String,
-    val averageReachedHoldsSuffix: String?,
-    val averageInsideSupportRatioText: String,
-    val averageStableContactRatioText: String,
+    val reachedHoldsText: String,
+    val reachedHoldsSuffix: String?,
     val feedbackTypes: List<String>,
     val loadFocusLabel: String?,
     val feedbackLine: String,
     val coachingLine: String,
     val focusReasonText: String?,
-    val combinedTimeline: List<Float>,
     val statsFocusFraction: Float?,
     val actionText: String
 )
@@ -112,14 +108,18 @@ internal fun FinalAnalysisPage(
         when (selectedTab) {
             FinalAnalysisTab.Stats -> {
                 ProblemStatsPanel(
-                    overallSuccess = state.overallSuccess,
-                    averageReachedHoldsText = state.averageReachedHoldsText,
-                    averageReachedHoldsSuffix = state.averageReachedHoldsSuffix,
-                    averageInsideSupportRatioText = state.averageInsideSupportRatioText,
-                    averageStableContactRatioText = state.averageStableContactRatioText,
-                    timeline = state.combinedTimeline,
+                    isSuccess = state.currentSummary.isSuccess,
+                    reachedHoldsTitle = "\uCD5C\uACE0 \uB3C4\uB2EC \uD640\uB4DC",
+                    reachedHoldsText = state.reachedHoldsText,
+                    reachedHoldsSuffix = state.reachedHoldsSuffix,
+                    insideSupportTitle = "\uADE0\uD615 \uC720\uC9C0 \uBE44\uC728",
+                    insideSupportRatioText = state.currentSummary.insideSupportRatioText,
+                    stableContactTitle = "\uC190\uBC1C \uC9C0\uC9C0 \uC548\uC815\uB3C4",
+                    stableContactRatioText = state.currentSummary.stableContactRatioText,
+                    timeline = state.currentSummary.stabilityTimeline,
                     focusFraction = state.statsFocusFraction,
-                    focusReasonText = state.focusReasonText
+                    focusReasonText = state.focusReasonText,
+                    focusGuideText = "\uBC1D\uC740 \uC138\uB85C\uC120\uC740 \uC774 \uC2DC\uB3C4\uC5D0\uC11C \uAC00\uC7A5 \uBC84\uAC70\uC6E0\uB358 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
                 )
             }
 
@@ -181,7 +181,7 @@ private fun FinalAnalysisFeedbackCard(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "종합 피드백",
+                text = "\uC885\uD569 \uD53C\uB4DC\uBC31",
                 color = AnalysisMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
@@ -195,7 +195,7 @@ private fun FinalAnalysisFeedbackCard(
             }
             loadFocusLabel?.let { focus ->
                 Text(
-                    text = "부담이 큰 부위: $focus",
+                    text = "\uBD80\uB2F4\uC774 \uD070 \uBD80\uC704: $focus",
                     color = AnalysisMuted,
                     fontSize = 13.sp,
                     lineHeight = 20.sp
@@ -209,7 +209,7 @@ private fun FinalAnalysisFeedbackCard(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "코칭: $coachingLine",
+                text = "\uCF54\uCE6D: $coachingLine",
                 color = AnalysisMuted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp
@@ -240,9 +240,9 @@ private fun FeedbackTypeChip(
 
 private fun feedbackTypeChipLabel(type: String): String {
     return when (type) {
-        "발 사용 부족" -> "발 활용 부족"
-        "팔 사용 과다" -> "팔 의존 큼"
-        "과한 버티기" -> "오래 버팀"
+        "\uBC1C \uC0AC\uC6A9 \uBD80\uC871" -> "\uBC1C \uD65C\uC6A9 \uBD80\uC871"
+        "\uD314 \uC0AC\uC6A9 \uACFC\uB2E4" -> "\uD314 \uC758\uC874 \uD07C"
+        "\uACFC\uD55C \uBC84\uD2F0\uAE30" -> "\uC624\uB798 \uBC84\uD2F0\uAE30"
         else -> type
     }
 }
@@ -270,13 +270,13 @@ private fun FinalAnalysisTopBar(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "뒤로가기",
+                contentDescription = "\uB4A4\uB85C\uAC00\uAE30",
                 tint = Color.White
             )
         }
 
         Text(
-            text = "분석 리포트",
+            text = "\uBD84\uC11D \uB9AC\uD3EC\uD2B8",
             modifier = Modifier.align(Alignment.Center),
             color = AnalysisText,
             fontSize = 18.sp,

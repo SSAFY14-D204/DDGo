@@ -10,6 +10,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import com.ddgo.app.feature.climbing.upload.ui.analysis.route.ChallengeFinalAnalysisRoute
 import com.ddgo.app.feature.climbing.upload.ui.analysis.route.FinalAnalysisRoute
 import com.ddgo.app.navigation.ScreenRoutes
 
@@ -231,6 +232,21 @@ fun NavGraphBuilder.uploadGraph(
             val viewModel: UploadViewModel = hiltViewModel(parentEntry)
 
             FinalAnalysisRoute(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToChallenge = {
+                    navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_FINAL_ANALYSIS)
+                }
+            )
+        }
+
+        composable(ScreenRoutes.Climbing.Upload.CHALLENGE_FINAL_ANALYSIS) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Climbing.Upload.route)
+            }
+            val viewModel: UploadViewModel = hiltViewModel(parentEntry)
+
+            ChallengeFinalAnalysisRoute(
                 viewModel = viewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToMain = {

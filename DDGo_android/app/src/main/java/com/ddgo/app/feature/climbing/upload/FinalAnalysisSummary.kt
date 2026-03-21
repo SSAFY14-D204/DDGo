@@ -39,6 +39,8 @@ internal data class FinalAnalysisAttemptSummary(
     val stabilityNarrative: String,
     val failureHighlights: List<String>,
     val failureNarrative: String,
+    val primaryCruxHoldNo: Int?,
+    val primaryReasonLabel: String?,
     val feedbackTypes: List<String>,
     val loadFocusLabel: String?,
     val feedbackLine: String,
@@ -93,6 +95,8 @@ private fun emptyFinalAnalysisAttemptSummary(
         stabilityNarrative = NoAiNarrative,
         failureHighlights = listOf(NoAiNarrative),
         failureNarrative = NoAiNarrative,
+        primaryCruxHoldNo = null,
+        primaryReasonLabel = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
         feedbackLine = "AI 분석 결과가 아직 충분하지 않아 종합 피드백을 만들지 못했습니다.",
@@ -121,6 +125,8 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         insideSupportRatio = insideSupportRatio,
         stableContactRatio = stableContactRatio
     )
+    val primaryCruxHoldNo = extractPrimaryCruxHoldNo()
+    val primaryReasonLabel = extractPrimaryReasonLabel()
     val failureHighlights = buildFailureHighlights()
     val isSuccess = totalHolds > 0 && (reachedHolds ?: 0) >= totalHolds
     val loadFocusLabel = extractPeakBodyLoadGroupLabel()
@@ -151,6 +157,8 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         stabilityNarrative = stabilityHighlights.joinToString(" "),
         failureHighlights = failureHighlights,
         failureNarrative = failureHighlights.joinToString(" "),
+        primaryCruxHoldNo = primaryCruxHoldNo,
+        primaryReasonLabel = primaryReasonLabel,
         feedbackTypes = feedbackTypes,
         loadFocusLabel = loadFocusLabel,
         feedbackLine = buildFeedbackLine(
@@ -347,6 +355,20 @@ private fun AiAnalysisResult.extractStabilityFocusFraction(): Float? {
         ?: return null
     val segment = topCandidate.bestSegment ?: return null
     return normalizedSegmentFraction(segment.startTimeMs, segment.endTimeMs)
+}
+
+private fun AiAnalysisResult.extractPrimaryCruxHoldNo(): Int? {
+    return cruxResult.topCandidates.firstOrNull()?.holdId?.takeIf { it > 0 }
+        ?: cruxResult.allCandidates.firstOrNull()?.holdId?.takeIf { it > 0 }
+}
+
+private fun AiAnalysisResult.extractPrimaryReasonLabel(): String? {
+    val topCandidate = cruxResult.topCandidates.firstOrNull()
+        ?: cruxResult.allCandidates.firstOrNull()
+        ?: return null
+    return cleanedReasonText(
+        topCandidate.reasonTags.ifEmpty { topCandidate.bestSegment?.reasonTags.orEmpty() }
+    )
 }
 
 private fun AiAnalysisResult.buildStabilityHighlights(
