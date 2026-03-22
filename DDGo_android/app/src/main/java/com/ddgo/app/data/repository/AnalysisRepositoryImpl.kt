@@ -5,6 +5,7 @@ import com.ddgo.app.data.remote.attempt.AttemptDetailResponseDto
 import com.ddgo.app.data.remote.attempt.AttemptFullResponseDto
 import com.ddgo.app.data.remote.challenge.ChallengeApi
 import com.ddgo.app.data.remote.challenge.ChallengeListResponseDto
+import com.ddgo.app.data.remote.common.GymNameFormatter
 import com.ddgo.app.data.remote.common.RemoteDateTimeParser
 import com.ddgo.app.domain.model.AnalysisAttemptSnapshot
 import com.ddgo.app.domain.model.AnalysisChallengeResult
@@ -64,7 +65,7 @@ class AnalysisRepositoryImpl @Inject constructor(
 
         return AnalysisChallengeSnapshot(
             id = challenge.id,
-            gymName = challenge.gymName,
+            gymName = GymNameFormatter.sanitize(challenge.gymName),
             problemColor = challenge.problemColor,
             gradeLabel = challenge.gradeLabel,
             challengeStatus = challenge.challengeStatus.toAnalysisStatus(),

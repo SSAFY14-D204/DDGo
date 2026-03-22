@@ -39,6 +39,22 @@ data class GenerateVideoUrlResponseDto(
 )
 
 @Serializable
+data class VideoUploadCompleteRequestDto(
+    val etag: String? = null
+)
+
+@Serializable
+data class VideoUploadCompleteResponseDto(
+    val attemptId: Long,
+    val uploaded: Boolean? = null,
+    val isUploaded: Boolean? = null,
+    val attemptStatus: String,
+    val uploadedAt: String? = null
+) {
+    fun isUploadConfirmed(): Boolean = uploaded ?: isUploaded ?: false
+}
+
+@Serializable
 data class AttemptFullResponseDto(
     val attemptId: Long,
     val attemptNo: Int,

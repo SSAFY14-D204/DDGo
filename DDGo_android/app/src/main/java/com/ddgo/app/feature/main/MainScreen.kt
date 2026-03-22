@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -32,6 +33,7 @@ fun MainScreen(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
     var lastActiveTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
+    var analysisTargetChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
     val isClimbing = selectedTab == MainTab.CLIMBING
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -41,9 +43,20 @@ fun MainScreen(
                 .zIndex(MainZIndex.CONTENT)
         ) {
             when (lastActiveTab) {
-                MainTab.CALENDAR -> CalendarScreen()
+                MainTab.CALENDAR -> CalendarScreen(
+                    onEntrySelected = { challengeId ->
+                        analysisTargetChallengeId = challengeId
+                        lastActiveTab = MainTab.ANALYSIS
+                        selectedTab = MainTab.ANALYSIS
+                    }
+                )
                 MainTab.COMMUNITY -> CommunityScreen()
-                MainTab.ANALYSIS -> AnalysisScreen()
+                MainTab.ANALYSIS -> AnalysisScreen(
+                    externalChallengeId = analysisTargetChallengeId,
+                    onExternalChallengeHandled = {
+                        analysisTargetChallengeId = null
+                    }
+                )
                 MainTab.PROFILE -> ProfileScreen(onNavigateToAuth = onNavigateToAuth)
             }
         }

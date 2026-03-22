@@ -2,6 +2,7 @@ package com.ddgo.app.data.repository
 
 import com.ddgo.app.data.remote.challenge.ChallengeApi
 import com.ddgo.app.data.remote.challenge.ChallengeListResponseDto
+import com.ddgo.app.data.remote.common.GymNameFormatter
 import com.ddgo.app.data.remote.common.RemoteDateTimeParser
 import com.ddgo.app.domain.model.CalendarEntry
 import com.ddgo.app.domain.repository.CalendarRepository
@@ -35,7 +36,7 @@ class CalendarRepositoryImpl @Inject constructor(
             id = id,
             date = startedAt.toLocalDate(),
             title = buildTitle(),
-            venue = gymName,
+            venue = GymNameFormatter.sanitize(gymName),
             time = startedAt.toLocalTime(),
             note = buildNote()
         )
