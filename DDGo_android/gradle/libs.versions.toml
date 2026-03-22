@@ -48,6 +48,8 @@ ui = "1.10.4"
 uiText = "1.10.4"
 foundation = "1.10.4"
 playServicesWearable = "19.0.0"
+healthServicesClient = "1.1.0-rc01"
+wearOngoing = "1.0.0"
 
 [libraries]
 # Core
@@ -116,6 +118,8 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref 
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
+androidx-health-services-client = { group = "androidx.health", name = "health-services-client", version.ref = "healthServicesClient" }
+androidx-wear-ongoing = { group = "androidx.wear", name = "wear-ongoing", version.ref = "wearOngoing" }
 
 [plugins]
 android-application     = { id = "com.android.application",                    version.ref = "agp" }
