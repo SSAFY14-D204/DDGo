@@ -24,6 +24,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -37,7 +38,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.feature.climbing.record.presentation.RecordWatchStatus
 import com.ddgo.app.feature.climbing.record.presentation.RecordUiState
+import com.ddgo.shared.model.MeasurementStatus
+import com.ddgo.shared.model.WatchState
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun RecordPage(
@@ -174,6 +181,8 @@ fun RecordPage(
                 )
             }
 
+            WatchStatusCard(watchStatus = uiState.watchStatus)
+
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF101A2B)),
                 modifier = Modifier.fillMaxWidth()
@@ -285,3 +294,152 @@ fun RecordPage(
         }
     }
 }
+
+@Composable
+private fun WatchStatusCard(
+    watchStatus: RecordWatchStatus
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0B2232)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "watch monitor",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                WatchStatusChip(
+                    label = if (watchStatus.isConnected) "watch online" else "watch offline",
+                    accent = if (watchStatus.isConnected) Color(0xFF56E0A8) else Color(0xFFFFB4A9)
+                )
+                WatchStatusChip(
+                    label = if (watchStatus.serviceActive) "service active" else "service idle",
+                    accent = if (watchStatus.serviceActive) Color(0xFF9ED6FF) else Color(0xFF9CAEC6)
+                )
+                WatchStatusChip(
+                    label = if (watchStatus.alerting) "alert active" else "alert safe",
+                    accent = if (watchStatus.alerting) Color(0xFFFF8B73) else Color(0xFF8EE3C4)
+                )
+            }
+
+            WatchStatusRow(
+                label = "state",
+                value = watchStatus.watchState.displayName()
+            )
+            WatchStatusRow(
+                label = "heart rate",
+                value = watchStatus.latestHeartRate?.let { "$it bpm" } ?: "--"
+            )
+            WatchStatusRow(
+                label = "measurement",
+                value = watchStatus.measurementStatus.displayName()
+            )
+            WatchStatusRow(
+                label = "session",
+                value = watchStatus.sessionId?.take(8) ?: "-"
+            )
+            WatchStatusRow(
+                label = "updated",
+                value = watchStatus.updatedAt.toReadableTime()
+            )
+            WatchStatusRow(
+                label = "last measure",
+                value = watchStatus.lastMeasuredAt.toReadableTime()
+            )
+            watchStatus.lastAlertReceivedAt?.let { triggeredAt ->
+                HorizontalDivider(color = Color(0xFF1F3A4B))
+                Text(
+                    text = "last alert ${triggeredAt.toReadableTime()}",
+                    color = Color(0xFFFFB4A9),
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WatchStatusChip(
+    label: String,
+    accent: Color
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.18f))
+    ) {
+        Text(
+            text = label,
+            color = accent,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun WatchStatusRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = Color(0xFF8FAAC1),
+            fontSize = 12.sp
+        )
+        Text(
+            text = value,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+private fun WatchState?.displayName(): String {
+    return when (this) {
+        WatchState.IDLE -> "Idle"
+        WatchState.RECORDING -> "Recording"
+        WatchState.ALERTING -> "Alerting"
+        WatchState.SENSOR_UNAVAILABLE -> "Sensor unavailable"
+        WatchState.PERMISSION_BLOCKED -> "Permission blocked"
+        WatchState.SESSION_RECOVERING -> "Recovering"
+        null -> "Waiting"
+    }
+}
+
+private fun MeasurementStatus?.displayName(): String {
+    return when (this) {
+        MeasurementStatus.MEASURING -> "Measuring"
+        MeasurementStatus.UNAVAILABLE -> "Unavailable"
+        MeasurementStatus.PERMISSION_BLOCKED -> "Permission blocked"
+        MeasurementStatus.RECOVERING -> "Recovering"
+        null -> "Waiting"
+    }
+}
+
+private fun Long?.toReadableTime(): String {
+    val value = this ?: return "-"
+    if (value <= 0L) {
+        return "-"
+    }
+    return Instant.ofEpochMilli(value)
+        .atZone(ZoneId.systemDefault())
+        .format(RECORD_TIME_FORMATTER)
+}
+
+private val RECORD_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
