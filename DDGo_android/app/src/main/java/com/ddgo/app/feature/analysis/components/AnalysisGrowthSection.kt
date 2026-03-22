@@ -5,8 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,20 +22,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.ddgo.app.feature.analysis.mapper.AnalysisFormatters
 import com.ddgo.app.feature.analysis.model.AnalysisGrowthSummaryUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisTrendPointUiModel
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
 
-/**
- * 전체 챌린지/시도를 바탕으로 만든 성장 요약 섹션입니다.
- *
- * 역할:
- * - 사용자가 메인 분석 탭에 들어왔을 때 최근 변화가 즉시 눈에 들어오게 만듭니다.
- * - 텍스트뿐 아니라 게이지, 비교 바, 추세 그래프로 성장 흐름을 직관적으로 보여줍니다.
- */
 @Composable
 internal fun AnalysisGrowthSection(
     summary: AnalysisGrowthSummaryUiModel
@@ -83,13 +78,6 @@ internal fun AnalysisGrowthSection(
     }
 }
 
-/**
- * 성장 카드 안에서 가장 먼저 눈에 들어오는 시각 요약 보드입니다.
- *
- * 역할:
- * - 평균 안정성은 원형 게이지로, 완등률과 리스크 관리는 비교 바 형태로 보여줍니다.
- * - 숫자를 읽기 전에 전체 수준을 감으로 파악할 수 있게 돕습니다.
- */
 @Composable
 private fun GrowthVisualBoard(
     summary: AnalysisGrowthSummaryUiModel
@@ -108,8 +96,8 @@ private fun GrowthVisualBoard(
             ) {
                 CircularGrowthGauge(
                     score = summary.stabilityScore,
-                    title = "평균 안정성",
-                    valueLabel = "${(summary.stabilityScore * 100).toInt()}%"
+                    title = "평균 안정률",
+                    valueLabel = AnalysisFormatters.formatPercent(summary.stabilityScore)
                 )
 
                 Column(
@@ -117,15 +105,15 @@ private fun GrowthVisualBoard(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     GrowthProgressBar(
-                        label = "완등률",
+                        label = "완등 챌린지",
                         value = summary.completionScore,
-                        valueLabel = "${(summary.completionScore * 100).toInt()}%",
+                        valueLabel = AnalysisFormatters.formatPercent(summary.completionScore),
                         color = AnalysisPalette.Success
                     )
                     GrowthProgressBar(
-                        label = "리스크 관리",
-                        value = summary.riskControlScore,
-                        valueLabel = "${(summary.riskControlScore * 100).toInt()}%",
+                        label = "평균 위험 이벤트",
+                        value = summary.dangerEventProgress,
+                        valueLabel = AnalysisFormatters.formatAverageEventCount(summary.averageDangerEvents),
                         color = AnalysisPalette.WarningBright
                     )
                 }
@@ -134,7 +122,6 @@ private fun GrowthVisualBoard(
     }
 }
 
-/** 안정성 점수를 직관적으로 보여주는 원형 게이지입니다. */
 @Composable
 private fun CircularGrowthGauge(
     score: Float,
@@ -181,13 +168,12 @@ private fun CircularGrowthGauge(
     }
 }
 
-/** 보조 성과 지표를 비교해서 보여주는 수평 진행 바입니다. */
 @Composable
 private fun GrowthProgressBar(
     label: String,
     value: Float,
     valueLabel: String,
-    color: androidx.compose.ui.graphics.Color
+    color: Color
 ) {
     val progress = value.coerceIn(0f, 1f)
 
@@ -228,7 +214,6 @@ private fun GrowthProgressBar(
     }
 }
 
-/** 최근 챌린지 안정성 흐름을 가볍게 보여주는 미니 추세 그래프입니다. */
 @Composable
 private fun GrowthTrendChart(
     points: List<AnalysisTrendPointUiModel>
@@ -242,7 +227,7 @@ private fun GrowthTrendChart(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                text = "최근 챌린지 안정성 추세",
+                text = "최근 평균 안정률 변화",
                 style = MaterialTheme.typography.titleMedium,
                 color = AnalysisPalette.TextPrimary
             )
@@ -287,7 +272,11 @@ private fun GrowthTrendChart(
                 offsets.forEachIndexed { index, offset ->
                     val point = points[index]
                     drawCircle(
-                        color = if (point.highlight) AnalysisPalette.AccentStrong else AnalysisPalette.Accent.copy(alpha = 0.7f),
+                        color = if (point.highlight) {
+                            AnalysisPalette.AccentStrong
+                        } else {
+                            AnalysisPalette.Accent.copy(alpha = 0.7f)
+                        },
                         radius = if (point.highlight) 6.dp.toPx() else 4.5.dp.toPx(),
                         center = offset
                     )
@@ -310,7 +299,11 @@ private fun GrowthTrendChart(
                             Surface(
                                 modifier = Modifier.size(if (point.highlight) 8.dp else 6.dp),
                                 shape = CircleShape,
-                                color = if (point.highlight) AnalysisPalette.AccentStrong else AnalysisPalette.Accent.copy(alpha = 0.55f)
+                                color = if (point.highlight) {
+                                    AnalysisPalette.AccentStrong
+                                } else {
+                                    AnalysisPalette.Accent.copy(alpha = 0.55f)
+                                }
                             ) {}
                         }
                         Text(

@@ -10,13 +10,6 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/**
- * 분석 화면 전반에서 재사용하는 포맷팅 규칙 모음입니다.
- *
- * 역할:
- * - 날짜, 시간, 퍼센트, 결과 라벨처럼 반복되는 표시 규칙을 한 곳에 모읍니다.
- * - 각 mapper가 같은 표현 규칙을 공유하도록 해 화면마다 말투가 달라지는 문제를 줄입니다.
- */
 internal object AnalysisFormatters {
 
     private val shortDateFormatter = DateTimeFormatter.ofPattern("M월 d일", Locale.KOREA)
@@ -39,6 +32,19 @@ internal object AnalysisFormatters {
 
     fun formatPercent(value: Float): String {
         return "${(value.coerceIn(0f, 1f) * 100f).roundToInt()}%"
+    }
+
+    fun formatEventCount(value: Int): String {
+        return "${value}회"
+    }
+
+    fun formatAverageEventCount(value: Float): String {
+        val rounded = ((value * 10f).roundToInt() / 10f)
+        return if (rounded % 1f == 0f) {
+            "${rounded.toInt()}회"
+        } else {
+            String.format(Locale.US, "%.1f회", rounded)
+        }
     }
 
     fun resultLabel(result: AnalysisChallengeResult): String {

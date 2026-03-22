@@ -364,13 +364,17 @@ private fun ChallengeGrowthTrendChart(
             }
         }
 
-        val minValue = values.minOrNull() ?: 0f
-        val maxValue = values.maxOrNull() ?: 0f
-        val range = (maxValue - minValue).takeIf { it > 0f } ?: 1f
+        val minValue = 0f
+        val maxValue = when (selectedMetric) {
+            ChallengeGrowthMetric.Stability -> 1f
+            ChallengeGrowthMetric.MaxHold -> values.maxOrNull()?.coerceAtLeast(1f) ?: 1f
+            ChallengeGrowthMetric.RiskEvents -> values.maxOrNull()?.coerceAtLeast(1f) ?: 1f
+        }
+        val range = (maxValue - minValue).coerceAtLeast(1f)
         val stepX = if (values.size == 1) 0f else size.width / (values.size - 1)
 
         val offsets = values.mapIndexed { index, value ->
-            val progress = (value - minValue) / range
+            val progress = ((value - minValue) / range).coerceIn(0f, 1f)
             Offset(
                 x = stepX * index,
                 y = size.height - (progress * (size.height - 18.dp.toPx())) - 9.dp.toPx()
@@ -477,7 +481,7 @@ private fun ChallengeGrowthSnapshots(
 private enum class ChallengeGrowthMetric(val label: String) {
     Stability("\uC548\uC815\uB960"),
     MaxHold("\uCD5C\uB300 \uD640\uB4DC"),
-    RiskEvents("\uC704\uD5D8\uB3C4")
+    RiskEvents("\uC704\uD5D8 \uC774\uBCA4\uD2B8")
 }
 
 /** 상세 화면 상단에서 쓰는 간결한 뒤로가기 칩입니다. */

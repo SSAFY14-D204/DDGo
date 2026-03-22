@@ -12,13 +12,6 @@ import com.ddgo.app.feature.analysis.model.AnalysisTrendPointUiModel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/**
- * 대시보드 화면에 필요한 UI 모델을 조립하는 mapper입니다.
- *
- * 역할:
- * - 전체 성장 요약과 챌린지 목록처럼 대시보드 영역에 필요한 계산만 담당합니다.
- * - 챌린지 상세/시도 상세 계산과 분리해 mapper 책임을 작게 유지합니다.
- */
 internal object AnalysisDashboardUiMapper {
 
     fun buildGrowthSummary(challenges: List<AnalysisChallengeSnapshot>): AnalysisGrowthSummaryUiModel {
@@ -29,13 +22,14 @@ internal object AnalysisDashboardUiMapper {
         val totalAttempts = attempts.size
         val successChallenges = challenges.count { it.challengeResult == AnalysisChallengeResult.SUCCESS }
         val averageStability = attempts.map { it.centerStabilityRatio }.average().toFloat()
-        val averageDanger = attempts.map { it.dangerEventCount }.average().toFloat()
+        val averageDangerEvents = attempts.map { it.dangerEventCount }.average().toFloat()
+        val totalDangerEvents = attempts.sumOf { it.dangerEventCount }
         val completionScore = if (totalChallenges > 0) {
             successChallenges.toFloat() / totalChallenges.toFloat()
         } else {
             0f
         }
-        val riskControlScore = (1f - (averageDanger / 4f)).coerceIn(0f, 1f)
+        val dangerEventProgress = (averageDangerEvents / 4f).coerceIn(0f, 1f)
 
         val recentChallenges = challenges
             .sortedBy { it.startedAt }
@@ -56,9 +50,12 @@ internal object AnalysisDashboardUiMapper {
         }
 
         val growthHeadline = when {
-            stabilityDeltaPercent > 0 -> "최근 챌린지에서 안정률이 ${stabilityDeltaPercent}% 좋아졌어요."
-            stabilityDeltaPercent < 0 -> "최근 챌린지에서 안정률 변동이 ${abs(stabilityDeltaPercent)}% 있었어요."
-            else -> "최근 챌린지 흐름이 비슷한 수준으로 유지되고 있어요."
+            stabilityDeltaPercent > 0 ->
+                "최근 기록에서 평균 안정률이 ${stabilityDeltaPercent}% 좋아졌어요."
+            stabilityDeltaPercent < 0 ->
+                "최근 기록에서 평균 안정률이 ${abs(stabilityDeltaPercent)}% 낮아졌어요."
+            else ->
+                "최근 기록의 평균 안정률이 비슷한 흐름을 유지하고 있어요."
         }
 
         return AnalysisGrowthSummaryUiModel(
@@ -66,7 +63,7 @@ internal object AnalysisDashboardUiMapper {
             headline = growthHeadline,
             trendBadges = listOf(
                 AnalysisBadgeUiModel(
-                    label = "완등 ${successChallenges}회",
+                    label = "완등 ${successChallenges}개",
                     tone = AnalysisBadgeTone.Success
                 ),
                 AnalysisBadgeUiModel(
@@ -82,7 +79,7 @@ internal object AnalysisDashboardUiMapper {
                     }
                 ),
                 AnalysisBadgeUiModel(
-                    label = "리스크 관리 ${AnalysisFormatters.formatPercent(riskControlScore)}",
+                    label = "평균 위험 이벤트 ${AnalysisFormatters.formatAverageEventCount(averageDangerEvents)}",
                     tone = AnalysisBadgeTone.Warning
                 )
             ),
@@ -98,12 +95,17 @@ internal object AnalysisDashboardUiMapper {
                 AnalysisOverviewStatUiModel(
                     label = AnalysisStrings.AverageStabilityLabel,
                     value = AnalysisFormatters.formatPercent(averageStability)
+                ),
+                AnalysisOverviewStatUiModel(
+                    label = "위험 이벤트",
+                    value = AnalysisFormatters.formatEventCount(totalDangerEvents)
                 )
             ),
             trendPoints = trendPoints,
             stabilityScore = averageStability.coerceIn(0f, 1f),
             completionScore = completionScore,
-            riskControlScore = riskControlScore
+            averageDangerEvents = averageDangerEvents,
+            dangerEventProgress = dangerEventProgress
         )
     }
 

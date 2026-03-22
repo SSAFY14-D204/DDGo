@@ -219,23 +219,27 @@ private fun AttemptMetricsSection(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     AttemptSignalBar(
-                        label = "\uC548\uC815\uC131",
+                        label = "\uC548\uC815\uB960",
                         score = detail.stabilityScore,
+                        valueLabel = detail.stabilityValueLabel,
                         tone = AnalysisBadgeTone.Accent
                     )
                     AttemptSignalBar(
-                        label = "\uB3C4\uB2EC \uBC94\uC704",
+                        label = "\uCD5C\uB300 \uD640\uB4DC",
                         score = detail.reachScore,
+                        valueLabel = detail.reachValueLabel,
                         tone = AnalysisBadgeTone.Success
                     )
                     AttemptSignalBar(
-                        label = "\uB9AC\uC2A4\uD06C \uAD00\uB9AC",
-                        score = detail.riskControlScore,
+                        label = "\uC704\uD5D8 \uC774\uBCA4\uD2B8",
+                        score = detail.dangerEventScore,
+                        valueLabel = detail.dangerEventValueLabel,
                         tone = AnalysisBadgeTone.Warning
                     )
                     AttemptSignalBar(
-                        label = "\uD06C\uB7ED\uC2A4 \uC9D1\uC911",
+                        label = "\uD06C\uB7ED\uC2A4 \uAD6C\uAC04 \uC2DC\uAC04",
                         score = detail.cruxFocusScore,
+                        valueLabel = detail.cruxFocusValueLabel,
                         tone = AnalysisBadgeTone.Danger
                     )
                 }
@@ -249,6 +253,7 @@ private fun AttemptMetricsSection(
 private fun AttemptSignalBar(
     label: String,
     score: Float,
+    valueLabel: String,
     tone: AnalysisBadgeTone
 ) {
     val clampedScore = score.coerceIn(0f, 1f)
@@ -267,7 +272,7 @@ private fun AttemptSignalBar(
                 color = AnalysisPalette.TextPrimary
             )
             Text(
-                text = "${(clampedScore * 100f).toInt()}%",
+                text = valueLabel,
                 style = MaterialTheme.typography.labelLarge,
                 color = signalToneColor(tone)
             )

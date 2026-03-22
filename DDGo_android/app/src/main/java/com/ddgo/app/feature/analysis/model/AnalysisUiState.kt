@@ -39,7 +39,8 @@ data class AnalysisGrowthSummaryUiModel(
     val trendPoints: List<AnalysisTrendPointUiModel>,
     val stabilityScore: Float,
     val completionScore: Float,
-    val riskControlScore: Float
+    val averageDangerEvents: Float,
+    val dangerEventProgress: Float
 ) {
     companion object {
         /** 데이터가 없을 때도 레이아웃이 무너지지 않도록 비어 있는 요약 모델을 제공합니다. */
@@ -52,7 +53,8 @@ data class AnalysisGrowthSummaryUiModel(
                 trendPoints = emptyList(),
                 stabilityScore = 0f,
                 completionScore = 0f,
-                riskControlScore = 0f
+                averageDangerEvents = 0f,
+                dangerEventProgress = 0f
             )
         }
     }
@@ -111,8 +113,12 @@ data class AnalysisAttemptDetailUiModel(
     val headline: String,
     val stabilityScore: Float,
     val reachScore: Float,
-    val riskControlScore: Float,
+    val dangerEventScore: Float,
     val cruxFocusScore: Float,
+    val stabilityValueLabel: String,
+    val reachValueLabel: String,
+    val dangerEventValueLabel: String,
+    val cruxFocusValueLabel: String,
     val metricCards: List<AnalysisOverviewStatUiModel>,
     val timelineItems: List<AnalysisTimelineItemUiModel>,
     val coachCards: List<AnalysisCoachCardUiModel>

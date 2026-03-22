@@ -1,5 +1,6 @@
 package com.ddgo.app.data.repository
 
+import android.util.Log
 import com.ddgo.app.data.remote.attempt.AttemptApi
 import com.ddgo.app.data.remote.attempt.AttemptDetailResponseDto
 import com.ddgo.app.data.remote.attempt.AttemptFullResponseDto
@@ -16,6 +17,8 @@ import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+
+private const val TAG = "AnalysisRepository"
 
 class AnalysisRepositoryImpl @Inject constructor(
     private val challengeApi: ChallengeApi,
@@ -92,27 +95,48 @@ class AnalysisRepositoryImpl @Inject constructor(
     ): AnalysisAttemptSnapshot? {
         val detailResponse = runCatching {
             attemptApi.getAttemptDetail(challengeId = challengeId, attemptId = attempt.attemptId)
+        }.onFailure { throwable ->
+            Log.w(
+                TAG,
+                "buildAttemptSnapshot: attempt detail request failed, challengeId=$challengeId, " +
+                    "attemptId=${attempt.attemptId}",
+                throwable
+            )
         }.getOrNull()
 
         val detail = detailResponse?.data.takeIf { detailResponse?.success == true }
+        if (detail == null) {
+            Log.w(
+                TAG,
+                "buildAttemptSnapshot: using fallback attempt data, challengeId=$challengeId, " +
+                    "attemptId=${attempt.attemptId}"
+            )
+        }
         return detail?.toAnalysisAttemptSnapshot()
             ?: attempt.toFallbackAnalysisAttemptSnapshot()
     }
 
     private fun AttemptFullResponseDto.toAnalysisAttemptSnapshot(): AnalysisAttemptSnapshot {
+        val resolvedMetrics = metricsData
+        val resolvedFeedbacks = feedbacksData
+
         return AnalysisAttemptSnapshot(
             attemptId = attemptId,
             attemptNo = attemptNo,
             attemptResult = attemptResult.toAnalysisResult(),
             durationMs = durationMs?.toLong() ?: 0L,
             maxHoldNo = maxHoldNo ?: 0,
-            centerStabilityRatio = (centerStabilityRatio ?: 0.0).toFloat(),
-            cruxHoldNo = cruxHoldNo,
-            cruxDurationMs = cruxDurationMs?.toLong(),
-            dangerEventCount = dangerEventCount ?: 0,
-            failureReason = failureReason,
-            riskAlert = riskAlert,
-            nextMission = nextMission
+            centerStabilityRatio = (
+                resolvedMetrics?.centerStabilityRatio
+                    ?: centerStabilityRatio
+                    ?: 0.0
+                ).toFloat(),
+            cruxHoldNo = resolvedMetrics?.cruxHoldNo ?: cruxHoldNo,
+            cruxDurationMs = (resolvedMetrics?.cruxDurationMs ?: cruxDurationMs)?.toLong(),
+            dangerEventCount = resolvedMetrics?.dangerEventCount ?: dangerEventCount ?: 0,
+            failureReason = resolvedFeedbacks?.failureReason ?: failureReason,
+            riskAlert = resolvedFeedbacks?.riskAlert ?: riskAlert,
+            nextMission = resolvedFeedbacks?.nextMission ?: nextMission
         )
     }
 
