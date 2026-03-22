@@ -24,4 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "DDGo"
 include(":app")
+include(":core-shared")
+include(":wear")
  
