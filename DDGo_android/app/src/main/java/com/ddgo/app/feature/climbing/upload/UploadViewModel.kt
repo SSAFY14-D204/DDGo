@@ -265,11 +265,22 @@ class UploadViewModel @Inject constructor(
     val challengeCreationUiState = challengeDelegate.challengeCreationUiState
 
     val uploadSubmissionUiState = submissionDelegate.uploadSubmissionUiState
+    val finalAnalysisPreparationUiState = submissionDelegate.finalAnalysisPreparationUiState
+    val backgroundUploadState = submissionDelegate.backgroundUploadState
+    val backgroundUploadNotice = submissionDelegate.backgroundUploadNotice
+    var analysisLoadingPhase by mutableStateOf(AnalysisLoadingPhase.AttemptResultPreparation)
+        private set
 
     // Thin bridge so delegates never call each other directly.
     private val submissionCallbacks = object : UploadSubmissionCallbacks {
-        override suspend fun awaitSubmitReadyPrePose(playbackUris: List<String>): TerminalPrePoseSnapshot {
-            return this@UploadViewModel.awaitSubmitReadyPrePose(playbackUris)
+        override suspend fun awaitSubmitReadyPrePose(
+            playbackUris: List<String>,
+            emitLoading: Boolean
+        ): TerminalPrePoseSnapshot {
+            return this@UploadViewModel.awaitSubmitReadyPrePose(
+                playbackUris = playbackUris,
+                emitLoading = emitLoading
+            )
         }
 
         override fun currentAttemptIndex(): Int = currentAttemptIndex
@@ -335,8 +346,15 @@ class UploadViewModel @Inject constructor(
             this@UploadViewModel.syncDisplayedAnalysisPoints()
         }
 
+        override fun onPrimaryVideoPrepared(generation: Long, playbackUri: String) {
+            this@UploadViewModel.onPrimaryVideoPrepared(
+                generation = generation,
+                playbackUri = playbackUri
+            )
+        }
+
         override fun onPrePoseBatchStateChanged() {
-            this@UploadViewModel.maybeStartHoldPrecomputeForCurrentSelection()
+            this@UploadViewModel.maybeStartPrimaryPrePoseAfterHoldPrecompute()
         }
     }
 
@@ -374,7 +392,8 @@ class UploadViewModel @Inject constructor(
             sessionDelegate.prePoseCacheEntries = value
         }
     private var holdPrecomputeRequestedGeneration by mutableStateOf<Long?>(null)
-    private var holdPrecomputeJob: Job? = null
+    private var pendingPrimaryPrePoseGeneration by mutableStateOf<Long?>(null)
+    private var holdPrecomputeObservationJob: Job? = null
     private var holdDetectionEnsureJob: Job? = null
     private var publishedAttemptResultSession: PublishedAttemptResultSession?
         get() = sessionDelegate.publishedAttemptResultSession
@@ -689,6 +708,7 @@ class UploadViewModel @Inject constructor(
 
     // --- 5. AttemptUploadScreen (異붽? ?곸긽 ?낅줈?? ---
     fun updateAdditionalVideoUris(uris: List<String>) {
+        invalidateSubmissionAnalysisPrewarm()
         sessionDelegate.updateAdditionalVideoUris(
             uris = uris,
             callbacks = sessionCallbacks
@@ -703,6 +723,7 @@ class UploadViewModel @Inject constructor(
      * - ???낅줈??諛곗튂瑜??쒖옉?????댁쟾 attempt-only ?좏깮媛믪쓣 鍮꾩썎?덈떎.
      */
     fun beginNewChallengeUploadFlow() {
+        invalidateSubmissionAnalysisPrewarm()
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
         clearHoldPrecomputeState()
@@ -740,6 +761,7 @@ class UploadViewModel @Inject constructor(
             return false
         }
 
+        invalidateSubmissionAnalysisPrewarm()
         captureCurrentAttemptResultSession()
         uploadFlowMode = UploadFlowMode.AttemptOnly
         allowLocalAnalysisWithoutChallenge = false
@@ -760,6 +782,7 @@ class UploadViewModel @Inject constructor(
      * - ?댄썑 諛붾줈 異붽? ?쒕룄 ?낅줈??紐⑤뱶濡?吏꾩엯?????덈뒗 ?곹깭瑜?留뚮벊?덈떎.
      */
     fun prepareExistingChallengeAttemptUpload(challenge: ChallengeSession) {
+        invalidateSubmissionAnalysisPrewarm()
         challengeDelegate.applyExistingChallenge(
             challenge = challenge,
             resolveHoldColorKey = { colorName ->
@@ -801,6 +824,7 @@ class UploadViewModel @Inject constructor(
      * 異붽? ?쒕룄 ?낅줈??紐⑤뱶瑜?痍⑥냼?섍퀬 ?먮옒 梨뚮┛吏 ?먮쫫 紐⑤뱶濡??뚯븘媛묐땲??
      */
     fun cancelAttemptOnlyUploadMode() {
+        invalidateSubmissionAnalysisPrewarm()
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
         resetAllSelectionPreparationJobs()
@@ -816,6 +840,7 @@ class UploadViewModel @Inject constructor(
     }
 
     fun setLocalAnalysisWithoutChallengeEnabled(enabled: Boolean) {
+        invalidateSubmissionAnalysisPrewarm()
         allowLocalAnalysisWithoutChallenge = enabled
         if (enabled) {
             uploadFlowMode = UploadFlowMode.FullChallenge
@@ -836,7 +861,7 @@ class UploadViewModel @Inject constructor(
                 longitude = longitude,
                 query = query,
                 nearbyOnly = nearbyOnly,
-                onChallengeFlowCleared = ::clearChallengeFlowState
+                onChallengeFlowCleared = ::clearChallengeSelectionStatePreservingHoldPrecompute
             )
         }
     }
@@ -845,7 +870,7 @@ class UploadViewModel @Inject constructor(
         viewModelScope.launch {
             challengeDelegate.resolveSelectedPlace(
                 place = place,
-                onChallengeFlowCleared = ::clearChallengeFlowState
+                onChallengeFlowCleared = ::clearChallengeSelectionStatePreservingHoldPrecompute
             )
         }
     }
@@ -859,6 +884,7 @@ class UploadViewModel @Inject constructor(
     }
 
     fun updateHoldColor(colorKey: String) {
+        invalidateSubmissionAnalysisPrewarm()
         challengeDelegate.updateHoldColor(colorKey) { colorName ->
             resolveHoldColorDisplayName(
                 colorName = colorName,
@@ -880,18 +906,58 @@ class UploadViewModel @Inject constructor(
     }
 
     fun finalizeHoldDetectionColorSelection() {
-        markHoldPrecomputeEligibleForCurrentSelection()
-        tryApplyCachedHoldFilter(updateUiStateOnSuccess = false)
+        val sourceVideoUri = videoUri
+        val reusedCachedFilter = tryApplyCachedHoldFilter(updateUiStateOnSuccess = false)
+        if (!reusedCachedFilter) {
+            val precomputeReady = holdDetectionDelegate.isPrecomputeReady(
+                selectionGeneration = selectionGeneration,
+                sourceVideoUri = sourceVideoUri
+            )
+            val precomputeRunning = holdDetectionDelegate.isPrecomputeRunning(
+                selectionGeneration = selectionGeneration,
+                sourceVideoUri = sourceVideoUri
+            )
+            if (!precomputeReady && !precomputeRunning) {
+                markHoldPrecomputeEligibleForCurrentSelection()
+            }
+        }
     }
 
     fun updateSelectedStartHold(hold: Hold) {
         holdDetectionDelegate.updateSelectedStartHold(hold)
         clearHoldReachAnalysis()
+        UploadAiTraceLogger.log(
+            event = "START_HOLD_SELECTED",
+            generation = selectionGeneration,
+            playbackUri = videoUri,
+            details = mapOf(
+                "holdNo" to hold.holdNo,
+                "detectedHoldCount" to detectedHolds.size
+            )
+        )
     }
 
     fun updateSelectedEndHold(hold: Hold) {
         holdDetectionDelegate.updateSelectedEndHold(hold)
         clearHoldReachAnalysis()
+        UploadAiTraceLogger.log(
+            event = "END_HOLD_SELECTED",
+            generation = selectionGeneration,
+            playbackUri = videoUri,
+            details = mapOf(
+                "holdNo" to hold.holdNo,
+                "numberedHoldCount" to numberedHolds.size
+            )
+        )
+        if (numberedHolds.isNotEmpty()) {
+            UploadAiTraceLogger.log(
+                event = "NUMBERED_HOLDS_READY",
+                generation = selectionGeneration,
+                playbackUri = videoUri,
+                details = mapOf("numberedHoldCount" to numberedHolds.size)
+            )
+        }
+        maybeStartSubmissionAnalysisPrewarmForCurrentSelection()
     }
 
     fun selectGymGrade(grade: GymGrade) {
@@ -920,6 +986,7 @@ class UploadViewModel @Inject constructor(
         realtimeSessionId: String? = null
     ) {
         clearHoldPrecomputeState()
+        invalidateSubmissionAnalysisPrewarm()
         holdDetectionDelegate.resetHoldDetectionState(clearDebugSource = true)
         sessionDelegate.updateVideoUri(
             uri = uri,
@@ -930,6 +997,7 @@ class UploadViewModel @Inject constructor(
 
     fun useDebugBestFrameImage(uri: String) {
         clearHoldPrecomputeState()
+        invalidateSubmissionAnalysisPrewarm()
         holdDetectionDelegate.useDebugBestFrameImage(uri)
         clearHoldReachAnalysis()
         _uiState.value = UploadUiState.Idle
@@ -950,11 +1018,51 @@ class UploadViewModel @Inject constructor(
         )
     }
 
-    private suspend fun awaitSubmitReadyPrePose(playbackUris: List<String>): TerminalPrePoseSnapshot {
+    private suspend fun awaitSubmitReadyPrePose(
+        playbackUris: List<String>,
+        emitLoading: Boolean = true
+    ): TerminalPrePoseSnapshot {
         return sessionDelegate.awaitSubmitReadyPrePose(
             playbackUris = playbackUris,
-            callbacks = sessionCallbacks
+            callbacks = sessionCallbacks,
+            emitLoading = emitLoading
         )
+    }
+
+    private fun onPrimaryVideoPrepared(
+        generation: Long,
+        playbackUri: String
+    ) {
+        if (generation != selectionGeneration || uploadFlowMode != UploadFlowMode.FullChallenge) {
+            return
+        }
+
+        videoUri = playbackUri
+        pendingPrimaryPrePoseGeneration = generation
+        holdPrecomputeRequestedGeneration = generation
+        UploadAiTraceLogger.log(
+            event = "PRIMARY_VIDEO_PREPARED",
+            generation = generation,
+            playbackUri = playbackUri,
+            details = mapOf("uploadFlowMode" to uploadFlowMode.name)
+        )
+        UploadAiTraceLogger.log(
+            event = "PREPOSE_PENDING_MARKED",
+            generation = generation,
+            playbackUri = playbackUri,
+            status = "pending"
+        )
+        invalidateSubmissionAnalysisPrewarm()
+        holdDetectionDelegate.requestHoldPrecompute(
+            selectionGeneration = generation,
+            sourceVideoUri = playbackUri
+        )
+        UploadAiTraceLogger.log(
+            event = "HOLD_PRECOMPUTE_REQUESTED",
+            generation = generation,
+            playbackUri = playbackUri
+        )
+        maybeStartHoldPrecomputeForCurrentSelection()
     }
 
     private fun maybeStartHoldPrecomputeForCurrentSelection() {
@@ -965,6 +1073,11 @@ class UploadViewModel @Inject constructor(
 
         val sourceVideoUri = videoUri
         if (sourceVideoUri == null && debugBestFrameImageUri == null) {
+            UploadAiTraceLogger.log(
+                event = "HOLD_PRECOMPUTE_SKIP_NO_SOURCE",
+                generation = selectionGeneration,
+                playbackUri = null
+            )
             return
         }
 
@@ -972,53 +1085,212 @@ class UploadViewModel @Inject constructor(
             selectionGeneration = selectionGeneration,
             sourceVideoUri = sourceVideoUri
         )
-
-        val gateOpen = if (sourceVideoUri == null) {
-            true
-        } else {
-            when (prePoseCacheEntries[sourceVideoUri]?.status) {
-                PrePoseStatus.Pending,
-                PrePoseStatus.Running -> false
-                PrePoseStatus.Ready,
-                PrePoseStatus.Failed -> true
-                null -> false
-            }
-        }
-
-        if (!gateOpen) {
-            return
-        }
-
-        if (
-            holdDetectionDelegate.isPrecomputeReady(
-                selectionGeneration = selectionGeneration,
-                sourceVideoUri = sourceVideoUri
-            ) ||
-            holdDetectionDelegate.isPrecomputeRunning(
+        when (
+            holdDetectionDelegate.ensurePrecomputeStarted(
+                scope = viewModelScope,
                 selectionGeneration = selectionGeneration,
                 sourceVideoUri = sourceVideoUri
             )
         ) {
-            return
-        }
+            UploadHoldDetectionDelegate.HoldDetectionPrecomputeStartResult.MissingSource -> {
+                UploadAiTraceLogger.log(
+                    event = "HOLD_PRECOMPUTE_SKIP_NO_SOURCE",
+                    generation = selectionGeneration,
+                    playbackUri = null
+                )
+            }
 
-        holdPrecomputeJob?.cancel()
-        holdPrecomputeJob = viewModelScope.launch {
-            holdDetectionDelegate.precomputeHoldDetection(
-                selectionGeneration = selectionGeneration,
-                sourceVideoUri = sourceVideoUri
-            ).onSuccess {
-                tryApplyCachedHoldFilter(updateUiStateOnSuccess = false)
-            }.onFailure { throwable ->
-                Log.w(TAG, "hold detection precompute failed", throwable)
+            UploadHoldDetectionDelegate.HoldDetectionPrecomputeStartResult.ReusedReady -> {
+                UploadAiTraceLogger.log(
+                    event = "HOLD_PRECOMPUTE_REUSE_READY",
+                    generation = selectionGeneration,
+                    playbackUri = sourceVideoUri,
+                    status = "ready"
+                )
+                maybeStartPrimaryPrePoseAfterHoldPrecompute()
+            }
+
+            UploadHoldDetectionDelegate.HoldDetectionPrecomputeStartResult.ReusedRunning -> {
+                UploadAiTraceLogger.log(
+                    event = "HOLD_PRECOMPUTE_REUSE_RUNNING",
+                    generation = selectionGeneration,
+                    playbackUri = sourceVideoUri,
+                    status = "running"
+                )
+                observeHoldPrecomputeTerminal(
+                    generation = selectionGeneration,
+                    sourceVideoUri = sourceVideoUri
+                )
+                maybeStartPrimaryPrePoseAfterHoldPrecompute()
+            }
+
+            UploadHoldDetectionDelegate.HoldDetectionPrecomputeStartResult.Started -> {
+                UploadAiTraceLogger.log(
+                    event = "HOLD_PRECOMPUTE_START",
+                    generation = selectionGeneration,
+                    playbackUri = sourceVideoUri
+                )
+                observeHoldPrecomputeTerminal(
+                    generation = selectionGeneration,
+                    sourceVideoUri = sourceVideoUri
+                )
             }
         }
     }
 
+    private fun observeHoldPrecomputeTerminal(
+        generation: Long,
+        sourceVideoUri: String?
+    ) {
+        holdPrecomputeObservationJob?.cancel()
+        holdPrecomputeObservationJob = viewModelScope.launch {
+            when (
+                holdDetectionDelegate.awaitPrecomputeTerminal(
+                    selectionGeneration = generation,
+                    sourceVideoUri = sourceVideoUri
+                )
+            ) {
+                UploadHoldDetectionDelegate.HoldDetectionPrecomputeTerminalResult.Ready -> {
+                    UploadAiTraceLogger.log(
+                        event = "HOLD_PRECOMPUTE_DONE",
+                        generation = generation,
+                        playbackUri = sourceVideoUri,
+                        status = "success"
+                    )
+                    maybeStartPrimaryPrePoseAfterHoldPrecompute()
+                    tryApplyCachedHoldFilter(updateUiStateOnSuccess = false)
+                }
+
+                UploadHoldDetectionDelegate.HoldDetectionPrecomputeTerminalResult.Failed -> {
+                    UploadAiTraceLogger.log(
+                        event = "HOLD_PRECOMPUTE_DONE",
+                        generation = generation,
+                        playbackUri = sourceVideoUri,
+                        status = "failed"
+                    )
+                    maybeStartPrimaryPrePoseAfterHoldPrecompute()
+                }
+
+                UploadHoldDetectionDelegate.HoldDetectionPrecomputeTerminalResult.Missing -> Unit
+            }
+        }
+    }
+
+    private fun maybeStartPrimaryPrePoseAfterHoldPrecompute() {
+        val pendingGeneration = pendingPrimaryPrePoseGeneration ?: return
+        if (pendingGeneration != selectionGeneration) {
+            pendingPrimaryPrePoseGeneration = null
+            return
+        }
+
+        val sourceVideoUri = videoUri ?: return
+        val holdReady = holdDetectionDelegate.isPrecomputeReady(
+            selectionGeneration = selectionGeneration,
+            sourceVideoUri = sourceVideoUri
+        )
+        val holdRunning = holdDetectionDelegate.isPrecomputeRunning(
+            selectionGeneration = selectionGeneration,
+            sourceVideoUri = sourceVideoUri
+        )
+        if (holdRunning) {
+            UploadAiTraceLogger.log(
+                event = "PREPOSE_WAIT_HOLD_RUNNING",
+                generation = selectionGeneration,
+                playbackUri = sourceVideoUri,
+                status = "waiting"
+            )
+            return
+        }
+
+        if (!holdReady) {
+            Log.d(TAG, "Hold precompute finished without ready state. Starting pre-pose anyway.")
+            UploadAiTraceLogger.log(
+                event = "PREPOSE_START_AFTER_HOLD_FAILED_OR_NOT_READY",
+                generation = selectionGeneration,
+                playbackUri = sourceVideoUri,
+                status = "hold_not_ready"
+            )
+        } else {
+            UploadAiTraceLogger.log(
+                event = "PREPOSE_START_AFTER_HOLD_TERMINAL",
+                generation = selectionGeneration,
+                playbackUri = sourceVideoUri,
+                status = "hold_ready"
+            )
+        }
+        pendingPrimaryPrePoseGeneration = null
+        refreshCurrentSelectionPrePoseTargets(selectionGeneration)
+    }
+
+    private fun maybeStartSubmissionAnalysisPrewarmForCurrentSelection() {
+        if (isAttemptOnlyUploadMode || uploadFlowMode != UploadFlowMode.FullChallenge) {
+            UploadAiTraceLogger.log(
+                event = "ANALYSIS_PREWARM_SKIP_ATTEMPT_ONLY",
+                generation = selectionGeneration,
+                playbackUri = videoUri,
+                status = uploadFlowMode.name
+            )
+            return
+        }
+        val request = buildCurrentSubmissionRequestOrNull() ?: return
+        if (request.numberedHolds.isEmpty() || request.bestFrameBitmap == null) {
+            UploadAiTraceLogger.log(
+                event = if (request.numberedHolds.isEmpty()) {
+                    "ANALYSIS_PREWARM_SKIP_MISSING_NUMBERED_HOLDS"
+                } else {
+                    "ANALYSIS_PREWARM_SKIP_MISSING_BITMAP"
+                },
+                generation = request.selectionGeneration,
+                playbackUri = request.attemptUris.firstOrNull(),
+                details = mapOf(
+                    "numberedHoldCount" to request.numberedHolds.size,
+                    "hasBestFrame" to (request.bestFrameBitmap != null)
+                )
+            )
+            return
+        }
+
+        submissionDelegate.requestAnalysisPrewarm(
+            scope = viewModelScope,
+            request = request,
+            callbacks = submissionCallbacks
+        )
+    }
+
+    private fun buildCurrentSubmissionRequestOrNull(): UploadSubmissionRequest? {
+        val currentVideoUri = videoUri
+        if (currentVideoUri == null && allAttemptUris.isEmpty()) {
+            return null
+        }
+
+        val currentChallengeId = challengeId
+        val useLocalAnalysisOnly = allowLocalAnalysisWithoutChallenge &&
+            !isAttemptOnlyUploadMode &&
+            (currentChallengeId == null || currentChallengeId <= 0L)
+
+        return UploadSubmissionRequest(
+            selectionGeneration = selectionGeneration,
+            challengeId = currentChallengeId,
+            useLocalAnalysisOnly = useLocalAnalysisOnly,
+            isAttemptOnlyUploadMode = isAttemptOnlyUploadMode,
+            attemptUris = allAttemptUris,
+            detectedHolds = detectedHolds,
+            numberedHolds = numberedHolds,
+            bestFrameBitmap = bestFrameBitmap,
+            aiMode = selectedAiAnalysisMode,
+            primaryRealtimeSessionId = primaryManagedVideo?.realtimeSessionId?.takeIf { it.isNotBlank() },
+            holdCoordinates = buildChallengeHoldCoordinates()
+        )
+    }
+
     private fun tryApplyCachedHoldFilter(updateUiStateOnSuccess: Boolean): Boolean {
+        val detectionTargetColor = resolveDetectionTargetHoldColor()
+        if (detectionTargetColor.isBlank()) {
+            return false
+        }
         return holdDetectionDelegate.applyHoldColorFilter(
             selectionGeneration = selectionGeneration,
-            detectionTargetColor = resolveDetectionTargetHoldColor()
+            detectionTargetColor = detectionTargetColor
         ).fold(
             onSuccess = { filterChanged ->
                 if (filterChanged) {
@@ -1035,6 +1307,10 @@ class UploadViewModel @Inject constructor(
         )
     }
 
+    private fun invalidateSubmissionAnalysisPrewarm() {
+        submissionDelegate.invalidateAnalysisPrewarm()
+    }
+
     private fun clearPosePrecomputeState(
         preservePlaybackUris: Set<String> = emptySet()
     ) {
@@ -1043,10 +1319,13 @@ class UploadViewModel @Inject constructor(
 
     private fun clearHoldPrecomputeState() {
         holdPrecomputeRequestedGeneration = null
-        holdPrecomputeJob?.cancel()
-        holdPrecomputeJob = null
+        pendingPrimaryPrePoseGeneration = null
+        holdPrecomputeObservationJob?.cancel()
+        holdPrecomputeObservationJob = null
+        holdDetectionDelegate.cancelPrecompute(clearDebugSource = false)
         holdDetectionEnsureJob?.cancel()
         holdDetectionEnsureJob = null
+        invalidateSubmissionAnalysisPrewarm()
     }
 
     private fun resetAllSelectionPreparationJobs() {
@@ -1154,20 +1433,32 @@ class UploadViewModel @Inject constructor(
             return
         }
 
-        val runningPrecompute = holdPrecomputeJob?.isActive == true ||
-            holdDetectionDelegate.isPrecomputeRunning(
-                selectionGeneration = selectionGeneration,
-                sourceVideoUri = sourceVideoUri
-            )
+        val runningPrecompute = holdDetectionDelegate.isPrecomputeRunning(
+            selectionGeneration = selectionGeneration,
+            sourceVideoUri = sourceVideoUri
+        )
 
         if (runningPrecompute) {
             _uiState.value = UploadUiState.Loading
             holdDetectionEnsureJob = viewModelScope.launch {
-                holdPrecomputeJob?.join()
-                if (tryApplyCachedHoldFilter(updateUiStateOnSuccess = true)) {
-                    return@launch
+                when (
+                    holdDetectionDelegate.awaitPrecomputeTerminal(
+                        selectionGeneration = selectionGeneration,
+                        sourceVideoUri = sourceVideoUri
+                    )
+                ) {
+                    UploadHoldDetectionDelegate.HoldDetectionPrecomputeTerminalResult.Ready -> {
+                        if (tryApplyCachedHoldFilter(updateUiStateOnSuccess = true)) {
+                            return@launch
+                        }
+                        runHoldDetection()
+                    }
+
+                    UploadHoldDetectionDelegate.HoldDetectionPrecomputeTerminalResult.Failed,
+                    UploadHoldDetectionDelegate.HoldDetectionPrecomputeTerminalResult.Missing -> {
+                        runHoldDetection()
+                    }
                 }
-                runHoldDetection()
             }
             return
         }
@@ -1189,6 +1480,7 @@ class UploadViewModel @Inject constructor(
             _uiState.value = UploadUiState.Loading
 
             holdDetectionDelegate.runHoldDetection(
+                scope = viewModelScope,
                 sourceVideoUri = sourceVideoUri,
                 detectionTargetColor = resolveDetectionTargetHoldColor(),
                 selectionGeneration = selectionGeneration
@@ -1207,31 +1499,40 @@ class UploadViewModel @Inject constructor(
      * 理쒖쥌 梨뚮┛吏 ?먮뒗 ?곸긽???쒕쾭???쒖텧?⑸땲??
      */
     fun submitUpload() {
+        when (analysisLoadingPhase) {
+            AnalysisLoadingPhase.AttemptResultPreparation -> submitUploadForAttemptResult()
+            AnalysisLoadingPhase.FinalAnalysisPreparation -> ensureFinalAnalysisReady()
+        }
+    }
+
+    private fun submitUploadForAttemptResult() {
         if (uploadSubmissionUiState.value is UploadSubmissionUiState.Loading) {
             return
         }
 
         viewModelScope.launch {
             awaitActiveSelectionPreparation()
+            val request = buildCurrentSubmissionRequestOrNull() ?: return@launch
 
-            val currentChallengeId = challengeId
-            val useLocalAnalysisOnly = allowLocalAnalysisWithoutChallenge &&
-                !isAttemptOnlyUploadMode &&
-                (currentChallengeId == null || currentChallengeId <= 0L)
+            submissionDelegate.submitUploadForAttemptResult(
+                scope = viewModelScope,
+                request = request,
+                callbacks = submissionCallbacks
+            )
+        }
+    }
 
-            submissionDelegate.submitUpload(
-                request = UploadSubmissionRequest(
-                    challengeId = currentChallengeId,
-                    useLocalAnalysisOnly = useLocalAnalysisOnly,
-                    isAttemptOnlyUploadMode = isAttemptOnlyUploadMode,
-                    attemptUris = allAttemptUris,
-                    detectedHolds = detectedHolds,
-                    numberedHolds = numberedHolds,
-                    bestFrameBitmap = bestFrameBitmap,
-                    aiMode = selectedAiAnalysisMode,
-                    primaryRealtimeSessionId = primaryManagedVideo?.realtimeSessionId?.takeIf { it.isNotBlank() },
-                    holdCoordinates = buildChallengeHoldCoordinates()
-                ),
+    fun ensureFinalAnalysisReady() {
+        if (finalAnalysisPreparationUiState.value is FinalAnalysisPreparationUiState.Loading) {
+            return
+        }
+
+        viewModelScope.launch {
+            awaitActiveSelectionPreparation()
+            val request = buildCurrentSubmissionRequestOrNull() ?: return@launch
+
+            submissionDelegate.ensureFinalAnalysisReady(
+                request = request,
                 callbacks = submissionCallbacks
             )
         }
@@ -1276,6 +1577,20 @@ class UploadViewModel @Inject constructor(
         }
     }
 
+    fun retryCurrentAnalysisLoadingPhase() {
+        when (analysisLoadingPhase) {
+            AnalysisLoadingPhase.AttemptResultPreparation -> {
+                submissionDelegate.resetUploadSubmissionState()
+                submitUploadForAttemptResult()
+            }
+
+            AnalysisLoadingPhase.FinalAnalysisPreparation -> {
+                submissionDelegate.resetFinalAnalysisPreparationState()
+                ensureFinalAnalysisReady()
+            }
+        }
+    }
+
     fun resetState() {
         holdDetectionEnsureJob?.cancel()
         _uiState.value = UploadUiState.Idle
@@ -1290,11 +1605,45 @@ class UploadViewModel @Inject constructor(
         submissionDelegate.resetUploadSubmissionState()
     }
 
+    fun resetFinalAnalysisPreparationState() {
+        submissionDelegate.resetFinalAnalysisPreparationState()
+    }
+
+    fun prepareAttemptResultAnalysisLoading() {
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        submissionDelegate.resetUploadSubmissionState()
+    }
+
+    fun prepareFinalAnalysisLoading() {
+        analysisLoadingPhase = AnalysisLoadingPhase.FinalAnalysisPreparation
+        submissionDelegate.resetFinalAnalysisPreparationState()
+    }
+
+    fun consumeBackgroundUploadNotice(id: Long) {
+        submissionDelegate.consumeBackgroundUploadNotice(id)
+    }
+
+    fun retryBackgroundAttemptUpload() {
+        submissionDelegate.retryBackgroundAttemptUpload(
+            scope = viewModelScope,
+            callbacks = submissionCallbacks
+        )
+    }
+
     private fun clearChallengeFlowState() {
         challengeDelegate.clearSelectionState()
         clearHoldPrecomputeState()
         clearSelectedHoldSelection()
         clearCreatedChallengeOnly()
+    }
+
+    private fun clearChallengeSelectionStatePreservingHoldPrecompute() {
+        holdDetectionEnsureJob?.cancel()
+        holdDetectionEnsureJob = null
+        challengeDelegate.clearSelectionState()
+        holdDetectionDelegate.clearAppliedHoldStatePreservingSourceCache()
+        clearCreatedChallengeOnly()
+        _uiState.value = UploadUiState.Idle
     }
 
     private fun clearCreatedChallengeOnly() {
@@ -1323,6 +1672,7 @@ class UploadViewModel @Inject constructor(
     }
 
     private fun clearAiAnalysisState() {
+        invalidateSubmissionAnalysisPrewarm()
         submissionDelegate.clearAiAnalysisState(submissionCallbacks)
     }
 
@@ -1335,10 +1685,12 @@ class UploadViewModel @Inject constructor(
     }
 
     private fun clearHoldReachAnalysis() {
+        invalidateSubmissionAnalysisPrewarm()
         submissionDelegate.clearHoldReachAnalysis(submissionCallbacks)
     }
 
     private fun clearAttemptResultState(clearPublishedSession: Boolean) {
+        invalidateSubmissionAnalysisPrewarm()
         submissionDelegate.clearAttemptResultState(
             callbacks = submissionCallbacks,
             clearPublishedSession = clearPublishedSession

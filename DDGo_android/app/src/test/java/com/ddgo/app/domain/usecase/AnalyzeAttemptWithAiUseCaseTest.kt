@@ -126,7 +126,7 @@ class AnalyzeAttemptWithAiUseCaseTest {
         val useCase = AnalyzeAttemptWithAiUseCase(provider, repository)
         val cachedPoseSequence = provider.analyzePoseSequence(
             videoUri = "file:///cached_attempt.mp4",
-            analysisFpsLimit = 30
+            analysisFpsLimit = 10
         )
         provider.callCount = 0
         provider.lastVideoUri = null

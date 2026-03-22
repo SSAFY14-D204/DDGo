@@ -39,3 +39,28 @@ sealed class UploadSubmissionUiState {
     data class Success(val uploadedAttempts: List<UploadedAttemptVideo>) : UploadSubmissionUiState()
     data class Error(val message: String) : UploadSubmissionUiState()
 }
+
+enum class AnalysisLoadingPhase {
+    AttemptResultPreparation,
+    FinalAnalysisPreparation
+}
+
+sealed class FinalAnalysisPreparationUiState {
+    object Idle : FinalAnalysisPreparationUiState()
+    object Loading : FinalAnalysisPreparationUiState()
+    object Success : FinalAnalysisPreparationUiState()
+    data class Error(val message: String) : FinalAnalysisPreparationUiState()
+}
+
+enum class BackgroundUploadState {
+    Idle,
+    Running,
+    Ready,
+    Failed
+}
+
+data class BackgroundUploadNotice(
+    val id: Long,
+    val message: String,
+    val actionLabel: String? = null
+)

@@ -14,29 +14,18 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.util.Log
-import com.ddgo.app.domain.model.AiPayloadSource
-import com.ddgo.app.domain.model.AiLandmark3D
 import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.model.AiPoseSequence
-import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PrePoseVideoAnalysisResult
-import com.ddgo.app.domain.model.ProcessedPoseDetectionFrame
 import com.ddgo.app.domain.repository.AiPoseSequenceProvider
-import com.ddgo.app.domain.model.PoseLandmark
-import com.ddgo.app.domain.model.PosePixelPoint
-import com.ddgo.app.domain.model.PoseWorldPoint
 import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
-import com.google.mediapipe.framework.image.BitmapImageBuilder
-import com.google.mediapipe.tasks.components.containers.Landmark
-import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
-import java.time.Instant
-import java.util.Optional
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
 import kotlin.math.max
@@ -99,7 +88,12 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         analysisFpsLimit: Int,
         cancellationCheckpoint: () -> Unit
     ): PoseSequenceAnalysisResult {
-        val poseLandmarker = createPoseLandmarker() ?: return emptyAnalysisResult(videoUri, analysisFpsLimit)
+        val poseLandmarker = createPoseLandmarker()
+            ?: return emptyPrePoseAnalysisResult(
+                videoUri = videoUri,
+                analysisFpsLimit = analysisFpsLimit,
+                generator = TAG
+            )
 
         try {
             return analyzeSequentialFrames(
@@ -129,7 +123,11 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             val videoTrackIndex = findVideoTrackIndex(extractor)
             if (videoTrackIndex == -1) {
                 Log.w(TAG, "No video track found.")
-                return emptyAnalysisResult(uri.toString(), analysisFpsLimit)
+                return emptyPrePoseAnalysisResult(
+                    videoUri = uri.toString(),
+                    analysisFpsLimit = analysisFpsLimit,
+                    generator = TAG
+                )
             }
 
             extractor.selectTrack(videoTrackIndex)
@@ -293,33 +291,19 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             "Sequential pose decode completed: decoded=$decodedFrameCount, processed=$processedFrameCount, skipped=$skippedFrameCount, poses=${poses.size}"
         )
 
-        return PoseSequenceAnalysisResult(
-            sequence = AiPoseSequence(
-                source = AiPayloadSource(
-                    videoUri = sourceUri.toString(),
-                    generator = TAG,
-                    exportedAtIso = Instant.now().toString(),
-                    uri = sourceUri.toString(),
-                    displayName = sourceUri.lastPathSegment,
-                    mimeType = mimeType,
-                    path = if (sourceUri.scheme == "file") sourceUri.path else null,
-                    legacySourceFile = sourceUri.toString()
-                ),
-                videoMetadata = AiVideoMetadata(
-                    frameWidth = frameWidth,
-                    frameHeight = frameHeight,
-                    fps = frameRate?.toFloat(),
-                    totalFrames = decodedFrameCount,
-                    processedFrames = processedFrameCount,
-                    frameStep = normalizedAnalysisFpsLimit,
-                    rotationDegrees = rotationDegrees,
-                    mimeType = mimeType,
-                    analysisFpsLimit = normalizedAnalysisFpsLimit,
-                    decodedFrameCount = decodedFrameCount,
-                    skippedFrameCount = skippedFrameCount
-                ),
-                frames = aiFrames
-            ),
+        return buildPoseSequenceAnalysisResult(
+            sourceUri = sourceUri,
+            generator = TAG,
+            mimeType = mimeType,
+            frameWidth = frameWidth,
+            frameHeight = frameHeight,
+            frameRate = frameRate,
+            analysisFpsLimit = normalizedAnalysisFpsLimit,
+            rotationDegrees = rotationDegrees,
+            decodedFrameCount = decodedFrameCount,
+            processedFrameCount = processedFrameCount,
+            skippedFrameCount = skippedFrameCount,
+            aiFrames = aiFrames,
             poses = poses
         )
     }
@@ -339,13 +323,13 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             val preparedFrame = rawBitmap.prepareForInference(rotationDegrees)
 
             try {
-                return inferPose(
+                return inferPoseCaptureFromBitmap(
                     poseLandmarker = poseLandmarker,
                     frameBitmap = preparedFrame.bitmap,
                     frameTimeMs = presentationTimeUs / 1_000L,
                     frameIndex = frameIndex,
-                    frameWidthPx = preparedFrame.referenceWidthPx,
-                    frameHeightPx = preparedFrame.referenceHeightPx
+                    referenceWidthPx = preparedFrame.referenceWidthPx,
+                    referenceHeightPx = preparedFrame.referenceHeightPx
                 )
             } finally {
                 if (preparedFrame.bitmap !== rawBitmap) {
@@ -358,80 +342,13 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         }
     }
 
-    private fun inferPose(
-        poseLandmarker: PoseLandmarker,
-        frameBitmap: Bitmap,
-        frameTimeMs: Long,
-        frameIndex: Int,
-        frameWidthPx: Int,
-        frameHeightPx: Int
-    ): PoseCapture {
-        val mpImage = BitmapImageBuilder(frameBitmap).build()
-
-        try {
-            val result = poseLandmarker.detectForVideo(mpImage, frameTimeMs)
-            val landmarks = result.landmarks().firstOrNull().orEmpty()
-            val worldLandmarks = result.worldLandmarks().firstOrNull().orEmpty()
-
-            val pose = if (landmarks.isEmpty()) {
-                null
-            } else {
-                landmarks.toPose(
-                frameTimeMs = result.timestampMs(),
-                frameWidthPx = frameWidthPx,
-                frameHeightPx = frameHeightPx,
-                    worldLandmarks = worldLandmarks
-                )
-            }
-
-            return PoseCapture(
-                frame = AiPoseFrame(
-                    frameIndex = frameIndex,
-                    timestampMs = result.timestampMs(),
-                    poseDetected = pose != null,
-                    poseLandmarks = landmarks.mapIndexed { index, landmark ->
-                        landmark.toAiLandmark(
-                            index = index,
-                            xSelector = { x() },
-                            ySelector = { y() },
-                            zSelector = { z() },
-                            visibilitySelector = { visibility().toNullable() },
-                            presenceSelector = { presence().toNullable() }
-                        )
-                    },
-                    poseWorldLandmarks = worldLandmarks.mapIndexed { index, landmark ->
-                        landmark.toAiLandmark(
-                            index = index,
-                            xSelector = { x() },
-                            ySelector = { y() },
-                            zSelector = { z() },
-                            visibilitySelector = { visibility().toNullable() },
-                            presenceSelector = { presence().toNullable() }
-                        )
-                    }
-                ),
-                pose = pose
-            )
-        } finally {
-            mpImage.close()
-        }
-    }
-
     private fun createPoseLandmarker(): PoseLandmarker? {
         return try {
-            val baseOptions = BaseOptions.builder()
-                .setModelAssetPath(POSE_MODEL_PATH)
-                .build()
-            val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-                .setBaseOptions(baseOptions)
-                .setRunningMode(RunningMode.VIDEO)
-                .setNumPoses(1)
-                .setMinPoseDetectionConfidence(0.5f)
-                .setMinPosePresenceConfidence(0.5f)
-                .setMinTrackingConfidence(0.5f)
-                .build()
-
-            PoseLandmarker.createFromOptions(context, options)
+            runCatching { createPoseLandmarker(delegate = Delegate.GPU) }
+                .onFailure { error ->
+                    Log.w(TAG, "GPU delegate unavailable for upload pre-pose. Falling back to CPU.", error)
+                }
+                .getOrElse { createPoseLandmarker(delegate = null) }
         } catch (error: UnsatisfiedLinkError) {
             Log.w(TAG, "MediaPipe video analyzer is unavailable on this device.", error)
             null
@@ -439,6 +356,25 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
             Log.e(TAG, "Failed to create pose landmarker.", error)
             null
         }
+    }
+
+    private fun createPoseLandmarker(delegate: Delegate?): PoseLandmarker {
+        val baseOptionsBuilder = BaseOptions.builder()
+            .setModelAssetPath(POSE_MODEL_PATH)
+        if (delegate != null) {
+            baseOptionsBuilder.setDelegate(delegate)
+        }
+
+        val options = PoseLandmarker.PoseLandmarkerOptions.builder()
+            .setBaseOptions(baseOptionsBuilder.build())
+            .setRunningMode(RunningMode.VIDEO)
+            .setNumPoses(1)
+            .setMinPoseDetectionConfidence(0.5f)
+            .setMinPosePresenceConfidence(0.5f)
+            .setMinTrackingConfidence(0.5f)
+            .build()
+
+        return PoseLandmarker.createFromOptions(context, options)
     }
 
     private fun createVideoDecoder(
@@ -579,64 +515,6 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         return output
     }
 
-    private fun List<NormalizedLandmark>.toPose(
-        frameTimeMs: Long,
-        frameWidthPx: Int,
-        frameHeightPx: Int,
-        worldLandmarks: List<Landmark>
-    ): Pose = Pose(
-        frameTimeMs = frameTimeMs,
-        landmarks = mapIndexed { index, landmark ->
-            PoseLandmark(
-                index = index,
-                x = landmark.x(),
-                y = landmark.y(),
-                z = landmark.z(),
-                visibility = landmark.visibility().toNullable(),
-                presence = landmark.presence().toNullable()
-            )
-        },
-        landmarksPx = toNamedPixelMap(
-            frameWidthPx = frameWidthPx,
-            frameHeightPx = frameHeightPx
-        ),
-        worldLandmarksSample = worldLandmarks.toNamedWorldMap()
-    )
-
-    private fun List<NormalizedLandmark>.toNamedPixelMap(
-        frameWidthPx: Int,
-        frameHeightPx: Int
-    ): Map<String, PosePixelPoint> {
-        if (isEmpty()) return emptyMap()
-
-        val points = linkedMapOf<String, PosePixelPoint>()
-        POSE_DTO_LANDMARK_NAMES_BY_INDEX.forEach { (index, landmarkName) ->
-            getOrNull(index)?.let { landmark ->
-                points[landmarkName] = PosePixelPoint(
-                    x = landmark.x() * frameWidthPx.toFloat(),
-                    y = landmark.y() * frameHeightPx.toFloat()
-                )
-            }
-        }
-        return points
-    }
-
-    private fun List<Landmark>.toNamedWorldMap(): Map<String, PoseWorldPoint> {
-        if (isEmpty()) return emptyMap()
-
-        val points = linkedMapOf<String, PoseWorldPoint>()
-        POSE_DTO_LANDMARK_NAMES_BY_INDEX.forEach { (index, landmarkName) ->
-            getOrNull(index)?.let { landmark ->
-                points[landmarkName] = PoseWorldPoint(
-                    x = landmark.x(),
-                    y = landmark.y(),
-                    z = landmark.z()
-                )
-            }
-        }
-        return points
-    }
-
     private fun Bitmap.prepareForInference(rotationDegrees: Int): PreparedInferenceBitmap {
         val orientedBitmap = if (rotationDegrees == 0) {
             this
@@ -670,26 +548,6 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         )
     }
 
-    private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
-
-    private inline fun <T> T.toAiLandmark(
-        index: Int,
-        xSelector: T.() -> Float,
-        ySelector: T.() -> Float,
-        zSelector: T.() -> Float,
-        visibilitySelector: T.() -> Float? = { null },
-        presenceSelector: T.() -> Float? = { null }
-    ): AiLandmark3D {
-        return AiLandmark3D(
-            index = index,
-            x = xSelector(),
-            y = ySelector(),
-            z = zSelector(),
-            visibility = visibilitySelector(),
-            presence = presenceSelector()
-        )
-    }
-
     private data class PreparedInferenceBitmap(
         val bitmap: Bitmap,
         val referenceWidthPx: Int,
@@ -702,76 +560,5 @@ class SequentialPoseVideoAnalyzer @Inject constructor(
         private const val DEQUEUE_TIMEOUT_US = 10_000L
         private const val MAX_INFERENCE_DIMENSION_PX = 640
         private const val DEFAULT_ANALYSIS_FPS_LIMIT = 10
-        private val POSE_DTO_LANDMARK_NAMES_BY_INDEX = linkedMapOf(
-            11 to "left_shoulder",
-            12 to "right_shoulder",
-            13 to "left_elbow",
-            14 to "right_elbow",
-            15 to "left_wrist",
-            16 to "right_wrist",
-            19 to "left_hand_tip",
-            20 to "right_hand_tip",
-            23 to "left_hip",
-            24 to "right_hip",
-            25 to "left_knee",
-            26 to "right_knee",
-            27 to "left_ankle",
-            28 to "right_ankle"
-        )
     }
-}
-
-private data class PoseCapture(
-    val frame: AiPoseFrame,
-    val pose: Pose?
-)
-
-private data class PoseSequenceAnalysisResult(
-    val sequence: AiPoseSequence,
-    val poses: List<Pose>
-)
-
-private fun PoseSequenceAnalysisResult.toPrePoseVideoAnalysisResult(): PrePoseVideoAnalysisResult {
-    return PrePoseVideoAnalysisResult(
-        aiPoseSequence = sequence,
-        poses = poses,
-        processedFrames = sequence.frames.map { frame ->
-            ProcessedPoseDetectionFrame(
-                timestampMs = frame.timestampMs,
-                poseDetected = frame.poseDetected
-            )
-        }
-    )
-}
-
-private fun emptyAnalysisResult(
-    videoUri: String,
-    analysisFpsLimit: Int
-): PoseSequenceAnalysisResult {
-    return PoseSequenceAnalysisResult(
-        sequence = AiPoseSequence(
-            source = AiPayloadSource(
-                videoUri = videoUri,
-                generator = "SequentialPoseVideoAnalyzer",
-                exportedAtIso = Instant.now().toString(),
-                uri = videoUri,
-                legacySourceFile = videoUri
-            ),
-            videoMetadata = AiVideoMetadata(
-                frameWidth = 0,
-                frameHeight = 0,
-                fps = null,
-                totalFrames = 0,
-                processedFrames = 0,
-                frameStep = analysisFpsLimit.coerceAtLeast(1),
-                rotationDegrees = 0,
-                mimeType = null,
-                analysisFpsLimit = analysisFpsLimit.coerceAtLeast(1),
-                decodedFrameCount = 0,
-                skippedFrameCount = 0
-            ),
-            frames = emptyList()
-        ),
-        poses = emptyList()
-    )
 }

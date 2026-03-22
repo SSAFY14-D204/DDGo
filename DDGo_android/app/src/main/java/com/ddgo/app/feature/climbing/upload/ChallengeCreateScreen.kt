@@ -132,10 +132,7 @@ fun ChallengeCreateScreen(
     when (step) {
         CreateStep.GYM_NAME -> GymNameStep(
             viewModel = viewModel,
-            onNext = {
-                viewModel.markHoldPrecomputeEligibleForCurrentSelection()
-                step = CreateStep.LEVEL
-            },
+            onNext = { step = CreateStep.LEVEL },
             onBack = handleBack
         )
 

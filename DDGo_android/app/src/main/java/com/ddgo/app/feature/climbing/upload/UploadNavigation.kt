@@ -146,6 +146,7 @@ fun NavGraphBuilder.uploadGraph(
                 viewModel = viewModel,
                 onNavigateToNext = {
                     val nextRoute = if (viewModel.isAttemptOnlyUploadMode) {
+                        viewModel.prepareAttemptResultAnalysisLoading()
                         ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING
                     } else {
                         ScreenRoutes.Climbing.Upload.HOLD_SELECT
@@ -165,6 +166,7 @@ fun NavGraphBuilder.uploadGraph(
             HoldSelectScreen(
                 viewModel = viewModel,
                 onNavigateToNext = {
+                    viewModel.prepareAttemptResultAnalysisLoading()
                     navController.navigate(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING)
                 }
             )
@@ -179,15 +181,28 @@ fun NavGraphBuilder.uploadGraph(
             AnalysisLoadingScreen(
                 viewModel = viewModel,
                 onLoadingFinished = {
-                    val popUpRoute = if (viewModel.isAttemptOnlyUploadMode) {
-                        ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD
-                    } else {
-                        ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD
-                    }
+                    when (viewModel.analysisLoadingPhase) {
+                        AnalysisLoadingPhase.AttemptResultPreparation -> {
+                            val popUpRoute = if (viewModel.isAttemptOnlyUploadMode) {
+                                ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD
+                            } else {
+                                ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD
+                            }
 
-                    navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) {
-                        popUpTo(popUpRoute) {
-                            inclusive = true
+                            navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) {
+                                popUpTo(popUpRoute) {
+                                    inclusive = true
+                                }
+                            }
+                        }
+
+                        AnalysisLoadingPhase.FinalAnalysisPreparation -> {
+                            navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) {
+                                popUpTo(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) {
+                                    inclusive = true
+                                }
+                                launchSingleTop = true
+                            }
                         }
                     }
                 }
@@ -203,7 +218,12 @@ fun NavGraphBuilder.uploadGraph(
             AttemptResultScreen(
                 viewModel = viewModel,
                 onNavigateToCompare = {
-                    navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS)
+                    if (viewModel.isAttemptOnlyUploadMode) {
+                        navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS)
+                    } else {
+                        viewModel.prepareFinalAnalysisLoading()
+                        navController.navigate(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING)
+                    }
                 },
                 onNavigateToAddAttempt = {
                     if (viewModel.enterAttemptOnlyUploadMode()) {

@@ -114,14 +114,34 @@ private fun TwoPhaseHoldSelection(
             onConfirm     = {
                 when (currentPhase) {
                     SelectionPhase.START -> {
+                        val selectedHold = viewModel.detectedHolds[selectedStartIndex]
+                        UploadAiTraceLogger.log(
+                            event = "HOLD_SELECT_CONFIRM_START",
+                            playbackUri = viewModel.videoUri,
+                            phase = "HoldSelect",
+                            details = mapOf(
+                                "selectedIndex" to selectedStartIndex,
+                                "bbox" to selectedHold.boundingBox.toString()
+                            )
+                        )
                         viewModel.updateSelectedStartHold(
-                            viewModel.detectedHolds[selectedStartIndex]
+                            selectedHold
                         )
                         phase = SelectionPhase.END
                     }
                     SelectionPhase.END -> {
+                        val selectedHold = viewModel.detectedHolds[selectedEndIndex]
+                        UploadAiTraceLogger.log(
+                            event = "HOLD_SELECT_CONFIRM_END",
+                            playbackUri = viewModel.videoUri,
+                            phase = "HoldSelect",
+                            details = mapOf(
+                                "selectedIndex" to selectedEndIndex,
+                                "bbox" to selectedHold.boundingBox.toString()
+                            )
+                        )
                         viewModel.updateSelectedEndHold(
-                            viewModel.detectedHolds[selectedEndIndex]
+                            selectedHold
                         )
                         viewModel.resetState()
                         onNavigateToNext()

@@ -1,5 +1,8 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.route
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -7,7 +10,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.feature.climbing.upload.UploadBackgroundUploadSnackbarHost
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
 import com.ddgo.app.feature.climbing.upload.buildChallengeFinalAnalysisSummary
 import com.ddgo.app.feature.climbing.upload.buildFinalAnalysisAttemptSummaries
@@ -129,13 +136,22 @@ fun ChallengeFinalAnalysisRoute(
         )
     }
 
-    ChallengeFinalAnalysisPage(
-        state = pageState,
-        selectedTab = selectedTab,
-        onNavigateBack = onNavigateBack,
-        onTabSelected = { selectedTab = it },
-        onPrimaryAction = onNavigateToMain
-    )
+    Box(modifier = Modifier.fillMaxSize()) {
+        ChallengeFinalAnalysisPage(
+            state = pageState,
+            selectedTab = selectedTab,
+            onNavigateBack = onNavigateBack,
+            onTabSelected = { selectedTab = it },
+            onPrimaryAction = onNavigateToMain
+        )
+
+        UploadBackgroundUploadSnackbarHost(
+            viewModel = viewModel,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 20.dp, vertical = 32.dp)
+        )
+    }
 }
 
 private data class ChallengeCloseRouteSummary(

@@ -86,6 +86,7 @@ fun PrePoseLandmarkerScreen(
     val selectedVideoUri = uiState.selectedVideoUri
     val selectedVideoName = uiState.selectedVideoName
     var useOptimized by remember { mutableStateOf(true) }
+    var useGpuAcceleration by remember { mutableStateOf(uiState.useGpuAcceleration) }
     var analysisFpsLimit by remember { mutableIntStateOf(uiState.analysisFpsLimit) }
     val analysisFpsOptions = remember { listOf(10, 20, 30) }
 
@@ -98,6 +99,7 @@ fun PrePoseLandmarkerScreen(
             uri = uri,
             displayName = context.resolveDisplayName(uri),
             useOptimized = useOptimized,
+            useGpuAcceleration = useGpuAcceleration,
             analysisFpsLimit = analysisFpsLimit
         )
     }
@@ -144,13 +146,13 @@ fun PrePoseLandmarkerScreen(
                             Text("현재 두 가지 분석 모드를 지원합니다:", fontWeight = FontWeight.Bold)
 
                             Text("1. 일반 모드 (Normal)", fontWeight = FontWeight.SemiBold)
-                            Text("• 방식: MediaCodec(YUV) → Bitmap 변환(ARGB) → CPU 리사이징 → MediaPipe(CPU/GPU)")
+                            Text("• 방식: MediaCodec(YUV) → Bitmap 변환(ARGB) → CPU 리사이징 → MediaPipe(CPU/GPU 선택)")
                             Text("• 단점: Java 레이어의 Bitmap 생성 및 픽셀 변환 오버헤드가 큼")
 
                             Text("2. 최적화 모드 (Optimized)", fontWeight = FontWeight.SemiBold)
-                            Text("• 방식: MediaCodec(YUV) → MediaImageBuilder → MediaPipe(GPU)")
-                            Text("• 장점: Bitmap 변환 생략(Zero-Copy 지향), GPU Delegate 강제 활성화, 회전 정보 처리")
-                            Text("• 결과: 분석 속도가 약 2~5배 향상되며 배터리 소모 감소")
+                            Text("• 방식: MediaCodec(YUV) → MediaImageBuilder → MediaPipe(CPU/GPU 선택)")
+                            Text("• 장점: Bitmap 변환 생략(Zero-Copy 지향), 회전 정보 처리")
+                            Text("• GPU를 켜면 지원 기기에서 더 빠를 수 있고, 실패 시 CPU로 자동 폴백됩니다.")
                         }
                     },
                     confirmButton = {
@@ -175,7 +177,19 @@ fun PrePoseLandmarkerScreen(
                     onCheckedChange = { useOptimized = it },
                     enabled = !uiState.isAnalyzing
                 )
-                Text("최적화 모드 사용 (Bitmap 패스, GPU 가속)")
+                Text("최적화 모드 사용 (Surface/Zero-Copy 경로)")
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Checkbox(
+                    checked = useGpuAcceleration,
+                    onCheckedChange = { useGpuAcceleration = it },
+                    enabled = !uiState.isAnalyzing
+                )
+                Text("MediaPipe GPU 가속 사용")
             }
 
             Text(

@@ -2,6 +2,7 @@ package com.ddgo.app.di
 
 import com.ddgo.app.data.ml.mediapipe.PoseEstimatorImpl
 import com.ddgo.app.data.ml.mediapipe.LivePoseLandmarkerAnalyzer
+import com.ddgo.app.data.ml.mediapipe.OptimizedPrePoseVideoAnalysisProvider
 import com.ddgo.app.data.ml.mediapipe.SequentialPoseVideoAnalyzer
 import com.ddgo.app.data.ml.persondetect.PersonDetectorImpl
 import com.ddgo.app.data.ml.yolo.HoldDetectorImpl
@@ -55,7 +56,7 @@ abstract class MlModule {
     @Binds
     @Singleton
     abstract fun bindPrePoseVideoAnalysisProvider(
-        impl: SequentialPoseVideoAnalyzer
+        impl: OptimizedPrePoseVideoAnalysisProvider
     ): PrePoseVideoAnalysisProvider
 
     @Binds
