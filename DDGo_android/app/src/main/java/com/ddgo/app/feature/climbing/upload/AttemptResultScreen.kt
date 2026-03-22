@@ -268,6 +268,7 @@ fun AttemptResultScreen(
     }
 
     SafeAreaScreen(containerColor = C_BG) {
+        Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -550,6 +551,14 @@ fun AttemptResultScreen(
                     }
                 }
             }
+        }
+
+        UploadBackgroundUploadSnackbarHost(
+            viewModel = viewModel,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 20.dp, vertical = 96.dp)
+        )
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.climbing.upload
 
+import android.os.SystemClock
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,12 +12,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -33,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.R
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import kotlinx.coroutines.delay
 
@@ -42,16 +45,74 @@ fun AnalysisLoadingScreen(
     onLoadingFinished: () -> Unit = {}
 ) {
     val uploadSubmissionUiState by viewModel.uploadSubmissionUiState.collectAsState()
+    val finalAnalysisPreparationUiState by viewModel.finalAnalysisPreparationUiState.collectAsState()
+    val phase = viewModel.analysisLoadingPhase
+    val screenShownAtMillis = remember(phase) { SystemClock.elapsedRealtime() }
+    val phaseTitle = when (phase) {
+        AnalysisLoadingPhase.AttemptResultPreparation -> "자세를 분석중입니다."
+        AnalysisLoadingPhase.FinalAnalysisPreparation -> "최종 결과물을 가져오고 있습니다."
+    }
+    val isSuccess = when (phase) {
+        AnalysisLoadingPhase.AttemptResultPreparation ->
+            uploadSubmissionUiState is UploadSubmissionUiState.Success
+        AnalysisLoadingPhase.FinalAnalysisPreparation ->
+            finalAnalysisPreparationUiState is FinalAnalysisPreparationUiState.Success
+    }
+    val errorMessage = when (phase) {
+        AnalysisLoadingPhase.AttemptResultPreparation ->
+            (uploadSubmissionUiState as? UploadSubmissionUiState.Error)?.message
+        AnalysisLoadingPhase.FinalAnalysisPreparation ->
+            (finalAnalysisPreparationUiState as? FinalAnalysisPreparationUiState.Error)?.message
+    }
+    val tracePhaseName = when (phase) {
+        AnalysisLoadingPhase.AttemptResultPreparation -> "AttemptResultPreparation"
+        AnalysisLoadingPhase.FinalAnalysisPreparation -> "FinalAnalysisPreparation"
+    }
 
-    LaunchedEffect(Unit) {
-        if (uploadSubmissionUiState is UploadSubmissionUiState.Idle) {
+    LaunchedEffect(phase) {
+        UploadAiTraceLogger.log(
+            event = "ANALYSIS_LOADING_ENTER",
+            phase = tracePhaseName,
+            details = mapOf("title" to phaseTitle)
+        )
+    }
+
+    LaunchedEffect(phase, uploadSubmissionUiState, finalAnalysisPreparationUiState) {
+        val shouldStart = when (phase) {
+            AnalysisLoadingPhase.AttemptResultPreparation ->
+                uploadSubmissionUiState is UploadSubmissionUiState.Idle
+            AnalysisLoadingPhase.FinalAnalysisPreparation ->
+                finalAnalysisPreparationUiState is FinalAnalysisPreparationUiState.Idle
+        }
+        if (shouldStart) {
+            UploadAiTraceLogger.log(
+                event = "ANALYSIS_LOADING_TRIGGER_SUBMIT",
+                phase = tracePhaseName
+            )
             viewModel.submitUpload()
         }
     }
 
-    LaunchedEffect(uploadSubmissionUiState) {
-        if (uploadSubmissionUiState is UploadSubmissionUiState.Success) {
-            delay(500)
+    LaunchedEffect(phase, isSuccess) {
+        if (isSuccess) {
+            val waitMillis = remainingLoadingDisplayMillis(
+                startedAtMillis = screenShownAtMillis,
+                nowMillis = SystemClock.elapsedRealtime()
+            )
+            if (waitMillis > 0L) {
+                delay(waitMillis)
+            }
+            UploadAiTraceLogger.log(
+                event = when (phase) {
+                    AnalysisLoadingPhase.AttemptResultPreparation ->
+                        "ANALYSIS_LOADING_FINISH_TO_ATTEMPT_RESULT"
+                    AnalysisLoadingPhase.FinalAnalysisPreparation ->
+                        "ANALYSIS_LOADING_FINISH_TO_FINAL_ANALYSIS"
+                },
+                phase = tracePhaseName,
+                status = "success",
+                elapsedMs = SystemClock.elapsedRealtime() - screenShownAtMillis
+            )
             onLoadingFinished()
         }
     }
@@ -73,14 +134,12 @@ fun AnalysisLoadingScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(16.dp))
-            // 헤더 영역
             Text(
                 text = "시도 분석",
                 color = Color.White.copy(alpha = 0.8f),
                 fontSize = 16.sp,
                 modifier = Modifier.padding(top = 24.dp)
             )
-            // 상단 밑줄
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -88,24 +147,23 @@ fun AnalysisLoadingScreen(
                     .background(Color.White.copy(alpha = 0.2f))
                     .padding(top = 16.dp)
             )
-            
+
             Spacer(modifier = Modifier.height(60.dp))
             Text(
-                text = when (val state = uploadSubmissionUiState) {
-                    is UploadSubmissionUiState.Loading -> state.message
-                    is UploadSubmissionUiState.Error -> "업로드 중 오류가 발생했어요"
-                    is UploadSubmissionUiState.Success -> "업로드가 완료되었어요"
-                    UploadSubmissionUiState.Idle -> "디디고가 자세를 분석하고 있어요"
+                text = if (errorMessage != null) {
+                    "분석 준비 중 오류가 발생했어요"
+                } else {
+                    phaseTitle
                 },
                 color = Color.White,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
 
-            if (uploadSubmissionUiState is UploadSubmissionUiState.Error) {
+            if (errorMessage != null) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = (uploadSubmissionUiState as UploadSubmissionUiState.Error).message,
+                    text = errorMessage,
                     color = Color.White.copy(alpha = 0.7f),
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
@@ -115,10 +173,7 @@ fun AnalysisLoadingScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Button(
-                    onClick = {
-                        viewModel.resetUploadSubmissionState()
-                        viewModel.submitUpload()
-                    },
+                    onClick = { viewModel.retryCurrentAnalysisLoadingPhase() },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF4A90E2),
                         contentColor = Color.White
@@ -130,22 +185,24 @@ fun AnalysisLoadingScreen(
 
             Spacer(modifier = Modifier.height(100.dp))
 
-            // 스캐너 + 캐릭터 영역 (목업 구현)
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(250.dp)
             ) {
-                // TODO: 실제 옐로우 캐릭터(drawable/ic_loading_mascot)를 넣어야 함
-                // 현재는 빈 회색 상자로 시뮬레이션
                 Box(
                     modifier = Modifier
                         .size(200.dp)
-                        .background(Color.DarkGray, shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp))
+                        .background(Color.DarkGray, shape = RoundedCornerShape(24.dp))
                 ) {
-                    Text("캐릭터 이미지 자리", color=Color.White, modifier = Modifier.align(Alignment.Center))
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_ddgo_mascot),
+                        contentDescription = "DDGO mascot",
+                        modifier = Modifier
+                            .size(120.dp)
+                            .align(Alignment.Center)
+                    )
                 }
 
-                // 위아래 스캔 바
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.9f)

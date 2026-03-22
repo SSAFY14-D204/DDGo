@@ -4,6 +4,7 @@ import com.ddgo.app.data.remote.common.ApiResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 
@@ -42,6 +43,11 @@ interface AuthApi {
     /** 로그인한 사용자의 기본 정보를 조회합니다. */
     @GET("v1/users/me")
     suspend fun getMyInfo(): ApiResponse<UserResponseDto>
+
+    @GET("v1/users/me")
+    suspend fun getMyInfoWithAuthorization(
+        @Header("Authorization") authorization: String
+    ): ApiResponse<UserResponseDto>
 
     /** 로그인한 사용자의 신체 정보를 수정합니다. */
     @PATCH("v1/users/profile")

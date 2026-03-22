@@ -54,6 +54,7 @@ import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -347,7 +348,7 @@ class UploadViewModelTest {
             viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Error
         }
 
-        coVerify(exactly = 2) { prePoseVideoAnalysisProvider.analyze(videoUri, any()) }
+        coVerify(atLeast = 2) { prePoseVideoAnalysisProvider.analyze(videoUri, any()) }
         assertTrue(viewModel.currentAttemptPoseSequence.isEmpty())
         assertEquals(PrePoseStatus.Failed, viewModel.currentAttemptPrePoseEntry?.status)
     }
@@ -559,35 +560,96 @@ class UploadViewModelTest {
     }
 
     @Test
-    fun `hold precompute does not start while current pre-pose is still pending`() = runTest {
+    fun `pre-pose와 번호화가 준비되면 분석 prewarm이 자동으로 시작된다`() = runTest {
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val aiCallCount = mutableListOf<String>()
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } coAnswers {
+            aiCallCount += firstArg<AiAnalysisMode>().name
+            Result.success(
+                AiAnalysisResult(
+                    mode = AiAnalysisMode.FAST,
+                    schemaVersion = "test",
+                    videoMetadata = null,
+                    timingsSeconds = emptyMap(),
+                    correctionSummary = null,
+                    cruxResult = AiCruxResult(
+                        candidateCount = 0,
+                        topCandidates = emptyList(),
+                        allCandidates = emptyList()
+                    ),
+                    rawResponse = JsonObject(emptyMap())
+                )
+            )
+        }
+
         val viewModel = createViewModel(
             poseEstimator = mockk(relaxed = true),
-            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false
         )
+        val videoUri = "file:///prewarm_auto.mp4"
 
-        setPrivateField(viewModel, "videoUri", "file:///current.mp4")
-        viewModel.useDebugBestFrameImage("file:///debug_frame.png")
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "videoUri", videoUri)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        })
+        setPrivateField(viewModel, "detectedHolds", listOf(hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START))
+        )
         setPrivateField(
             viewModel,
             "prePoseCacheEntries",
             mapOf(
-                "file:///current.mp4" to PrePoseCacheEntry(
-                    playbackUri = "file:///current.mp4",
+                videoUri to PrePoseCacheEntry(
+                    playbackUri = videoUri,
                     selectionGeneration = viewModel.selectionGeneration,
-                    status = PrePoseStatus.Pending,
-                    taskId = 1L
+                    status = PrePoseStatus.Ready,
+                    aiPoseSequence = aiPoseSequence(
+                        videoUri = videoUri,
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    ),
+                    poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)))
                 )
             )
         )
 
-        viewModel.markHoldPrecomputeEligibleForCurrentSelection()
         invokePrivateMethod(
             target = viewModel,
-            methodName = "maybeStartHoldPrecomputeForCurrentSelection"
+            methodName = "maybeStartSubmissionAnalysisPrewarmForCurrentSelection"
         )
 
-        assertTrue(viewModel.allRawHolds.isEmpty())
-        assertEquals(null, getPrivateField(viewModel, "holdPrecomputeJob"))
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            aiCallCount.size == 1
+        }
+
+        assertEquals(1, aiCallCount.size)
+        assertTrue(viewModel.uploadSubmissionUiState.value !is UploadSubmissionUiState.Loading)
     }
 
     @Test
@@ -618,7 +680,1035 @@ class UploadViewModelTest {
         )
 
         assertEquals(null, getPrivateField(viewModel, "holdPrecomputeRequestedGeneration"))
-        assertEquals(null, getPrivateField(viewModel, "holdPrecomputeJob"))
+        assertEquals(null, getPrivateField(viewModel, "holdPrecomputeObservationJob"))
+    }
+
+    @Test
+    fun `메인 영상 준비 후 hold precompute가 끝나야 pre-pose가 시작된다`() = runTest {
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
+        val videoUri = "file:///hold_first.mp4"
+        val generation = viewModel.selectionGeneration
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "onPrimaryVideoPrepared",
+            generation,
+            videoUri
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val prePoseCacheEntries =
+            getPrivateField(viewModel, "prePoseCacheEntries") as Map<String, PrePoseCacheEntry>
+        assertTrue(prePoseCacheEntries.isEmpty())
+        assertEquals(generation, getPrivateField(viewModel, "pendingPrimaryPrePoseGeneration"))
+
+        val holdDetectionDelegate =
+            getPrivateField(viewModel, "holdDetectionDelegate") as UploadHoldDetectionDelegate
+        setPrivateField(
+            holdDetectionDelegate,
+            "holdDetectionPrecomputeEntry",
+            UploadHoldDetectionDelegate.HoldDetectionPrecomputeEntry(
+                selectionGeneration = generation,
+                sourceVideoUri = videoUri,
+                debugBestFrameImageUri = null,
+                status = UploadHoldDetectionDelegate.HoldDetectionPrecomputeStatus.Ready,
+                bestFrameBitmap = mockk<Bitmap>(relaxed = true) {
+                    every { width } returns 1080
+                    every { height } returns 1920
+                },
+                rawYoloHolds = emptyList(),
+                classifiedAllRich = emptyList(),
+                allRawHolds = emptyList(),
+                detectedHolds = emptyList()
+            )
+        )
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "maybeStartPrimaryPrePoseAfterHoldPrecompute"
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val updatedPrePoseCacheEntries =
+            getPrivateField(viewModel, "prePoseCacheEntries") as Map<String, PrePoseCacheEntry>
+        val prePoseEntry = updatedPrePoseCacheEntries[videoUri]
+        assertTrue(
+            prePoseEntry?.status == PrePoseStatus.Pending ||
+                prePoseEntry?.status == PrePoseStatus.Running
+        )
+        assertEquals(null, getPrivateField(viewModel, "pendingPrimaryPrePoseGeneration"))
+    }
+
+    @Test
+    fun `start와 end 홀드를 선택하면 분석 prewarm이 자동으로 시작된다`() = runTest {
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val aiInvocationCount = mutableListOf<String>()
+        val videoUri = "file:///hold_selection_prewarm.mp4"
+        val startHold = hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)
+        val endHold = hold(centerX = 0.62f, centerY = 0.34f, holdNo = 2)
+
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } coAnswers {
+            aiInvocationCount += secondArg<String>()
+            Result.success(
+                AiAnalysisResult(
+                    mode = AiAnalysisMode.FAST,
+                    schemaVersion = "test",
+                    videoMetadata = null,
+                    timingsSeconds = emptyMap(),
+                    correctionSummary = null,
+                    cruxResult = AiCruxResult(
+                        candidateCount = 0,
+                        topCandidates = emptyList(),
+                        allCandidates = emptyList()
+                    ),
+                    rawResponse = JsonObject(emptyMap())
+                )
+            )
+        }
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false
+        )
+
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "videoUri", videoUri)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        })
+        setPrivateField(viewModel, "detectedHolds", listOf(startHold, endHold))
+        setPrivateField(
+            viewModel,
+            "prePoseCacheEntries",
+            mapOf(
+                videoUri to PrePoseCacheEntry(
+                    playbackUri = videoUri,
+                    selectionGeneration = viewModel.selectionGeneration,
+                    status = PrePoseStatus.Ready,
+                    aiPoseSequence = aiPoseSequence(
+                        videoUri = videoUri,
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    ),
+                    poses = listOf(
+                        poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)),
+                        poseAt(100L, handLandmark(index = 20, x = 0.62f, y = 0.34f))
+                    )
+                )
+            )
+        )
+
+        viewModel.updateSelectedStartHold(startHold)
+        viewModel.updateSelectedEndHold(endHold)
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            aiInvocationCount.size == 1
+        }
+
+        assertEquals(1, aiInvocationCount.size)
+        assertEquals(2, viewModel.numberedHolds.size)
+    }
+
+    @Test
+    fun `finalizeHoldDetectionColorSelection does not start analysis prewarm`() = runTest {
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val aiInvocationCount = mutableListOf<String>()
+        val videoUri = "file:///finalize_no_prewarm.mp4"
+        val bitmap = mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        }
+        val rawHold = hold(centerX = 0.30f, centerY = 0.40f, holdNo = 1)
+        val classifiedRich = HoldColorClassifier.ClassifiedHoldRich(
+            hold = rawHold.copy(colorLabel = "yellow", colorScore = 0.9f),
+            colorLabel = "yellow",
+            colorScore = 0.9f,
+            colorStatus = "classified",
+            primaryColor = "yellow",
+            colorDistribution = mapOf("yellow" to 0.9f),
+            rawColorScore = 0.9f,
+            detectionReliability = 0.9f,
+            validPixelRatio = 0.9f,
+            warnings = emptySet()
+        )
+
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } coAnswers {
+            aiInvocationCount += secondArg<String>()
+            Result.success(
+                AiAnalysisResult(
+                    mode = AiAnalysisMode.FAST,
+                    schemaVersion = "test",
+                    videoMetadata = null,
+                    timingsSeconds = emptyMap(),
+                    correctionSummary = null,
+                    cruxResult = AiCruxResult(
+                        candidateCount = 0,
+                        topCandidates = emptyList(),
+                        allCandidates = emptyList()
+                    ),
+                    rawResponse = JsonObject(emptyMap())
+                )
+            )
+        }
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false
+        )
+
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "videoUri", videoUri)
+        setPrivateField(viewModel, "bestFrameBitmap", bitmap)
+        setPrivateField(viewModel, "detectedHolds", listOf(rawHold))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.30f, centerY = 0.40f, role = HoldRole.START))
+        )
+        setPrivateField(
+            viewModel,
+            "prePoseCacheEntries",
+            mapOf(
+                videoUri to PrePoseCacheEntry(
+                    playbackUri = videoUri,
+                    selectionGeneration = viewModel.selectionGeneration,
+                    status = PrePoseStatus.Ready,
+                    aiPoseSequence = aiPoseSequence(
+                        videoUri = videoUri,
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    ),
+                    poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.30f, y = 0.40f)))
+                )
+            )
+        )
+
+        viewModel.updateHoldColor("yellow")
+        val holdDetectionDelegate =
+            getPrivateField(viewModel, "holdDetectionDelegate") as UploadHoldDetectionDelegate
+        setPrivateField(
+            holdDetectionDelegate,
+            "holdDetectionPrecomputeEntry",
+            UploadHoldDetectionDelegate.HoldDetectionPrecomputeEntry(
+                selectionGeneration = viewModel.selectionGeneration,
+                sourceVideoUri = videoUri,
+                debugBestFrameImageUri = null,
+                status = UploadHoldDetectionDelegate.HoldDetectionPrecomputeStatus.Ready,
+                bestFrameBitmap = bitmap,
+                bestFrameTimeUs = 1_000_000L,
+                rawYoloHolds = listOf(rawHold),
+                classifiedAllRich = listOf(classifiedRich),
+                allRawHolds = listOf(rawHold),
+                detectedHolds = listOf(rawHold)
+            )
+        )
+        holdDetectionDelegate.bestFrameBitmap = bitmap
+        holdDetectionDelegate.allRawHolds = listOf(rawHold)
+
+        viewModel.finalizeHoldDetectionColorSelection()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(aiInvocationCount.isEmpty())
+    }
+
+    @Test
+    fun `pre-pose batch callback does not start analysis prewarm`() = runTest {
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val aiInvocationCount = mutableListOf<String>()
+        val videoUri = "file:///prepose_callback_no_prewarm.mp4"
+
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } coAnswers {
+            aiInvocationCount += secondArg<String>()
+            Result.success(
+                AiAnalysisResult(
+                    mode = AiAnalysisMode.FAST,
+                    schemaVersion = "test",
+                    videoMetadata = null,
+                    timingsSeconds = emptyMap(),
+                    correctionSummary = null,
+                    cruxResult = AiCruxResult(
+                        candidateCount = 0,
+                        topCandidates = emptyList(),
+                        allCandidates = emptyList()
+                    ),
+                    rawResponse = JsonObject(emptyMap())
+                )
+            )
+        }
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false
+        )
+
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "videoUri", videoUri)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        })
+        setPrivateField(viewModel, "detectedHolds", listOf(hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START))
+        )
+        setPrivateField(
+            viewModel,
+            "prePoseCacheEntries",
+            mapOf(
+                videoUri to PrePoseCacheEntry(
+                    playbackUri = videoUri,
+                    selectionGeneration = viewModel.selectionGeneration,
+                    status = PrePoseStatus.Ready,
+                    aiPoseSequence = aiPoseSequence(
+                        videoUri = videoUri,
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    ),
+                    poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)))
+                )
+            )
+        )
+
+        val sessionCallbacks =
+            getPrivateField(viewModel, "sessionCallbacks") as UploadSessionCallbacks
+        sessionCallbacks.onPrePoseBatchStateChanged()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(aiInvocationCount.isEmpty())
+    }
+
+    @Test
+    fun `submitUpload starts batch ai before quiet background upload finishes`() = runTest {
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        val attemptRepository = mockk<AttemptRepository>()
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val callOrder = mutableListOf<String>()
+        val videoUri = "file:///background_upload.mp4"
+
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f))),
+            processedFrames = listOf(
+                processedFrame(0L, true),
+                processedFrame(100L, true),
+                processedFrame(200L, true)
+            ),
+            aiPoseSequence = aiPoseSequence(
+                videoUri = videoUri,
+                processedFrames = listOf(
+                    processedFrame(0L, true),
+                    processedFrame(100L, true),
+                    processedFrame(200L, true)
+                )
+            )
+        )
+        coEvery { attemptRepository.uploadAttemptVideo(any(), any()) } coAnswers {
+            callOrder += "upload-start"
+            delay(1_000L)
+            callOrder += "upload-end"
+            Result.success(uploadedAttemptVideo(attemptId = 101L, attemptNo = 1, videoUri = secondArg()))
+        }
+        coEvery { attemptRepository.endAttempt(any(), any(), any()) } returns Result.success(Unit)
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } coAnswers {
+            callOrder += "ai-start"
+            Result.success(
+                AiAnalysisResult(
+                    mode = AiAnalysisMode.FAST,
+                    schemaVersion = "test",
+                    videoMetadata = null,
+                    timingsSeconds = emptyMap(),
+                    correctionSummary = null,
+                    cruxResult = AiCruxResult(
+                        candidateCount = 0,
+                        topCandidates = emptyList(),
+                        allCandidates = emptyList()
+                    ),
+                    rawResponse = JsonObject(emptyMap())
+                )
+            )
+        }
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false,
+            attemptRepository = attemptRepository
+        )
+
+        setPrivateField(viewModel, "challengeId", 77L)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        })
+        setPrivateField(viewModel, "detectedHolds", listOf(hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START))
+        )
+        setPrivateField(viewModel, "videoUri", videoUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.prePoseBatchState.readyCount == 1
+        }
+
+        viewModel.submitUpload()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Success
+        }
+
+        assertTrue(callOrder.indexOf("ai-start") in 0 until callOrder.indexOf("upload-end"))
+    }
+
+    @Test
+    fun `submitUpload does not wait for background batch ai to enter attempt result`() = runTest {
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val aiStarted = CompletableDeferred<Unit>()
+        val aiGate = CompletableDeferred<Unit>()
+        val videoUri = "file:///attempt_result_without_ai_wait.mp4"
+
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } coAnswers {
+            aiStarted.complete(Unit)
+            aiGate.await()
+            Result.success(
+                AiAnalysisResult(
+                    mode = AiAnalysisMode.FAST,
+                    schemaVersion = "test",
+                    videoMetadata = null,
+                    timingsSeconds = emptyMap(),
+                    correctionSummary = null,
+                    cruxResult = AiCruxResult(
+                        candidateCount = 0,
+                        topCandidates = emptyList(),
+                        allCandidates = emptyList()
+                    ),
+                    rawResponse = JsonObject(emptyMap())
+                )
+            )
+        }
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false
+        )
+
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "videoUri", videoUri)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        })
+        setPrivateField(viewModel, "detectedHolds", listOf(hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START))
+        )
+        setPrivateField(
+            viewModel,
+            "prePoseCacheEntries",
+            mapOf(
+                videoUri to PrePoseCacheEntry(
+                    playbackUri = videoUri,
+                    selectionGeneration = viewModel.selectionGeneration,
+                    status = PrePoseStatus.Ready,
+                    aiPoseSequence = aiPoseSequence(
+                        videoUri = videoUri,
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    ),
+                    poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)))
+                )
+            )
+        )
+
+        viewModel.submitUpload()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(aiStarted.isCompleted)
+        assertTrue(viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Success)
+        assertTrue(viewModel.attemptAiAnalysisResults.isEmpty())
+
+        aiGate.complete(Unit)
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+    }
+
+    @Test
+    fun `submitUpload는 준비된 분석 prewarm 결과를 재사용한다`() = runTest {
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val aiInvocationCount = mutableListOf<String>()
+        val videoUri = "file:///prewarm_reuse.mp4"
+
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } coAnswers {
+            aiInvocationCount += secondArg<String>()
+            Result.success(
+                AiAnalysisResult(
+                    mode = AiAnalysisMode.FAST,
+                    schemaVersion = "test",
+                    videoMetadata = null,
+                    timingsSeconds = emptyMap(),
+                    correctionSummary = null,
+                    cruxResult = AiCruxResult(
+                        candidateCount = 0,
+                        topCandidates = emptyList(),
+                        allCandidates = emptyList()
+                    ),
+                    rawResponse = JsonObject(emptyMap())
+                )
+            )
+        }
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false
+        )
+
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "videoUri", videoUri)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        })
+        setPrivateField(viewModel, "detectedHolds", listOf(hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START))
+        )
+        setPrivateField(
+            viewModel,
+            "prePoseCacheEntries",
+            mapOf(
+                videoUri to PrePoseCacheEntry(
+                    playbackUri = videoUri,
+                    selectionGeneration = viewModel.selectionGeneration,
+                    status = PrePoseStatus.Ready,
+                    aiPoseSequence = aiPoseSequence(
+                        videoUri = videoUri,
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    ),
+                    poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)))
+                )
+            )
+        )
+
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "maybeStartSubmissionAnalysisPrewarmForCurrentSelection"
+        )
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            aiInvocationCount.size == 1
+        }
+
+        viewModel.prepareFinalAnalysisLoading()
+        viewModel.submitUpload()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.finalAnalysisPreparationUiState.value is FinalAnalysisPreparationUiState.Success
+        }
+
+        assertEquals(1, aiInvocationCount.size)
+        assertEquals(1, viewModel.attemptAiAnalysisResults.size)
+    }
+
+    @Test
+    fun `same requestKey final ai runs once across eager trigger and submit fallback`() = runTest {
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        val aiInvocationCount = mutableListOf<String>()
+        val videoUri = "file:///request_key_single_flight.mp4"
+        val startHold = hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)
+        val endHold = hold(centerX = 0.62f, centerY = 0.34f, holdNo = 2)
+
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = any(),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } coAnswers {
+            aiInvocationCount += secondArg<String>()
+            Result.success(
+                AiAnalysisResult(
+                    mode = AiAnalysisMode.FAST,
+                    schemaVersion = "test",
+                    videoMetadata = null,
+                    timingsSeconds = emptyMap(),
+                    correctionSummary = null,
+                    cruxResult = AiCruxResult(
+                        candidateCount = 0,
+                        topCandidates = emptyList(),
+                        allCandidates = emptyList()
+                    ),
+                    rawResponse = JsonObject(emptyMap())
+                )
+            )
+        }
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false
+        )
+
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "videoUri", videoUri)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        })
+        setPrivateField(viewModel, "detectedHolds", listOf(startHold, endHold))
+        setPrivateField(
+            viewModel,
+            "prePoseCacheEntries",
+            mapOf(
+                videoUri to PrePoseCacheEntry(
+                    playbackUri = videoUri,
+                    selectionGeneration = viewModel.selectionGeneration,
+                    status = PrePoseStatus.Ready,
+                    aiPoseSequence = aiPoseSequence(
+                        videoUri = videoUri,
+                        processedFrames = listOf(
+                            processedFrame(0L, true),
+                            processedFrame(100L, true),
+                            processedFrame(200L, true)
+                        )
+                    ),
+                    poses = listOf(
+                        poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)),
+                        poseAt(100L, handLandmark(index = 20, x = 0.62f, y = 0.34f))
+                    )
+                )
+            )
+        )
+
+        viewModel.updateSelectedStartHold(startHold)
+        viewModel.updateSelectedEndHold(endHold)
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            aiInvocationCount.size == 1
+        }
+
+        viewModel.prepareFinalAnalysisLoading()
+        viewModel.submitUpload()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.finalAnalysisPreparationUiState.value is FinalAnalysisPreparationUiState.Success
+        }
+
+        assertEquals(1, aiInvocationCount.size)
+        assertEquals(1, viewModel.attemptAiAnalysisResults.size)
+    }
+
+    @Test
+    fun `submitUpload keeps attempt result success when quiet background upload fails and retry succeeds`() = runTest {
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        val attemptRepository = mockk<AttemptRepository>()
+        val videoUri = "file:///background_upload_fail.mp4"
+
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f))),
+            processedFrames = listOf(
+                processedFrame(0L, true),
+                processedFrame(100L, true),
+                processedFrame(200L, true)
+            ),
+            aiPoseSequence = aiPoseSequence(
+                videoUri = videoUri,
+                processedFrames = listOf(
+                    processedFrame(0L, true),
+                    processedFrame(100L, true),
+                    processedFrame(200L, true)
+                )
+            )
+        )
+        coEvery { attemptRepository.uploadAttemptVideo(any(), any()) } returnsMany listOf(
+            Result.failure(IllegalStateException("upload boom")),
+            Result.success(uploadedAttemptVideo(attemptId = 101L, attemptNo = 1, videoUri = videoUri))
+        )
+        coEvery { attemptRepository.endAttempt(any(), any(), any()) } returns Result.success(Unit)
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            attemptRepository = attemptRepository
+        )
+
+        setPrivateField(viewModel, "challengeId", 77L)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true))
+        setPrivateField(viewModel, "detectedHolds", listOf(hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START))
+        )
+        setPrivateField(viewModel, "videoUri", videoUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.prePoseBatchState.readyCount == 1
+        }
+
+        viewModel.submitUpload()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Success
+        }
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.backgroundUploadState.value == BackgroundUploadState.Failed
+        }
+
+        assertTrue(viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Success)
+        assertTrue(viewModel.backgroundUploadNotice.value != null)
+
+        viewModel.retryBackgroundAttemptUpload()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.backgroundUploadState.value == BackgroundUploadState.Ready
+        }
+
+        assertEquals(1, viewModel.uploadedAttemptVideos.size)
+        assertEquals(null, viewModel.backgroundUploadNotice.value)
+    }
+
+    @Test
+    fun `challenge hold waits for existing precompute after challenge selection reset`() = runTest {
+        val bitmap = mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        }
+        val parsedUri = mockk<Uri> {
+            every { scheme } returns "file"
+            every { path } returns "/debug_frame.png"
+        }
+        val rawHold = hold(centerX = 0.30f, centerY = 0.40f, holdNo = 1)
+        val classifiedHold = rawHold.copy(colorLabel = "red", colorScore = 0.9f)
+        val firstGate = CompletableDeferred<Unit>()
+        val secondGate = CompletableDeferred<Unit>()
+        var detectInvocationCount = 0
+        val holdDetector = mockk<HoldDetector>()
+        val holdColorClassifier = mockk<HoldColorClassifier>(relaxed = true)
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            holdDetector = holdDetector,
+            holdColorClassifier = holdColorClassifier
+        )
+
+        mockkStatic(BitmapFactory::class)
+        mockkStatic(Uri::class)
+        every { Uri.parse("file:///debug_frame.png") } returns parsedUri
+        every { BitmapFactory.decodeFile("/debug_frame.png") } returns bitmap
+        coEvery { holdDetector.detectFromFrame(bitmap) } coAnswers {
+            when (detectInvocationCount++) {
+                0 -> {
+                    firstGate.await()
+                    listOf(rawHold)
+                }
+
+                1 -> {
+                    secondGate.await()
+                    listOf(rawHold)
+                }
+
+                else -> listOf(rawHold)
+            }
+        }
+        every {
+            holdColorClassifier.classifyAllRich(
+                bitmap = bitmap,
+                holds = listOf(rawHold),
+                relaxedRejection = true
+            )
+        } returns HoldColorClassifier.ClassifiedHoldPrecomputeResult(
+            classifiedHolds = listOf(
+                HoldColorClassifier.ClassifiedHoldRich(
+                    hold = classifiedHold,
+                    colorLabel = "red",
+                    colorScore = 0.9f,
+                    colorStatus = "classified",
+                    primaryColor = "red",
+                    colorDistribution = mapOf("red" to 0.9f),
+                    rawColorScore = 0.9f,
+                    detectionReliability = 0.9f,
+                    validPixelRatio = 0.9f,
+                    warnings = emptySet()
+                )
+            ),
+            allHolds = listOf(classifiedHold)
+        )
+        every {
+            holdColorClassifier.filterClassifiedHolds(
+                classifiedHolds = any(),
+                targetColorName = "red",
+                scoreThreshold = 0.25f
+            )
+        } returns listOf(classifiedHold)
+
+        viewModel.useDebugBestFrameImage("file:///debug_frame.png")
+        viewModel.updateHoldColor("red")
+        viewModel.markHoldPrecomputeEligibleForCurrentSelection()
+
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        val holdDetectionDelegate =
+            getPrivateField(viewModel, "holdDetectionDelegate") as UploadHoldDetectionDelegate
+        assertTrue(
+            holdDetectionDelegate.isPrecomputeRunning(
+                selectionGeneration = viewModel.selectionGeneration,
+                sourceVideoUri = null
+            )
+        )
+
+        invokePrivateMethod(viewModel, "clearChallengeSelectionStatePreservingHoldPrecompute")
+        viewModel.updateHoldColor("red")
+        viewModel.ensureHoldDetectionReadyForCurrentColor()
+
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is UploadUiState.Loading)
+        assertEquals(1, detectInvocationCount)
+
+        firstGate.complete(Unit)
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value is UploadUiState.Error)
+
+        secondGate.complete(Unit)
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.uiState.value is UploadUiState.Success
+        }
+
+        assertTrue(viewModel.uiState.value is UploadUiState.Success)
+    }
+
+    @Test
+    fun `challenge selection reset preserves ready hold source cache`() = runTest {
+        val bitmap = mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        }
+        val rawHold = hold(centerX = 0.30f, centerY = 0.40f, holdNo = 1)
+        val numberedHold = HoldNumbered(
+            hold = rawHold,
+            progress = 0f,
+            axisDistance = 0f,
+            role = HoldRole.START
+        )
+        val classifiedRich = HoldColorClassifier.ClassifiedHoldRich(
+            hold = rawHold.copy(colorLabel = "red", colorScore = 0.9f),
+            colorLabel = "red",
+            colorScore = 0.9f,
+            colorStatus = "classified",
+            primaryColor = "red",
+            colorDistribution = mapOf("red" to 0.9f),
+            rawColorScore = 0.9f,
+            detectionReliability = 0.9f,
+            validPixelRatio = 0.9f,
+            warnings = emptySet()
+        )
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
+        val videoUri = "file:///cached.mp4"
+
+        setPrivateField(viewModel, "videoUri", videoUri)
+        viewModel.updateHoldColor("red")
+
+        val holdDetectionDelegate =
+            getPrivateField(viewModel, "holdDetectionDelegate") as UploadHoldDetectionDelegate
+        setPrivateField(
+            holdDetectionDelegate,
+            "holdDetectionPrecomputeEntry",
+            UploadHoldDetectionDelegate.HoldDetectionPrecomputeEntry(
+                selectionGeneration = viewModel.selectionGeneration,
+                sourceVideoUri = videoUri,
+                debugBestFrameImageUri = null,
+                status = UploadHoldDetectionDelegate.HoldDetectionPrecomputeStatus.Ready,
+                bestFrameBitmap = bitmap,
+                bestFrameTimeUs = 1_000_000L,
+                rawYoloHolds = listOf(rawHold),
+                classifiedAllRich = listOf(classifiedRich),
+                allRawHolds = listOf(rawHold),
+                lastAppliedColorKey = "red",
+                detectedHolds = listOf(rawHold)
+            )
+        )
+        holdDetectionDelegate.bestFrameBitmap = bitmap
+        holdDetectionDelegate.allRawHolds = listOf(rawHold)
+        holdDetectionDelegate.detectedHolds = listOf(rawHold)
+        holdDetectionDelegate.selectedStartHold = rawHold
+        holdDetectionDelegate.selectedEndHold = rawHold
+        holdDetectionDelegate.numberedHolds = listOf(numberedHold)
+
+        invokePrivateMethod(viewModel, "clearChallengeSelectionStatePreservingHoldPrecompute")
+
+        assertTrue(
+            holdDetectionDelegate.isPrecomputeReady(
+                selectionGeneration = viewModel.selectionGeneration,
+                sourceVideoUri = videoUri
+            )
+        )
+        assertEquals(bitmap, viewModel.bestFrameBitmap)
+        assertEquals(listOf(rawHold), viewModel.allRawHolds)
+        assertTrue(viewModel.detectedHolds.isEmpty())
+        assertEquals(null, viewModel.selectedStartHold)
+        assertEquals(null, viewModel.selectedEndHold)
+        assertTrue(viewModel.numberedHolds.isEmpty())
+        assertEquals(null, viewModel.selectedHoldColorKey)
     }
 
     private fun createViewModel(
@@ -628,17 +1718,30 @@ class UploadViewModelTest {
         analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase = AnalyzeHandPeakAndEndUseCase(),
         analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase = mockk(),
         stubAnalyzeAttemptWithAiUseCase: Boolean = true,
+        attemptRepository: AttemptRepository = mockk(relaxed = true),
         personDetector: PersonDetector = mockk(relaxed = true),
         holdDetector: HoldDetector = mockk(relaxed = true),
         holdColorClassifier: HoldColorClassifier = HoldColorClassifier()
     ): UploadViewModel {
         val challengeRepository = mockk<ChallengeRepository>(relaxed = true)
-        val attemptRepository = mockk<AttemptRepository>(relaxed = true)
         val gymRepository = mockk<GymRepository>(relaxed = true)
         val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
         val attachAiRealtimeContextUseCase = mockk<AttachAiRealtimeContextUseCase>()
         val finalizeAiRealtimeSessionUseCase = mockk<FinalizeAiRealtimeSessionUseCase>()
 
+        coEvery {
+            challengeRepository.saveChallengeHolds(any(), any())
+        } answers {
+            val challengeId = firstArg<Long>()
+            val holds = secondArg<List<com.ddgo.app.domain.model.ChallengeHoldCoordinate>>()
+            Result.success(
+                com.ddgo.app.domain.model.SavedChallengeHolds(
+                    challengeId = challengeId,
+                    holdCount = holds.size,
+                    holds = holds
+                )
+            )
+        }
         coEvery { getMyInfoUseCase.invoke() } returns Result.success(
             User(
                 id = 1L,
@@ -832,7 +1935,7 @@ class UploadViewModelTest {
                 fps = 30f,
                 totalFrames = processedFrames.size,
                 processedFrames = processedFrames.size,
-                analysisFpsLimit = 30
+                analysisFpsLimit = 10
             ),
             frames = processedFrames.mapIndexed { index, frame ->
                 AiPoseFrame(

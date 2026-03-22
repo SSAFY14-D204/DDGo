@@ -12,7 +12,7 @@ import com.ddgo.app.domain.usecase.ClimbEndDetection
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
 
-internal const val UPLOAD_PREPOSE_ANALYSIS_FPS = 30
+internal const val UPLOAD_PREPOSE_ANALYSIS_FPS = 10
 
 data class ManagedAttemptVideo(
     val sourceUri: String,

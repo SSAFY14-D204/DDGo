@@ -43,6 +43,7 @@ class PrePoseLandmarkerViewModel @Inject constructor(
         uri: Uri,
         displayName: String,
         useOptimized: Boolean = false,
+        useGpuAcceleration: Boolean = true,
         analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
     ) {
         val normalizedAnalysisFpsLimit = normalizeAnalysisFpsLimit(analysisFpsLimit)
@@ -58,6 +59,7 @@ class PrePoseLandmarkerViewModel @Inject constructor(
             errorMessage = null,
             analysisTimeMs = 0L,
             isOptimized = useOptimized,
+            useGpuAcceleration = useGpuAcceleration,
             analysisFpsLimit = normalizedAnalysisFpsLimit
         )
 
@@ -68,14 +70,16 @@ class PrePoseLandmarkerViewModel @Inject constructor(
                 val result = if (useOptimized) {
                     optimizedPrePoseVideoAnalyzer(
                         videoUri = uri.toString(),
-                        analysisFpsLimit = normalizedAnalysisFpsLimit
+                        analysisFpsLimit = normalizedAnalysisFpsLimit,
+                        useGpuAcceleration = useGpuAcceleration
                     ) { progress ->
                         _uiState.value = _uiState.value.copy(analysisProgress = progress)
                     }
                 } else {
                     prePoseVideoAnalyzer(
                         videoUri = uri.toString(),
-                        analysisFpsLimit = normalizedAnalysisFpsLimit
+                        analysisFpsLimit = normalizedAnalysisFpsLimit,
+                        useGpuAcceleration = useGpuAcceleration
                     ) { progress ->
                         _uiState.value = _uiState.value.copy(analysisProgress = progress)
                     }
@@ -194,6 +198,7 @@ data class PrePoseUiState(
     val errorMessage: String? = null,
     val analysisTimeMs: Long = 0L,
     val isOptimized: Boolean = false,
+    val useGpuAcceleration: Boolean = true,
     val analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
 )
 

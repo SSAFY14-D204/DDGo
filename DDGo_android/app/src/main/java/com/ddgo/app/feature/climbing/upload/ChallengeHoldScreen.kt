@@ -1,5 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
+import android.os.SystemClock
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -59,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.domain.model.Hold
+import kotlinx.coroutines.delay
 
 private data class AnimHoldItem(
     val color: Color,
@@ -84,6 +87,12 @@ fun ChallengeHoldScreen(
     val videoUri = viewModel.videoUri
     val debugBestFrameImageUri = viewModel.debugBestFrameImageUri
     var showDialog by remember { mutableStateOf(false) }
+    var displayedUiState by remember(videoUri, debugBestFrameImageUri) {
+        mutableStateOf<UploadUiState>(UploadUiState.Loading)
+    }
+    var loadingStartedAtMillis by remember(videoUri, debugBestFrameImageUri) {
+        mutableStateOf(SystemClock.elapsedRealtime())
+    }
 
     if (showDialog) {
         AlertDialog(
@@ -137,13 +146,38 @@ fun ChallengeHoldScreen(
         }
     }
 
+    LaunchedEffect(uiState, videoUri, debugBestFrameImageUri) {
+        when (val currentState = uiState) {
+            UploadUiState.Success -> {
+                val waitMillis = remainingLoadingDisplayMillis(
+                    startedAtMillis = loadingStartedAtMillis,
+                    nowMillis = SystemClock.elapsedRealtime()
+                )
+                if (waitMillis > 0L) {
+                    delay(waitMillis)
+                }
+                displayedUiState = UploadUiState.Success
+            }
+
+            UploadUiState.Loading,
+            UploadUiState.Idle -> {
+                loadingStartedAtMillis = SystemClock.elapsedRealtime()
+                displayedUiState = currentState
+            }
+
+            is UploadUiState.Error -> {
+                displayedUiState = currentState
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
         AnimatedContent(
-            targetState = uiState is UploadUiState.Success,
+            targetState = displayedUiState is UploadUiState.Success,
             transitionSpec = {
                 fadeIn(tween(600, easing = FastOutSlowInEasing)) togetherWith
                     fadeOut(tween(300))
@@ -156,7 +190,7 @@ fun ChallengeHoldScreen(
                     onProceed = { showDialog = true }
                 )
             } else {
-                HoldLoadingContent(uiState = uiState)
+                HoldLoadingContent(uiState = displayedUiState)
             }
         }
     }

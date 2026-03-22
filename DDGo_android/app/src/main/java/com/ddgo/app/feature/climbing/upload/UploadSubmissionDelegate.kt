@@ -35,9 +35,16 @@ import com.ddgo.app.domain.usecase.analyzePolygonHoldContacts
 import com.ddgo.app.domain.usecase.summarizeHoldReachResults
 import com.ddgo.app.domain.usecase.toAttemptHoldReachResult
 import com.ddgo.app.domain.usecase.toHolds
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
 private const val SUBMISSION_TAG = "UploadSubmissionDelegate"
@@ -46,6 +53,7 @@ private const val HOLD_CONTACT_LOG_PREFIX = "[DDGO_HOLD_CONTACT]"
 private const val DEFAULT_AI_REQUEST_FRAME_STEP = 1
 
 internal data class UploadSubmissionRequest(
+    val selectionGeneration: Long,
     val challengeId: Long?,
     val useLocalAnalysisOnly: Boolean,
     val isAttemptOnlyUploadMode: Boolean,
@@ -59,7 +67,10 @@ internal data class UploadSubmissionRequest(
 )
 
 internal interface UploadSubmissionCallbacks {
-    suspend fun awaitSubmitReadyPrePose(playbackUris: List<String>): TerminalPrePoseSnapshot
+    suspend fun awaitSubmitReadyPrePose(
+        playbackUris: List<String>,
+        emitLoading: Boolean = true
+    ): TerminalPrePoseSnapshot
     fun currentAttemptIndex(): Int
     fun setCurrentAttemptIndex(index: Int)
     fun clearCurrentPoseLandmarks()
@@ -91,6 +102,16 @@ internal class UploadSubmissionDelegate(
     private val _uploadSubmissionUiState =
         MutableStateFlow<UploadSubmissionUiState>(UploadSubmissionUiState.Idle)
     val uploadSubmissionUiState: StateFlow<UploadSubmissionUiState> = _uploadSubmissionUiState.asStateFlow()
+    private val _finalAnalysisPreparationUiState =
+        MutableStateFlow<FinalAnalysisPreparationUiState>(FinalAnalysisPreparationUiState.Idle)
+    val finalAnalysisPreparationUiState: StateFlow<FinalAnalysisPreparationUiState> =
+        _finalAnalysisPreparationUiState.asStateFlow()
+    private val _backgroundUploadState =
+        MutableStateFlow(BackgroundUploadState.Idle)
+    val backgroundUploadState: StateFlow<BackgroundUploadState> = _backgroundUploadState.asStateFlow()
+    private val _backgroundUploadNotice =
+        MutableStateFlow<BackgroundUploadNotice?>(null)
+    val backgroundUploadNotice: StateFlow<BackgroundUploadNotice?> = _backgroundUploadNotice.asStateFlow()
 
     var uploadedAttemptVideos by mutableStateOf<List<UploadedAttemptVideo>>(emptyList())
     var attemptHoldReachResults by mutableStateOf<List<AttemptHoldReachResult>>(emptyList())
@@ -99,11 +120,358 @@ internal class UploadSubmissionDelegate(
     var attemptPolygonHoldContactDebugResults by mutableStateOf<List<PolygonHoldContactDebugResult>>(emptyList())
     var overallHoldReachSummary by mutableStateOf<OverallHoldReachSummary?>(null)
     var attemptAiAnalysisResults by mutableStateOf<List<AiAnalysisResult?>>(emptyList())
+    private var analysisPrewarmEntry by mutableStateOf<SubmissionAnalysisPrewarmEntry?>(null)
+    private var analysisPrewarmJob: Deferred<Result<SubmissionAnalysisPrewarmResult>>? = null
+    private var backgroundUploadJob: Job? = null
+    private var backgroundUploadRequest: BackgroundUploadRequest? = null
+    private var backgroundUploadKey: BackgroundUploadKey? = null
+    private var nextBackgroundUploadNoticeId = 1L
+
+    fun invalidateAnalysisPrewarm() {
+        analysisPrewarmJob?.cancel()
+        analysisPrewarmJob = null
+        analysisPrewarmEntry = null
+        _finalAnalysisPreparationUiState.value = FinalAnalysisPreparationUiState.Idle
+    }
+
+    fun requestAnalysisPrewarm(
+        scope: CoroutineScope,
+        request: UploadSubmissionRequest,
+        callbacks: UploadSubmissionCallbacks
+    ) {
+        val requestKey = buildAnalysisPrewarmKey(request) ?: return
+        val existingEntry = analysisPrewarmEntry
+
+        if (existingEntry?.key == requestKey) {
+            when (existingEntry.status) {
+                SubmissionAnalysisPrewarmStatus.Running -> {
+                    UploadAiTraceLogger.log(
+                        event = "FINAL_AI_PREWARM_REUSE_RUNNING",
+                        generation = request.selectionGeneration,
+                        playbackUri = request.attemptUris.firstOrNull(),
+                        status = "running"
+                    )
+                    return
+                }
+
+                SubmissionAnalysisPrewarmStatus.Ready -> {
+                    UploadAiTraceLogger.log(
+                        event = "FINAL_AI_PREWARM_REUSE_READY",
+                        generation = request.selectionGeneration,
+                        playbackUri = request.attemptUris.firstOrNull(),
+                        status = "ready"
+                    )
+                    return
+                }
+
+                SubmissionAnalysisPrewarmStatus.Failed -> {
+                    UploadAiTraceLogger.log(
+                        event = "FINAL_AI_PREWARM_FAILED_RETRY",
+                        generation = request.selectionGeneration,
+                        playbackUri = request.attemptUris.firstOrNull(),
+                        status = "retry"
+                    )
+                }
+            }
+        }
+
+        analysisPrewarmJob?.cancel()
+        analysisPrewarmEntry = SubmissionAnalysisPrewarmEntry(
+            key = requestKey,
+            status = SubmissionAnalysisPrewarmStatus.Running
+        )
+        UploadAiTraceLogger.log(
+            event = "FINAL_AI_PREWARM_REQUESTED",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            details = mapOf(
+                "attemptCount" to request.attemptUris.size,
+                "numberedHoldCount" to request.numberedHolds.size,
+                "aiMode" to request.aiMode.name
+            )
+        )
+        analysisPrewarmJob = scope.async {
+            val aiProfile = resolveAiProfile(request.aiMode)
+                .getOrElse { throwable ->
+                    val failure = Result.failure<SubmissionAnalysisPrewarmResult>(throwable)
+                    storeAnalysisPrewarmResult(requestKey, failure)
+                    return@async failure
+                }
+
+            val result = executeAnalysisPipeline(
+                request = request,
+                aiProfile = aiProfile,
+                callbacks = callbacks,
+                emitLoading = false
+            )
+            storeAnalysisPrewarmResult(requestKey, result)
+            result
+        }
+    }
+
+    suspend fun submitUploadForAttemptResult(
+        scope: CoroutineScope,
+        request: UploadSubmissionRequest,
+        callbacks: UploadSubmissionCallbacks
+    ) = coroutineScope {
+        if (_uploadSubmissionUiState.value is UploadSubmissionUiState.Loading) {
+            return@coroutineScope
+        }
+        val startedAt = UploadAiTraceLogger.now()
+        UploadAiTraceLogger.log(
+            event = "ATTEMPT_RESULT_PREP_BEGIN",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "AttemptResultPreparation",
+            details = mapOf(
+                "attemptCount" to request.attemptUris.size,
+                "numberedHoldCount" to request.numberedHolds.size
+            )
+        )
+
+        val currentChallengeId = request.challengeId
+        if (!request.useLocalAnalysisOnly && (currentChallengeId == null || currentChallengeId <= 0L)) {
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("생성된 챌린지가 없습니다.")
+            return@coroutineScope
+        }
+
+        val currentBitmap = request.bestFrameBitmap
+        val numberedHoldsForAnalysis = request.numberedHolds.takeIf { it.isNotEmpty() }
+
+        if (!request.isAttemptOnlyUploadMode) {
+            if (currentBitmap == null) {
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("대표 기준 이미지가 없습니다.")
+                return@coroutineScope
+            }
+
+            if (request.detectedHolds.isEmpty()) {
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("저장할 홀드가 없습니다.")
+                return@coroutineScope
+            }
+
+            if (numberedHoldsForAnalysis == null) {
+                _uploadSubmissionUiState.value =
+                    UploadSubmissionUiState.Error("시작 홀드와 종료 홀드를 먼저 선택해 주세요.")
+                return@coroutineScope
+            }
+        }
+
+        if (request.attemptUris.isEmpty()) {
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("업로드할 영상이 없습니다.")
+            return@coroutineScope
+        }
+
+        if (!request.isAttemptOnlyUploadMode && !request.useLocalAnalysisOnly) {
+            _uploadSubmissionUiState.value =
+                UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있어요.")
+
+            UploadAiTraceLogger.log(
+                event = "ATTEMPT_RESULT_HOLDS_SAVE_BEGIN",
+                generation = request.selectionGeneration,
+                playbackUri = request.attemptUris.firstOrNull(),
+                phase = "AttemptResultPreparation"
+            )
+            saveChallengeHoldsUseCase(
+                challengeId = currentChallengeId!!,
+                holds = request.holdCoordinates
+            ).onSuccess { saved ->
+                callbacks.setSavedChallengeHolds(saved)
+                UploadAiTraceLogger.log(
+                    event = "ATTEMPT_RESULT_HOLDS_SAVE_DONE",
+                    generation = request.selectionGeneration,
+                    playbackUri = request.attemptUris.firstOrNull(),
+                    phase = "AttemptResultPreparation",
+                    status = "success",
+                    details = mapOf(
+                        "challengeId" to saved.challengeId,
+                        "holdCount" to saved.holdCount
+                    )
+                )
+                Log.d(
+                    SUBMISSION_TAG,
+                    "submitUploadForAttemptResult: holds saved, challengeId=${saved.challengeId}, holdCount=${saved.holdCount}"
+                )
+            }.onFailure { throwable ->
+                Log.e(SUBMISSION_TAG, "submitUploadForAttemptResult: save holds failed", throwable)
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                    throwable.message ?: "홀드 정보를 저장하지 못했습니다."
+                )
+                return@coroutineScope
+            }
+        }
+
+        startBackgroundAttemptUploads(
+            scope = scope,
+            request = request,
+            challengeId = currentChallengeId,
+            callbacks = callbacks
+        )
+
+        if (
+            !request.isAttemptOnlyUploadMode &&
+            numberedHoldsForAnalysis != null &&
+            currentBitmap != null
+        ) {
+            requestAnalysisPrewarm(
+                scope = scope,
+                request = request,
+                callbacks = callbacks
+            )
+        }
+
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading("자세 데이터를 준비하고 있어요.")
+
+        val analysisResult = runAttemptResultPreparationPipeline(
+            request = request,
+            numberedHoldsForAnalysis = numberedHoldsForAnalysis,
+            callbacks = callbacks
+        )
+        if (analysisResult.isFailure) {
+            val throwable = analysisResult.exceptionOrNull()
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                throwable?.extractHttpErrorDetail()
+                    ?: throwable?.message
+                    ?: "업로드 분석을 완료하지 못했습니다."
+            )
+            return@coroutineScope
+        }
+
+        publishAttemptResultSession(
+            callbacks = callbacks,
+            playbackUris = request.attemptUris,
+            uploadedVideos = uploadedAttemptVideos,
+            currentAttemptIndex = 0,
+            holdReachResults = attemptHoldReachResults,
+            poseDtos = attemptPoseDtos,
+            analyzedPoses = attemptAnalyzedPoses,
+            polygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
+            overallSummary = overallHoldReachSummary
+        )
+        UploadAiTraceLogger.log(
+            event = "ATTEMPT_RESULT_SESSION_PUBLISH_DONE",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "AttemptResultPreparation",
+            status = "success",
+            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt)
+        )
+        UploadAiTraceLogger.log(
+            event = "ATTEMPT_RESULT_PREP_DONE",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "AttemptResultPreparation",
+            status = "success",
+            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+            details = mapOf(
+                "uploadedVideoCount" to uploadedAttemptVideos.size,
+                "holdReachCount" to attemptHoldReachResults.size
+            )
+        )
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedAttemptVideos)
+    }
+
+    suspend fun ensureFinalAnalysisReady(
+        request: UploadSubmissionRequest,
+        callbacks: UploadSubmissionCallbacks
+    ) {
+        if (_finalAnalysisPreparationUiState.value is FinalAnalysisPreparationUiState.Loading) {
+            return
+        }
+        val startedAt = UploadAiTraceLogger.now()
+        UploadAiTraceLogger.log(
+            event = "FINAL_ANALYSIS_READY_BEGIN",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "FinalAnalysisPreparation",
+            details = mapOf("attemptCount" to request.attemptUris.size)
+        )
+
+        val requestKey = buildAnalysisPrewarmKey(request)
+        if (requestKey == null) {
+            _finalAnalysisPreparationUiState.value =
+                FinalAnalysisPreparationUiState.Error("최종 분석에 필요한 AI 데이터를 준비할 수 없습니다.")
+            return
+        }
+
+        _finalAnalysisPreparationUiState.value = FinalAnalysisPreparationUiState.Loading
+        val existingEntry = analysisPrewarmEntry
+        if (existingEntry?.key == requestKey) {
+            when (existingEntry.status) {
+                SubmissionAnalysisPrewarmStatus.Ready -> UploadAiTraceLogger.log(
+                    event = "FINAL_ANALYSIS_READY_REUSE_READY",
+                    generation = request.selectionGeneration,
+                    playbackUri = request.attemptUris.firstOrNull(),
+                    phase = "FinalAnalysisPreparation",
+                    status = "ready"
+                )
+
+                SubmissionAnalysisPrewarmStatus.Running -> UploadAiTraceLogger.log(
+                    event = "FINAL_ANALYSIS_READY_WAIT_RUNNING",
+                    generation = request.selectionGeneration,
+                    playbackUri = request.attemptUris.firstOrNull(),
+                    phase = "FinalAnalysisPreparation",
+                    status = "running"
+                )
+
+                SubmissionAnalysisPrewarmStatus.Failed -> Unit
+            }
+        }
+
+        val aiProfile = resolveAiProfile(request.aiMode)
+            .getOrElse { throwable ->
+                _finalAnalysisPreparationUiState.value =
+                    FinalAnalysisPreparationUiState.Error(
+                        throwable.message ?: "AI 분석에 사용할 프로필을 확인할 수 없습니다."
+                    )
+                return
+            }
+
+        val result = awaitOrReuseAnalysisPrewarm(
+            request = request,
+            aiProfile = aiProfile,
+            callbacks = callbacks,
+            emitLoading = false
+        )
+
+        if (result.isFailure) {
+            val throwable = result.exceptionOrNull()
+            _finalAnalysisPreparationUiState.value =
+                FinalAnalysisPreparationUiState.Error(
+                    throwable?.extractHttpErrorDetail()
+                        ?: throwable?.message
+                        ?: "최종 분석 결과를 준비하지 못했습니다."
+                )
+            return
+        }
+
+        applyAnalysisPrewarmResult(
+            result = result.getOrThrow(),
+            callbacks = callbacks
+        )
+        UploadAiTraceLogger.log(
+            event = "FINAL_ANALYSIS_READY_DONE",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "FinalAnalysisPreparation",
+            status = "success",
+            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+            details = mapOf("resultCount" to attemptAiAnalysisResults.size)
+        )
+        _finalAnalysisPreparationUiState.value = FinalAnalysisPreparationUiState.Success
+    }
 
     suspend fun submitUpload(
         request: UploadSubmissionRequest,
         callbacks: UploadSubmissionCallbacks
     ) {
+        if (shouldUseBackgroundSubmissionPipeline()) {
+            submitUploadWithBackgroundUploads(
+                request = request,
+                callbacks = callbacks
+            )
+            return
+        }
+
         if (_uploadSubmissionUiState.value is UploadSubmissionUiState.Loading) {
             return
         }
@@ -199,7 +567,7 @@ internal class UploadSubmissionDelegate(
         } else {
             request.attemptUris.forEachIndexed { index, uri ->
                 _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
-                    "영상 업로드 중입니다. (${index + 1}/${request.attemptUris.size})"
+                    "분석에 필요한 데이터를 준비하고 있습니다. (${index + 1}/${request.attemptUris.size})"
                 )
 
                 uploadAttemptVideoUseCase(
@@ -331,8 +699,690 @@ internal class UploadSubmissionDelegate(
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedVideos)
     }
 
+    private fun shouldUseBackgroundSubmissionPipeline(): Boolean = true
+
+    private suspend fun submitUploadWithBackgroundUploads(
+        request: UploadSubmissionRequest,
+        callbacks: UploadSubmissionCallbacks
+    ) = coroutineScope {
+        if (_uploadSubmissionUiState.value is UploadSubmissionUiState.Loading) {
+            return@coroutineScope
+        }
+
+        val currentChallengeId = request.challengeId
+        if (!request.useLocalAnalysisOnly && (currentChallengeId == null || currentChallengeId <= 0L)) {
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("생성된 챌린지가 없습니다.")
+            return@coroutineScope
+        }
+
+        val currentBitmap = request.bestFrameBitmap
+        val numberedHoldsForAnalysis = request.numberedHolds.takeIf { it.isNotEmpty() }
+
+        if (!request.isAttemptOnlyUploadMode) {
+            if (currentBitmap == null) {
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("대표 기준 이미지가 없습니다.")
+                return@coroutineScope
+            }
+
+            if (request.detectedHolds.isEmpty()) {
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("저장할 홀드가 없습니다.")
+                return@coroutineScope
+            }
+
+            if (numberedHoldsForAnalysis == null) {
+                _uploadSubmissionUiState.value =
+                    UploadSubmissionUiState.Error("시작 홀드와 종료 홀드를 먼저 선택해 주세요.")
+                return@coroutineScope
+            }
+        }
+
+        if (request.attemptUris.isEmpty()) {
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("업로드할 영상이 없습니다.")
+            return@coroutineScope
+        }
+
+        val shouldRunAiAnalysis =
+            !request.isAttemptOnlyUploadMode &&
+                numberedHoldsForAnalysis != null &&
+                currentBitmap != null
+
+        val aiProfile = if (shouldRunAiAnalysis) {
+            resolveAiProfile(request.aiMode)
+                .onFailure { throwable ->
+                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                        throwable.message ?: "AI 분석에 사용할 프로필을 확인할 수 없습니다."
+                    )
+                }
+                .getOrNull()
+        } else {
+            null
+        }
+
+        if (shouldRunAiAnalysis && aiProfile == null) {
+            return@coroutineScope
+        }
+
+        if (!request.isAttemptOnlyUploadMode && !request.useLocalAnalysisOnly) {
+            _uploadSubmissionUiState.value =
+                UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있어요.")
+
+            saveChallengeHoldsUseCase(
+                challengeId = currentChallengeId!!,
+                holds = request.holdCoordinates
+            ).onSuccess { saved ->
+                callbacks.setSavedChallengeHolds(saved)
+                Log.d(
+                    SUBMISSION_TAG,
+                    "submitUpload(background): holds saved, challengeId=${saved.challengeId}, holdCount=${saved.holdCount}"
+                )
+            }.onFailure { throwable ->
+                Log.e(SUBMISSION_TAG, "submitUpload(background): save holds failed", throwable)
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                    throwable.message ?: "홀드 정보를 저장하지 못했습니다."
+                )
+                return@coroutineScope
+            }
+        }
+
+        val backgroundUploadJob = launchAttemptUploadsInBackground(
+            request = request,
+            challengeId = currentChallengeId
+        )
+
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading("자세 데이터를 준비하고 있어요.")
+
+        val analysisResult = runAnalysisPipelineForSubmit(
+            request = request,
+            numberedHoldsForAnalysis = numberedHoldsForAnalysis,
+            currentBitmap = currentBitmap,
+            aiProfile = aiProfile,
+            callbacks = callbacks
+        )
+        if (analysisResult.isFailure) {
+            backgroundUploadJob?.cancel()
+            val throwable = analysisResult.exceptionOrNull()
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                throwable?.extractHttpErrorDetail()
+                    ?: throwable?.message
+                    ?: "업로드 분석을 완료하지 못했습니다."
+            )
+            return@coroutineScope
+        }
+
+        val uploadedVideosResult = awaitBackgroundUploadsOrThrow(backgroundUploadJob)
+        if (uploadedVideosResult.isFailure) {
+            val throwable = uploadedVideosResult.exceptionOrNull()
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                throwable?.message ?: "영상 업로드를 완료하지 못했습니다."
+            )
+            return@coroutineScope
+        }
+
+        val uploadedVideos = uploadedVideosResult.getOrThrow()
+        publishAttemptResultSession(
+            callbacks = callbacks,
+            playbackUris = request.attemptUris,
+            uploadedVideos = uploadedVideos,
+            currentAttemptIndex = 0,
+            holdReachResults = attemptHoldReachResults,
+            poseDtos = attemptPoseDtos,
+            analyzedPoses = attemptAnalyzedPoses,
+            polygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
+            overallSummary = overallHoldReachSummary
+        )
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedVideos)
+    }
+
+    private fun startBackgroundAttemptUploads(
+        scope: CoroutineScope,
+        request: UploadSubmissionRequest,
+        challengeId: Long?,
+        callbacks: UploadSubmissionCallbacks
+    ) {
+        if (request.useLocalAnalysisOnly) {
+            backgroundUploadRequest = null
+            backgroundUploadKey = null
+            backgroundUploadJob?.cancel()
+            backgroundUploadJob = null
+            _backgroundUploadState.value = BackgroundUploadState.Ready
+            _backgroundUploadNotice.value = null
+            return
+        }
+
+        val resolvedChallengeId = requireNotNull(challengeId)
+        startBackgroundAttemptUploads(
+            scope = scope,
+            request = BackgroundUploadRequest(
+                key = BackgroundUploadKey(
+                    selectionGeneration = request.selectionGeneration,
+                    challengeId = resolvedChallengeId,
+                    attemptUrisSignature = request.attemptUris.joinToString("|")
+                ),
+                challengeId = resolvedChallengeId,
+                attemptUris = request.attemptUris
+            ),
+            callbacks = callbacks
+        )
+    }
+
+    private fun kotlinx.coroutines.CoroutineScope.launchAttemptUploadsInBackground(
+        request: UploadSubmissionRequest,
+        challengeId: Long?
+    ): Deferred<Result<List<UploadedAttemptVideo>>>? {
+        if (request.useLocalAnalysisOnly) {
+            Log.d(SUBMISSION_TAG, "submitUpload(background): skipping video upload in local analysis mode")
+            return null
+        }
+
+        return async {
+            uploadAttemptVideosQuietly(
+                challengeId = requireNotNull(challengeId),
+                attemptUris = request.attemptUris
+            )
+        }
+    }
+
+    private fun startBackgroundAttemptUploads(
+        scope: CoroutineScope,
+        request: BackgroundUploadRequest,
+        callbacks: UploadSubmissionCallbacks
+    ) {
+        val existingKey = backgroundUploadKey
+        if (existingKey == request.key) {
+            when (_backgroundUploadState.value) {
+                BackgroundUploadState.Running,
+                BackgroundUploadState.Ready -> return
+                BackgroundUploadState.Idle,
+                BackgroundUploadState.Failed -> Unit
+            }
+        }
+
+        backgroundUploadJob?.cancel()
+        backgroundUploadRequest = request
+        backgroundUploadKey = request.key
+        _backgroundUploadState.value = BackgroundUploadState.Running
+        _backgroundUploadNotice.value = null
+        val startedAt = UploadAiTraceLogger.now()
+        UploadAiTraceLogger.log(
+            event = "BACKGROUND_UPLOAD_BEGIN",
+            generation = request.key.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "BackgroundUpload",
+            details = mapOf("attemptCount" to request.attemptUris.size)
+        )
+
+        backgroundUploadJob = scope.launch {
+            val result = uploadAttemptVideosQuietly(
+                challengeId = request.challengeId,
+                attemptUris = request.attemptUris
+            )
+
+            if (backgroundUploadKey != request.key) {
+                return@launch
+            }
+
+            result.onSuccess { videos ->
+                uploadedAttemptVideos = videos
+                _backgroundUploadState.value = BackgroundUploadState.Ready
+                _backgroundUploadNotice.value = null
+                UploadAiTraceLogger.log(
+                    event = "BACKGROUND_UPLOAD_DONE",
+                    generation = request.key.selectionGeneration,
+                    playbackUri = request.attemptUris.firstOrNull(),
+                    phase = "BackgroundUpload",
+                    status = "success",
+                    elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                    details = mapOf("uploadedVideoCount" to videos.size)
+                )
+                updatePublishedUploadedVideos(
+                    callbacks = callbacks,
+                    uploadedVideos = videos
+                )
+            }.onFailure { throwable ->
+                Log.e(SUBMISSION_TAG, "background upload failed", throwable)
+                _backgroundUploadState.value = BackgroundUploadState.Failed
+                UploadAiTraceLogger.log(
+                    event = "BACKGROUND_UPLOAD_FAILED",
+                    generation = request.key.selectionGeneration,
+                    playbackUri = request.attemptUris.firstOrNull(),
+                    phase = "BackgroundUpload",
+                    status = "failed",
+                    elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                    details = mapOf("message" to throwable.message)
+                )
+                _backgroundUploadNotice.value = BackgroundUploadNotice(
+                    id = nextBackgroundUploadNoticeId++,
+                    message = throwable.message ?: "영상 업로드에 실패했어요. 다시 시도할 수 있어요.",
+                    actionLabel = "다시 시도"
+                )
+            }
+        }
+    }
+
+    fun retryBackgroundAttemptUpload(
+        scope: CoroutineScope,
+        callbacks: UploadSubmissionCallbacks
+    ) {
+        val request = backgroundUploadRequest ?: return
+        if (_backgroundUploadState.value == BackgroundUploadState.Running) {
+            return
+        }
+
+        startBackgroundAttemptUploads(
+            scope = scope,
+            request = request,
+            callbacks = callbacks
+        )
+    }
+
+    fun consumeBackgroundUploadNotice(id: Long) {
+        val currentNotice = _backgroundUploadNotice.value ?: return
+        if (currentNotice.id == id) {
+            _backgroundUploadNotice.value = null
+        }
+    }
+
+    private suspend fun uploadAttemptVideosQuietly(
+        challengeId: Long,
+        attemptUris: List<String>
+    ): Result<List<UploadedAttemptVideo>> {
+        val uploadedVideos = mutableListOf<UploadedAttemptVideo>()
+
+        attemptUris.forEach { uri ->
+            val uploaded = uploadAttemptVideoUseCase(
+                challengeId = challengeId,
+                videoUri = uri
+            ).getOrElse { throwable ->
+                Log.e(SUBMISSION_TAG, "submitUpload(background): attempt upload failed", throwable)
+                return Result.failure(throwable)
+            }
+
+            endAttemptUseCase(
+                challengeId = challengeId,
+                attemptId = uploaded.attemptId,
+                payload = AttemptCompletionPayload()
+            ).getOrElse { throwable ->
+                Log.e(SUBMISSION_TAG, "submitUpload(background): end attempt failed", throwable)
+                return Result.failure(throwable)
+            }
+
+            uploadedVideos += uploaded
+            Log.d(
+                SUBMISSION_TAG,
+                "submitUpload(background): attempt upload success, attemptId=${uploaded.attemptId}, " +
+                    "attemptNo=${uploaded.attemptNo}, objectKey=${uploaded.objectKey}"
+            )
+        }
+
+        return Result.success(uploadedVideos)
+    }
+
+    private suspend fun awaitOrReuseAnalysisPrewarm(
+        request: UploadSubmissionRequest,
+        aiProfile: ResolvedAiProfile,
+        callbacks: UploadSubmissionCallbacks,
+        emitLoading: Boolean = true
+    ): Result<SubmissionAnalysisPrewarmResult> {
+        val requestKey = buildAnalysisPrewarmKey(request)
+            ?: return executeAnalysisPipeline(
+                request = request,
+                aiProfile = aiProfile,
+                callbacks = callbacks,
+                emitLoading = emitLoading
+            )
+
+        val existingEntry = analysisPrewarmEntry
+        if (existingEntry?.key == requestKey) {
+            when (existingEntry.status) {
+                SubmissionAnalysisPrewarmStatus.Ready -> {
+                    existingEntry.result?.let { return Result.success(it) }
+                }
+
+                SubmissionAnalysisPrewarmStatus.Running -> {
+                    val runningJob = analysisPrewarmJob
+                    if (runningJob != null) {
+                        return try {
+                            runningJob.await()
+                        } catch (cancellation: CancellationException) {
+                            throw cancellation
+                        } catch (throwable: Throwable) {
+                            Result.failure(throwable)
+                        }
+                    }
+                }
+
+                SubmissionAnalysisPrewarmStatus.Failed -> Unit
+            }
+        }
+
+        val result = executeAnalysisPipeline(
+            request = request,
+            aiProfile = aiProfile,
+            callbacks = callbacks,
+            emitLoading = emitLoading
+        )
+        storeAnalysisPrewarmResult(requestKey, result)
+        return result
+    }
+
+    private suspend fun runAttemptResultPreparationPipeline(
+        request: UploadSubmissionRequest,
+        numberedHoldsForAnalysis: List<HoldNumbered>?,
+        callbacks: UploadSubmissionCallbacks
+    ): Result<Unit> {
+        val startedAt = UploadAiTraceLogger.now()
+        UploadAiTraceLogger.log(
+            event = "ATTEMPT_RESULT_PREPOSE_AWAIT_BEGIN",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "AttemptResultPreparation"
+        )
+        val terminalSnapshot = callbacks.awaitSubmitReadyPrePose(request.attemptUris)
+        val failedPrePoseUris = request.attemptUris.filter { playbackUri ->
+            val entry = terminalSnapshot.entriesByPlaybackUri[playbackUri]
+            entry?.status != PrePoseStatus.Ready || entry?.aiPoseSequence == null
+        }
+        if (failedPrePoseUris.isNotEmpty()) {
+            return Result.failure(
+                IllegalStateException(
+                    buildPrePoseFailureMessage(
+                        playbackUris = failedPrePoseUris,
+                        terminalSnapshot = terminalSnapshot
+                    )
+                )
+            )
+        }
+
+        if (numberedHoldsForAnalysis != null) {
+            UploadAiTraceLogger.log(
+                event = "ATTEMPT_RESULT_HOLD_REACH_BEGIN",
+                generation = request.selectionGeneration,
+                playbackUri = request.attemptUris.firstOrNull(),
+                phase = "AttemptResultPreparation",
+                details = mapOf("numberedHoldCount" to numberedHoldsForAnalysis.size)
+            )
+            analyzeAllAttemptHoldReach(
+                attemptUris = request.attemptUris,
+                holds = numberedHoldsForAnalysis,
+                terminalSnapshot = terminalSnapshot
+            )
+            UploadAiTraceLogger.log(
+                event = "ATTEMPT_RESULT_HOLD_REACH_DONE",
+                generation = request.selectionGeneration,
+                playbackUri = request.attemptUris.firstOrNull(),
+                phase = "AttemptResultPreparation",
+                status = "success",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                details = mapOf("holdReachCount" to attemptHoldReachResults.size)
+            )
+        } else {
+            clearHoldReachAnalysis(callbacks)
+        }
+
+        return Result.success(Unit)
+    }
+
+    private suspend fun runAnalysisPipelineForSubmit(
+        request: UploadSubmissionRequest,
+        numberedHoldsForAnalysis: List<HoldNumbered>?,
+        currentBitmap: Bitmap?,
+        aiProfile: ResolvedAiProfile?,
+        callbacks: UploadSubmissionCallbacks
+    ): Result<Unit> {
+        val shouldUsePrewarm =
+            !request.isAttemptOnlyUploadMode &&
+                numberedHoldsForAnalysis != null &&
+                currentBitmap != null &&
+                aiProfile != null
+
+        if (shouldUsePrewarm) {
+            val analysisResult = awaitOrReuseAnalysisPrewarm(
+                request = request,
+                aiProfile = aiProfile,
+                callbacks = callbacks
+            )
+            if (analysisResult.isFailure) {
+                return Result.failure(
+                    analysisResult.exceptionOrNull()
+                        ?: IllegalStateException("분석 prewarm 결과를 불러오지 못했습니다.")
+                )
+            }
+
+            applyAnalysisPrewarmResult(
+                result = analysisResult.getOrThrow(),
+                callbacks = callbacks
+            )
+            return Result.success(Unit)
+        }
+
+        val terminalSnapshot = callbacks.awaitSubmitReadyPrePose(request.attemptUris)
+        val failedPrePoseUris = request.attemptUris.filter { playbackUri ->
+            val entry = terminalSnapshot.entriesByPlaybackUri[playbackUri]
+            entry?.status != PrePoseStatus.Ready || entry?.aiPoseSequence == null
+        }
+        if (failedPrePoseUris.isNotEmpty()) {
+            return Result.failure(
+                IllegalStateException(
+                    buildPrePoseFailureMessage(
+                        playbackUris = failedPrePoseUris,
+                        terminalSnapshot = terminalSnapshot
+                    )
+                )
+            )
+        }
+
+        if (numberedHoldsForAnalysis != null) {
+            analyzeAllAttemptHoldReach(
+                attemptUris = request.attemptUris,
+                holds = numberedHoldsForAnalysis,
+                terminalSnapshot = terminalSnapshot
+            )
+        } else {
+            clearHoldReachAnalysis(callbacks)
+        }
+
+        val shouldRunAiAnalysis =
+            !request.isAttemptOnlyUploadMode &&
+                numberedHoldsForAnalysis != null &&
+                currentBitmap != null
+
+        if (!shouldRunAiAnalysis) {
+            clearAiAnalysisState(callbacks)
+            return Result.success(Unit)
+        }
+
+        val bitmapForAi = currentBitmap
+            ?: return Result.failure(IllegalStateException("AI 분석용 대표 이미지가 없습니다."))
+        val holdsForAi = numberedHoldsForAnalysis
+            ?: return Result.failure(IllegalStateException("AI 분석용 홀드 번호가 없습니다."))
+        val profileForAi = aiProfile
+            ?: return Result.failure(IllegalStateException("AI 분석용 프로필이 없습니다."))
+
+        return analyzeAllAttemptsWithAi(
+            attemptUris = request.attemptUris,
+            holds = holdsForAi,
+            frameBitmap = bitmapForAi,
+            mode = request.aiMode,
+            primaryRealtimeSessionId = request.primaryRealtimeSessionId,
+            profile = profileForAi,
+            terminalSnapshot = terminalSnapshot,
+            callbacks = callbacks
+        ).map { Unit }
+    }
+
+    private suspend fun executeAnalysisPipeline(
+        request: UploadSubmissionRequest,
+        aiProfile: ResolvedAiProfile,
+        callbacks: UploadSubmissionCallbacks,
+        emitLoading: Boolean
+    ): Result<SubmissionAnalysisPrewarmResult> = coroutineScope {
+        val startedAt = UploadAiTraceLogger.now()
+        UploadAiTraceLogger.log(
+            event = "FINAL_AI_PIPELINE_BEGIN",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "FinalAnalysisPreparation",
+            details = mapOf(
+                "attemptCount" to request.attemptUris.size,
+                "emitLoading" to emitLoading,
+                "aiMode" to request.aiMode.name
+            )
+        )
+        val numberedHoldsForAnalysis = request.numberedHolds.takeIf { it.isNotEmpty() }
+            ?: return@coroutineScope Result.failure(
+                IllegalStateException("AI 분석용 홀드 번호가 없습니다.")
+            )
+        val currentBitmap = request.bestFrameBitmap
+            ?: return@coroutineScope Result.failure(
+                IllegalStateException("AI 분석용 대표 이미지가 없습니다.")
+            )
+
+        UploadAiTraceLogger.log(
+            event = "FINAL_AI_PREPOSE_AWAIT_BEGIN",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "FinalAnalysisPreparation"
+        )
+        val terminalSnapshot = callbacks.awaitSubmitReadyPrePose(
+            playbackUris = request.attemptUris,
+            emitLoading = emitLoading
+        )
+        val failedPrePoseUris = request.attemptUris.filter { playbackUri ->
+            val entry = terminalSnapshot.entriesByPlaybackUri[playbackUri]
+            entry?.status != PrePoseStatus.Ready || entry?.aiPoseSequence == null
+        }
+        if (failedPrePoseUris.isNotEmpty()) {
+            return@coroutineScope Result.failure(
+                IllegalStateException(
+                    buildPrePoseFailureMessage(
+                        playbackUris = failedPrePoseUris,
+                        terminalSnapshot = terminalSnapshot
+                    )
+                )
+            )
+        }
+
+        val aiResults = analyzeAllAttemptsWithAiResult(
+            attemptUris = request.attemptUris,
+            holds = numberedHoldsForAnalysis,
+            frameBitmap = currentBitmap,
+            mode = request.aiMode,
+            primaryRealtimeSessionId = request.primaryRealtimeSessionId,
+            profile = aiProfile,
+            terminalSnapshot = terminalSnapshot,
+            emitLoading = emitLoading
+        ).getOrElse { throwable ->
+            return@coroutineScope Result.failure(throwable)
+        }
+
+        UploadAiTraceLogger.log(
+            event = "FINAL_AI_PIPELINE_DONE",
+            generation = request.selectionGeneration,
+            playbackUri = request.attemptUris.firstOrNull(),
+            phase = "FinalAnalysisPreparation",
+            status = "success",
+            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+            details = mapOf("resultCount" to aiResults.size)
+        )
+        return@coroutineScope Result.success(
+            SubmissionAnalysisPrewarmResult(
+                aiAnalysisResults = aiResults
+            )
+        )
+    }
+
+    private fun applyAnalysisPrewarmResult(
+        result: SubmissionAnalysisPrewarmResult,
+        callbacks: UploadSubmissionCallbacks
+    ) {
+        attemptAiAnalysisResults = result.aiAnalysisResults
+        callbacks.clearCurrentPoseLandmarks()
+        callbacks.syncDisplayedAnalysisPoints()
+    }
+
+    private fun storeAnalysisPrewarmResult(
+        requestKey: SubmissionAnalysisPrewarmKey,
+        result: Result<SubmissionAnalysisPrewarmResult>
+    ) {
+        val currentEntry = analysisPrewarmEntry ?: return
+        if (currentEntry.key != requestKey) {
+            return
+        }
+
+        analysisPrewarmEntry = if (result.isSuccess) {
+            SubmissionAnalysisPrewarmEntry(
+                key = requestKey,
+                status = SubmissionAnalysisPrewarmStatus.Ready,
+                result = result.getOrNull()
+            )
+        } else {
+            SubmissionAnalysisPrewarmEntry(
+                key = requestKey,
+                status = SubmissionAnalysisPrewarmStatus.Failed,
+                errorMessage = result.exceptionOrNull()?.message
+            )
+        }
+    }
+
+    private fun buildAnalysisPrewarmKey(
+        request: UploadSubmissionRequest
+    ): SubmissionAnalysisPrewarmKey? {
+        if (
+            request.isAttemptOnlyUploadMode ||
+            request.bestFrameBitmap == null ||
+            request.numberedHolds.isEmpty() ||
+            request.attemptUris.isEmpty()
+        ) {
+            return null
+        }
+
+        return SubmissionAnalysisPrewarmKey(
+            selectionGeneration = request.selectionGeneration,
+            attemptUrisSignature = request.attemptUris.joinToString("|"),
+            numberedHoldsFingerprint = request.numberedHolds.joinToString("|") { hold ->
+                buildString {
+                    append(hold.hold.holdNo)
+                    append(':')
+                    append(hold.role.name)
+                    append(':')
+                    append(hold.hold.boundingBox.left)
+                    append(':')
+                    append(hold.hold.boundingBox.top)
+                    append(':')
+                    append(hold.hold.boundingBox.right)
+                    append(':')
+                    append(hold.hold.boundingBox.bottom)
+                }
+            },
+            aiMode = request.aiMode,
+            primaryRealtimeSessionId = request.primaryRealtimeSessionId,
+            frameWidthPx = request.bestFrameBitmap.width,
+            frameHeightPx = request.bestFrameBitmap.height
+        )
+    }
+
+    private suspend fun awaitBackgroundUploadsOrThrow(
+        backgroundUploadJob: Deferred<Result<List<UploadedAttemptVideo>>>?
+    ): Result<List<UploadedAttemptVideo>> {
+        if (backgroundUploadJob == null) {
+            return Result.success(emptyList())
+        }
+
+        return try {
+            backgroundUploadJob.await()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (throwable: Throwable) {
+            Result.failure(throwable)
+        }
+    }
+
     fun resetUploadSubmissionState() {
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Idle
+    }
+
+    fun resetFinalAnalysisPreparationState() {
+        _finalAnalysisPreparationUiState.value = FinalAnalysisPreparationUiState.Idle
     }
 
     fun setUploadSubmissionLoading(message: String) {
@@ -340,11 +1390,13 @@ internal class UploadSubmissionDelegate(
     }
 
     fun clearAiAnalysisState(callbacks: UploadSubmissionCallbacks) {
+        invalidateAnalysisPrewarm()
         attemptAiAnalysisResults = emptyList()
         callbacks.resetDisplayedAnalysisPoints()
     }
 
     fun clearHoldReachAnalysis(callbacks: UploadSubmissionCallbacks) {
+        invalidateAnalysisPrewarm()
         attemptHoldReachResults = emptyList()
         attemptPoseDtos = emptyList()
         attemptAnalyzedPoses = emptyList()
@@ -357,6 +1409,8 @@ internal class UploadSubmissionDelegate(
         callbacks: UploadSubmissionCallbacks,
         clearPublishedSession: Boolean
     ) {
+        invalidateAnalysisPrewarm()
+        clearBackgroundUploadState(cancelJob = true)
         callbacks.setCurrentAttemptIndex(0)
         callbacks.setSessionResultPlaybackUris(emptyList())
         uploadedAttemptVideos = emptyList()
@@ -404,6 +1458,27 @@ internal class UploadSubmissionDelegate(
                 overallHoldReachSummary = overallSummary
             )
         )
+    }
+
+    fun updatePublishedUploadedVideos(
+        callbacks: UploadSubmissionCallbacks,
+        uploadedVideos: List<UploadedAttemptVideo>
+    ) {
+        this.uploadedAttemptVideos = uploadedVideos
+        callbacks.setPublishedSession(
+            callbacks.publishedSession()?.copy(uploadedAttemptVideos = uploadedVideos)
+        )
+    }
+
+    private fun clearBackgroundUploadState(cancelJob: Boolean) {
+        if (cancelJob) {
+            backgroundUploadJob?.cancel()
+        }
+        backgroundUploadJob = null
+        backgroundUploadRequest = null
+        backgroundUploadKey = null
+        _backgroundUploadState.value = BackgroundUploadState.Idle
+        _backgroundUploadNotice.value = null
     }
 
     fun captureCurrentAttemptResultSession(callbacks: UploadSubmissionCallbacks) {
@@ -462,6 +1537,42 @@ internal class UploadSubmissionDelegate(
         } else {
             fallback
         }
+    }
+
+    private suspend fun analyzeAllAttemptHoldReachResult(
+        attemptUris: List<String>,
+        holds: List<HoldNumbered>,
+        terminalSnapshot: TerminalPrePoseSnapshot
+    ): HoldReachAnalysisBundle {
+        if (attemptUris.isEmpty() || holds.isEmpty()) {
+            return HoldReachAnalysisBundle(
+                holdReachResults = emptyList(),
+                poseDtos = emptyList(),
+                analyzedPoses = emptyList(),
+                polygonHoldContactDebugResults = emptyList(),
+                overallSummary = null
+            )
+        }
+
+        val analyses = attemptUris.map { uri ->
+            analyzeSingleAttemptPoseAnalysis(
+                playbackUri = uri,
+                poses = terminalSnapshot.entriesByPlaybackUri[uri]?.poses.orEmpty(),
+                holds = holds
+            )
+        }
+
+        val holdReachResults = analyses.map(AttemptPoseAnalysis::holdReachResult)
+        return HoldReachAnalysisBundle(
+            holdReachResults = holdReachResults,
+            poseDtos = analyses.map(AttemptPoseAnalysis::poseSequenceDto),
+            analyzedPoses = analyses.map(AttemptPoseAnalysis::poses),
+            polygonHoldContactDebugResults = analyses.map(AttemptPoseAnalysis::polygonHoldContactDebugResult),
+            overallSummary = summarizeHoldReachResults(
+                results = holdReachResults,
+                totalHoldCount = holds.size
+            )
+        )
     }
 
     private suspend fun analyzeAllAttemptHoldReach(
@@ -539,6 +1650,91 @@ internal class UploadSubmissionDelegate(
             poses = stablePoses,
             polygonHoldContactDebugResult = polygonHoldContactDebugResult
         )
+    }
+
+    private suspend fun analyzeAllAttemptsWithAiResult(
+        attemptUris: List<String>,
+        holds: List<HoldNumbered>,
+        frameBitmap: Bitmap,
+        mode: AiAnalysisMode,
+        primaryRealtimeSessionId: String?,
+        profile: ResolvedAiProfile,
+        terminalSnapshot: TerminalPrePoseSnapshot,
+        emitLoading: Boolean
+    ): Result<List<AiAnalysisResult>> {
+        if (attemptUris.isEmpty()) {
+            return Result.success(emptyList())
+        }
+
+        val results = mutableListOf<AiAnalysisResult>()
+        val analysisHolds = holds.toHolds()
+
+        attemptUris.forEachIndexed { index, uri ->
+            val attemptStartedAt = UploadAiTraceLogger.now()
+            UploadAiTraceLogger.log(
+                event = "FINAL_AI_ATTEMPT_BEGIN",
+                playbackUri = uri,
+                phase = "FinalAnalysisPreparation",
+                status = "running",
+                details = mapOf(
+                    "attemptIndex" to index,
+                    "attemptCount" to attemptUris.size,
+                    "mode" to mode.name
+                )
+            )
+            if (emitLoading) {
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
+                    "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${attemptUris.size})"
+                )
+            }
+
+            val result = if (index == 0 && primaryRealtimeSessionId != null) {
+                finalizeRealtimeAttemptOrFallback(
+                    sessionId = primaryRealtimeSessionId,
+                    requestedMode = mode,
+                    videoUri = uri,
+                    holds = analysisHolds,
+                    frameBitmap = frameBitmap,
+                    profile = profile,
+                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri]?.aiPoseSequence
+                )
+            } else {
+                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri]?.aiPoseSequence
+                    ?: return Result.failure(
+                        IllegalStateException("Missing cached pre-pose AI sequence for $uri")
+                    )
+                analyzeAttemptWithBatchAi(
+                    mode = mode,
+                    videoUri = uri,
+                    holds = analysisHolds,
+                    frameBitmap = frameBitmap,
+                    profile = profile,
+                    cachedPoseSequence = cachedPoseSequence
+                )
+            }
+
+            if (result.isFailure) {
+                return Result.failure(
+                    result.exceptionOrNull()
+                        ?: IllegalStateException("AI 분석 결과를 가져오지 못했습니다.")
+                )
+            }
+
+            results += result.getOrThrow()
+            UploadAiTraceLogger.log(
+                event = "FINAL_AI_ATTEMPT_DONE",
+                playbackUri = uri,
+                phase = "FinalAnalysisPreparation",
+                status = "success",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(attemptStartedAt),
+                details = mapOf(
+                    "attemptIndex" to index,
+                    "attemptCount" to attemptUris.size
+                )
+            )
+        }
+
+        return Result.success(results)
     }
 
     private suspend fun analyzeAllAttemptsWithAi(
@@ -924,6 +2120,53 @@ private data class AttemptPoseAnalysis(
     val poseSequenceDto: PoseSequenceDto,
     val poses: List<Pose>,
     val polygonHoldContactDebugResult: PolygonHoldContactDebugResult
+)
+
+private data class HoldReachAnalysisBundle(
+    val holdReachResults: List<AttemptHoldReachResult>,
+    val poseDtos: List<PoseSequenceDto>,
+    val analyzedPoses: List<List<Pose>>,
+    val polygonHoldContactDebugResults: List<PolygonHoldContactDebugResult>,
+    val overallSummary: OverallHoldReachSummary?
+)
+
+private enum class SubmissionAnalysisPrewarmStatus {
+    Running,
+    Ready,
+    Failed
+}
+
+private data class SubmissionAnalysisPrewarmKey(
+    val selectionGeneration: Long,
+    val attemptUrisSignature: String,
+    val numberedHoldsFingerprint: String,
+    val aiMode: AiAnalysisMode,
+    val primaryRealtimeSessionId: String?,
+    val frameWidthPx: Int,
+    val frameHeightPx: Int
+)
+
+private data class SubmissionAnalysisPrewarmResult(
+    val aiAnalysisResults: List<AiAnalysisResult>
+)
+
+private data class SubmissionAnalysisPrewarmEntry(
+    val key: SubmissionAnalysisPrewarmKey,
+    val status: SubmissionAnalysisPrewarmStatus,
+    val result: SubmissionAnalysisPrewarmResult? = null,
+    val errorMessage: String? = null
+)
+
+private data class BackgroundUploadKey(
+    val selectionGeneration: Long,
+    val challengeId: Long,
+    val attemptUrisSignature: String
+)
+
+private data class BackgroundUploadRequest(
+    val key: BackgroundUploadKey,
+    val challengeId: Long,
+    val attemptUris: List<String>
 )
 
 private data class ResolvedAiProfile(

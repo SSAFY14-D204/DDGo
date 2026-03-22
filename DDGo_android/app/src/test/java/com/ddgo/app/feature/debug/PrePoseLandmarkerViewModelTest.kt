@@ -8,9 +8,10 @@ import com.ddgo.app.domain.poseanalysis.PoseFrame
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
 import com.ddgo.app.feature.climbing.upload.MainDispatcherRule
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.verify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -47,7 +48,7 @@ class PrePoseLandmarkerViewModelTest {
         )
 
         coEvery {
-            prePoseVideoAnalyzer.invoke(any(), any(), any())
+            prePoseVideoAnalyzer.invoke(any(), any(), any(), any())
         } returns Result.success(poseFrames)
         every { analyzeHandPeakAndEndUseCase(any<List<PoseFrame>>(), any()) } returns annotation
 
@@ -79,7 +80,7 @@ class PrePoseLandmarkerViewModelTest {
         val poseFrames = listOf(debugPoseFrameAt(0L))
 
         coEvery {
-            prePoseVideoAnalyzer.invoke(any(), any(), any())
+            prePoseVideoAnalyzer.invoke(any(), any(), any(), any())
         } returns Result.success(poseFrames)
         every { analyzeHandPeakAndEndUseCase(any<List<PoseFrame>>(), any()) } returns null
 
@@ -119,7 +120,7 @@ class PrePoseLandmarkerViewModelTest {
         )
 
         coEvery {
-            prePoseVideoAnalyzer.invoke(any(), any(), any())
+            prePoseVideoAnalyzer.invoke(any(), any(), any(), any())
         } returns Result.success(poseFrames)
         every { analyzeHandPeakAndEndUseCase(any<List<PoseFrame>>(), any()) } returns annotation
 
@@ -149,6 +150,37 @@ class PrePoseLandmarkerViewModelTest {
         assertNull(uiState.handPeakAnnotation)
         assertTrue(uiState.analysisPoints.isEmpty())
         assertTrue(uiState.poseFrames.isEmpty())
+    }
+
+    @Test
+    fun `analyzeVideo forwards gpu toggle to optimized analyzer`() = runTest {
+        val prePoseVideoAnalyzer = mockk<PrePoseVideoAnalyzer>()
+        val optimizedPrePoseVideoAnalyzer = mockk<OptimizedPrePoseVideoAnalyzer>()
+        val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
+        val poseFrames = listOf(debugPoseFrameAt(0L))
+
+        coEvery {
+            optimizedPrePoseVideoAnalyzer.invoke(any(), any(), any(), any())
+        } returns Result.success(poseFrames)
+        every { analyzeHandPeakAndEndUseCase(any<List<PoseFrame>>(), any()) } returns null
+
+        val viewModel = PrePoseLandmarkerViewModel(
+            prePoseVideoAnalyzer = prePoseVideoAnalyzer,
+            optimizedPrePoseVideoAnalyzer = optimizedPrePoseVideoAnalyzer,
+            analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase
+        )
+
+        viewModel.analyzeVideo(
+            uri = fileUri(),
+            displayName = "gpu_video.mp4",
+            useOptimized = true,
+            useGpuAcceleration = true
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            optimizedPrePoseVideoAnalyzer.invoke(any(), 30, true, any())
+        }
     }
 
     private fun debugPoseFrameAt(frameTimeMs: Long): DebugPoseFrameResult = DebugPoseFrameResult(

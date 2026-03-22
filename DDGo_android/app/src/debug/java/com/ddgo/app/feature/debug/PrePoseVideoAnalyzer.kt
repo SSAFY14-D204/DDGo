@@ -20,6 +20,7 @@ import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -46,19 +47,21 @@ class PrePoseVideoAnalyzer @Inject constructor(
     suspend operator fun invoke(
         videoUri: String,
         analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT,
+        useGpuAcceleration: Boolean = false,
         onProgress: (Float) -> Unit = {}
     ): Result<List<DebugPoseFrameResult>> = withContext(Dispatchers.IO) {
-        runCatching { analyzeInternal(videoUri, analysisFpsLimit, onProgress) }
+        runCatching { analyzeInternal(videoUri, analysisFpsLimit, useGpuAcceleration, onProgress) }
     }
 
     private fun analyzeInternal(
         videoUri: String,
         analysisFpsLimit: Int,
+        useGpuAcceleration: Boolean,
         onProgress: (Float) -> Unit
     ): List<DebugPoseFrameResult> {
         lastCaptureTimeMs = -5_000
         val uri = Uri.parse(videoUri)
-        val poseLandmarker = createPoseLandmarker()
+        val poseLandmarker = createPoseLandmarker(useGpuAcceleration)
 
         try {
             return analyzeSequentialFrames(
@@ -332,12 +335,27 @@ class PrePoseVideoAnalyzer @Inject constructor(
 
     private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
 
-    private fun createPoseLandmarker(): PoseLandmarker {
-        val baseOptions = BaseOptions.builder()
+    private fun createPoseLandmarker(useGpuAcceleration: Boolean): PoseLandmarker {
+        if (useGpuAcceleration) {
+            val gpuResult = runCatching { createPoseLandmarker(delegate = Delegate.GPU) }
+            gpuResult.onFailure {
+                Log.w(TAG, "GPU delegate unavailable. Falling back to CPU.", it)
+            }
+            return gpuResult.getOrElse { createPoseLandmarker(delegate = null) }
+        }
+
+        return createPoseLandmarker(delegate = null)
+    }
+
+    private fun createPoseLandmarker(delegate: Delegate?): PoseLandmarker {
+        val baseOptionsBuilder = BaseOptions.builder()
             .setModelAssetPath(POSE_MODEL_PATH)
-            .build()
+        if (delegate != null) {
+            baseOptionsBuilder.setDelegate(delegate)
+        }
+
         val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-            .setBaseOptions(baseOptions)
+            .setBaseOptions(baseOptionsBuilder.build())
             .setRunningMode(RunningMode.VIDEO)
             .setNumPoses(1)
             .setMinPoseDetectionConfidence(0.5f)

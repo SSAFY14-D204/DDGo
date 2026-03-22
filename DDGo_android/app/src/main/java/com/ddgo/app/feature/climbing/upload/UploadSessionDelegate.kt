@@ -33,6 +33,7 @@ internal interface UploadSessionCallbacks {
     fun setCurrentAttemptIndex(index: Int)
     fun clearCurrentPoseLandmarks()
     fun syncDisplayedAnalysisPoints()
+    fun onPrimaryVideoPrepared(generation: Long, playbackUri: String)
     fun onPrePoseBatchStateChanged()
 }
 
@@ -191,7 +192,10 @@ internal class UploadSessionDelegate(
                 registerManagedVideo(managedVideo)
                 primaryManagedVideo = managedVideo
                 videoUri = managedVideo.playbackUri
-                refreshCurrentSelectionPrePoseTargets(generation)
+                callbacks.onPrimaryVideoPrepared(
+                    generation = generation,
+                    playbackUri = managedVideo.playbackUri
+                )
                 cleanupUnusedManagedTempFiles()
             }
 
@@ -244,6 +248,13 @@ internal class UploadSessionDelegate(
                         taskId = taskId
                     )
                 )
+                UploadAiTraceLogger.log(
+                    event = "PREPOSE_QUEUE_ENQUEUED",
+                    generation = generation,
+                    playbackUri = playbackUri,
+                    status = "new_pending",
+                    details = mapOf("taskId" to taskId)
+                )
                 return@forEach
             }
 
@@ -263,6 +274,13 @@ internal class UploadSessionDelegate(
                         playbackUri = playbackUri,
                         taskId = existingEntry.taskId
                     )
+                )
+                UploadAiTraceLogger.log(
+                    event = "PREPOSE_QUEUE_REUSED_PENDING",
+                    generation = generation,
+                    playbackUri = playbackUri,
+                    status = "requeued",
+                    details = mapOf("taskId" to existingEntry.taskId)
                 )
             }
         }
@@ -288,7 +306,8 @@ internal class UploadSessionDelegate(
 
     suspend fun awaitPrePoseTerminal(
         playbackUris: List<String>,
-        callbacks: UploadSessionCallbacks
+        callbacks: UploadSessionCallbacks? = latestCallbacks,
+        emitLoading: Boolean = true
     ): TerminalPrePoseSnapshot {
         if (playbackUris.isEmpty()) {
             return TerminalPrePoseSnapshot(
@@ -330,7 +349,7 @@ internal class UploadSessionDelegate(
             val completedCount = entries.count { entry ->
                 entry.status == PrePoseStatus.Ready || entry.status == PrePoseStatus.Failed
             }
-            callbacks.setUploadSubmissionLoading(
+            if (emitLoading) callbacks?.setUploadSubmissionLoading(
                 "pre-pose 준비 중입니다. (${completedCount}/${playbackUris.size})"
             )
             delay(100L)
@@ -339,23 +358,54 @@ internal class UploadSessionDelegate(
 
     suspend fun awaitSubmitReadyPrePose(
         playbackUris: List<String>,
-        callbacks: UploadSessionCallbacks
+        callbacks: UploadSessionCallbacks? = latestCallbacks,
+        emitLoading: Boolean = true
     ): TerminalPrePoseSnapshot {
+        UploadAiTraceLogger.log(
+            event = "PREPOSE_AWAIT_BEGIN",
+            generation = selectionGeneration,
+            playbackUri = playbackUris.firstOrNull(),
+            status = "awaiting_submit_ready",
+            details = mapOf("playbackCount" to playbackUris.size)
+        )
         var snapshot = awaitPrePoseTerminal(
             playbackUris = playbackUris,
-            callbacks = callbacks
+            callbacks = callbacks,
+            emitLoading = emitLoading
         )
         val retryPlaybackUris = playbackUris.filter { playbackUri ->
             snapshot.entriesByPlaybackUri[playbackUri].isReusableForSubmission().not()
         }
         if (retryPlaybackUris.isEmpty()) {
+            UploadAiTraceLogger.log(
+                event = "PREPOSE_AWAIT_DONE",
+                generation = selectionGeneration,
+                playbackUri = playbackUris.firstOrNull(),
+                status = "reusable",
+                details = mapOf("playbackCount" to playbackUris.size)
+            )
             return snapshot
         }
 
+        UploadAiTraceLogger.log(
+            event = "PREPOSE_AWAIT_RETRY_FAILED_ENTRIES",
+            generation = selectionGeneration,
+            playbackUri = retryPlaybackUris.firstOrNull(),
+            status = "retry",
+            details = mapOf("retryCount" to retryPlaybackUris.size)
+        )
         retryPrePoseEntries(retryPlaybackUris)
         snapshot = awaitPrePoseTerminal(
             playbackUris = playbackUris,
-            callbacks = callbacks
+            callbacks = callbacks,
+            emitLoading = emitLoading
+        )
+        UploadAiTraceLogger.log(
+            event = "PREPOSE_AWAIT_DONE",
+            generation = selectionGeneration,
+            playbackUri = playbackUris.firstOrNull(),
+            status = "retried",
+            details = mapOf("playbackCount" to playbackUris.size)
         )
         return snapshot
     }
@@ -422,6 +472,12 @@ internal class UploadSessionDelegate(
     private fun ensurePrePoseWorkerRunning() {
         if (prePoseWorkerJob?.isActive == true) return
 
+        UploadAiTraceLogger.log(
+            event = "PREPOSE_WORKER_KICKED",
+            generation = selectionGeneration,
+            playbackUri = allAttemptUris.firstOrNull(),
+            status = "worker_start"
+        )
         prePoseWorkerJob = scope.launch(Dispatchers.Default) {
             while (true) {
                 val task = if (prePoseTaskQueue.isEmpty()) {
@@ -445,6 +501,14 @@ internal class UploadSessionDelegate(
                     )
                 }
                 activePrePosePlaybackUris += task.playbackUri
+                val startedAt = UploadAiTraceLogger.now()
+                UploadAiTraceLogger.log(
+                    event = "PREPOSE_RUNNING",
+                    generation = currentEntry.selectionGeneration,
+                    playbackUri = task.playbackUri,
+                    status = "running",
+                    details = mapOf("taskId" to task.taskId)
+                )
                 updatePrePoseBatchState()
 
                 val result = runCatching {
@@ -492,6 +556,17 @@ internal class UploadSessionDelegate(
                                 taskId = null
                             )
                         } else {
+                            UploadAiTraceLogger.log(
+                                event = "PREPOSE_FAILED",
+                                generation = latestEntry.selectionGeneration,
+                                playbackUri = task.playbackUri,
+                                status = "failed",
+                                elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                                details = mapOf(
+                                    "taskId" to task.taskId,
+                                    "error" to result.exceptionOrNull()?.message
+                                )
+                            )
                             latestEntry.copy(
                                 status = PrePoseStatus.Failed,
                                 aiPoseSequence = null,
@@ -505,6 +580,21 @@ internal class UploadSessionDelegate(
                                 taskId = null
                             )
                         }
+                    )
+                }
+                if (result.isSuccess) {
+                    val latestReadyEntry = prePoseCacheEntries[task.playbackUri]
+                    UploadAiTraceLogger.log(
+                        event = "PREPOSE_READY",
+                        generation = latestReadyEntry?.selectionGeneration ?: selectionGeneration,
+                        playbackUri = task.playbackUri,
+                        status = "ready",
+                        elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                        details = mapOf(
+                            "poseCount" to latestReadyEntry?.poses?.size,
+                            "processedFrameCount" to latestReadyEntry?.processedFrames?.size,
+                            "hasAiPoseSequence" to (latestReadyEntry?.aiPoseSequence != null)
+                        )
                     )
                 }
                 activePrePosePlaybackUris -= task.playbackUri
@@ -530,6 +620,18 @@ internal class UploadSessionDelegate(
             runningCount = entries.count { it.status == PrePoseStatus.Running },
             readyCount = entries.count { it.status == PrePoseStatus.Ready },
             failedCount = entries.count { it.status == PrePoseStatus.Failed }
+        )
+        UploadAiTraceLogger.log(
+            event = "PREPOSE_BATCH_STATE",
+            generation = selectionGeneration,
+            playbackUri = currentUris.firstOrNull(),
+            details = mapOf(
+                "totalCount" to prePoseBatchState.totalCount,
+                "pendingCount" to prePoseBatchState.pendingCount,
+                "runningCount" to prePoseBatchState.runningCount,
+                "readyCount" to prePoseBatchState.readyCount,
+                "failedCount" to prePoseBatchState.failedCount
+            )
         )
         callbacksOnPrePoseBatchStateChanged()
     }

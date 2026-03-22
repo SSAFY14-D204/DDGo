@@ -1,4 +1,4 @@
-package com.ddgo.app.feature.debug
+package com.ddgo.app.data.ml.mediapipe
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -21,98 +21,79 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import android.view.Surface
-import com.ddgo.app.data.mapper.VisionMapper
-import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.model.PrePoseVideoAnalysisResult
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
-import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.Optional
 import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.coroutines.coroutineContext
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-class OptimizedPrePoseVideoAnalyzer @Inject constructor(
+@Singleton
+class UploadOptimizedPrePoseVideoAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private var lastTimestampMs: Long = -1L
-    private var lastCaptureTimeMs: Long = -CAPTURE_INTERVAL_MS
 
-    suspend operator fun invoke(
+    suspend fun analyze(
         videoUri: String,
-        analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT,
-        useGpuAcceleration: Boolean = true,
-        onProgress: (Float) -> Unit = {}
-    ): Result<List<DebugPoseFrameResult>> = withContext(Dispatchers.IO) {
-        runCatching {
-            lastTimestampMs = -1L
-            lastCaptureTimeMs = -CAPTURE_INTERVAL_MS
+        analysisFpsLimit: Int
+    ): PrePoseVideoAnalysisResult = withContext(Dispatchers.IO) {
+        coroutineContext.ensureActive()
+        lastTimestampMs = -1L
 
-            val safeUri = prepareSafeUri(videoUri)
-            try {
-                analyzeInternal(safeUri, analysisFpsLimit, useGpuAcceleration, onProgress)
-            } finally {
-                cleanupSafeUri(safeUri)
-            }
-        }
-    }
-
-    private fun prepareSafeUri(videoUri: String): Uri {
-        val uri = Uri.parse(videoUri)
-        if (uri.scheme == "file") return uri
-
-        return try {
-            val tempFile = File(
-                context.cacheDir,
-                "pre_pose_temp_${System.currentTimeMillis()}.mp4"
+        val safeUri = prepareSafeUri(videoUri)
+        try {
+            analyzeInternal(
+                sourceVideoUri = videoUri,
+                decodeUri = safeUri,
+                analysisFpsLimit = analysisFpsLimit,
+                cancellationCheckpoint = { coroutineContext.ensureActive() }
             )
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            Log.d(TAG, "Temporary analysis file created: ${tempFile.absolutePath}")
-            Uri.fromFile(tempFile)
-        } catch (error: Exception) {
-            Log.w(TAG, "Failed to create temporary file, falling back to source URI", error)
-            uri
-        }
-    }
-
-    private fun cleanupSafeUri(uri: Uri) {
-        val path = uri.path ?: return
-        if (uri.scheme == "file" && path.contains("pre_pose_temp_")) {
-            runCatching { File(path).delete() }
-                .onFailure { Log.w(TAG, "Failed to delete temp file: $path", it) }
+        } finally {
+            cleanupSafeUri(safeUri)
         }
     }
 
     private fun analyzeInternal(
-        uri: Uri,
+        sourceVideoUri: String,
+        decodeUri: Uri,
         analysisFpsLimit: Int,
-        useGpuAcceleration: Boolean,
-        onProgress: (Float) -> Unit
-    ): List<DebugPoseFrameResult> {
-        val poseLandmarker = createPoseLandmarker(useGpuAcceleration)
+        cancellationCheckpoint: () -> Unit
+    ): PrePoseVideoAnalysisResult {
+        val poseLandmarker = createPoseLandmarker()
+            ?: throw IllegalStateException("Optimized upload pre-pose landmarker is unavailable.")
+
         try {
-            return analyzeWithSurface(uri, poseLandmarker, analysisFpsLimit, onProgress)
+            return analyzeWithSurface(
+                sourceVideoUri = sourceVideoUri,
+                decodeUri = decodeUri,
+                poseLandmarker = poseLandmarker,
+                analysisFpsLimit = analysisFpsLimit,
+                cancellationCheckpoint = cancellationCheckpoint
+            ).toPrePoseVideoAnalysisResult()
         } finally {
             poseLandmarker.close()
         }
     }
 
     private fun analyzeWithSurface(
-        uri: Uri,
+        sourceVideoUri: String,
+        decodeUri: Uri,
         poseLandmarker: PoseLandmarker,
         analysisFpsLimit: Int,
-        onProgress: (Float) -> Unit
-    ): List<DebugPoseFrameResult> {
+        cancellationCheckpoint: () -> Unit
+    ): PoseSequenceAnalysisResult {
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
         var handlerThread: HandlerThread? = null
@@ -123,45 +104,45 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
         var decoderSurface: Surface? = null
 
         try {
-            if (!setExtractorDataSource(extractor, uri)) {
-                throw IllegalStateException("Could not open the selected video.")
+            require(setExtractorDataSource(extractor, decodeUri)) {
+                "Could not open the selected video."
             }
 
             val videoTrackIndex = findVideoTrackIndex(extractor)
-            if (videoTrackIndex == -1) return emptyList()
+            if (videoTrackIndex == -1) {
+                Log.w(TAG, "No video track found for optimized upload pre-pose.")
+                return emptyPrePoseAnalysisResult(
+                    videoUri = sourceVideoUri,
+                    analysisFpsLimit = analysisFpsLimit,
+                    generator = TAG
+                )
+            }
 
             extractor.selectTrack(videoTrackIndex)
             val trackFormat = extractor.getTrackFormat(videoTrackIndex)
             val mimeType = trackFormat.getString(MediaFormat.KEY_MIME)
                 ?: throw IllegalStateException("Missing video mime type.")
             val durationUs = trackFormat.getLongOrZero(MediaFormat.KEY_DURATION)
-            val width = trackFormat.getIntOrZero(MediaFormat.KEY_WIDTH)
-            val height = trackFormat.getIntOrZero(MediaFormat.KEY_HEIGHT)
+            val sourceFrameWidth = trackFormat.getIntOrZero(MediaFormat.KEY_WIDTH)
+            val sourceFrameHeight = trackFormat.getIntOrZero(MediaFormat.KEY_HEIGHT)
             val rotationDegrees = trackFormat.getIntOrZero(MediaFormat.KEY_ROTATION)
-            val sourceFrameRate = trackFormat.getIntOrNull(MediaFormat.KEY_FRAME_RATE)
+            val frameRate = trackFormat.getIntOrNull(MediaFormat.KEY_FRAME_RATE)
 
             val isRotated = rotationDegrees == 90 || rotationDegrees == 270
-            val visualWidth = if (isRotated) height else width
-            val visualHeight = if (isRotated) width else height
-            val maxDim = max(visualWidth, visualHeight)
-            val scale = if (maxDim > MAX_INFERENCE_DIM) {
-                MAX_INFERENCE_DIM.toFloat() / maxDim.toFloat()
+            val referenceWidthPx = if (isRotated) sourceFrameHeight else sourceFrameWidth
+            val referenceHeightPx = if (isRotated) sourceFrameWidth else sourceFrameHeight
+            val maxDimension = max(referenceWidthPx, referenceHeightPx)
+            val scale = if (maxDimension > MAX_INFERENCE_DIMENSION_PX) {
+                MAX_INFERENCE_DIMENSION_PX.toFloat() / maxDimension.toFloat()
             } else {
                 1f
             }
-            val targetWidth = (visualWidth * scale).toInt().coerceAtLeast(1)
-            val targetHeight = (visualHeight * scale).toInt().coerceAtLeast(1)
+            val targetWidth = (referenceWidthPx * scale).toInt().coerceAtLeast(1)
+            val targetHeight = (referenceHeightPx * scale).toInt().coerceAtLeast(1)
             val normalizedAnalysisFpsLimit = analysisFpsLimit.coerceAtLeast(1)
             val minProcessFrameGapUs = 1_000_000L / normalizedAnalysisFpsLimit
 
-            Log.d(
-                TAG,
-                "Video setup: ${width}x$height -> ${targetWidth}x$targetHeight, " +
-                    "rotation=$rotationDegrees, fps=${sourceFrameRate ?: "unknown"}, " +
-                    "targetAnalysisFps=$normalizedAnalysisFpsLimit, minGapUs=$minProcessFrameGapUs"
-            )
-
-            handlerThread = HandlerThread("PrePoseSurfaceTexture").apply { start() }
+            handlerThread = HandlerThread("UploadPrePoseSurfaceTexture").apply { start() }
             val handler = Handler(handlerThread.looper)
 
             imageReader = ImageReader.newInstance(
@@ -201,21 +182,28 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
                 decoder = decoder,
                 imageReader = imageReader,
                 poseLandmarker = poseLandmarker,
+                sourceVideoUri = sourceVideoUri,
+                mimeType = mimeType,
                 durationUs = durationUs,
                 rotationDegrees = rotationDegrees,
-                onProgress = onProgress,
-                targetWidth = targetWidth,
-                targetHeight = targetHeight,
+                sourceFrameWidth = sourceFrameWidth,
+                sourceFrameHeight = sourceFrameHeight,
+                referenceWidthPx = referenceWidthPx,
+                referenceHeightPx = referenceHeightPx,
+                frameRate = frameRate,
+                analysisFpsLimit = normalizedAnalysisFpsLimit,
                 minProcessFrameGapUs = minProcessFrameGapUs,
                 frameSyncObject = frameSyncObject,
                 isFrameAvailable = { frameAvailable },
                 setFrameAvailable = { frameAvailable = it },
                 surfaceTexture = surfaceTexture,
                 textureRenderer = textureRenderer,
-                eglWindow = eglWindow
+                eglWindow = eglWindow,
+                cancellationCheckpoint = cancellationCheckpoint
             )
         } finally {
             runCatching { decoder?.stop() }
+                .onFailure { error -> Log.w(TAG, "Failed to stop optimized decoder.", error) }
             runCatching { decoder?.release() }
             decoderSurface?.release()
             surfaceTexture?.release()
@@ -232,25 +220,29 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
         decoder: MediaCodec,
         imageReader: ImageReader,
         poseLandmarker: PoseLandmarker,
+        sourceVideoUri: String,
+        mimeType: String,
         durationUs: Long,
         rotationDegrees: Int,
-        onProgress: (Float) -> Unit,
-        targetWidth: Int,
-        targetHeight: Int,
+        sourceFrameWidth: Int,
+        sourceFrameHeight: Int,
+        referenceWidthPx: Int,
+        referenceHeightPx: Int,
+        frameRate: Int?,
+        analysisFpsLimit: Int,
         minProcessFrameGapUs: Long,
         frameSyncObject: Object,
         isFrameAvailable: () -> Boolean,
         setFrameAvailable: (Boolean) -> Unit,
         surfaceTexture: SurfaceTexture,
         textureRenderer: TextureRenderer,
-        eglWindow: EglWindow
-    ): List<DebugPoseFrameResult> {
+        eglWindow: EglWindow,
+        cancellationCheckpoint: () -> Unit
+    ): PoseSequenceAnalysisResult {
         val bufferInfo = MediaCodec.BufferInfo()
-        val poses = ArrayList<DebugPoseFrameResult>()
-        val bitmapExtractor = RgbaBitmapExtractor(targetWidth, targetHeight)
-        val imageOptions = ImageProcessingOptions.builder()
-            .setRotationDegrees(0)
-            .build()
+        val poses = ArrayList<Pose>()
+        val aiFrames = ArrayList<com.ddgo.app.domain.model.AiPoseFrame>()
+        val bitmapExtractor = RgbaBitmapExtractor(imageReader.width, imageReader.height)
         val texMatrix = FloatArray(16)
         val mvpMatrix = FloatArray(16)
         android.opengl.Matrix.setIdentityM(mvpMatrix, 0)
@@ -268,16 +260,20 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
 
         var inputEnded = false
         var outputEnded = false
+        var decodedFrameCount = 0
         var processedFrameCount = 0
         var skippedFrameCount = 0
         var lastProcessedPresentationTimeUs = Long.MIN_VALUE
 
         while (!outputEnded) {
+            cancellationCheckpoint()
+
             if (!inputEnded) {
                 val inputIndex = decoder.dequeueInputBuffer(DEQUEUE_TIMEOUT_US)
                 if (inputIndex >= 0) {
                     val inputBuffer = decoder.getInputBuffer(inputIndex)
-                        ?: throw IllegalStateException("Failed to obtain decoder input buffer.")
+                        ?: throw IllegalStateException("Failed to obtain optimized decoder input buffer.")
+                    inputBuffer.clear()
                     val sampleSize = extractor.readSampleData(inputBuffer, 0)
                     if (sampleSize < 0) {
                         decoder.queueInputBuffer(
@@ -304,7 +300,7 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
             when (val outputIndex = decoder.dequeueOutputBuffer(bufferInfo, DEQUEUE_TIMEOUT_US)) {
                 MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
                 MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    Log.d(TAG, "Decoder output format changed: ${decoder.outputFormat}")
+                    Log.d(TAG, "Optimized decoder output format changed: ${decoder.outputFormat}")
                 }
 
                 else -> {
@@ -316,10 +312,7 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
                         bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
 
                     if (!isCodecConfig && bufferInfo.presentationTimeUs >= 0L) {
-                        if (durationUs > 0L) {
-                            onProgress(bufferInfo.presentationTimeUs.toFloat() / durationUs.toFloat())
-                        }
-
+                        decodedFrameCount++
                         decoder.releaseOutputBuffer(outputIndex, true)
 
                         if (
@@ -329,10 +322,9 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
                                 setFrameAvailable = setFrameAvailable
                             )
                         ) {
-                            Log.w(TAG, "Timed out waiting for SurfaceTexture frame.")
+                            Log.w(TAG, "Timed out waiting for optimized SurfaceTexture frame.")
                             if (isEndOfStream) {
                                 outputEnded = true
-                                onProgress(1f)
                             }
                             continue
                         }
@@ -348,98 +340,37 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
                             skippedFrameCount++
                         } else {
                             lastProcessedPresentationTimeUs = bufferInfo.presentationTimeUs
+                            val currentFrameIndex = processedFrameCount
+                            processedFrameCount++
+
                             surfaceTexture.getTransformMatrix(texMatrix)
                             textureRenderer.draw(texMatrix, mvpMatrix)
                             eglWindow.swapBuffers()
 
                             val image = imageReader.acquireLatestImage()
                             if (image != null) {
-                                val shouldCapture =
-                                    currentTimestampMs >= lastCaptureTimeMs + CAPTURE_INTERVAL_MS
-                                var capturedBitmap: Bitmap? = null
                                 var frameBitmap: Bitmap? = null
                                 try {
                                     frameBitmap = bitmapExtractor.copyToBitmap(image)
-                                    capturedBitmap = if (shouldCapture) {
-                                        Bitmap.createBitmap(frameBitmap)
-                                    } else {
-                                        null
-                                    }
-                                    val mpImage = BitmapImageBuilder(frameBitmap).build()
-
-                                    try {
-                                        val result = poseLandmarker.detectForVideo(
-                                            mpImage,
-                                            imageOptions,
-                                            currentTimestampMs
+                                    runCatching {
+                                        inferPoseCaptureFromBitmap(
+                                            poseLandmarker = poseLandmarker,
+                                            frameBitmap = frameBitmap,
+                                            frameTimeMs = currentTimestampMs,
+                                            frameIndex = currentFrameIndex,
+                                            referenceWidthPx = referenceWidthPx,
+                                            referenceHeightPx = referenceHeightPx
                                         )
-                                        processedFrameCount++
-
-                                        val landmarks = result.landmarks().firstOrNull().orEmpty()
-                                        if (landmarks.isNotEmpty() || shouldCapture) {
-                                            if (shouldCapture) {
-                                                lastCaptureTimeMs =
-                                                    (currentTimestampMs / CAPTURE_INTERVAL_MS) *
-                                                        CAPTURE_INTERVAL_MS
-                                            }
-
-                                            poses.add(
-                                                DebugPoseFrameResult(
-                                                    pose = VisionMapper.toPose(
-                                                        frameTimeMs = result.timestampMs(),
-                                                        rawLandmarks = landmarks.map {
-                                                            Triple(it.x(), it.y(), it.z())
-                                                        },
-                                                        visibilityValues = landmarks.map {
-                                                            it.visibility().toNullable()
-                                                        },
-                                                        presenceValues = landmarks.map {
-                                                            it.presence().toNullable()
-                                                        }
-                                                    ),
-                                                    worldLandmarks = result.worldLandmarks()
-                                                        .firstOrNull()
-                                                        .orEmpty()
-                                                        .mapIndexed { index, landmark ->
-                                                            DebugPoseWorldLandmark(
-                                                                index = index,
-                                                                x = landmark.x(),
-                                                                y = landmark.y(),
-                                                                z = landmark.z(),
-                                                                visibility = landmark.visibility()
-                                                                    .toNullable(),
-                                                                presence = landmark.presence()
-                                                                    .toNullable()
-                                                            )
-                                                        },
-                                                    capturedBitmap = capturedBitmap
-                                                )
-                                            )
-                                        }
-                                    } finally {
-                                        mpImage.close()
-                                    }
-                                } catch (error: Exception) {
-                                    if (shouldCapture) {
-                                        lastCaptureTimeMs =
-                                            (currentTimestampMs / CAPTURE_INTERVAL_MS) *
-                                                CAPTURE_INTERVAL_MS
-                                        poses.add(
-                                            DebugPoseFrameResult(
-                                                pose = VisionMapper.toPose(
-                                                    frameTimeMs = currentTimestampMs,
-                                                    rawLandmarks = emptyList()
-                                                ),
-                                                worldLandmarks = emptyList(),
-                                                capturedBitmap = capturedBitmap
-                                            )
+                                    }.onFailure { error ->
+                                        Log.e(
+                                            TAG,
+                                            "Optimized pose inference failed at ptsUs=${bufferInfo.presentationTimeUs}",
+                                            error
                                         )
+                                    }.getOrNull()?.let { capture ->
+                                        aiFrames.add(capture.frame)
+                                        capture.pose?.let(poses::add)
                                     }
-                                    Log.e(
-                                        TAG,
-                                        "Pose inference failed at ${bufferInfo.presentationTimeUs / 1_000L}ms",
-                                        error
-                                    )
                                 } finally {
                                     frameBitmap?.takeIf { !it.isRecycled }?.recycle()
                                     image.close()
@@ -452,7 +383,6 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
 
                     if (isEndOfStream) {
                         outputEnded = true
-                        onProgress(1f)
                     }
                 }
             }
@@ -460,9 +390,53 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
 
         Log.d(
             TAG,
-            "Analysis complete: poses=${poses.size}, processed=$processedFrameCount, skipped=$skippedFrameCount"
+            "Optimized upload pre-pose complete: decoded=$decodedFrameCount, processed=$processedFrameCount, skipped=$skippedFrameCount, poses=${poses.size}, durationUs=$durationUs"
         )
-        return poses
+
+        return buildPoseSequenceAnalysisResult(
+            sourceUri = Uri.parse(sourceVideoUri),
+            generator = TAG,
+            mimeType = mimeType,
+            frameWidth = sourceFrameWidth,
+            frameHeight = sourceFrameHeight,
+            frameRate = frameRate,
+            analysisFpsLimit = analysisFpsLimit,
+            rotationDegrees = rotationDegrees,
+            decodedFrameCount = decodedFrameCount,
+            processedFrameCount = processedFrameCount,
+            skippedFrameCount = skippedFrameCount,
+            aiFrames = aiFrames,
+            poses = poses
+        )
+    }
+
+    private fun prepareSafeUri(videoUri: String): Uri {
+        val uri = Uri.parse(videoUri)
+        if (uri.scheme == "file") return uri
+
+        return try {
+            val tempFile = File(
+                context.cacheDir,
+                "upload_pre_pose_optimized_${System.currentTimeMillis()}.mp4"
+            )
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Uri.fromFile(tempFile)
+        } catch (error: Exception) {
+            Log.w(TAG, "Failed to create temp upload pre-pose file. Using source URI directly.", error)
+            uri
+        }
+    }
+
+    private fun cleanupSafeUri(uri: Uri) {
+        val path = uri.path ?: return
+        if (uri.scheme == "file" && path.contains("upload_pre_pose_optimized_")) {
+            runCatching { File(path).delete() }
+                .onFailure { Log.w(TAG, "Failed to delete temp upload pre-pose file: $path", it) }
+        }
     }
 
     private fun awaitFrame(
@@ -496,16 +470,20 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
         return timestampMs
     }
 
-    private fun createPoseLandmarker(useGpuAcceleration: Boolean): PoseLandmarker {
-        if (useGpuAcceleration) {
-            val gpuResult = runCatching { createPoseLandmarker(delegate = Delegate.GPU) }
-            gpuResult.onFailure {
-                Log.w(TAG, "GPU delegate unavailable. Falling back to CPU.", it)
-            }
-            return gpuResult.getOrElse { createPoseLandmarker(delegate = null) }
+    private fun createPoseLandmarker(): PoseLandmarker? {
+        return try {
+            runCatching { createPoseLandmarker(delegate = Delegate.GPU) }
+                .onFailure { error ->
+                    Log.w(TAG, "GPU delegate unavailable for optimized upload pre-pose. Falling back to CPU.", error)
+                }
+                .getOrElse { createPoseLandmarker(delegate = null) }
+        } catch (error: UnsatisfiedLinkError) {
+            Log.w(TAG, "Optimized upload pre-pose MediaPipe is unavailable on this device.", error)
+            null
+        } catch (error: Exception) {
+            Log.e(TAG, "Failed to create optimized upload pre-pose landmarker.", error)
+            null
         }
-
-        return createPoseLandmarker(delegate = null)
     }
 
     private fun createPoseLandmarker(delegate: Delegate?): PoseLandmarker {
@@ -551,7 +529,7 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
             }
             true
         } catch (error: Exception) {
-            Log.e(TAG, "Failed to set video data source.", error)
+            Log.e(TAG, "Failed to set optimized upload pre-pose data source.", error)
             false
         }
     }
@@ -833,18 +811,11 @@ class OptimizedPrePoseVideoAnalyzer @Inject constructor(
     private fun MediaFormat.getLongOrZero(key: String): Long =
         if (containsKey(key)) getLong(key) else 0L
 
-    private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
-
     companion object {
-        private const val TAG = "OptimizedPrePose"
+        internal const val MAX_INFERENCE_DIMENSION_PX = 384
+
+        private const val TAG = "UploadOptimizedPrePoseVideoAnalyzer"
         private const val POSE_MODEL_PATH = "models/pose_landmarker_lite.task"
-        // pose_detector.tflite input: 224x224
-        // pose_landmarks_detector.tflite input: 256x256
-        // Pre-scaling the long edge to 256 keeps us close to the actual task input sizes
-        // and avoids paying copy/resize cost on larger intermediate frames.
-        private const val MAX_INFERENCE_DIM = 256
-        private const val DEFAULT_ANALYSIS_FPS_LIMIT = 30
-        private const val CAPTURE_INTERVAL_MS = 5_000L
         private const val DEQUEUE_TIMEOUT_US = 10_000L
         private const val FRAME_WAIT_TIMEOUT_MS = 500L
         private const val PIXEL_STRIDE = 4
