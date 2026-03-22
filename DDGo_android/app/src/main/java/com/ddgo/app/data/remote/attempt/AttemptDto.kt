@@ -64,10 +64,27 @@ data class AttemptFullResponseDto(
     val durationMs: Int? = null,
     val maxHoldNo: Int? = null,
     val videoUrl: String? = null,
+    val metricsData: AttemptMetricsResponseDto? = null,
+    val feedbacksData: AttemptFeedbacksResponseDto? = null,
     val centerStabilityRatio: Double? = null,
     val cruxHoldNo: Int? = null,
     val cruxDurationMs: Int? = null,
     val dangerEventCount: Int? = null,
+    val failureReason: String? = null,
+    val riskAlert: String? = null,
+    val nextMission: String? = null
+)
+
+@Serializable
+data class AttemptMetricsResponseDto(
+    val centerStabilityRatio: Double? = null,
+    val cruxHoldNo: Int? = null,
+    val cruxDurationMs: Int? = null,
+    val dangerEventCount: Int? = null
+)
+
+@Serializable
+data class AttemptFeedbacksResponseDto(
     val failureReason: String? = null,
     val riskAlert: String? = null,
     val nextMission: String? = null

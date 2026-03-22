@@ -12,13 +12,6 @@ import com.ddgo.app.feature.analysis.model.AnalysisChallengeDetailUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisChallengeSummaryUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisOverviewStatUiModel
 
-/**
- * 챌린지 상세 화면 전용 UI 모델을 조립하는 mapper입니다.
- *
- * 역할:
- * - 챌린지 요약, 시도 흐름, 시도 목록 등 챌린지 상세 화면 구성만 담당합니다.
- * - 대시보드/시도 상세 계산과 분리해 변경 영향 범위를 챌린지 화면으로 한정합니다.
- */
 internal object AnalysisChallengeDetailUiMapper {
 
     fun build(challenge: AnalysisChallengeSnapshot): AnalysisChallengeDetailUiModel {
@@ -58,17 +51,21 @@ internal object AnalysisChallengeDetailUiMapper {
         )
     }
 
-    /** 챌린지 종합 분석 카드에 들어갈 헤드라인과 지표를 조립합니다. */
     private fun buildSummary(challenge: AnalysisChallengeSnapshot): AnalysisChallengeSummaryUiModel {
         val attempts = challenge.attempts
         val averageStability = attempts.map { it.centerStabilityRatio }.average().toFloat()
-        val totalDanger = attempts.sumOf { it.dangerEventCount }
-        val cruxHold = attempts.maxByOrNull { it.cruxDurationMs ?: 0L }?.cruxHoldNo
+        val totalDangerEvents = attempts.sumOf { it.dangerEventCount }
+        val representativeCruxHold = attempts
+            .maxByOrNull { it.cruxDurationMs ?: 0L }
+            ?.cruxHoldNo
 
         val headline = when (challenge.challengeResult) {
-            AnalysisChallengeResult.SUCCESS -> "시도마다 흔들림이 줄면서 완등까지 자연스럽게 연결됐어요."
-            AnalysisChallengeResult.FAIL -> "도달 지점은 늘었지만 크럭스 전환이 아직 가장 큰 과제예요."
-            AnalysisChallengeResult.UNKNOWN -> "이번 챌린지는 결과보다 흐름 확인이 먼저 필요한 상태예요."
+            AnalysisChallengeResult.SUCCESS ->
+                "완등까지 이어진 흐름을 다시 볼 수 있어요."
+            AnalysisChallengeResult.FAIL ->
+                "반복된 시도에서 어느 구간이 막혔는지 확인할 수 있어요."
+            AnalysisChallengeResult.UNKNOWN ->
+                "현재 저장된 시도 데이터를 기준으로 분석했어요."
         }
 
         return AnalysisChallengeSummaryUiModel(
@@ -84,25 +81,24 @@ internal object AnalysisChallengeDetailUiMapper {
                     value = AnalysisFormatters.formatPercent(averageStability)
                 ),
                 AnalysisOverviewStatUiModel(
-                    label = AnalysisStrings.ChallengeCruxLabel,
-                    value = cruxHold?.let { "${it}홀드" } ?: "-"
+                    label = AnalysisStrings.ChallengeDangerLabel,
+                    value = AnalysisFormatters.formatEventCount(totalDangerEvents)
                 ),
                 AnalysisOverviewStatUiModel(
-                    label = AnalysisStrings.ChallengeDangerLabel,
-                    value = "${totalDanger}회"
+                    label = AnalysisStrings.ChallengeCruxLabel,
+                    value = representativeCruxHold?.let { "${it}번" } ?: "-"
                 )
             )
         )
     }
 
-    /** 챌린지 안의 시도 목록 카드용 값을 조립합니다. */
     private fun buildAttemptListItem(attempt: AnalysisAttemptSnapshot): AnalysisAttemptListItemUiModel {
         return AnalysisAttemptListItemUiModel(
             attemptNo = attempt.attemptNo,
             title = "${attempt.attemptNo}차 시도",
-            subtitle = "${AnalysisFormatters.formatDuration(attempt.durationMs)} | 위험 ${attempt.dangerEventCount}회",
-            holdLabel = "최대 ${attempt.maxHoldNo}홀드",
-            stabilityLabel = "안정 ${AnalysisFormatters.formatPercent(attempt.centerStabilityRatio)}",
+            subtitle = "${AnalysisFormatters.formatDuration(attempt.durationMs)} | 위험 ${AnalysisFormatters.formatEventCount(attempt.dangerEventCount)}",
+            holdLabel = "최대 ${attempt.maxHoldNo}번 홀드",
+            stabilityLabel = "안정률 ${AnalysisFormatters.formatPercent(attempt.centerStabilityRatio)}",
             resultBadge = AnalysisBadgeUiModel(
                 label = AnalysisFormatters.resultLabel(attempt.attemptResult),
                 tone = AnalysisFormatters.resultTone(attempt.attemptResult)
