@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.data.wear.RecordingStateSyncManager
+import com.ddgo.app.data.wear.WatchRuntimeMonitor
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.model.AiVideoMetadata
@@ -31,6 +32,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class RecordViewModel @Inject constructor(
     private val recordingStateSyncManager: RecordingStateSyncManager,
+    private val watchRuntimeMonitor: WatchRuntimeMonitor,
     private val livePoseAnalyzerRepository: LivePoseAnalyzerRepository,
     private val getMyInfoUseCase: GetMyInfoUseCase,
     private val buildAiUserBodyProfileUseCase: BuildAiUserBodyProfileUseCase,
@@ -58,6 +60,38 @@ class RecordViewModel @Inject constructor(
     private var sessionTransferredToUpload = false
     private var currentRecordingSessionId: String? = null
     private val bufferedPoseFrames = mutableListOf<AiPoseFrame>()
+
+    init {
+        watchRuntimeMonitor.start()
+        viewModelScope.launch {
+            watchRuntimeMonitor.snapshot.collect { snapshot ->
+                _uiState.update { current ->
+                    current.copy(
+                        watchStatus = current.watchStatus.copy(
+                            isConnected = snapshot.isWatchConnected,
+                            watchState = snapshot.watchSessionStatus?.watchState,
+                            serviceActive = snapshot.watchSessionStatus?.serviceActive ?: false,
+                            alerting = snapshot.watchSessionStatus?.alerting
+                                ?: snapshot.heartRateSnapshot?.alerting
+                                ?: false,
+                            sensorAvailable = snapshot.watchSessionStatus?.sensorAvailable
+                                ?: snapshot.heartRateSnapshot?.sensorAvailable
+                                ?: false,
+                            measurementStatus = snapshot.heartRateSnapshot?.measurementStatus,
+                            latestHeartRate = snapshot.heartRateSnapshot?.heartRate,
+                            sessionId = snapshot.watchSessionStatus?.sessionId,
+                            lastMeasuredAt = snapshot.heartRateSnapshot?.lastMeasuredAt,
+                            updatedAt = listOfNotNull(
+                                snapshot.watchSessionStatus?.updatedAt,
+                                snapshot.heartRateSnapshot?.updatedAt
+                            ).maxOrNull(),
+                            lastAlertReceivedAt = snapshot.lastAlertReceivedAt
+                        )
+                    )
+                }
+            }
+        }
+    }
 
     fun onPermissionChanged(granted: Boolean) {
         _uiState.update { current ->
@@ -503,6 +537,7 @@ class RecordViewModel @Inject constructor(
     override fun onCleared() {
         analyzerStartJob?.cancel()
         analyzerStopJob?.cancel()
+        watchRuntimeMonitor.stop()
         super.onCleared()
     }
 

@@ -2,6 +2,8 @@ package com.ddgo.app.feature.climbing.record.presentation
 
 import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.repository.LivePoseAnalysisSummary
+import com.ddgo.shared.model.MeasurementStatus
+import com.ddgo.shared.model.WatchState
 
 data class RecordThumbnailFrame(
     val frameIndex: Int,
@@ -19,6 +21,20 @@ data class RecordedAttemptDraft(
     val frameHeightPx: Int? = null
 )
 
+data class RecordWatchStatus(
+    val isConnected: Boolean = false,
+    val watchState: WatchState? = null,
+    val serviceActive: Boolean = false,
+    val alerting: Boolean = false,
+    val sensorAvailable: Boolean = false,
+    val measurementStatus: MeasurementStatus? = null,
+    val latestHeartRate: Int? = null,
+    val sessionId: String? = null,
+    val lastMeasuredAt: Long? = null,
+    val updatedAt: Long? = null,
+    val lastAlertReceivedAt: Long? = null
+)
+
 data class RecordUiState(
     val hasCameraPermission: Boolean = false,
     val isCameraBound: Boolean = false,
@@ -34,6 +50,7 @@ data class RecordUiState(
     val cameraErrorMessage: String? = null,
     val livePoseErrorMessage: String? = null,
     val recordedDraft: RecordedAttemptDraft? = null,
+    val watchStatus: RecordWatchStatus = RecordWatchStatus(),
     val submissionFailureCount: Int = 0,
     val statusMessage: String = "Preparing camera and live pose analysis."
 ) {

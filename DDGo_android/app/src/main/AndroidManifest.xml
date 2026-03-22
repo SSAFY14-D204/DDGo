@@ -37,6 +37,29 @@
         </activity>
 
         <!-- WorkManager를 Hilt와 함께 사용하기 위한 초기화 Provider -->
+        <service
+            android:name=".data.wear.WatchRuntimeListenerService"
+            android:exported="true"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+
+                <data
+                    android:host="*"
+                    android:pathPrefix="/ddigo"
+                    android:scheme="wear" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+
+                <data
+                    android:host="*"
+                    android:pathPrefix="/ddigo/msg/alert"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
