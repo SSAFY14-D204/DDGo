@@ -113,6 +113,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":core-shared"))
+
     // 1. Android Core & UI (Compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
