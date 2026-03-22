@@ -47,6 +47,7 @@ mockk                   = "1.13.12"
 ui = "1.10.4"
 uiText = "1.10.4"
 foundation = "1.10.4"
+playServicesWearable = "19.0.0"
 
 [libraries]
 # Core
@@ -114,6 +115,7 @@ mockk-android                       = { group = "io.mockk",                     
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
+play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
 
 [plugins]
 android-application     = { id = "com.android.application",                    version.ref = "agp" }

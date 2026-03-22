@@ -167,6 +167,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.video)
     implementation(libs.androidx.camera.view)
+    implementation(libs.play.services.wearable)
     implementation("com.github.wseemann:FFmpegMediaMetadataRetriever-core:1.0.19")
     implementation("com.github.wseemann:FFmpegMediaMetadataRetriever-native:1.0.19")
     // Desugaring (Java 8+ API 지원)

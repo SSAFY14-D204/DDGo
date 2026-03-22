@@ -3,6 +3,7 @@ package com.ddgo.app.feature.climbing.record.presentation
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.data.wear.RecordingStateSyncManager
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.model.AiVideoMetadata
@@ -16,7 +17,9 @@ import com.ddgo.app.domain.usecase.AppendAiRealtimePoseChunkUseCase
 import com.ddgo.app.domain.usecase.BuildAiUserBodyProfileUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.StartAiRealtimeSessionUseCase
+import com.ddgo.shared.model.RecordingState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +30,7 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class RecordViewModel @Inject constructor(
+    private val recordingStateSyncManager: RecordingStateSyncManager,
     private val livePoseAnalyzerRepository: LivePoseAnalyzerRepository,
     private val getMyInfoUseCase: GetMyInfoUseCase,
     private val buildAiUserBodyProfileUseCase: BuildAiUserBodyProfileUseCase,
@@ -52,6 +56,7 @@ class RecordViewModel @Inject constructor(
     private var lastChunkUploadedAtMs: Long = 0L
     private var videoMetadata: AiVideoMetadata? = null
     private var sessionTransferredToUpload = false
+    private var currentRecordingSessionId: String? = null
     private val bufferedPoseFrames = mutableListOf<AiPoseFrame>()
 
     fun onPermissionChanged(granted: Boolean) {
@@ -75,6 +80,9 @@ class RecordViewModel @Inject constructor(
     }
 
     fun onCameraUnbound() {
+        if (_uiState.value.isRecording) {
+            syncRecordingState(isRecording = false)
+        }
         _uiState.update {
             it.copy(
                 isCameraBound = false,
@@ -86,6 +94,7 @@ class RecordViewModel @Inject constructor(
     }
 
     fun onRecordingStarted() {
+        currentRecordingSessionId = UUID.randomUUID().toString()
         sessionTransferredToUpload = false
         sessionHandle = null
         sessionStartAttempted = false
@@ -118,9 +127,11 @@ class RecordViewModel @Inject constructor(
         if (!_uiState.value.isLivePoseAnalyzerRunning) {
             startLivePoseAnalyzer(forceRestart = true)
         }
+        syncRecordingState(isRecording = true)
     }
 
     fun onRecordingStopped(draft: RecordedAttemptDraft) {
+        syncRecordingState(isRecording = false)
         viewModelScope.launch {
             flushBufferedPoseFrames(force = true)
             stopLivePoseAnalyzer()
@@ -148,6 +159,7 @@ class RecordViewModel @Inject constructor(
     }
 
     fun onRecordingFailed(message: String) {
+        syncRecordingState(isRecording = false)
         viewModelScope.launch {
             abortRealtimeSessionIfNeeded()
             stopLivePoseAnalyzer()
@@ -472,6 +484,20 @@ class RecordViewModel @Inject constructor(
             return
         }
         abortAiRealtimeSessionUseCase(handle)
+    }
+
+    private fun syncRecordingState(isRecording: Boolean) {
+        val sessionId = currentRecordingSessionId ?: return
+        recordingStateSyncManager.sync(
+            RecordingState(
+                sessionId = sessionId,
+                isRecording = isRecording,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        if (!isRecording) {
+            currentRecordingSessionId = null
+        }
     }
 
     override fun onCleared() {
