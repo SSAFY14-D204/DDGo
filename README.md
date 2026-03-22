@@ -159,13 +159,21 @@ commit은 squash하여 요청하기
 
 | 카테고리 | 설명 |
 |----------|------|
-| `[FE]` | 프론트엔드 |
+| `[AOS]` | Android 앱 전반(모바일 + 워치 연동 포함) |
+| `[WEAR]` | Wear OS 전용 작업 |
+| `[FE]` | 프론트엔드(Web 등) |
 | `[BE]` | 백엔드 |
 | `[AI]` | AI / 머신러닝 |
 | `[INFRA]` | 인프라 / 배포 |
 | `[DB]` | 데이터베이스 |
 | `[DESIGN]` | 디자인 |
 | `[DOCS]` | 문서 작업 |
+
+### Android 클라이언트 카테고리 사용 기준
+
+- 기본값은 `[AOS]`를 사용한다.
+- 폰 앱과 워치 앱을 함께 수정하거나, 공통 계약/연동 로직을 포함하는 경우 `[AOS]`를 사용한다.
+- 워치 앱 전용 UI, 서비스, 센서 처리처럼 변경 범위가 Wear OS 내부로 한정될 때만 `[WEAR]`를 사용한다.
 
 
 
@@ -183,7 +191,8 @@ commit은 squash하여 요청하기
 
 ```
 [BE][회원] 회원 관리
-[FE][게임] 실시간 게임 플레이
+[AOS][클라이밍] 녹화 및 워치 연동
+[WEAR][센서] 심박 측정 및 경고
 [인프라] CI/CD 및 배포 환경 구축
 ```
 
@@ -310,7 +319,8 @@ S14P21D204 Sprint 2 (03/02 ~ 03/08)
 ### 예시
 
 ```
-Frontend  - Android UI
+AOS       - Android App
+WEAR      - Wear OS App
 Backend   - API Server
 Backend   - Auth Module
 AI        - Model Server
