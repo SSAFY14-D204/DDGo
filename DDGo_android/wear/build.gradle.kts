@@ -54,5 +54,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.play.services.wearable)
 
+    testImplementation(libs.junit)
     debugImplementation(libs.androidx.ui.tooling)
 }
