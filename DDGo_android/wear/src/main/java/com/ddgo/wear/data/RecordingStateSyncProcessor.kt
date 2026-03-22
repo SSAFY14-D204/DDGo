@@ -5,6 +5,7 @@ import android.util.Log
 import com.ddgo.shared.contract.DlKeys
 import com.ddgo.shared.contract.DlPaths
 import com.ddgo.shared.model.RecordingState
+import com.ddgo.wear.runtime.SessionRecoveryCoordinator
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
@@ -26,10 +27,13 @@ object RecordingStateSyncProcessor {
                         val item = buffer[index]
                         if (item.uri.path == DlPaths.DATA_RECORDING_STATE) {
                             parseDataItem(item)?.let { recordingState ->
-                                RecordingStateStore.get(appContext).apply(
+                                val applied = RecordingStateStore.get(appContext).apply(
                                     incoming = recordingState,
                                     source = RecordingStateEventSource.DATA_ITEM
                                 )
+                                if (applied) {
+                                    SessionRecoveryCoordinator.syncDesiredState(appContext)
+                                }
                             }
                         }
                     }
@@ -56,10 +60,13 @@ object RecordingStateSyncProcessor {
                 continue
             }
             val recordingState = parseDataItem(item) ?: continue
-            RecordingStateStore.get(appContext).apply(
+            val applied = RecordingStateStore.get(appContext).apply(
                 incoming = recordingState,
                 source = RecordingStateEventSource.DATA_ITEM
             )
+            if (applied) {
+                SessionRecoveryCoordinator.syncDesiredState(appContext)
+            }
         }
     }
 
@@ -79,10 +86,14 @@ object RecordingStateSyncProcessor {
             return
         }
 
-        RecordingStateStore.get(context.applicationContext).apply(
+        val appContext = context.applicationContext
+        val applied = RecordingStateStore.get(appContext).apply(
             incoming = recordingState,
             source = RecordingStateEventSource.MESSAGE
         )
+        if (applied) {
+            SessionRecoveryCoordinator.syncDesiredState(appContext)
+        }
     }
 
     fun createDataChangedListener(context: Context): DataClient.OnDataChangedListener {

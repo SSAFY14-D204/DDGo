@@ -7,7 +7,12 @@
         android:required="true" />
 
     <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission
+        android:name="android.permission.BODY_SENSORS_BACKGROUND"
+        android:maxSdkVersion="35" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
@@ -46,6 +51,12 @@
                     android:scheme="wear" />
             </intent-filter>
         </service>
+
+        <service
+            android:name=".service.WatchExerciseService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="health" />
     </application>
 
 </manifest>
