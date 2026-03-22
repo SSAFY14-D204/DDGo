@@ -40,7 +40,9 @@ internal data class FinalAnalysisAttemptSummary(
     val failureHighlights: List<String>,
     val failureNarrative: String,
     val primaryCruxHoldNo: Int?,
+    val primaryCruxDurationMs: Int?,
     val primaryReasonLabel: String?,
+    val dangerEventCount: Int?,
     val feedbackTypes: List<String>,
     val loadFocusLabel: String?,
     val feedbackLine: String,
@@ -96,7 +98,9 @@ private fun emptyFinalAnalysisAttemptSummary(
         failureHighlights = listOf(NoAiNarrative),
         failureNarrative = NoAiNarrative,
         primaryCruxHoldNo = null,
+        primaryCruxDurationMs = null,
         primaryReasonLabel = null,
+        dangerEventCount = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
         feedbackLine = "AI 분석 결과가 아직 충분하지 않아 종합 피드백을 만들지 못했습니다.",
@@ -126,11 +130,16 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         stableContactRatio = stableContactRatio
     )
     val primaryCruxHoldNo = extractPrimaryCruxHoldNo()
+    val primaryCruxDurationMs = extractPrimaryCruxDurationMs()
     val primaryReasonLabel = extractPrimaryReasonLabel()
     val failureHighlights = buildFailureHighlights()
     val isSuccess = totalHolds > 0 && (reachedHolds ?: 0) >= totalHolds
     val loadFocusLabel = extractPeakBodyLoadGroupLabel()
     val feedbackTypes = buildFeedbackTypes(
+        insideSupportRatio = insideSupportRatio,
+        stableContactRatio = stableContactRatio
+    )
+    val dangerEventCount = extractDangerEventCount(
         insideSupportRatio = insideSupportRatio,
         stableContactRatio = stableContactRatio
     )
@@ -158,7 +167,9 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         failureHighlights = failureHighlights,
         failureNarrative = failureHighlights.joinToString(" "),
         primaryCruxHoldNo = primaryCruxHoldNo,
+        primaryCruxDurationMs = primaryCruxDurationMs,
         primaryReasonLabel = primaryReasonLabel,
+        dangerEventCount = dangerEventCount,
         feedbackTypes = feedbackTypes,
         loadFocusLabel = loadFocusLabel,
         feedbackLine = buildFeedbackLine(
@@ -362,6 +373,22 @@ private fun AiAnalysisResult.extractPrimaryCruxHoldNo(): Int? {
         ?: cruxResult.allCandidates.firstOrNull()?.holdId?.takeIf { it > 0 }
 }
 
+private fun AiAnalysisResult.extractPrimaryCruxDurationMs(): Int? {
+    val topCandidate = cruxResult.topCandidates.firstOrNull()
+        ?: cruxResult.allCandidates.firstOrNull()
+        ?: return null
+    val segment = topCandidate.bestSegment ?: return null
+    val durationFromRange = (segment.endTimeMs - segment.startTimeMs)
+        .takeIf { it > 0L }
+        ?.coerceAtMost(Int.MAX_VALUE.toLong())
+        ?.toInt()
+    return durationFromRange
+        ?: segment.durationSeconds
+            .takeIf { it > 0.0 }
+            ?.times(1000.0)
+            ?.roundToInt()
+}
+
 private fun AiAnalysisResult.extractPrimaryReasonLabel(): String? {
     val topCandidate = cruxResult.topCandidates.firstOrNull()
         ?: cruxResult.allCandidates.firstOrNull()
@@ -369,6 +396,39 @@ private fun AiAnalysisResult.extractPrimaryReasonLabel(): String? {
     return cleanedReasonText(
         topCandidate.reasonTags.ifEmpty { topCandidate.bestSegment?.reasonTags.orEmpty() }
     )
+}
+
+private fun AiAnalysisResult.extractDangerEventCount(
+    insideSupportRatio: Int?,
+    stableContactRatio: Int?
+): Int {
+    val riskTokens = setOf(
+        "instability",
+        "negative_margin",
+        "loss_of_balance",
+        "contact_loss",
+        "load_spike"
+    )
+    val candidateRiskCount = cruxResult.allCandidates.count { candidate ->
+        val candidateTokens = (
+            candidate.reasonTags +
+                candidate.bestSegment?.reasonTags.orEmpty()
+            ).map { it.lowercase() }
+        candidateTokens.any { it in riskTokens }
+    }
+
+    if (candidateRiskCount > 0) {
+        return candidateRiskCount.coerceIn(0, 4)
+    }
+
+    val balance = insideSupportRatio ?: 100
+    val contact = stableContactRatio ?: 100
+    return when {
+        balance < 45 || contact < 45 -> 3
+        balance < 55 || contact < 55 -> 2
+        balance < 65 || contact < 65 -> 1
+        else -> 0
+    }
 }
 
 private fun AiAnalysisResult.buildStabilityHighlights(

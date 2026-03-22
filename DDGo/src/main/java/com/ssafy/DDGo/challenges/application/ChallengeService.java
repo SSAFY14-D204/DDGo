@@ -118,33 +118,96 @@ public class ChallengeService {
                 }
 
                 if (challenge.getChallengeStatus() == ChallengeStatus.CLOSED) {
-                        throw new CustomException(ErrorCode.CHALLENGE_ALREADY_CLOSED, "이미 종료된 챌린지입니다.");
+                        // 이미 종료된 챌린지인 경우 예외를 던지지 않고 그대로 진행하여 Idempotent(멱등성) 보장
+                        // 단, 프론트엔드가 새로운 결과를 명시적으로 보냈다면 부분 업데이트 허용 (옵션)
+                        if (request.getChallengeResult() != null && challenge.getChallengeResult() == ChallengeResult.UNKNOWN) {
+                                // 기존 상태가 UNKNOWN이었고, 새롭게 명확한 결과가 들어왔다면 반영 (선택적)
+                                // challenge.close(request.getChallengeResult()); 
+                                // (이 부분은 기획에 맞춰 오픈해둘 수 있지만, 안전을 위해 막아두거나 그냥 진행)
+                        }
+                } else {
+                        // challengeResult 미입력 시 UNKNOWN으로 처리
+                        ChallengeResult result = (request.getChallengeResult() != null)
+                                        ? request.getChallengeResult()
+                                        : ChallengeResult.UNKNOWN;
+                        challenge.close(result);
                 }
 
-                // challengeResult 미입력 시 UNKNOWN으로 처리
-                ChallengeResult result = (request.getChallengeResult() != null)
-                                ? request.getChallengeResult()
-                                : ChallengeResult.UNKNOWN;
+                // 기존 challenge_summaries 데이터 존부 확인
+                java.util.Optional<ChallengeSummary> existingSummaryOpt = challengeSummaryRepository.findByChallengeId(challengeId);
+                ChallengeSummary summary;
 
-                challenge.close(result);
+                if (existingSummaryOpt.isPresent()) {
+                        // 1. 기존 데이터가 있는 경우 (Update)
+                        summary = existingSummaryOpt.get();
+                        
+                        // 기존 값 백업
+                        BigDecimal updatedRatio = summary.getAverageCenterStabilityRatio();
+                        Integer updatedCruxHoldNo = summary.getMostCruxHoldNo();
+                        Integer updatedMaxDurationMs = summary.getMaxCruxDurationMs();
+                        String updatedFinalComment = summary.getFinalComment();
 
-                // attempt_metrics 집계 → challenge_summaries 생성
-                List<Object[]> aggList = challengeSummaryRepository.aggregateMetrics(challengeId);
-                List<Integer> cruxHoldNos = challengeSummaryRepository.findCruxHoldNos(challengeId,
-                                PageRequest.of(0, 1));
+                        // 프론트엔드에서 보낸 값 중 null이 아닌 것만 덮어쓰기 (부분 업데이트 지원)
+                        if (request.getSummary() != null) {
+                                ChallengeCloseRequest.ChallengeCloseSummaryRequest summaryReq = request.getSummary();
+                                if (summaryReq.getAverageCenterStabilityRatio() != null) {
+                                        updatedRatio = BigDecimal.valueOf(summaryReq.getAverageCenterStabilityRatio());
+                                }
+                                if (summaryReq.getMostCruxHoldNo() != null) {
+                                        updatedCruxHoldNo = summaryReq.getMostCruxHoldNo();
+                                }
+                                if (summaryReq.getMaxCruxDurationMs() != null) {
+                                        updatedMaxDurationMs = summaryReq.getMaxCruxDurationMs();
+                                }
+                                if (summaryReq.getFinalComment() != null) {
+                                        updatedFinalComment = summaryReq.getFinalComment();
+                                }
+                        }
+                        
+                        summary.updateSummary(updatedRatio, updatedCruxHoldNo, updatedMaxDurationMs, updatedFinalComment);
+                } else {
+                        // 2. 기존 데이터가 없는 경우 (Insert)
+                        // 1차적으로 DB 통계(attempt_metrics) 기반 집계를 수행하여 Base 데이터 세팅
+                        List<Object[]> aggList = challengeSummaryRepository.aggregateMetrics(challengeId);
+                        List<Integer> cruxHoldNos = challengeSummaryRepository.findCruxHoldNos(challengeId,
+                                        PageRequest.of(0, 1));
 
-                Object[] agg = aggList.isEmpty() ? new Object[] { null, null } : aggList.get(0);
-                Double avgRatio = agg[0] != null ? ((Number) agg[0]).doubleValue() : null;
-                Integer maxDurationMs = agg[1] != null ? ((Number) agg[1]).intValue() : null;
-                Integer mostCruxHoldNo = cruxHoldNos.isEmpty() ? null : cruxHoldNos.get(0);
+                        Object[] agg = aggList.isEmpty() ? new Object[] { null, null } : aggList.get(0);
+                        Double avgRatio = agg[0] != null ? ((Number) agg[0]).doubleValue() : null;
+                        Integer maxDurationMs = agg[1] != null ? ((Number) agg[1]).intValue() : null;
+                        Integer mostCruxHoldNo = cruxHoldNos.isEmpty() ? null : cruxHoldNos.get(0);
+                        String finalComment = null;
 
-                ChallengeSummary summary = ChallengeSummary.builder()
-                                .challengeId(challengeId)
-                                .averageCenterStabilityRatio(avgRatio != null ? BigDecimal.valueOf(avgRatio) : null)
-                                .mostCruxHoldNo(mostCruxHoldNo)
-                                .maxCruxDurationMs(maxDurationMs)
-                                .build();
+                        // 2차적으로 프론트엔드에서 넘어온 summary 데이터가 있다면 Null이 아닌 필드들만 오버라이드 (Partial Override)
+                        if (request.getSummary() != null) {
+                                ChallengeCloseRequest.ChallengeCloseSummaryRequest summaryReq = request.getSummary();
+                                if (summaryReq.getAverageCenterStabilityRatio() != null) {
+                                        avgRatio = summaryReq.getAverageCenterStabilityRatio();
+                                }
+                                if (summaryReq.getMaxCruxDurationMs() != null) {
+                                        maxDurationMs = summaryReq.getMaxCruxDurationMs();
+                                }
+                                if (summaryReq.getMostCruxHoldNo() != null) {
+                                        mostCruxHoldNo = summaryReq.getMostCruxHoldNo();
+                                }
+                                if (summaryReq.getFinalComment() != null) {
+                                        finalComment = summaryReq.getFinalComment();
+                                }
+                        }
 
+                        BigDecimal averageCenterStabilityRatio = avgRatio != null ? BigDecimal.valueOf(avgRatio) : null;
+                        
+                        summary = ChallengeSummary.builder()
+                                        .challengeId(challengeId)
+                                        .averageCenterStabilityRatio(averageCenterStabilityRatio)
+                                        .mostCruxHoldNo(mostCruxHoldNo)
+                                        .maxCruxDurationMs(maxDurationMs)
+                                        .build();
+                        
+                        summary.updateSummary(averageCenterStabilityRatio, mostCruxHoldNo, maxDurationMs, finalComment);
+                }
+
+                // challenge_summaries 테이블 반영 (insert 또는 update)
                 challengeSummaryRepository.save(summary);
 
                 return ChallengeCloseResponse.from(challenge, summary);

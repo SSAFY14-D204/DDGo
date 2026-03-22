@@ -2,6 +2,7 @@ package com.ddgo.app.domain.repository
 
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.ChallengeSession
+import com.ddgo.app.domain.model.ClosedChallenge
 import com.ddgo.app.domain.model.SavedChallengeHolds
 
 /**
@@ -25,4 +26,13 @@ interface ChallengeRepository {
         challengeId: Long,
         holds: List<ChallengeHoldCoordinate>
     ): Result<SavedChallengeHolds>
+
+    suspend fun closeChallenge(
+        challengeId: Long,
+        challengeResult: String? = null,
+        averageCenterStabilityRatio: Double? = null,
+        mostCruxHoldNo: Int? = null,
+        maxCruxDurationMs: Int? = null,
+        finalComment: String? = null
+    ): Result<ClosedChallenge>
 }

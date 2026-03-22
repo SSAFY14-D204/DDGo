@@ -126,12 +126,30 @@ public class ChallengeController {
         return ResponseEntity.ok(ApiResponse.success("챌린지 종합 분석 조회 성공", response));
     }
 
-    @Operation(summary = "챌린지 종료", description = "챌린지(문제 세션)를 종료합니다. 결과(SUCCESS/FAIL/UNKNOWN)를 선택할 수 있으며, 미입력 시 UNKNOWN으로 처리됩니다.")
+    @Operation(summary = "챌린지 종료", description = "챌린지(문제 세션)를 종료합니다. 결과(SUCCESS/FAIL/UNKNOWN)를 선택할 수 있으며, 미입력 시 UNKNOWN으로 처리됩니다. 선택적으로 챌린지 종합 분석 결과(summary)도 함께 제출할 수 있습니다.")
     @PatchMapping("/{challengeId}/close")
     public ResponseEntity<ApiResponse<ChallengeCloseResponse>> closeChallenge(
             Authentication authentication,
             @PathVariable Long challengeId,
-            @RequestBody(required = false) ChallengeCloseRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    content = @io.swagger.v3.oas.annotations.media.Content(
+                            examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                    name = "챌린지 종료 요청 예시 (summary 포함)",
+                                    value = """
+                                            {
+                                              "challengeResult": "SUCCESS",
+                                              "summary": {
+                                                "averageCenterStabilityRatio": 0.72,
+                                                "mostCruxHoldNo": 7,
+                                                "maxCruxDurationMs": 2860,
+                                                "finalComment": "총 4번 시도 중 1번 완등에 성공했고, 평균 7/10 홀드까지 도달했습니다. 이 문제는 발을 세우면서 중심을 놓치지 않는 연결이 핵심이었습니다."
+                                              }
+                                            }
+                                            """
+                            )
+                    )
+            )
+            @RequestBody(required = false) @Valid ChallengeCloseRequest request) {
         ChallengeCloseResponse response = challengeService.closeChallenge(
                 authentication.getName(),
                 challengeId,

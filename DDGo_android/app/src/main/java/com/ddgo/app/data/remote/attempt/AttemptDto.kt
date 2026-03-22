@@ -47,7 +47,14 @@ data class AttemptFullResponseDto(
     val createdAt: String,
     val durationMs: Int? = null,
     val maxHoldNo: Int? = null,
-    val videoUrl: String? = null
+    val videoUrl: String? = null,
+    val centerStabilityRatio: Double? = null,
+    val cruxHoldNo: Int? = null,
+    val cruxDurationMs: Int? = null,
+    val dangerEventCount: Int? = null,
+    val failureReason: String? = null,
+    val riskAlert: String? = null,
+    val nextMission: String? = null
 )
 
 @Serializable

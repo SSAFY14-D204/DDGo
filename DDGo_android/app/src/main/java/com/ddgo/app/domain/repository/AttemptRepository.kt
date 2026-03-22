@@ -1,5 +1,6 @@
 package com.ddgo.app.domain.repository
 
+import com.ddgo.app.domain.model.AttemptCompletionPayload
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 
 /**
@@ -20,6 +21,6 @@ interface AttemptRepository {
     suspend fun endAttempt(
         challengeId: Long,
         attemptId: Long,
-        attemptResult: String? = null
+        payload: AttemptCompletionPayload
     ): Result<Unit>
 }

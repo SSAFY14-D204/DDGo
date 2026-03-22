@@ -136,41 +136,73 @@ public class AttemptService {
             throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 시도를 종료할 권한이 없습니다.");
         }
 
-        // 3-1. 상태 검증 (이미 종료된 시도인지 확인)
-        if (attempt.getAttemptStatus() == com.ssafy.DDGo.attempts.domain.AttemptStatus.DONE) {
-            throw new CustomException(ErrorCode.INVALID_ATTEMPT_STATUS, "이미 종료된 시도입니다.");
+        // 3-1. 상태 검증 (Idempotent 멱등성 보장 & 유효성 검사)
+        com.ssafy.DDGo.attempts.domain.AttemptStatus currentStatus = attempt.getAttemptStatus();
+        boolean isAlreadyDone = (currentStatus == com.ssafy.DDGo.attempts.domain.AttemptStatus.DONE);
+
+        if (!isAlreadyDone && currentStatus != com.ssafy.DDGo.attempts.domain.AttemptStatus.PROCESSING) {
+            throw new CustomException(ErrorCode.INVALID_ATTEMPT_STATUS, "분석 진행 중(PROCESSING)이거나 이미 완료된(DONE) 시도만 종료 처리할 수 있습니다. 현재 상태: " + currentStatus);
         }
 
-        // 4. 시도 종료 처리 (기본 정보)
-        if (request.baseData() != null) {
+        // 4. 시도 종료 처리 (기본 정보 부분 업데이트 지원)
+        if (!isAlreadyDone) {
+            // 첫 종료 시에는 baseData 필수
+            if (request.baseData() == null || request.baseData().attemptResult() == null) {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "정상적인 분석 데이터 처리를 위해 필수 결과값(attemptResult)이 포함된 baseData가 필요합니다.");
+            }
             attempt.endAttempt(request.baseData().attemptResult(), request.baseData().durationMs(),
                     request.baseData().maxHoldNo());
+            attempt.markAnalysisEnded(); // 분석 종료 시간 기록
         } else {
-            // baseData가 필수라고 가정하더라도 기본적으로 DONE 처리는 수행
-            attempt.endAttempt(null, null, null);
+            // 이미 종료된 상태라면 null이 아닌 값들만 기존 데이터 위에 덮어쓰기 (Partial Update)
+            if (request.baseData() != null) {
+                com.ssafy.DDGo.attempts.domain.AttemptResult newResult = request.baseData().attemptResult() != null ? request.baseData().attemptResult() : attempt.getAttemptResult();
+                Integer newDuration = request.baseData().durationMs() != null ? request.baseData().durationMs() : attempt.getDurationMs();
+                Integer newMaxHold = request.baseData().maxHoldNo() != null ? request.baseData().maxHoldNo() : attempt.getMaxHoldNo();
+                attempt.endAttempt(newResult, newDuration, newMaxHold);
+            }
         }
 
-        // 5. 정량 분석 데이터(Metrics) 저장
+        // 5. 정량 분석 데이터(Metrics) 저장 (Upsert)
         if (request.metricsData() != null) {
-            AttemptMetrics metrics = AttemptMetrics.builder()
-                    .attempt(attempt)
-                    .centerStabilityRatio(request.metricsData().centerStabilityRatio())
-                    .cruxHoldNo(request.metricsData().cruxHoldNo())
-                    .cruxDurationMs(request.metricsData().cruxDurationMs())
-                    .dangerEventCount(request.metricsData().dangerEventCount())
-                    .build();
-            attemptMetricsRepository.save(metrics);
+            AttemptMetrics metrics = attemptMetricsRepository.findByAttemptId(attemptId).orElse(null);
+            if (metrics != null) {
+                metrics.updateMetrics(
+                        request.metricsData().centerStabilityRatio(),
+                        request.metricsData().cruxHoldNo(),
+                        request.metricsData().cruxDurationMs(),
+                        request.metricsData().dangerEventCount()
+                );
+            } else {
+                metrics = AttemptMetrics.builder()
+                        .attempt(attempt)
+                        .centerStabilityRatio(request.metricsData().centerStabilityRatio())
+                        .cruxHoldNo(request.metricsData().cruxHoldNo())
+                        .cruxDurationMs(request.metricsData().cruxDurationMs())
+                        .dangerEventCount(request.metricsData().dangerEventCount())
+                        .build();
+                attemptMetricsRepository.save(metrics);
+            }
         }
 
-        // 6. AI 텍스트 피드백(Feedbacks) 저장
+        // 6. AI 텍스트 피드백(Feedbacks) 저장 (Upsert)
         if (request.feedbacksData() != null) {
-            AttemptFeedback feedback = AttemptFeedback.builder()
-                    .attempt(attempt)
-                    .failureReason(request.feedbacksData().failureReason())
-                    .riskAlert(request.feedbacksData().riskAlert())
-                    .nextMission(request.feedbacksData().nextMission())
-                    .build();
-            attemptFeedbackRepository.save(feedback);
+            AttemptFeedback feedback = attemptFeedbackRepository.findByAttemptId(attemptId).orElse(null);
+            if (feedback != null) {
+                feedback.updateFeedback(
+                        request.feedbacksData().failureReason(),
+                        request.feedbacksData().riskAlert(),
+                        request.feedbacksData().nextMission()
+                );
+            } else {
+                feedback = AttemptFeedback.builder()
+                        .attempt(attempt)
+                        .failureReason(request.feedbacksData().failureReason())
+                        .riskAlert(request.feedbacksData().riskAlert())
+                        .nextMission(request.feedbacksData().nextMission())
+                        .build();
+                attemptFeedbackRepository.save(feedback);
+            }
         }
 
         return AttemptDetailResponse.from(attempt);
