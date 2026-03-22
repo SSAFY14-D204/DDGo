@@ -37,6 +37,7 @@ import java.time.YearMonth
 // Screen은 ViewModel 상태를 구독하고 화면 섹션을 조합하는 역할만 맡는다.
 @Composable
 fun CalendarScreen(
+    onEntrySelected: (Long) -> Unit = {},
     viewModel: CalendarViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -45,7 +46,8 @@ fun CalendarScreen(
         uiState = uiState,
         onPreviousMonth = viewModel::showPreviousMonth,
         onNextMonth = viewModel::showNextMonth,
-        onDateSelected = viewModel::selectDate
+        onDateSelected = viewModel::selectDate,
+        onEntrySelected = onEntrySelected
     )
 }
 
@@ -54,7 +56,8 @@ private fun CalendarContent(
     uiState: CalendarUiState,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
-    onDateSelected: (LocalDate) -> Unit
+    onDateSelected: (LocalDate) -> Unit,
+    onEntrySelected: (Long) -> Unit
 ) {
     // 메인 화면과 톤을 맞추기 위해 밝은 블루 계열 배경을 사용한다.
     val backgroundBrush = Brush.verticalGradient(
@@ -133,7 +136,8 @@ private fun CalendarContent(
                     SelectedDateSection(
                         date = selectedDate,
                         entries = uiState.selectedEntries,
-                        isToday = selectedDate == uiState.today
+                        isToday = selectedDate == uiState.today,
+                        onEntrySelected = onEntrySelected
                     )
                 }
             }
@@ -184,7 +188,8 @@ private fun CalendarScreenPreview() {
             ),
             onPreviousMonth = {},
             onNextMonth = {},
-            onDateSelected = {}
+            onDateSelected = {},
+            onEntrySelected = {}
         )
     }
 }

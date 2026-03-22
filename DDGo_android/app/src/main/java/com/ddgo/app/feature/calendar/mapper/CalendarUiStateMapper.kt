@@ -50,6 +50,7 @@ internal object CalendarUiStateMapper {
 
     private fun CalendarEntry.toUiModel(): CalendarEntryUiModel {
         return CalendarEntryUiModel(
+            challengeId = id,
             title = title,
             secondaryText = listOf(venue, note)
                 .filter { it.isNotBlank() }

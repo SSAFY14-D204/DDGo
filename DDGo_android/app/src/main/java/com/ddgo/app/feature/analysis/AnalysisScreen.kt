@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -36,11 +37,20 @@ import com.ddgo.app.feature.analysis.style.AnalysisPalette
  */
 @Composable
 fun AnalysisScreen(
+    externalChallengeId: Long? = null,
+    onExternalChallengeHandled: () -> Unit = {},
     viewModel: AnalysisViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val attemptDetail = uiState.attemptDetail
     val challengeDetail = uiState.challengeDetail
+
+    LaunchedEffect(externalChallengeId, uiState.challenges.size) {
+        val challengeId = externalChallengeId ?: return@LaunchedEffect
+        if (viewModel.openChallengeDetailIfAvailable(challengeId)) {
+            onExternalChallengeHandled()
+        }
+    }
 
     when {
         attemptDetail != null -> {

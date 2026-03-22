@@ -21,6 +21,12 @@ interface AttemptApi {
         @Body request: GenerateVideoUrlRequestDto
     ): ApiResponse<GenerateVideoUrlResponseDto>
 
+    @PATCH("v1/attempts/{attemptId}/video-upload-complete")
+    suspend fun completeVideoUpload(
+        @Path("attemptId") attemptId: Long,
+        @Body request: VideoUploadCompleteRequestDto
+    ): ApiResponse<VideoUploadCompleteResponseDto>
+
     @GET("v1/challenges/{challengeId}/attempts")
     suspend fun getAttempts(
         @Path("challengeId") challengeId: Long

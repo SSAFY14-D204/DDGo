@@ -2,6 +2,7 @@ package com.ddgo.app.feature.calendar.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +39,8 @@ private val FullDateFormatter: DateTimeFormatter =
 internal fun SelectedDateSection(
     date: LocalDate,
     entries: List<CalendarEntryUiModel>,
-    isToday: Boolean
+    isToday: Boolean,
+    onEntrySelected: (Long) -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -100,7 +102,10 @@ internal fun SelectedDateSection(
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     entries.forEach { entry ->
-                        CalendarEntryRow(entry = entry)
+                        CalendarEntryRow(
+                            entry = entry,
+                            onClick = { onEntrySelected(entry.challengeId) }
+                        )
                     }
                 }
             }
@@ -153,8 +158,12 @@ private fun EmptyCalendarState() {
 
 // 기록 한 건을 제목, 보조 정보, 시간 중심의 간단한 카드로 표현한다.
 @Composable
-private fun CalendarEntryRow(entry: CalendarEntryUiModel) {
+private fun CalendarEntryRow(
+    entry: CalendarEntryUiModel,
+    onClick: () -> Unit
+) {
     Surface(
+        modifier = Modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
         color = CalendarPalette.SurfaceMuted
     ) {

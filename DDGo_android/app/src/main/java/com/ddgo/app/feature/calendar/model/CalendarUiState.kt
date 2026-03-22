@@ -31,6 +31,7 @@ data class CalendarMonthSummaryUiModel(
 
 // 상세 카드에서 바로 렌더링할 수 있도록 가공한 기록 모델이다.
 data class CalendarEntryUiModel(
+    val challengeId: Long,
     val title: String,
     val secondaryText: String,
     val timeLabel: String

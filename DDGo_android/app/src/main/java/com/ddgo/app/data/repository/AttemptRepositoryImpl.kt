@@ -6,12 +6,14 @@ import android.provider.OpenableColumns
 import android.util.Log
 import com.ddgo.app.data.mapper.AttemptMapper.toDomain
 import com.ddgo.app.data.mapper.AttemptMapper.toUploadedAttemptVideo
+import com.ddgo.app.data.remote.common.ApiErrorResponse
 import com.ddgo.app.data.remote.attempt.AttemptApi
 import com.ddgo.app.data.remote.attempt.AttemptEndBaseDataDto
 import com.ddgo.app.data.remote.attempt.AttemptEndFeedbacksDataDto
 import com.ddgo.app.data.remote.attempt.AttemptEndMetricsDataDto
 import com.ddgo.app.data.remote.attempt.AttemptEndRequestDto
 import com.ddgo.app.data.remote.attempt.GenerateVideoUrlRequestDto
+import com.ddgo.app.data.remote.attempt.VideoUploadCompleteRequestDto
 import com.ddgo.app.domain.model.AttemptCompletionPayload
 import com.ddgo.app.domain.model.AttemptUploadTicket
 import com.ddgo.app.domain.model.UploadedAttemptVideo
@@ -19,6 +21,7 @@ import com.ddgo.app.domain.repository.AttemptRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,7 +49,8 @@ private const val TAG = "AttemptRepository"
 class AttemptRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val attemptApi: AttemptApi,
-    @Named("DirectUploadOkHttpClient") private val directUploadOkHttpClient: OkHttpClient
+    @Named("DirectUploadOkHttpClient") private val directUploadOkHttpClient: OkHttpClient,
+    private val json: Json
 ) : AttemptRepository {
 
     override suspend fun uploadAttemptVideo(
@@ -94,7 +98,39 @@ class AttemptRepositoryImpl @Inject constructor(
                     videoUri = videoUri,
                     contentType = metadata.contentType,
                     fileSize = metadata.fileSize
-                )
+                ).let { etag ->
+                    val uploadCompleteResponse = attemptApi.completeVideoUpload(
+                        attemptId = startedAttempt.attemptId,
+                        request = VideoUploadCompleteRequestDto(etag = etag)
+                    )
+
+                    if (!uploadCompleteResponse.success) {
+                        return@withContext Result.failure(
+                            Exception(
+                                uploadCompleteResponse.message.ifBlank {
+                                    "Failed to confirm uploaded video."
+                                }
+                            )
+                        )
+                    }
+
+                    val uploadCompletion = uploadCompleteResponse.data
+                        ?: return@withContext Result.failure(
+                            Exception("Missing upload confirmation response.")
+                        )
+
+                    if (
+                        !uploadCompletion.isUploadConfirmed() ||
+                        !uploadCompletion.attemptStatus.equals("PROCESSING", ignoreCase = true) &&
+                        !uploadCompletion.attemptStatus.equals("DONE", ignoreCase = true)
+                    ) {
+                        return@withContext Result.failure(
+                            Exception(
+                                "Video upload was confirmed, but attempt status is ${uploadCompletion.attemptStatus}."
+                            )
+                        )
+                    }
+                }
 
                 Result.success(
                     com.ddgo.app.data.mapper.AttemptMapper.toUploadedAttemptVideo(
@@ -102,6 +138,20 @@ class AttemptRepositoryImpl @Inject constructor(
                         videoUri = videoUri,
                         startResponse = startedAttempt,
                         uploadResponse = presignedUrl
+                    )
+                )
+            } catch (e: HttpException) {
+                val detail = resolveHttpErrorMessage(e)
+                Log.e(
+                    TAG,
+                    "uploadAttemptVideo: request failed with HTTP ${e.code()}" +
+                        detail?.let { ", detail=$it" }.orEmpty(),
+                    e
+                )
+                Result.failure(
+                    IllegalStateException(
+                        detail ?: "Failed to upload attempt video with HTTP ${e.code()}.",
+                        e
                     )
                 )
             } catch (e: Exception) {
@@ -154,7 +204,19 @@ class AttemptRepositoryImpl @Inject constructor(
                 )
                 Result.success(Unit)
             } else {
-                Result.failure(e)
+                val detail = resolveHttpErrorMessage(e)
+                Log.e(
+                    TAG,
+                    "endAttempt: request failed with HTTP ${e.code()}" +
+                        detail?.let { ", detail=$it" }.orEmpty(),
+                    e
+                )
+                Result.failure(
+                    IllegalStateException(
+                        detail ?: "Failed to end attempt with HTTP ${e.code()}.",
+                        e
+                    )
+                )
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -166,7 +228,7 @@ class AttemptRepositoryImpl @Inject constructor(
         videoUri: String,
         contentType: String,
         fileSize: Long
-    ) {
+    ): String? {
         val uploadUri = Uri.parse(uploadTicket.uploadUrl)
         if (uploadUri.host.equals("minio", ignoreCase = true)) {
             throw IllegalStateException(
@@ -199,6 +261,10 @@ class AttemptRepositoryImpl @Inject constructor(
             if (!response.isSuccessful) {
                 throw IllegalStateException("Video upload failed with HTTP ${response.code}.")
             }
+
+            return response.header("ETag")
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
         }
     }
 
@@ -293,6 +359,23 @@ class AttemptRepositoryImpl @Inject constructor(
     }
 
     /** 업로드 대상 영상의 메타데이터입니다. */
+    private fun resolveHttpErrorMessage(exception: HttpException): String? {
+        val body = runCatching {
+            exception.response()
+                ?.errorBody()
+                ?.string()
+                ?.trim()
+        }.getOrNull()
+            ?.takeIf { it.isNotEmpty() }
+            ?: return null
+
+        return runCatching {
+            json.decodeFromString(ApiErrorResponse.serializer(), body).message
+        }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: body
+    }
+
     private data class VideoFileMetadata(
         val originalFileName: String,
         val contentType: String,
