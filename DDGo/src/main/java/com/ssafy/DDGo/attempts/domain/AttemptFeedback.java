@@ -58,4 +58,10 @@ public class AttemptFeedback extends BaseTimeEntity {
         this.promptVersion = promptVersion;
         this.generatedAt = generatedAt;
     }
+
+    public void updateFeedback(String failureReason, String riskAlert, String nextMission) {
+        if (failureReason != null) this.failureReason = failureReason;
+        if (riskAlert != null) this.riskAlert = riskAlert;
+        if (nextMission != null) this.nextMission = nextMission;
+    }
 }

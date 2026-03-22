@@ -1,5 +1,6 @@
 package com.ddgo.app.domain.usecase
 
+import com.ddgo.app.domain.model.AttemptCompletionPayload
 import com.ddgo.app.domain.repository.AttemptRepository
 import javax.inject.Inject
 
@@ -17,7 +18,7 @@ class EndAttemptUseCase @Inject constructor(
     suspend operator fun invoke(
         challengeId: Long,
         attemptId: Long,
-        attemptResult: String? = null
+        payload: AttemptCompletionPayload
     ): Result<Unit> {
         if (challengeId <= 0L) {
             return Result.failure(Exception("Challenge ID is invalid."))
@@ -29,7 +30,7 @@ class EndAttemptUseCase @Inject constructor(
         return attemptRepository.endAttempt(
             challengeId = challengeId,
             attemptId = attemptId,
-            attemptResult = attemptResult
+            payload = payload
         )
     }
 }

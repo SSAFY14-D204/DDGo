@@ -1,12 +1,14 @@
 package com.ddgo.app.data.mapper
 
 import com.ddgo.app.data.remote.challenge.BoundingBoxDto
+import com.ddgo.app.data.remote.challenge.ChallengeCloseResponseDto
 import com.ddgo.app.data.remote.challenge.ChallengeCreateResponseDto
 import com.ddgo.app.data.remote.challenge.HoldItemDto
 import com.ddgo.app.data.remote.challenge.HoldSaveResponseDto
 import com.ddgo.app.data.remote.challenge.PointItemDto
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.ChallengeSession
+import com.ddgo.app.domain.model.ClosedChallenge
 import com.ddgo.app.domain.model.HoldBoundingBox
 import com.ddgo.app.domain.model.HoldPoint
 import com.ddgo.app.domain.model.SavedChallengeHolds
@@ -44,6 +46,17 @@ object ChallengeMapper {
     )
 
     /** domain 홀드 좌표를 요청 DTO로 변환합니다. */
+    fun ChallengeCloseResponseDto.toDomain(): ClosedChallenge = ClosedChallenge(
+        challengeId = challengeId,
+        challengeStatus = challengeStatus,
+        challengeResult = challengeResult,
+        endedAt = endedAt,
+        averageCenterStabilityRatio = summary?.averageCenterStabilityRatio,
+        mostCruxHoldNo = summary?.mostCruxHoldNo,
+        maxCruxDurationMs = summary?.maxCruxDurationMs,
+        finalComment = summary?.finalComment
+    )
+
     fun ChallengeHoldCoordinate.toDto(): HoldItemDto = HoldItemDto(
         holdNo = holdNo,
         boundingBox = BoundingBoxDto(

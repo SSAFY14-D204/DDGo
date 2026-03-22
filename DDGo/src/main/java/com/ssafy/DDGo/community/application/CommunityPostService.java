@@ -132,7 +132,7 @@ public class CommunityPostService {
         List<com.ssafy.DDGo.community.domain.CommunityComment> comments = communityCommentRepository
                 .findVisibleByPostIdOrderByCreatedAtAsc(postId);
         if (!videos.isEmpty()) {
-            communityPostVideoRepository.deleteAll(videos);
+            communityPostVideoRepository.deleteHardByPostId(postId);
         }
         if (!comments.isEmpty()) {
             List<Long> commentIds = comments.stream().map(comment -> comment.getId()).toList();
@@ -207,10 +207,7 @@ public class CommunityPostService {
     }
 
     private void replaceVideos(CommunityPost post, List<CommunityPostVideoItemRequest> videos) {
-        List<CommunityPostVideo> existingVideos = communityPostVideoRepository.findAllByPostIdOrderBySortOrderAsc(post.getId());
-        if (!existingVideos.isEmpty()) {
-            communityPostVideoRepository.deleteAll(existingVideos);
-        }
+        communityPostVideoRepository.deleteHardByPostId(post.getId());
         saveVideos(post, videos);
     }
 
@@ -236,6 +233,10 @@ public class CommunityPostService {
     private void validateVideos(Long userId, List<CommunityPostVideoItemRequest> videos) {
         if (videos == null || videos.size() > 3) {
             throw new CustomException(ErrorCode.INVALID_COMMUNITY_MEDIA, "영상은 최대 3개까지 첨부할 수 있습니다.");
+        }
+        long uniqueSortOrders = videos.stream().map(CommunityPostVideoItemRequest::getSortOrder).distinct().count();
+        if (uniqueSortOrders != videos.size()) {
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "영상의 정렬 순서(sortOrder)는 중복될 수 없습니다.");
         }
         communityMediaService.validateOwnedUploadedVideos(userId, videos);
     }

@@ -31,8 +31,8 @@ public class ChallengeCloseResponse {
     public static ChallengeCloseResponse from(Challenge challenge, ChallengeSummary summary) {
         return ChallengeCloseResponse.builder()
                 .challengeId(challenge.getId())
-                .challengeStatus(challenge.getChallengeStatus().name())
-                .challengeResult(challenge.getChallengeResult().name())
+                .challengeStatus(challenge.getChallengeStatus() != null ? challenge.getChallengeStatus().name() : null)
+                .challengeResult(challenge.getChallengeResult() != null ? challenge.getChallengeResult().name() : null)
                 .endedAt(challenge.getEndedAt())
                 .summary(ChallengeSummaryResponse.from(summary))
                 .build();

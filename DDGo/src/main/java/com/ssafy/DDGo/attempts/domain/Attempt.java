@@ -70,4 +70,12 @@ public class Attempt extends BaseTimeEntity {
         this.durationMs = durationMs;
         this.maxHoldNo = maxHoldNo;
     }
+
+    public void markAnalysisStarted() {
+        this.analysisStartedAt = LocalDateTime.now();
+    }
+
+    public void markAnalysisEnded() {
+        this.analysisEndedAt = LocalDateTime.now();
+    }
 }

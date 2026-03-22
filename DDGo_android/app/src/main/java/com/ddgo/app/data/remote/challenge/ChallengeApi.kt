@@ -22,4 +22,10 @@ interface ChallengeApi {
         @Path("challengeId") challengeId: Long,
         @Body request: HoldSaveRequestDto
     ): ApiResponse<HoldSaveResponseDto>
+
+    @PATCH("v1/challenges/{challengeId}/close")
+    suspend fun closeChallenge(
+        @Path("challengeId") challengeId: Long,
+        @Body request: ChallengeCloseRequestDto
+    ): ApiResponse<ChallengeCloseResponseDto>
 }

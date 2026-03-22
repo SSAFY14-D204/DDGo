@@ -11,6 +11,7 @@ import com.ddgo.app.domain.model.AiAnalysisFallbackReason
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AiPoseSequence
+import com.ddgo.app.domain.model.AttemptCompletionPayload
 import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.Hold
@@ -205,18 +206,6 @@ internal class UploadSubmissionDelegate(
                     challengeId = currentChallengeId!!,
                     videoUri = uri
                 ).onSuccess { uploaded ->
-                    endAttemptUseCase(
-                        challengeId = currentChallengeId,
-                        attemptId = uploaded.attemptId,
-                        attemptResult = null
-                    ).onFailure { throwable ->
-                        Log.e(SUBMISSION_TAG, "submitUpload: end attempt failed", throwable)
-                        _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
-                            throwable.message ?: "Failed to end attempt."
-                        )
-                        return
-                    }
-
                     uploadedVideos += uploaded
                     Log.d(
                         SUBMISSION_TAG,
@@ -239,6 +228,13 @@ internal class UploadSubmissionDelegate(
             entry?.status != PrePoseStatus.Ready || entry?.aiPoseSequence == null
         }
         if (failedPrePoseUris.isNotEmpty()) {
+            finalizeUploadedAttempts(
+                challengeId = currentChallengeId,
+                uploadedVideos = uploadedVideos,
+                playbackUris = request.attemptUris,
+                terminalSnapshot = terminalSnapshot,
+                totalHoldCount = numberedHoldsForAnalysis?.size ?: 0
+            )
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
                 buildPrePoseFailureMessage(
                     playbackUris = failedPrePoseUris,
@@ -286,6 +282,13 @@ internal class UploadSubmissionDelegate(
                 callbacks = callbacks
             ).onFailure { throwable ->
                 val serverDetail = throwable.extractHttpErrorDetail()
+                finalizeUploadedAttempts(
+                    challengeId = currentChallengeId,
+                    uploadedVideos = uploadedVideos,
+                    playbackUris = request.attemptUris,
+                    terminalSnapshot = terminalSnapshot,
+                    totalHoldCount = holdsForAi.size
+                )
                 Log.e(
                     SUBMISSION_TAG,
                     "submitUpload: AI analysis failed" + serverDetail?.let { " detail=$it" }.orEmpty(),
@@ -298,6 +301,20 @@ internal class UploadSubmissionDelegate(
             }
         } else {
             clearAiAnalysisState(callbacks)
+        }
+
+        finalizeUploadedAttempts(
+            challengeId = currentChallengeId,
+            uploadedVideos = uploadedVideos,
+            playbackUris = request.attemptUris,
+            terminalSnapshot = terminalSnapshot,
+            totalHoldCount = numberedHoldsForAnalysis?.size ?: 0
+        ).onFailure { throwable ->
+            Log.e(SUBMISSION_TAG, "submitUpload: end attempt failed", throwable)
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                throwable.message ?: "Failed to end attempt."
+            )
+            return
         }
 
         publishAttemptResultSession(
@@ -746,6 +763,138 @@ internal class UploadSubmissionDelegate(
         )
     }
 
+    private suspend fun finalizeUploadedAttempts(
+        challengeId: Long?,
+        uploadedVideos: List<UploadedAttemptVideo>,
+        playbackUris: List<String>,
+        terminalSnapshot: TerminalPrePoseSnapshot,
+        totalHoldCount: Int
+    ): Result<Unit> {
+        if (challengeId == null || challengeId <= 0L || uploadedVideos.isEmpty()) {
+            return Result.success(Unit)
+        }
+
+        val aiSummaries = buildFinalAnalysisAttemptSummaries(
+            attemptCount = playbackUris.size,
+            totalHolds = totalHoldCount,
+            aiResults = attemptAiAnalysisResults
+        )
+
+        uploadedVideos.forEachIndexed { index, uploadedVideo ->
+            val playbackUri = playbackUris.getOrNull(index) ?: uploadedVideo.videoUri
+            val payload = buildAttemptCompletionPayload(
+                playbackUri = playbackUri,
+                holdReachResult = attemptHoldReachResults.getOrNull(index),
+                aiSummary = aiSummaries.getOrNull(index)
+                    ?: emptyAttemptCompletionSummary(index + 1),
+                terminalSnapshot = terminalSnapshot,
+                totalHoldCount = totalHoldCount
+            )
+
+            val result = endAttemptUseCase(
+                challengeId = challengeId,
+                attemptId = uploadedVideo.attemptId,
+                payload = payload
+            )
+
+            if (result.isFailure) {
+                return result
+            }
+        }
+
+        return Result.success(Unit)
+    }
+
+    private fun buildAttemptCompletionPayload(
+        playbackUri: String,
+        holdReachResult: AttemptHoldReachResult?,
+        aiSummary: FinalAnalysisAttemptSummary,
+        terminalSnapshot: TerminalPrePoseSnapshot,
+        totalHoldCount: Int
+    ): AttemptCompletionPayload {
+        val attemptResult = resolveAttemptResult(
+            holdReachResult = holdReachResult,
+            aiSummary = aiSummary,
+            totalHoldCount = totalHoldCount
+        )
+        val durationMs = terminalSnapshot.resolveDurationMs(playbackUri)
+        val maxHoldNo = holdReachResult?.highestReachedHoldNo ?: aiSummary.reachedHolds
+        val failureReason = aiSummary.feedbackLine.takeIf { it.isNotBlank() }
+            ?: defaultFailureReason(attemptResult)
+        val riskAlert = aiSummary.failureNarrative.takeIf { it.isNotBlank() }
+            ?: defaultRiskAlert(attemptResult)
+        val nextMission = aiSummary.coachingLine.takeIf { it.isNotBlank() }
+            ?: defaultNextMission(attemptResult)
+
+        return AttemptCompletionPayload(
+            attemptResult = attemptResult,
+            durationMs = durationMs,
+            maxHoldNo = maxHoldNo,
+            centerStabilityRatio = aiSummary.insideSupportRatio?.let { it / 100.0 },
+            cruxHoldNo = aiSummary.primaryCruxHoldNo,
+            cruxDurationMs = aiSummary.primaryCruxDurationMs,
+            dangerEventCount = aiSummary.dangerEventCount ?: 0,
+            failureReason = failureReason,
+            riskAlert = riskAlert,
+            nextMission = nextMission
+        )
+    }
+
+    private fun resolveAttemptResult(
+        holdReachResult: AttemptHoldReachResult?,
+        aiSummary: FinalAnalysisAttemptSummary,
+        totalHoldCount: Int
+    ): String {
+        if (totalHoldCount > 0 && holdReachResult != null) {
+            return if (holdReachResult.highestReachedHoldNo >= totalHoldCount) {
+                "SUCCESS"
+            } else {
+                "FAIL"
+            }
+        }
+
+        return when {
+            aiSummary.isSuccess -> "SUCCESS"
+            aiSummary.hasAiResult || holdReachResult != null -> "FAIL"
+            else -> "UNKNOWN"
+        }
+    }
+
+    private fun defaultFailureReason(attemptResult: String): String {
+        return when (attemptResult) {
+            "SUCCESS" -> "Completed this attempt successfully."
+            "FAIL" -> "This attempt did not reach the target hold sequence."
+            else -> "This attempt was recorded without a full analysis result."
+        }
+    }
+
+    private fun defaultRiskAlert(attemptResult: String): String {
+        return when (attemptResult) {
+            "SUCCESS" -> "No major risk pattern was detected in this attempt."
+            "FAIL" -> "A clear risk pattern could not be fully measured, but the attempt ended before completion."
+            else -> "Risk signals could not be fully measured for this attempt."
+        }
+    }
+
+    private fun defaultNextMission(attemptResult: String): String {
+        return when (attemptResult) {
+            "SUCCESS" -> "Keep this attempt as the baseline for your next challenge."
+            "FAIL" -> "Use this attempt as a baseline record for the next comparison."
+            else -> "Store this attempt as a reference for the next analyzed try."
+        }
+    }
+
+    private fun TerminalPrePoseSnapshot.resolveDurationMs(playbackUri: String): Int? {
+        val entry = entriesByPlaybackUri[playbackUri] ?: return null
+        val poseDurationMs = entry.poses.lastOrNull()?.frameTimeMs ?: 0L
+        val aiDurationMs = entry.aiPoseSequence?.frames?.lastOrNull()?.timestampMs ?: 0L
+        val resolvedDurationMs = maxOf(poseDurationMs, aiDurationMs)
+        if (resolvedDurationMs <= 0L) {
+            return null
+        }
+        return resolvedDurationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
     private fun Throwable.extractHttpErrorDetail(): String? {
         val httpException = this as? HttpException ?: return null
         return runCatching {
@@ -782,3 +931,40 @@ private data class ResolvedAiProfile(
     val weightKg: Float?,
     val wingspanCm: Float?
 )
+
+private fun emptyAttemptCompletionSummary(attemptNo: Int): FinalAnalysisAttemptSummary {
+    return FinalAnalysisAttemptSummary(
+        attemptNo = attemptNo,
+        hasAiResult = false,
+        isSuccess = false,
+        analysisPoints = emptyList(),
+        reachedHolds = null,
+        reachedHoldsText = FinalAnalysisUnknownMetricText,
+        processedFrames = null,
+        processedFramesText = FinalAnalysisUnknownMetricText,
+        highConfidenceRatio = null,
+        highConfidenceRatioText = FinalAnalysisUnknownMetricText,
+        insideSupportRatio = null,
+        insideSupportRatioText = FinalAnalysisUnknownMetricText,
+        stableContactFrameCount = null,
+        stableContactFrameCountText = FinalAnalysisUnknownMetricText,
+        stableContactRatio = null,
+        stableContactRatioText = FinalAnalysisUnknownMetricText,
+        stabilityTimeline = DefaultFinalAnalysisTimeline,
+        stabilityFocusFraction = null,
+        stabilityHighlights = emptyList(),
+        stabilityNarrative = "",
+        failureHighlights = emptyList(),
+        failureNarrative = "",
+        primaryCruxHoldNo = null,
+        primaryCruxDurationMs = null,
+        primaryReasonLabel = null,
+        dangerEventCount = null,
+        feedbackTypes = emptyList(),
+        loadFocusLabel = null,
+        feedbackLine = "",
+        coachingLine = "",
+        effectiveModeLabel = "",
+        fallbackLabel = null
+    )
+}

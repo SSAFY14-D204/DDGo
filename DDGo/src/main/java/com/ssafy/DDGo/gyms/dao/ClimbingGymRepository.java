@@ -16,4 +16,7 @@ public interface ClimbingGymRepository extends JpaRepository<ClimbingGym, Long> 
 
     @Query("SELECT g FROM ClimbingGym g WHERE g.displayName = :name OR g.name = :name")
     List<ClimbingGym> findByDisplayNameOrName(@Param("name") String name);
+
+    @Query("SELECT g FROM ClimbingGym g WHERE REPLACE(g.displayName, ' ', '') = :name OR REPLACE(g.name, ' ', '') = :name")
+    List<ClimbingGym> findByDisplayNameOrNameWithoutSpaces(@Param("name") String nameWithoutSpaces);
 }

@@ -48,4 +48,11 @@ public class AttemptMetrics extends BaseTimeEntity {
         this.cruxDurationMs = cruxDurationMs;
         this.dangerEventCount = dangerEventCount;
     }
+
+    public void updateMetrics(Double centerStabilityRatio, Integer cruxHoldNo, Integer cruxDurationMs, Integer dangerEventCount) {
+        if (centerStabilityRatio != null) this.centerStabilityRatio = centerStabilityRatio;
+        if (cruxHoldNo != null) this.cruxHoldNo = cruxHoldNo;
+        if (cruxDurationMs != null) this.cruxDurationMs = cruxDurationMs;
+        if (dangerEventCount != null) this.dangerEventCount = dangerEventCount;
+    }
 }

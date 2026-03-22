@@ -103,6 +103,7 @@ public class AttemptVideoService {
 
     public String getVideoUrlForAttempt(Long attemptId) {
         return attemptVideoRepository.findByAttemptId(attemptId)
+                .filter(AttemptVideo::isUploaded) // 업로드 완료된 영상만 Presigned URL 발급
                 .map(video -> getPresignedGetUrl(video.getObjectKey()))
                 .orElse(null);
     }
@@ -167,5 +168,69 @@ public class AttemptVideoService {
             return "";
         }
         return originalFileName.substring(originalFileName.lastIndexOf("."));
+    }
+
+    @Transactional
+    public com.ssafy.DDGo.attempts.dto.response.VideoUploadCompleteResponse completeVideoUpload(
+            Long attemptId, String username, com.ssafy.DDGo.attempts.dto.request.VideoUploadCompleteRequest request) {
+        
+        // 1. 시도(Attempt) 조회
+        Attempt attempt = attemptRepository.findById(attemptId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ATTEMPT_NOT_FOUND, "존재하지 않는 시도입니다. ID: " + attemptId));
+
+        // 2. 권한 검증
+        if (!attempt.getChallenge().getUser().getUsername().equals(username)) {
+            throw new CustomException(ErrorCode.CHALLENGE_ACCESS_DENIED, "해당 시도에 대한 권한이 없습니다.");
+        }
+
+        // 3. AttemptVideo 조회
+        AttemptVideo attemptVideo = attemptVideoRepository.findByAttemptId(attemptId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_INPUT_VALUE, "업로드 대기 중인 영상 정보를 찾을 수 없습니다. 먼저 Presigned URL을 발급받아 주세요."));
+
+        // 4. 실제로 MinIO 스토리지에 영상이 올라와 있는지 검증 (statObject)
+        String etag;
+        try {
+            io.minio.StatObjectResponse stat = minioClient.statObject(
+                    io.minio.StatObjectArgs.builder()
+                            .bucket(minioProperties.getBucket())
+                            .object(attemptVideo.getObjectKey())
+                            .build()
+            );
+            // 클라이언트가 명시적 ETag를 주지 않았다면 서버에서 가져온 실제 ETag로 대체
+            if (request != null && request.getEtag() != null && !request.getEtag().isBlank()) {
+                etag = request.getEtag();
+            } else {
+                etag = stat.etag();
+            }
+
+            // 파일 무결성(크기 및 타입) 검증 추가
+            if (attemptVideo.getFileSize() != null && stat.size() != attemptVideo.getFileSize()) {
+                log.warn("파일 크기 비정상 (attemptId: {}, DB: {}, MinIO: {})", attemptId, attemptVideo.getFileSize(), stat.size());
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "업로드된 파일의 크기 식별이 실패했습니다. 비정상적인 업로드입니다.");
+            }
+            if (attemptVideo.getContentType() != null && stat.contentType() != null) {
+                // MinIO 자체 Fallback으로 application/octet-stream이 찍힐 수 있음은 허용. 단, 클라이언트가 명확히 다른 타입을 보냈다면 차단.
+                if (!attemptVideo.getContentType().equals(stat.contentType()) && !"application/octet-stream".equals(stat.contentType())) {
+                    log.warn("ContentType 비정상 (attemptId: {}, DB: {}, MinIO: {})", attemptId, attemptVideo.getContentType(), stat.contentType());
+                    throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "업로드된 파일의 포맷 정보가 올바르지 않습니다.");
+                }
+            }
+        } catch (CustomException e) {
+            throw e; // 검증에 의한 CustomException은 그대로 Throw 되도록 패스
+        } catch (Exception e) {
+            log.error("MinIO statObject 검증 실패 (objectKey: {}): {}", attemptVideo.getObjectKey(), e.getMessage());
+            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE, "해당 영상이 MinIO 스토리지에 존재하지 않습니다. 정상적으로 업로드되었는지 확인해주세요.");
+        }
+
+        // 5. 업로드 완료 처리
+        attemptVideo.markAsUploaded(etag);
+
+        // 6. 진행 상태 변경 (UPLOADING 이거나 에러 상태에서만 PROCESSING으로 전환)
+        if (attempt.getAttemptStatus() == AttemptStatus.UPLOADING || attempt.getAttemptStatus() == AttemptStatus.UPLOAD_FAILED) {
+            attempt.updateStatus(AttemptStatus.PROCESSING);
+            attempt.markAnalysisStarted(); // 분석 시작 타이머 기록
+        }
+
+        return com.ssafy.DDGo.attempts.dto.response.VideoUploadCompleteResponse.from(attempt, attemptVideo.isUploaded(), attemptVideo.getUploadedAt());
     }
 }

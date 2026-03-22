@@ -29,6 +29,8 @@ data class ChallengeListResponseDto(
     val gradeLabel: String? = null,
     val challengeStatus: String,
     val challengeResult: String? = null,
+    val startedAt: String? = null,
+    val endedAt: String? = null,
     val createdAt: String
 )
 
@@ -63,4 +65,27 @@ data class HoldSaveResponseDto(
     val challengeId: Long,
     val holdCount: Int,
     val holds: List<HoldItemDto>
+)
+
+@Serializable
+data class ChallengeCloseRequestDto(
+    val challengeResult: String? = null,
+    val summary: ChallengeCloseSummaryDto? = null
+)
+
+@Serializable
+data class ChallengeCloseSummaryDto(
+    val averageCenterStabilityRatio: Double? = null,
+    val mostCruxHoldNo: Int? = null,
+    val maxCruxDurationMs: Int? = null,
+    val finalComment: String? = null
+)
+
+@Serializable
+data class ChallengeCloseResponseDto(
+    val challengeId: Long,
+    val challengeStatus: String,
+    val challengeResult: String,
+    val endedAt: String? = null,
+    val summary: ChallengeCloseSummaryDto? = null
 )

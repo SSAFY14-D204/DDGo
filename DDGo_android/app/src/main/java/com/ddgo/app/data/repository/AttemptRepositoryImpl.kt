@@ -8,8 +8,11 @@ import com.ddgo.app.data.mapper.AttemptMapper.toDomain
 import com.ddgo.app.data.mapper.AttemptMapper.toUploadedAttemptVideo
 import com.ddgo.app.data.remote.attempt.AttemptApi
 import com.ddgo.app.data.remote.attempt.AttemptEndBaseDataDto
+import com.ddgo.app.data.remote.attempt.AttemptEndFeedbacksDataDto
+import com.ddgo.app.data.remote.attempt.AttemptEndMetricsDataDto
 import com.ddgo.app.data.remote.attempt.AttemptEndRequestDto
 import com.ddgo.app.data.remote.attempt.GenerateVideoUrlRequestDto
+import com.ddgo.app.domain.model.AttemptCompletionPayload
 import com.ddgo.app.domain.model.AttemptUploadTicket
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.domain.repository.AttemptRepository
@@ -110,7 +113,7 @@ class AttemptRepositoryImpl @Inject constructor(
     override suspend fun endAttempt(
         challengeId: Long,
         attemptId: Long,
-        attemptResult: String?
+        payload: AttemptCompletionPayload
     ): Result<Unit> {
         return try {
             val response = attemptApi.endAttempt(
@@ -118,7 +121,20 @@ class AttemptRepositoryImpl @Inject constructor(
                 attemptId = attemptId,
                 request = AttemptEndRequestDto(
                     baseData = AttemptEndBaseDataDto(
-                        attemptResult = attemptResult
+                        attemptResult = payload.attemptResult,
+                        durationMs = payload.durationMs,
+                        maxHoldNo = payload.maxHoldNo
+                    ),
+                    metricsData = AttemptEndMetricsDataDto(
+                        centerStabilityRatio = payload.centerStabilityRatio,
+                        cruxHoldNo = payload.cruxHoldNo,
+                        cruxDurationMs = payload.cruxDurationMs,
+                        dangerEventCount = payload.dangerEventCount
+                    ),
+                    feedbacksData = AttemptEndFeedbacksDataDto(
+                        failureReason = payload.failureReason,
+                        riskAlert = payload.riskAlert,
+                        nextMission = payload.nextMission
                     )
                 )
             )

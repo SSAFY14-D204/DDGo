@@ -41,7 +41,7 @@ public class GymService {
 
         // 2. Try matching by raw place name normalization
         String normalizedName = normalizePlaceName(request.getPlaceName());
-        List<ClimbingGym> nameMatches = gymRepository.findByDisplayNameOrName(normalizedName);
+        List<ClimbingGym> nameMatches = gymRepository.findByDisplayNameOrNameWithoutSpaces(normalizedName);
         
         if (!nameMatches.isEmpty()) {
             ClimbingGym gym = nameMatches.get(0); // For MVP, grab the first one
@@ -85,10 +85,8 @@ public class GymService {
 
     private String normalizePlaceName(String placeName) {
         if (placeName == null) return "";
-        return placeName.trim()
-                .replaceAll("\\s+", " ")
-                .replaceAll("·", "")
-                .replaceAll("[^a-zA-Z0-9가-힣\\s]", "");
+        // 모든 띄어쓰기 및 특수문자 제거 후 순수 단벌로 비교
+        return placeName.replaceAll("[^a-zA-Z0-9가-힣]", "");
     }
 
     private ClimbingGym createFallbackGym(GymResolveRequest request) {

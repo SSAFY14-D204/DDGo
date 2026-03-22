@@ -34,6 +34,7 @@ import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
 import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
+import com.ddgo.app.domain.usecase.CloseChallengeUseCase
 import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
@@ -90,6 +91,7 @@ class UploadViewModel @Inject constructor(
     private val searchNearbyClimbingGymsUseCase: SearchNearbyClimbingGymsUseCase,
     private val resolveGymUseCase: ResolveGymUseCase,
     private val createChallengeUseCase: CreateChallengeUseCase,
+    private val closeChallengeUseCase: CloseChallengeUseCase,
     private val saveChallengeHoldsUseCase: SaveChallengeHoldsUseCase,
     private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase,
     private val endAttemptUseCase: EndAttemptUseCase,
@@ -133,6 +135,8 @@ class UploadViewModel @Inject constructor(
         attachAiRealtimeContextUseCase = attachAiRealtimeContextUseCase,
         finalizeAiRealtimeSessionUseCase = finalizeAiRealtimeSessionUseCase
     )
+    private var closedChallengeId by mutableStateOf<Long?>(null)
+    private var closingChallengeId by mutableStateOf<Long?>(null)
 
     var videoUri: String?
         get() = sessionDelegate.videoUri
@@ -1233,6 +1237,45 @@ class UploadViewModel @Inject constructor(
         }
     }
 
+    fun closeChallengeForFinalAnalysis(
+        challengeResult: String,
+        averageCenterStabilityRatio: Double?,
+        mostCruxHoldNo: Int?,
+        maxCruxDurationMs: Int?,
+        finalComment: String?
+    ) {
+        val currentChallengeId = challengeId ?: return
+        if (currentChallengeId <= 0L) {
+            return
+        }
+        if (closedChallengeId == currentChallengeId || closingChallengeId == currentChallengeId) {
+            return
+        }
+
+        viewModelScope.launch {
+            closingChallengeId = currentChallengeId
+            closeChallengeUseCase(
+                challengeId = currentChallengeId,
+                challengeResult = challengeResult,
+                averageCenterStabilityRatio = averageCenterStabilityRatio,
+                mostCruxHoldNo = mostCruxHoldNo,
+                maxCruxDurationMs = maxCruxDurationMs,
+                finalComment = finalComment
+            ).onSuccess { closedChallenge ->
+                closedChallengeId = currentChallengeId
+                createdChallenge = createdChallenge?.copy(
+                    challengeStatus = closedChallenge.challengeStatus
+                )
+            }.onFailure { throwable ->
+                Log.e(TAG, "closeChallengeForFinalAnalysis: failed", throwable)
+            }
+
+            if (closingChallengeId == currentChallengeId) {
+                closingChallengeId = null
+            }
+        }
+    }
+
     fun resetState() {
         holdDetectionEnsureJob?.cancel()
         _uiState.value = UploadUiState.Idle
@@ -1256,6 +1299,8 @@ class UploadViewModel @Inject constructor(
 
     private fun clearCreatedChallengeOnly() {
         challengeDelegate.clearCreatedChallengeState()
+        closedChallengeId = null
+        closingChallengeId = null
         savedChallengeHolds = null
         uploadedAttemptVideos = emptyList()
         clearHoldReachAnalysis()

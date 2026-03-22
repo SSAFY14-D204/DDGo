@@ -44,11 +44,20 @@ public class ChallengeSummary extends BaseTimeEntity {
 
     @Builder
     public ChallengeSummary(Long challengeId, BigDecimal averageCenterStabilityRatio,
-                            Integer mostCruxHoldNo, Integer maxCruxDurationMs) {
+            Integer mostCruxHoldNo, Integer maxCruxDurationMs) {
         this.challengeId = challengeId;
         this.averageCenterStabilityRatio = averageCenterStabilityRatio;
         this.mostCruxHoldNo = mostCruxHoldNo;
         this.maxCruxDurationMs = maxCruxDurationMs;
         this.finalComment = null;
+    }
+
+    // 기존 챌린지 요약 데이터 업데이트 로직 (Upsert 목적)
+    public void updateSummary(BigDecimal averageCenterStabilityRatio, Integer mostCruxHoldNo,
+                              Integer maxCruxDurationMs, String finalComment) {
+        this.averageCenterStabilityRatio = averageCenterStabilityRatio;
+        this.mostCruxHoldNo = mostCruxHoldNo;
+        this.maxCruxDurationMs = maxCruxDurationMs;
+        this.finalComment = finalComment;
     }
 }

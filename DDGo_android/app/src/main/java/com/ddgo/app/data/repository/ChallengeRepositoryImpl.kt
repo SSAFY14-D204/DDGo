@@ -3,10 +3,13 @@ package com.ddgo.app.data.repository
 import com.ddgo.app.data.mapper.ChallengeMapper.toDomain
 import com.ddgo.app.data.mapper.ChallengeMapper.toDto
 import com.ddgo.app.data.remote.challenge.ChallengeApi
+import com.ddgo.app.data.remote.challenge.ChallengeCloseRequestDto
+import com.ddgo.app.data.remote.challenge.ChallengeCloseSummaryDto
 import com.ddgo.app.data.remote.challenge.ChallengeCreateRequestDto
 import com.ddgo.app.data.remote.challenge.HoldSaveRequestDto
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.ChallengeSession
+import com.ddgo.app.domain.model.ClosedChallenge
 import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.repository.ChallengeRepository
 import javax.inject.Inject
@@ -62,6 +65,38 @@ class ChallengeRepositoryImpl @Inject constructor(
                 Result.success(response.data.toDomain())
             } else {
                 Result.failure(Exception(response.message.ifBlank { "Failed to save holds." }))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun closeChallenge(
+        challengeId: Long,
+        challengeResult: String?,
+        averageCenterStabilityRatio: Double?,
+        mostCruxHoldNo: Int?,
+        maxCruxDurationMs: Int?,
+        finalComment: String?
+    ): Result<ClosedChallenge> {
+        return try {
+            val response = challengeApi.closeChallenge(
+                challengeId = challengeId,
+                request = ChallengeCloseRequestDto(
+                    challengeResult = challengeResult,
+                    summary = ChallengeCloseSummaryDto(
+                        averageCenterStabilityRatio = averageCenterStabilityRatio,
+                        mostCruxHoldNo = mostCruxHoldNo,
+                        maxCruxDurationMs = maxCruxDurationMs,
+                        finalComment = finalComment
+                    )
+                )
+            )
+
+            if (response.success && response.data != null) {
+                Result.success(response.data.toDomain())
+            } else {
+                Result.failure(Exception(response.message.ifBlank { "Failed to close challenge." }))
             }
         } catch (e: Exception) {
             Result.failure(e)

@@ -67,13 +67,22 @@ public class AttemptController {
         return ResponseEntity.ok(ApiResponse.success("시도 상세 정보 조회가 완료되었습니다.", response));
     }
 
-    @Operation(summary = "시도 종료 처리", description = "프론트엔드에서 측정한 결과를 바탕으로 해당 시도의 상태를 DONE으로 변경하고 결과를 저장합니다.")
+    @Operation(summary = "시도 종료 처리", description = "프론트엔드에서 측정한 결과를 바탕으로 해당 시도의 상태를 DONE으로 변경하고 결과를 저장합니다. (네트워크 지연 시 재요청이 가능하도록 멱등성을 보장합니다.)")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+        content = @io.swagger.v3.oas.annotations.media.Content(
+            mediaType = "application/json",
+            examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+                name = "요청 예시 (모든 필드 포함)",
+                value = "{\n  \"baseData\": {\n    \"attemptResult\": \"FAIL\",\n    \"durationMs\": 12000,\n    \"maxHoldNo\": 5\n  },\n  \"metricsData\": {\n    \"centerStabilityRatio\": 0.65,\n    \"cruxHoldNo\": 4,\n    \"cruxDurationMs\": 3000,\n    \"dangerEventCount\": 1\n  },\n  \"feedbacksData\": {\n    \"failureReason\": \"중심 이동 실패\",\n    \"riskAlert\": \"지상 추락 주의\",\n    \"nextMission\": \"발 위치 정확히 맞추기\"\n  }\n}"
+            )
+        )
+    )
     @PatchMapping("/challenges/{challengeId}/attempts/{attemptId}")
     public ResponseEntity<ApiResponse<AttemptDetailResponse>> endAttempt(
             Authentication authentication,
             @PathVariable("challengeId") Long challengeId,
             @PathVariable("attemptId") Long attemptId,
-            @RequestBody AttemptEndRequest request) {
+            @RequestBody @jakarta.validation.Valid AttemptEndRequest request) {
 
         AttemptDetailResponse response = attemptService.endAttempt(authentication.getName(), challengeId, attemptId,
                 request);

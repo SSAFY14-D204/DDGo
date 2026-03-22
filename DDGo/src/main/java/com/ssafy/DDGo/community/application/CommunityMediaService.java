@@ -55,7 +55,7 @@ public class CommunityMediaService {
             if (!video.getObjectKey().startsWith(prefix)) {
                 throw new CustomException(ErrorCode.INVALID_COMMUNITY_MEDIA, "본인이 발급받은 영상만 첨부할 수 있습니다.");
             }
-            assertObjectExists(video.getObjectKey());
+            assertObjectExistsAndMatches(video);
         }
     }
 
@@ -107,14 +107,25 @@ public class CommunityMediaService {
         }
     }
 
-    private void assertObjectExists(String objectKey) {
+    private void assertObjectExistsAndMatches(CommunityPostVideoItemRequest video) {
         try {
-            minioClient.statObject(StatObjectArgs.builder()
+            io.minio.StatObjectResponse stat = minioClient.statObject(StatObjectArgs.builder()
                     .bucket(minioProperties.getBucket())
-                    .object(objectKey)
+                    .object(video.getObjectKey())
                     .build());
+            
+            if (video.getFileSize() != null && stat.size() != video.getFileSize()) {
+                throw new CustomException(ErrorCode.INVALID_COMMUNITY_MEDIA, "업로드된 영상의 파일 크기 무결성 검증에 실패했습니다.");
+            }
+            if (video.getContentType() != null && stat.contentType() != null) {
+                if (!video.getContentType().equals(stat.contentType()) && !"application/octet-stream".equals(stat.contentType())) {
+                    throw new CustomException(ErrorCode.INVALID_COMMUNITY_MEDIA, "업로드된 영상의 포맷이 올바르지 않습니다.");
+                }
+            }
+        } catch (CustomException e) {
+            throw e;
         } catch (Exception e) {
-            throw new CustomException(ErrorCode.INVALID_COMMUNITY_MEDIA, "업로드가 완료되지 않은 영상은 저장할 수 없습니다.");
+            throw new CustomException(ErrorCode.INVALID_COMMUNITY_MEDIA, "업로드가 완료되지 않은 영상은 누락되었습니다. 정상 업로드 여부를 확인해 주십시오.");
         }
     }
 

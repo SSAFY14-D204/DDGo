@@ -36,4 +36,25 @@ public class AttemptVideoController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Presigned URL 발급이 완료되었습니다.", response));
     }
+
+    @Operation(summary = "영상 업로드 완료 처리", description = "클라이언트에서 Presigned URL을 통한 데이터 업로드를 마친 뒤 이 API를 호출하면 시도 상태가 분석 중(PROCESSING)으로 변경됩니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @io.swagger.v3.oas.annotations.media.Content(
+                    mediaType = "application/json",
+                    examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+                            name = "정상 업로드 완료 (선택적 eTag 포함)",
+                            value = "{\n  \"etag\": \"d41d8cd98f00b204e9800998ecf8427e\"\n}"
+                    )
+            )
+    )
+    @PatchMapping("/video-upload-complete")
+    public ResponseEntity<ApiResponse<com.ssafy.DDGo.attempts.dto.response.VideoUploadCompleteResponse>> completeVideoUpload(
+            Authentication authentication,
+            @PathVariable("attemptId") Long attemptId,
+            @RequestBody(required = false) com.ssafy.DDGo.attempts.dto.request.VideoUploadCompleteRequest request) {
+        
+        com.ssafy.DDGo.attempts.dto.response.VideoUploadCompleteResponse response = 
+                attemptVideoService.completeVideoUpload(attemptId, authentication.getName(), request);
+        return ResponseEntity.ok(ApiResponse.success("영상 업로드 상태가 완료로 변경되었습니다.", response));
+    }
 }

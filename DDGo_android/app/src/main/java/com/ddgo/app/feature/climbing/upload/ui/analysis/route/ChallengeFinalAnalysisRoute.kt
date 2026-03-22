@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.route
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,43 @@ fun ChallengeFinalAnalysisRoute(
             totalHolds = totalHolds
         )
     }
+    val closeSummaryPayload = remember(attemptSummaries, challengeSummary) {
+        val averageCenterStabilityRatio = attemptSummaries
+            .mapNotNull { it.insideSupportRatio }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.div(100.0)
+        val mostCruxHoldNo = attemptSummaries
+            .mapNotNull { it.primaryCruxHoldNo }
+            .groupingBy { it }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
+        val maxCruxDurationMs = attemptSummaries
+            .mapNotNull { it.primaryCruxDurationMs }
+            .maxOrNull()
+        val finalComment = listOf(
+            challengeSummary.summaryLine,
+            challengeSummary.completionLine,
+            challengeSummary.challengeNatureLine
+        ).filter { it.isNotBlank() }
+            .joinToString(" ")
+            .takeIf { it.isNotBlank() }
+
+        ChallengeCloseRouteSummary(
+            averageCenterStabilityRatio = averageCenterStabilityRatio,
+            mostCruxHoldNo = mostCruxHoldNo,
+            maxCruxDurationMs = maxCruxDurationMs,
+            finalComment = finalComment
+        )
+    }
+    val challengeResult = remember(challengeSummary.overallSuccess, attemptSummaries) {
+        when {
+            attemptSummaries.isEmpty() -> "UNKNOWN"
+            challengeSummary.overallSuccess -> "SUCCESS"
+            else -> "FAIL"
+        }
+    }
 
     var selectedTab by rememberSaveable {
         mutableStateOf(ChallengeFinalAnalysisTab.Overview)
@@ -81,6 +119,16 @@ fun ChallengeFinalAnalysisRoute(
         )
     }
 
+    LaunchedEffect(viewModel.challengeId, challengeResult) {
+        viewModel.closeChallengeForFinalAnalysis(
+            challengeResult = challengeResult,
+            averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+            mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+            maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+            finalComment = closeSummaryPayload.finalComment
+        )
+    }
+
     ChallengeFinalAnalysisPage(
         state = pageState,
         selectedTab = selectedTab,
@@ -89,3 +137,10 @@ fun ChallengeFinalAnalysisRoute(
         onPrimaryAction = onNavigateToMain
     )
 }
+
+private data class ChallengeCloseRouteSummary(
+    val averageCenterStabilityRatio: Double?,
+    val mostCruxHoldNo: Int?,
+    val maxCruxDurationMs: Int?,
+    val finalComment: String?
+)
