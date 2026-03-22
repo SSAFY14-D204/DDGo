@@ -220,6 +220,10 @@ private fun RuntimeDashboard(
             },
             active = runtimeSnapshot.serviceActive
         )
+        StatusPill(
+            label = if (runtimeSnapshot.alerting) "Alert ACTIVE" else "Alert SAFE",
+            active = runtimeSnapshot.alerting
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)

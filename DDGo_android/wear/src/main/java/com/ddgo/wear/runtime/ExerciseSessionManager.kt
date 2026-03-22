@@ -21,6 +21,7 @@ import com.ddgo.shared.model.MeasurementStatus
 import com.ddgo.shared.model.RecordingState
 import com.ddgo.wear.data.ExerciseRuntimeStore
 import com.ddgo.wear.data.RecordingStateStore
+import com.ddgo.wear.data.WatchStateSyncManager
 import com.ddgo.wear.service.WatchExerciseService
 import java.time.Instant
 import kotlin.math.roundToInt
@@ -32,6 +33,9 @@ class ExerciseSessionManager(
     private val runtimeStore: ExerciseRuntimeStore = ExerciseRuntimeStore.get(service.applicationContext),
     private val recordingStateStore: RecordingStateStore = RecordingStateStore.get(service.applicationContext),
     private val ongoingActivityController: OngoingActivityController = OngoingActivityController(service.applicationContext),
+    private val watchStateSyncManager: WatchStateSyncManager = WatchStateSyncManager(service.applicationContext),
+    private val riskEvaluator: RiskEvaluator = RiskEvaluator(),
+    private val watchHaptics: WatchHaptics = WatchHaptics(service.applicationContext),
     private val stopService: () -> Unit
 ) {
     private val appContext = service.applicationContext
@@ -58,11 +62,17 @@ class ExerciseSessionManager(
             }
             sensorAvailable = !availability.javaClass.simpleName.contains("Unavailable", ignoreCase = true)
             val recordingState = recordingStateStore.snapshot.value.recordingState ?: return
+            val currentSnapshot = runtimeStore.snapshot.value
             val snapshot = if (sensorAvailable) {
                 runtimeStore.markRecording(
                     recordingState = recordingState,
                     sensorAvailable = true,
                     measurementStatus = MeasurementStatus.MEASURING,
+                    alerting = currentSnapshot.alerting,
+                    aboveThresholdStartedAt = currentSnapshot.aboveThresholdStartedAt,
+                    belowThresholdStartedAt = currentSnapshot.belowThresholdStartedAt,
+                    lastAlertTriggeredAt = currentSnapshot.lastAlertTriggeredAt,
+                    lastHapticAt = currentSnapshot.lastHapticAt,
                     reason = "Heart rate sensor is available"
                 )
             } else {
@@ -71,7 +81,7 @@ class ExerciseSessionManager(
                     reason = "Heart rate sensor is unavailable"
                 )
             }
-            ongoingActivityController.startOrUpdate(service, snapshot)
+            publish(snapshot)
         }
 
         override fun onExerciseUpdateReceived(update: ExerciseUpdate) {
@@ -79,25 +89,29 @@ class ExerciseSessionManager(
             val stateName = update.exerciseStateInfo.state.name
             if (stateName.contains("ENDED", ignoreCase = true)) {
                 val snapshot = runtimeStore.markIdle("Exercise ended: $stateName")
-                ongoingActivityController.startOrUpdate(service, snapshot)
+                publish(snapshot)
                 stopService()
                 return
             }
 
-            val heartRate = update.latestMetrics
+            val latestHeartRateDataPoint = update.latestMetrics
                 .getData(DataType.HEART_RATE_BPM)
                 .lastOrNull()
+            val heartRate = latestHeartRateDataPoint
                 ?.value
                 ?.roundToInt()
-            val measuredAt = update.latestMetrics
-                .getData(DataType.HEART_RATE_BPM)
-                .lastOrNull()
-                ?.let(::toEpochMillis)
+            val measuredAt = latestHeartRateDataPoint?.let(::toEpochMillis)
 
             val effectiveRecordingState = recordingState ?: RecordingState(
                 sessionId = runtimeStore.snapshot.value.sessionId ?: "recovered",
                 isRecording = true,
                 updatedAt = System.currentTimeMillis()
+            )
+            val currentSnapshot = runtimeStore.snapshot.value
+            val risk = riskEvaluator.evaluate(
+                current = currentSnapshot,
+                heartRate = heartRate,
+                measuredAt = measuredAt
             )
             val snapshot = runtimeStore.markRecording(
                 recordingState = effectiveRecordingState,
@@ -109,9 +123,21 @@ class ExerciseSessionManager(
                 } else {
                     MeasurementStatus.RECOVERING
                 },
-                reason = "Exercise update received"
+                alerting = risk.alerting,
+                aboveThresholdStartedAt = risk.aboveThresholdStartedAt,
+                belowThresholdStartedAt = risk.belowThresholdStartedAt,
+                lastAlertTriggeredAt = risk.lastAlertTriggeredAt,
+                lastHapticAt = risk.lastHapticAt,
+                reason = if (risk.alerting) {
+                    "High heart rate alert active"
+                } else {
+                    "Exercise update received"
+                }
             )
-            ongoingActivityController.startOrUpdate(service, snapshot)
+            if (risk.shouldTriggerHaptic) {
+                watchHaptics.triggerAlert()
+            }
+            publish(snapshot, sendAlertMessage = risk.shouldTriggerHaptic)
         }
     }
 
@@ -130,14 +156,14 @@ class ExerciseSessionManager(
                 "Syncing watch exercise session"
             }
         )
-        ongoingActivityController.startOrUpdate(service, recoveringSnapshot)
+        publish(recoveringSnapshot)
 
         if (!WearPermissionHelper.hasAllExercisePermissions(appContext)) {
             val snapshot = runtimeStore.markPermissionBlocked(
                 recordingState = recordingState,
                 reason = "Grant body sensor and activity permissions on watch"
             )
-            ongoingActivityController.startOrUpdate(service, snapshot)
+            publish(snapshot)
             return
         }
 
@@ -146,7 +172,7 @@ class ExerciseSessionManager(
                 recordingState = recordingState,
                 reason = "This watch does not expose heart rate workout data"
             )
-            ongoingActivityController.startOrUpdate(service, snapshot)
+            publish(snapshot)
             return
         }
 
@@ -157,9 +183,14 @@ class ExerciseSessionManager(
                 recordingState = recordingState,
                 sensorAvailable = sensorAvailable,
                 measurementStatus = MeasurementStatus.RECOVERING,
+                alerting = runtimeStore.snapshot.value.alerting,
+                aboveThresholdStartedAt = runtimeStore.snapshot.value.aboveThresholdStartedAt,
+                belowThresholdStartedAt = runtimeStore.snapshot.value.belowThresholdStartedAt,
+                lastAlertTriggeredAt = runtimeStore.snapshot.value.lastAlertTriggeredAt,
+                lastHapticAt = runtimeStore.snapshot.value.lastHapticAt,
                 reason = "Recovered existing exercise session"
             )
-            ongoingActivityController.startOrUpdate(service, snapshot)
+            publish(snapshot)
             return
         }
 
@@ -172,13 +203,25 @@ class ExerciseSessionManager(
 
         runCatching {
             exerciseClient.startExercise(config)
+            val snapshot = runtimeStore.markRecording(
+                recordingState = recordingState,
+                sensorAvailable = sensorAvailable,
+                measurementStatus = MeasurementStatus.RECOVERING,
+                alerting = runtimeStore.snapshot.value.alerting,
+                aboveThresholdStartedAt = runtimeStore.snapshot.value.aboveThresholdStartedAt,
+                belowThresholdStartedAt = runtimeStore.snapshot.value.belowThresholdStartedAt,
+                lastAlertTriggeredAt = runtimeStore.snapshot.value.lastAlertTriggeredAt,
+                lastHapticAt = runtimeStore.snapshot.value.lastHapticAt,
+                reason = "Exercise session started"
+            )
+            publish(snapshot)
         }.onFailure { throwable ->
             Log.w(TAG, "Failed to start exercise session.", throwable)
             val snapshot = runtimeStore.markUnavailable(
                 recordingState = recordingState,
                 reason = throwable.message ?: "Unable to start exercise session"
             )
-            ongoingActivityController.startOrUpdate(service, snapshot)
+            publish(snapshot)
         }
     }
 
@@ -192,7 +235,7 @@ class ExerciseSessionManager(
             clearCallback()
         }
         val snapshot = runtimeStore.markIdle(reason)
-        ongoingActivityController.startOrUpdate(service, snapshot)
+        publish(snapshot)
         stopService()
     }
 
@@ -248,6 +291,17 @@ class ExerciseSessionManager(
     private fun toEpochMillis(dataPoint: SampleDataPoint<Double>): Long {
         val bootInstant = Instant.ofEpochMilli(System.currentTimeMillis() - SystemClock.elapsedRealtime())
         return dataPoint.getTimeInstant(bootInstant).toEpochMilli()
+    }
+
+    private fun publish(
+        snapshot: com.ddgo.wear.data.ExerciseRuntimeSnapshot,
+        sendAlertMessage: Boolean = false
+    ) {
+        ongoingActivityController.startOrUpdate(service, snapshot)
+        watchStateSyncManager.syncRuntime(snapshot)
+        if (sendAlertMessage && snapshot.alerting) {
+            watchStateSyncManager.sendAlertMessage(snapshot)
+        }
     }
 
     private companion object {

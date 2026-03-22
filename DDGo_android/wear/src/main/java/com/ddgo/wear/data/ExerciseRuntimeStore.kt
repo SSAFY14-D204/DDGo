@@ -37,6 +37,7 @@ class ExerciseRuntimeStore private constructor(
             sessionId = recordingState.sessionId,
             watchState = WatchState.SESSION_RECOVERING,
             serviceActive = true,
+            alerting = false,
             measurementStatus = MeasurementStatus.RECOVERING,
             updatedAt = System.currentTimeMillis(),
             lastReason = reason
@@ -49,16 +50,26 @@ class ExerciseRuntimeStore private constructor(
         lastMeasuredAt: Long? = null,
         sensorAvailable: Boolean,
         measurementStatus: MeasurementStatus,
+        alerting: Boolean = false,
+        aboveThresholdStartedAt: Long? = null,
+        belowThresholdStartedAt: Long? = null,
+        lastAlertTriggeredAt: Long? = null,
+        lastHapticAt: Long? = null,
         reason: String? = null
     ): ExerciseRuntimeSnapshot = update {
         it.copy(
             sessionId = recordingState.sessionId,
-            watchState = WatchState.RECORDING,
+            watchState = if (alerting) WatchState.ALERTING else WatchState.RECORDING,
             serviceActive = true,
+            alerting = alerting,
             sensorAvailable = sensorAvailable,
             measurementStatus = measurementStatus,
             latestHeartRate = latestHeartRate ?: it.latestHeartRate,
             lastMeasuredAt = lastMeasuredAt ?: it.lastMeasuredAt,
+            aboveThresholdStartedAt = aboveThresholdStartedAt ?: it.aboveThresholdStartedAt,
+            belowThresholdStartedAt = belowThresholdStartedAt ?: it.belowThresholdStartedAt,
+            lastAlertTriggeredAt = lastAlertTriggeredAt ?: it.lastAlertTriggeredAt,
+            lastHapticAt = lastHapticAt ?: it.lastHapticAt,
             updatedAt = System.currentTimeMillis(),
             lastReason = reason
         )
@@ -72,8 +83,12 @@ class ExerciseRuntimeStore private constructor(
             sessionId = recordingState?.sessionId ?: it.sessionId,
             watchState = WatchState.PERMISSION_BLOCKED,
             serviceActive = true,
+            alerting = false,
             sensorAvailable = false,
             measurementStatus = MeasurementStatus.PERMISSION_BLOCKED,
+            aboveThresholdStartedAt = null,
+            belowThresholdStartedAt = null,
+            lastHapticAt = null,
             updatedAt = System.currentTimeMillis(),
             lastReason = reason
         )
@@ -87,17 +102,27 @@ class ExerciseRuntimeStore private constructor(
             sessionId = recordingState?.sessionId ?: it.sessionId,
             watchState = WatchState.SENSOR_UNAVAILABLE,
             serviceActive = true,
+            alerting = false,
             sensorAvailable = false,
             measurementStatus = MeasurementStatus.UNAVAILABLE,
+            aboveThresholdStartedAt = null,
+            belowThresholdStartedAt = null,
+            lastHapticAt = null,
             updatedAt = System.currentTimeMillis(),
             lastReason = reason
         )
     }
 
     fun markIdle(reason: String? = null): ExerciseRuntimeSnapshot = update {
-        ExerciseRuntimeSnapshot(
+        it.copy(
             watchState = WatchState.IDLE,
+            serviceActive = false,
+            alerting = false,
+            sensorAvailable = false,
             measurementStatus = MeasurementStatus.UNAVAILABLE,
+            aboveThresholdStartedAt = null,
+            belowThresholdStartedAt = null,
+            lastHapticAt = null,
             updatedAt = System.currentTimeMillis(),
             lastReason = reason
         )
