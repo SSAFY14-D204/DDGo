@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.core.ui.theme.DDGoTheme
 import com.ddgo.app.domain.model.CalendarMonthSummary
-import com.ddgo.app.feature.main.MainChromeDefaults
 import com.ddgo.app.feature.calendar.components.CalendarErrorSection
 import com.ddgo.app.feature.calendar.components.CalendarHeroSection
 import com.ddgo.app.feature.calendar.components.CalendarMonthSection
@@ -32,6 +31,7 @@ import com.ddgo.app.feature.calendar.components.SelectedDateSection
 import com.ddgo.app.feature.calendar.mapper.CalendarUiStateMapper
 import com.ddgo.app.feature.calendar.model.CalendarUiState
 import com.ddgo.app.feature.calendar.style.CalendarPalette
+import com.ddgo.app.feature.main.MainChromeDefaults
 import java.time.LocalDate
 import java.time.YearMonth
 

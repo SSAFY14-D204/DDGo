@@ -7,22 +7,38 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.core.validation.AuthInputPolicy
 import com.ddgo.app.core.validation.ValidationResult
+import com.ddgo.app.domain.model.User
+import com.ddgo.app.domain.model.SocialLoginProvider
+import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.LoginUseCase
 import com.ddgo.app.domain.usecase.RegisterUseCase
+import com.ddgo.app.domain.usecase.SocialLoginUseCase
+import com.ddgo.app.domain.usecase.UpdateNicknameUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+private const val NICKNAME_KEYWORD = "\uB2C9\uB124\uC784"
+
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val loginUseCase: LoginUseCase,
-    private val registerUseCase: RegisterUseCase
+    private val registerUseCase: RegisterUseCase,
+    private val socialLoginUseCase: SocialLoginUseCase,
+    private val getMyInfoUseCase: GetMyInfoUseCase,
+    private val updateNicknameUseCase: UpdateNicknameUseCase
 ) : ViewModel() {
+
+    private companion object {
+        const val PROVISIONAL_NICKNAME_PREFIX = "DDGoUser"
+        const val KAKAO_USERNAME_PREFIX = "kakao_"
+    }
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState = _uiState.asStateFlow()
+
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
@@ -48,6 +64,7 @@ class AuthViewModel @Inject constructor(
                 setError(validation.message)
                 validation.message
             }
+
             is ValidationResult.Valid -> {
                 username = validation.value
                 clearErrorState()
@@ -87,6 +104,31 @@ class AuthViewModel @Inject constructor(
                 }
                 .onFailure { throwable ->
                     setError(throwable.message ?: AuthStrings.LoginFailed)
+                }
+        }
+    }
+
+    fun loginWithKakaoAccessToken(accessToken: String) {
+        if (accessToken.isBlank()) {
+            setError(AuthStrings.KakaoLoginFailed)
+            return
+        }
+
+        viewModelScope.launch {
+            clearErrorState()
+            _uiState.value = AuthUiState.Loading
+
+            socialLoginUseCase(
+                provider = SocialLoginProvider.KAKAO,
+                accessToken = accessToken
+            )
+                .onSuccess {
+                    syncKakaoNicknameIfNeeded()
+                    clearErrorState()
+                    _uiState.value = AuthUiState.Success
+                }
+                .onFailure { throwable ->
+                    setError(throwable.message ?: AuthStrings.KakaoLoginFailed)
                 }
         }
     }
@@ -139,6 +181,14 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    fun reportExternalLoginError(message: String) {
+        setError(message)
+    }
+
+    fun notifyGoogleLoginPending() {
+        setError(AuthStrings.GoogleLoginPending)
+    }
+
     fun resetUiState() {
         _uiState.value = AuthUiState.Idle
         errorMessage = null
@@ -173,12 +223,31 @@ class AuthViewModel @Inject constructor(
             }
 
             val message = result.exceptionOrNull()?.message.orEmpty()
-            if (!message.contains("\uB2C9\uB124\uC784")) {
+            if (!message.contains(NICKNAME_KEYWORD)) {
                 return result
             }
         }
 
         return Result.failure(Exception(AuthStrings.RegisterFailed))
+    }
+
+    private suspend fun syncKakaoNicknameIfNeeded() {
+        val currentUser = getMyInfoUseCase().getOrNull() ?: return
+        if (!shouldSyncKakaoNickname(currentUser)) return
+
+        val kakaoNickname = loadKakaoProfile()
+            .getOrNull()
+            ?.nickname
+            ?.trim()
+            ?.takeUnless { it.isBlank() }
+            ?: return
+
+        updateNicknameUseCase(kakaoNickname)
+    }
+
+    private fun shouldSyncKakaoNickname(user: User): Boolean {
+        return user.username.startsWith(KAKAO_USERNAME_PREFIX) &&
+            user.nickname.startsWith(PROVISIONAL_NICKNAME_PREFIX)
     }
 }
 

@@ -59,7 +59,7 @@ internal object CalendarUiStateMapper {
         )
     }
 
-    // 달력은 6주 고정 그리드로 만들어 이전/다음 달 날짜도 함께 보여준다.
+    // 달력은 6주 고정 그리드로 만들고 이전/다음 달 날짜도 함께 보여준다.
     private fun buildCalendarWeeks(
         currentMonth: YearMonth,
         entriesByDate: Map<LocalDate, List<CalendarEntry>>

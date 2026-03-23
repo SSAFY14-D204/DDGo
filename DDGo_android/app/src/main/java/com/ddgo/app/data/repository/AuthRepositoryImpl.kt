@@ -7,12 +7,14 @@ import com.ddgo.app.data.remote.auth.AuthApi
 import com.ddgo.app.data.remote.auth.LoginRequestDto
 import com.ddgo.app.data.remote.auth.RefreshTokenRequestDto
 import com.ddgo.app.data.remote.auth.RegisterRequestDto
+import com.ddgo.app.data.remote.auth.SocialLoginRequestDto
 import com.ddgo.app.data.remote.auth.UpdateNicknameRequestDto
 import com.ddgo.app.data.remote.auth.UpdatePasswordRequestDto
 import com.ddgo.app.data.remote.auth.UpdateProfileRequestDto
 import com.ddgo.app.data.remote.common.ApiErrorResponse
 import com.ddgo.app.domain.model.AuthToken
 import com.ddgo.app.domain.model.LogoutResult
+import com.ddgo.app.domain.model.SocialLoginProvider
 import com.ddgo.app.domain.model.User
 import com.ddgo.app.domain.repository.AuthRepository
 import javax.inject.Inject
@@ -51,15 +53,7 @@ class AuthRepositoryImpl @Inject constructor(
         return try {
             val response = authApi.login(LoginRequestDto(username, password))
             if (response.success && response.data != null) {
-                tokenDataStore.saveTokens(
-                    response.data.accessToken,
-                    response.data.refreshToken
-                )
-                Log.d(
-                    TAG,
-                    "login: tokens saved, accessTokenLength=${response.data.accessToken.length}, " +
-                        "refreshTokenLength=${response.data.refreshToken.length}"
-                )
+                saveTokens(response.data.accessToken, response.data.refreshToken, "login")
                 Result.success(response.data.toDomain())
             } else {
                 Result.failure(Exception(response.message.ifBlank { LOGIN_FAILED_MESSAGE }))
@@ -69,19 +63,35 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun socialLogin(
+        provider: SocialLoginProvider,
+        accessToken: String?,
+        idToken: String?
+    ): Result<AuthToken> {
+        return try {
+            val response = authApi.socialLogin(
+                SocialLoginRequestDto(
+                    provider = provider.name,
+                    accessToken = accessToken,
+                    idToken = idToken
+                )
+            )
+            if (response.success && response.data != null) {
+                saveTokens(response.data.accessToken, response.data.refreshToken, "socialLogin:${provider.name}")
+                Result.success(response.data.toDomain())
+            } else {
+                Result.failure(Exception(response.message.ifBlank { SOCIAL_LOGIN_FAILED_MESSAGE }))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(resolveErrorMessage(e, SOCIAL_LOGIN_FAILED_MESSAGE), e))
+        }
+    }
+
     override suspend fun refreshToken(refreshToken: String): Result<AuthToken> {
         return try {
             val response = authApi.refresh(RefreshTokenRequestDto(refreshToken))
             if (response.success && response.data != null) {
-                tokenDataStore.saveTokens(
-                    response.data.accessToken,
-                    response.data.refreshToken
-                )
-                Log.d(
-                    TAG,
-                    "refreshToken: tokens saved, accessTokenLength=${response.data.accessToken.length}, " +
-                        "refreshTokenLength=${response.data.refreshToken.length}"
-                )
+                saveTokens(response.data.accessToken, response.data.refreshToken, "refreshToken")
                 Result.success(response.data.toDomain())
             } else {
                 Result.failure(Exception(response.message.ifBlank { REFRESH_FAILED_MESSAGE }))
@@ -214,6 +224,14 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    private suspend fun saveTokens(accessToken: String, refreshToken: String, source: String) {
+        tokenDataStore.saveTokens(accessToken, refreshToken)
+        Log.d(
+            TAG,
+            "$source: tokens saved, accessTokenLength=${accessToken.length}, refreshTokenLength=${refreshToken.length}"
+        )
+    }
+
     private fun resolveErrorMessage(throwable: Exception, fallbackMessage: String): String {
         if (throwable is HttpException) {
             val parsedMessage = throwable.response()
@@ -245,6 +263,8 @@ class AuthRepositoryImpl @Inject constructor(
             "회원가입을 완료하지 못했어요. 입력한 정보를 확인해 주세요."
         const val LOGIN_FAILED_MESSAGE =
             "로그인에 실패했어요. 아이디와 비밀번호를 확인해 주세요."
+        const val SOCIAL_LOGIN_FAILED_MESSAGE =
+            "카카오 로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요."
         const val REFRESH_FAILED_MESSAGE =
             "세션을 갱신하지 못했어요. 다시 로그인해 주세요."
         const val LOAD_PROFILE_FAILED_MESSAGE =

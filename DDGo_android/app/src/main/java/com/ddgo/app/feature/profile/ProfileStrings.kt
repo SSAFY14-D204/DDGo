@@ -17,9 +17,14 @@ internal object ProfileStrings {
     const val Dash = "-"
 
     const val AccountSectionTitle = "\uACC4\uC815"
+    const val AccountIdRowTitle = "\uACC4\uC815"
     const val UsernameRowTitle = "\uC544\uC774\uB514"
     const val NicknameRowTitle = "\uB2C9\uB124\uC784"
     const val NicknameEmpty = "\uBBF8\uC124\uC815"
+    const val KakaoAccountLabel = "\uCE74\uCE74\uC624 \uB85C\uADF8\uC778 \uACC4\uC815"
+    const val GoogleAccountLabel = "\uAD6C\uAE00 \uB85C\uADF8\uC778 \uACC4\uC815"
+    const val KakaoDefaultNickname = "\uCE74\uCE74\uC624 \uC0AC\uC6A9\uC790"
+    const val GoogleDefaultNickname = "\uAD6C\uAE00 \uC0AC\uC6A9\uC790"
 
     const val ActionRegister = "\uB4F1\uB85D"
     const val ActionEdit = "\uC218\uC815"

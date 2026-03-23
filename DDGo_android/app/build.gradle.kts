@@ -15,6 +15,9 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 
+val kakaoRestApiKey = localProperties.getProperty("kakao.rest.api.key") ?: ""
+val kakaoNativeAppKey = localProperties.getProperty("kakao.native.app.key") ?: ""
+
 android {
     namespace = "com.ddgo.app"
     compileSdk = 35
@@ -46,13 +49,20 @@ android {
         buildConfigField(
             "String",
             "KAKAO_REST_API_KEY",
-            "\"${localProperties.getProperty("kakao.rest.api.key") ?: ""}\""
+            "\"$kakaoRestApiKey\""
+        )
+        buildConfigField(
+            "String",
+            "KAKAO_NATIVE_APP_KEY",
+            "\"$kakaoNativeAppKey\""
         )
         buildConfigField(
             "String",
             "KAKAO_LOCAL_BASE_URL",
             "\"https://dapi.kakao.com/\""
         )
+
+        manifestPlaceholders["kakaoScheme"] = "kakao$kakaoNativeAppKey"
     }
 
     buildTypes {
@@ -141,6 +151,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kakao.user)
 
     // 4. Local Storage (Security & DataStore)
     implementation(libs.security.crypto.ktx)

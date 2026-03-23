@@ -33,6 +33,7 @@ internal object ProfilePreviewData {
         return User(
             id = 1L,
             username = "griphunter",
+            email = "griphunter@example.com",
             nickname = "Peak Hopper",
             sex = "M",
             heightCm = 176f,

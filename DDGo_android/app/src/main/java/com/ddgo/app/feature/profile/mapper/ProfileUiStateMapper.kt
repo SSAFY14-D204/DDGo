@@ -27,6 +27,10 @@ import com.ddgo.app.feature.profile.model.ProfileUiState
  */
 internal object ProfileUiStateMapper {
 
+    private const val KakaoUsernamePrefix = "kakao_"
+    private const val GoogleUsernamePrefix = "google_"
+    private const val ProvisionalNicknamePrefix = "DDGoUser"
+
     /**
      * 프로필 화면 전체 상태를 조립합니다.
      *
@@ -45,6 +49,8 @@ internal object ProfileUiStateMapper {
         passwordEditor: ProfilePasswordEditorUiState?
     ): ProfileUiState {
         val resolvedNickname = resolveNickname(user, nicknameSnapshot)
+        val displayNickname = resolveDisplayNickname(user, resolvedNickname)
+        val accountIdentifier = resolveAccountIdentifier(user)
         val bodyProfile = mergeBodyProfile(user, bodyProfileSnapshot)
         val hasBodyProfile = hasAnyBodyProfile(bodyProfile)
 
@@ -52,14 +58,12 @@ internal object ProfileUiStateMapper {
             title = ProfileStrings.ScreenTitle,
             header = ProfileHeaderUiModel(
                 nickname = when {
-                    !resolvedNickname.isNullOrBlank() -> resolvedNickname
-                    !user?.username.isNullOrBlank() -> user.username
+                    !displayNickname.isNullOrBlank() -> displayNickname
                     isLoadingProfile -> ProfileStrings.Loading
                     else -> ProfileStrings.DefaultNickname
                 },
                 accountId = when {
-                    !user?.username.isNullOrBlank() && resolvedNickname != user.username ->
-                        "@${user.username}"
+                    accountIdentifier.isNotBlank() -> accountIdentifier
                     isLoadingProfile -> ProfileStrings.LoadingAccount
                     else -> ""
                 }
@@ -98,13 +102,14 @@ internal object ProfileUiStateMapper {
         nicknameSnapshot: String?
     ): ProfileNicknameEditorUiState {
         val resolvedNickname = resolveNickname(user, nicknameSnapshot).orEmpty()
-        val hasNickname = resolvedNickname.isNotBlank()
+        val isProvisionalNickname = isProvisionalSocialNickname(user, resolvedNickname)
+        val hasNickname = resolvedNickname.isNotBlank() && !isProvisionalNickname
 
         return ProfileNicknameEditorUiState(
             title = ProfileStrings.nicknameEditorTitle(hasNickname),
             description = ProfileStrings.nicknameEditorDescription(hasNickname),
             submitLabel = ProfileStrings.ActionSave,
-            nicknameInput = resolvedNickname
+            nicknameInput = if (isProvisionalNickname) "" else resolvedNickname
         )
     }
 
@@ -143,19 +148,30 @@ internal object ProfileUiStateMapper {
         isLoadingProfile: Boolean
     ): ProfileInfoSectionUiModel {
         val hasNickname = !resolvedNickname.isNullOrBlank()
+        val displayNickname = resolveDisplayNickname(user, resolvedNickname)
+        val accountIdentifier = resolveAccountIdentifier(user)
+        val isSocialUser = isSocialUser(user)
 
         return ProfileInfoSectionUiModel(
             title = ProfileStrings.AccountSectionTitle,
             rows = listOf(
                 ProfileInfoRowUiModel(
-                    title = ProfileStrings.UsernameRowTitle,
-                    value = user?.username ?: loadingOrDash(isLoadingProfile)
+                    title = if (isSocialUser) {
+                        ProfileStrings.AccountIdRowTitle
+                    } else {
+                        ProfileStrings.UsernameRowTitle
+                    },
+                    value = if (accountIdentifier.isNotBlank()) {
+                        accountIdentifier
+                    } else {
+                        loadingOrDash(isLoadingProfile)
+                    }
                 ),
                 ProfileInfoRowUiModel(
                     title = ProfileStrings.NicknameRowTitle,
                     value = when {
                         isLoadingProfile -> ProfileStrings.Loading
-                        hasNickname -> resolvedNickname
+                        !displayNickname.isNullOrBlank() -> displayNickname
                         else -> ProfileStrings.NicknameEmpty
                     },
                     actionType = if (isLoadingProfile) null else ProfileActionType.EditNickname,
@@ -257,6 +273,33 @@ internal object ProfileUiStateMapper {
             ?: user?.nickname?.takeUnless { it.isBlank() }
     }
 
+    private fun resolveDisplayNickname(
+        user: User?,
+        resolvedNickname: String?
+    ): String? {
+        if (!resolvedNickname.isNullOrBlank() && !isProvisionalSocialNickname(user, resolvedNickname)) {
+            return resolvedNickname
+        }
+
+        return when {
+            isKakaoUser(user) -> ProfileStrings.KakaoDefaultNickname
+            isGoogleUser(user) -> ProfileStrings.GoogleDefaultNickname
+            else -> user?.username?.takeUnless { it.isBlank() }
+        }
+    }
+
+    private fun resolveAccountIdentifier(user: User?): String {
+        if (user == null) return ""
+
+        return when {
+            !user.email.isNullOrBlank() -> user.email
+            isKakaoUser(user) -> ProfileStrings.KakaoAccountLabel
+            isGoogleUser(user) -> ProfileStrings.GoogleAccountLabel
+            user.username.isBlank() -> ""
+            else -> "@${user.username}"
+        }
+    }
+
     /** 서버 사용자 정보와 로컬 신체 정보 스냅샷을 병합합니다. */
     private fun mergeBodyProfile(
         user: User?,
@@ -315,5 +358,21 @@ internal object ProfileUiStateMapper {
     /** 로딩 중이면 로딩 문구를, 아니면 `-`를 반환합니다. */
     private fun loadingOrDash(isLoadingProfile: Boolean): String {
         return if (isLoadingProfile) ProfileStrings.Loading else ProfileStrings.Dash
+    }
+
+    private fun isSocialUser(user: User?): Boolean {
+        return isKakaoUser(user) || isGoogleUser(user)
+    }
+
+    private fun isKakaoUser(user: User?): Boolean {
+        return user?.username?.startsWith(KakaoUsernamePrefix) == true
+    }
+
+    private fun isGoogleUser(user: User?): Boolean {
+        return user?.username?.startsWith(GoogleUsernamePrefix) == true
+    }
+
+    private fun isProvisionalSocialNickname(user: User?, nickname: String): Boolean {
+        return isSocialUser(user) && nickname.startsWith(ProvisionalNicknamePrefix)
     }
 }

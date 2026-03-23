@@ -9,6 +9,7 @@ package com.ddgo.app.domain.model
 data class User(
     val id: Long,
     val username: String,
+    val email: String? = null,
     val nickname: String,
     val sex: String? = null,
     val heightCm: Float? = null,
