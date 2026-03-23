@@ -1,7 +1,8 @@
 package com.ddgo.app.data.repository
 
+import android.util.Log
 import com.ddgo.app.data.mapper.ChallengeMapper.toDomain
-import com.ddgo.app.data.mapper.ChallengeMapper.toDto
+import com.ddgo.app.data.mapper.ChallengeMapper.toRequestDto
 import com.ddgo.app.data.remote.challenge.ChallengeApi
 import com.ddgo.app.data.remote.challenge.ChallengeCloseRequestDto
 import com.ddgo.app.data.remote.challenge.ChallengeCloseSummaryDto
@@ -13,6 +14,14 @@ import com.ddgo.app.domain.model.ClosedChallenge
 import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.repository.ChallengeRepository
 import javax.inject.Inject
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+private const val HOLD_API_TAG = "holdapi"
+
+private val HoldApiJson = Json {
+    prettyPrint = true
+}
 
 /**
  * ChallengeRepository 구현체입니다.
@@ -54,19 +63,34 @@ class ChallengeRepositoryImpl @Inject constructor(
         holds: List<ChallengeHoldCoordinate>
     ): Result<SavedChallengeHolds> {
         return try {
+            val request = HoldSaveRequestDto(
+                holds = holds.map { it.toRequestDto() }
+            )
+            Log.d(
+                HOLD_API_TAG,
+                "PATCH /v1/challenges/$challengeId/holds request=\n" +
+                    HoldApiJson.encodeToString(HoldSaveRequestDto.serializer(), request)
+            )
             val response = challengeApi.saveChallengeHolds(
                 challengeId = challengeId,
-                request = HoldSaveRequestDto(
-                    holds = holds.map { it.toDto() }
-                )
+                request = request
             )
 
             if (response.success && response.data != null) {
+                Log.d(
+                    HOLD_API_TAG,
+                    "PATCH /v1/challenges/$challengeId/holds success holdCount=${response.data.holdCount}"
+                )
                 Result.success(response.data.toDomain())
             } else {
+                Log.e(
+                    HOLD_API_TAG,
+                    "PATCH /v1/challenges/$challengeId/holds failed message=${response.message}"
+                )
                 Result.failure(Exception(response.message.ifBlank { "Failed to save holds." }))
             }
         } catch (e: Exception) {
+            Log.e(HOLD_API_TAG, "PATCH /v1/challenges/$challengeId/holds exception", e)
             Result.failure(e)
         }
     }

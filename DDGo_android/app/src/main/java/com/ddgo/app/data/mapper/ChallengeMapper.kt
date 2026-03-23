@@ -4,6 +4,7 @@ import com.ddgo.app.data.remote.challenge.BoundingBoxDto
 import com.ddgo.app.data.remote.challenge.ChallengeCloseResponseDto
 import com.ddgo.app.data.remote.challenge.ChallengeCreateResponseDto
 import com.ddgo.app.data.remote.challenge.HoldItemDto
+import com.ddgo.app.data.remote.challenge.HoldSaveRequestItemDto
 import com.ddgo.app.data.remote.challenge.HoldSaveResponseDto
 import com.ddgo.app.data.remote.challenge.PointItemDto
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
@@ -57,7 +58,7 @@ object ChallengeMapper {
         finalComment = summary?.finalComment
     )
 
-    fun ChallengeHoldCoordinate.toDto(): HoldItemDto = HoldItemDto(
+    fun ChallengeHoldCoordinate.toRequestDto(): HoldSaveRequestItemDto = HoldSaveRequestItemDto(
         holdNo = holdNo,
         boundingBox = BoundingBoxDto(
             x1 = boundingBox.x1,
@@ -70,12 +71,36 @@ object ChallengeMapper {
 
     private fun HoldItemDto.toDomain(): ChallengeHoldCoordinate = ChallengeHoldCoordinate(
         holdNo = holdNo,
-        boundingBox = HoldBoundingBox(
-            x1 = boundingBox.x1,
-            x2 = boundingBox.x2,
-            y1 = boundingBox.y1,
-            y2 = boundingBox.y2
-        ),
+        boundingBox = boundingBox.toDomainBoundingBox(polygon),
         polygon = polygon.map { HoldPoint(x = it.x, y = it.y) }
     )
+
+    private fun BoundingBoxDto?.toDomainBoundingBox(polygon: List<PointItemDto>): HoldBoundingBox {
+        if (this != null) {
+            return HoldBoundingBox(
+                x1 = x1,
+                x2 = x2,
+                y1 = y1,
+                y2 = y2
+            )
+        }
+
+        val xs = polygon.map { it.x }
+        val ys = polygon.map { it.y }
+        if (xs.isEmpty() || ys.isEmpty()) {
+            return HoldBoundingBox(
+                x1 = 0f,
+                x2 = 0f,
+                y1 = 0f,
+                y2 = 0f
+            )
+        }
+
+        return HoldBoundingBox(
+            x1 = xs.minOrNull() ?: 0f,
+            x2 = xs.maxOrNull() ?: 0f,
+            y1 = ys.minOrNull() ?: 0f,
+            y2 = ys.maxOrNull() ?: 0f
+        )
+    }
 }
