@@ -101,7 +101,7 @@ class AttemptPoseOverlayCacheTest {
     }
 
     @Test
-    fun `overlay trail segments split when filtered frame gap is too large`() {
+    fun `overlay cache keeps smoothed pose frames sorted by timestamp`() {
         val overlayCache = buildAttemptPoseOverlayCache(
             poses = listOf(
                 poseWithHipCenter(0L, 0.20f, 0.30f),
@@ -112,20 +112,10 @@ class AttemptPoseOverlayCacheTest {
             )
         )
 
-        assertEquals(10_000L, overlayCache.trailWindowMs)
         assertEquals(listOf(0L, 100L, 200L, 600L, 700L), overlayCache.frameTimesMs)
-        assertEquals(5, overlayCache.trackSeriesByKind[OverlayTrackKind.HIP_CENTER]?.samples?.size)
-        assertEquals(listOf(0L, 100L, 200L, 600L, 700L), overlayCache.trackSeriesByKind[OverlayTrackKind.HIP_CENTER]?.sampleTimesMs)
-
-        val segments = buildOverlayTrackTrailSegments(
-            cache = overlayCache,
-            anchorTimeMs = 700L,
-            kind = OverlayTrackKind.HIP_CENTER
-        )
-
-        assertEquals(2, segments.size)
-        assertEquals(3, segments[0].size)
-        assertEquals(2, segments[1].size)
+        assertEquals(listOf(0L, 100L, 200L, 600L, 700L), overlayCache.frames.map { it.frameTimeMs })
+        assertEquals(0L, overlayCache.frames.first().pose.frameTimeMs)
+        assertEquals(700L, overlayCache.frames.last().pose.frameTimeMs)
     }
 
     @Test

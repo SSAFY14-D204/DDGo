@@ -39,6 +39,8 @@ import com.ddgo.app.domain.usecase.HoldRole
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
+import com.ddgo.app.domain.usecase.DetectStallSegmentFromPoseUseCase
+import com.ddgo.app.domain.usecase.DetectWallArrivalTimeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
@@ -92,6 +94,8 @@ class UploadViewModel @Inject constructor(
     private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase,
     private val endAttemptUseCase: EndAttemptUseCase,
     private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase,
+    private val detectStallSegmentFromPoseUseCase: DetectStallSegmentFromPoseUseCase,
+    private val detectWallArrivalTimeUseCase: DetectWallArrivalTimeUseCase,
     private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
     private val getMyInfoUseCase: GetMyInfoUseCase,
     private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase
@@ -117,6 +121,8 @@ class UploadViewModel @Inject constructor(
         context = context,
         prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
         analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
+        detectStallSegmentFromPoseUseCase = detectStallSegmentFromPoseUseCase,
+        detectWallArrivalTimeUseCase = detectWallArrivalTimeUseCase,
         detectStablePersonObservationUseCase = detectStablePersonObservationUseCase,
         scope = viewModelScope
     )

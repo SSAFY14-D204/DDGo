@@ -14,6 +14,7 @@ import com.ddgo.app.domain.model.AiPayloadSource
 import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AiVideoMetadata
+import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
@@ -34,6 +35,8 @@ import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
 import com.ddgo.app.domain.usecase.CloseChallengeUseCase
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
+import com.ddgo.app.domain.usecase.DetectStallSegmentFromPoseUseCase
+import com.ddgo.app.domain.usecase.DetectWallArrivalTimeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
@@ -42,6 +45,7 @@ import com.ddgo.app.domain.usecase.HoldRole
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
+import com.ddgo.app.domain.usecase.StallSegmentAnnotation
 import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import com.ddgo.app.domain.usecase.summarizeHoldReachResults
@@ -211,6 +215,170 @@ class UploadViewModelTest {
                 ?.isValidForEndpoint
                 ?: true
         )
+    }
+
+    @Test
+    fun `pre-pose ready stores wall arrival time and uses it as first timeline point`() = runTest {
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
+        val annotation = HandPeakAnnotation(
+            globalTopTimeMs = 6_000L,
+            globalTopHeight = 0.71,
+            selectedTopTimeMs = 5_500L,
+            selectedTopHeight = 0.69,
+            supportCount = 12,
+            endTimeMs = 4_000L,
+            endHeight = 0.67,
+            validTopFound = true
+        )
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = listOf(
+                wallArrivalPoseAt(1_000L, 0.50f),
+                wallArrivalPoseAt(1_100L, 0.49f),
+                wallArrivalPoseAt(1_200L, 0.48f),
+                wallArrivalPoseAt(1_300L, 0.30f),
+                wallArrivalPoseAt(1_400L, 0.30f),
+                wallArrivalPoseAt(1_500L, 0.30f),
+                wallArrivalPoseAt(1_600L, 0.30f),
+                wallArrivalPoseAt(1_700L, 0.30f),
+                wallArrivalPoseAt(1_800L, 0.30f),
+                wallArrivalPoseAt(1_900L, 0.30f),
+                wallArrivalPoseAt(2_000L, 0.30f)
+            ),
+            processedFrames = listOf(
+                processedFrame(1_000L, true),
+                processedFrame(1_100L, true),
+                processedFrame(1_200L, true),
+                processedFrame(1_300L, true),
+                processedFrame(1_400L, true),
+                processedFrame(1_500L, true),
+                processedFrame(1_600L, true),
+                processedFrame(1_700L, true),
+                processedFrame(1_800L, true),
+                processedFrame(1_900L, true),
+                processedFrame(2_000L, true)
+            )
+        )
+        every { analyzeHandPeakAndEndUseCase(any(), any()) } returns annotation
+
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase
+        )
+        val videoUri = "file:///wall_arrival.mp4"
+
+        setPrivateField(viewModel, "videoUri", videoUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.prePoseBatchState.readyCount == 1
+        }
+
+        val entry = viewModel.currentAttemptPrePoseEntry
+        assertEquals(1_000L, entry?.personObservationStartTimeMs)
+        assertEquals(1_300L, entry?.wallArrivalTimeMs)
+        assertEquals(2, entry?.timelinePoints?.size)
+        assertEquals(1_300L, entry?.timelinePoints?.firstOrNull()?.timeMs)
+        assertEquals(4_000L, entry?.timelinePoints?.getOrNull(1)?.timeMs)
+    }
+
+    @Test
+    fun `pre-pose ready stores strongest stall segment and adds it to timeline`() = runTest {
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
+        val detectStallSegmentFromPoseUseCase = mockk<DetectStallSegmentFromPoseUseCase>()
+        val annotation = HandPeakAnnotation(
+            globalTopTimeMs = 6_000L,
+            globalTopHeight = 0.71,
+            selectedTopTimeMs = 5_500L,
+            selectedTopHeight = 0.69,
+            supportCount = 12,
+            endTimeMs = 4_000L,
+            endHeight = 0.67,
+            validTopFound = true
+        )
+        val stallSegment = StallSegmentAnnotation(
+            startTimeMs = 2_200L,
+            endTimeMs = 3_500L,
+            durationMs = 1_300L,
+            score = 5.4f
+        )
+
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = listOf(
+                wallArrivalPoseAt(1_000L, 0.50f),
+                wallArrivalPoseAt(1_100L, 0.49f),
+                wallArrivalPoseAt(1_200L, 0.48f),
+                wallArrivalPoseAt(1_300L, 0.30f),
+                wallArrivalPoseAt(1_400L, 0.30f),
+                wallArrivalPoseAt(1_500L, 0.30f),
+                wallArrivalPoseAt(1_600L, 0.30f),
+                wallArrivalPoseAt(1_700L, 0.30f),
+                wallArrivalPoseAt(1_800L, 0.30f),
+                wallArrivalPoseAt(1_900L, 0.30f),
+                wallArrivalPoseAt(2_000L, 0.30f)
+            ),
+            processedFrames = listOf(
+                processedFrame(1_000L, true),
+                processedFrame(1_100L, true),
+                processedFrame(1_200L, true),
+                processedFrame(1_300L, true),
+                processedFrame(1_400L, true),
+                processedFrame(1_500L, true),
+                processedFrame(1_600L, true),
+                processedFrame(1_700L, true),
+                processedFrame(1_800L, true),
+                processedFrame(1_900L, true),
+                processedFrame(2_000L, true)
+            )
+        )
+        every { analyzeHandPeakAndEndUseCase(any(), any()) } returns annotation
+        every {
+            detectStallSegmentFromPoseUseCase(
+                poses = any(),
+                wallArrivalTimeMs = any(),
+                endTimeMs = any(),
+                supportWindowMs = any(),
+                minSupportCountPerSide = any(),
+                gracePeriodMs = any(),
+                endGuardMs = any(),
+                windowMs = any(),
+                maxGapMs = any(),
+                maxHipDisplacementNorm = any(),
+                minSegmentDurationMs = any()
+            )
+        } returns stallSegment
+
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
+            detectStallSegmentFromPoseUseCase = detectStallSegmentFromPoseUseCase
+        )
+        val videoUri = "file:///stall_segment.mp4"
+
+        setPrivateField(viewModel, "videoUri", videoUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.prePoseBatchState.readyCount == 1
+        }
+
+        val entry = viewModel.currentAttemptPrePoseEntry
+        assertEquals(stallSegment, entry?.stallSegment)
+        assertEquals(listOf(1_300L, 2_200L, 4_000L), entry?.timelinePoints?.map { it.timeMs })
+        assertEquals(AnalysisPointKind.STALL, entry?.timelinePoints?.getOrNull(1)?.kind)
     }
 
     @Test
@@ -689,6 +857,7 @@ class UploadViewModelTest {
         assertTrue(entry?.poses?.isNotEmpty() == true)
         assertEquals(6, entry?.processedFrames?.size)
         assertEquals(2_000L, entry?.personObservationStartTimeMs)
+        assertEquals(null, entry?.wallArrivalTimeMs)
         assertEquals(2, entry?.timelinePoints?.size)
         assertEquals(2_000L, entry?.timelinePoints?.get(0)?.timeMs)
         assertEquals(4_000L, entry?.timelinePoints?.get(1)?.timeMs)
@@ -2102,6 +2271,8 @@ class UploadViewModelTest {
         poseEstimator: PoseEstimator,
         prePoseVideoAnalysisProvider: PrePoseVideoAnalysisProvider,
         analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase = AnalyzeHandPeakAndEndUseCase(),
+        detectStallSegmentFromPoseUseCase: DetectStallSegmentFromPoseUseCase = DetectStallSegmentFromPoseUseCase(),
+        detectWallArrivalTimeUseCase: DetectWallArrivalTimeUseCase = DetectWallArrivalTimeUseCase(),
         analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase = mockk(),
         stubAnalyzeAttemptWithAiUseCase: Boolean = true,
         attemptRepository: AttemptRepository = mockk(relaxed = true),
@@ -2182,6 +2353,8 @@ class UploadViewModelTest {
             uploadAttemptVideoUseCase = UploadAttemptVideoUseCase(attemptRepository),
             endAttemptUseCase = EndAttemptUseCase(attemptRepository),
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
+            detectStallSegmentFromPoseUseCase = detectStallSegmentFromPoseUseCase,
+            detectWallArrivalTimeUseCase = detectWallArrivalTimeUseCase,
             detectStablePersonObservationUseCase = DetectStablePersonObservationUseCase(),
             getMyInfoUseCase = getMyInfoUseCase,
             analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase
@@ -2382,6 +2555,20 @@ class UploadViewModelTest {
                 PoseLandmark(index = 24, x = 0.36f, y = hipY, z = 0f, visibility = 0.99f, presence = 0.99f),
                 PoseLandmark(index = 15, x = 0.62f, y = wristY, z = 0f, visibility = 0.99f, presence = 0.99f),
                 PoseLandmark(index = 16, x = 0.38f, y = wristY, z = 0f, visibility = 0.99f, presence = 0.99f)
+            )
+        )
+    }
+
+    private fun wallArrivalPoseAt(frameTimeMs: Long, torsoScale: Float): Pose {
+        val shoulderY = 0.5f - (torsoScale / 2f)
+        val hipY = 0.5f + (torsoScale / 2f)
+        return Pose(
+            frameTimeMs = frameTimeMs,
+            landmarks = listOf(
+                PoseLandmark(index = 11, x = 0.65f, y = shoulderY, z = 0f, visibility = 0.99f, presence = 0.99f),
+                PoseLandmark(index = 12, x = 0.35f, y = shoulderY, z = 0f, visibility = 0.99f, presence = 0.99f),
+                PoseLandmark(index = 23, x = 0.64f, y = hipY, z = 0f, visibility = 0.99f, presence = 0.99f),
+                PoseLandmark(index = 24, x = 0.36f, y = hipY, z = 0f, visibility = 0.99f, presence = 0.99f)
             )
         )
     }

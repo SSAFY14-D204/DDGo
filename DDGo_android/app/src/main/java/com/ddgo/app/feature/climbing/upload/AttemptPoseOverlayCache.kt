@@ -7,7 +7,6 @@ import com.ddgo.app.domain.model.PoseLandmark
 
 internal const val POSE_VALIDITY_WINDOW_RADIUS_MS = 1_000L
 internal const val POSE_VALIDITY_MIN_OBSERVED_2D_FRAMES = 3
-internal const val ATTEMPT_POSE_TRAIL_WINDOW_MS = 10_000L
 internal const val ATTEMPT_POSE_OVERLAY_MAX_SNAP_GAP_MS = 250L
 private const val ATTEMPT_POSE_SMOOTH_MEDIAN_WINDOW = 3
 private const val ATTEMPT_POSE_SMOOTH_MEAN_WINDOW = 5
@@ -24,39 +23,13 @@ internal data class PoseValidityFrame(
 )
 
 internal data class AttemptPoseOverlayCache(
-    val trailWindowMs: Long = ATTEMPT_POSE_TRAIL_WINDOW_MS,
     val frames: List<AttemptPoseOverlayFrame> = emptyList(),
-    val frameTimesMs: List<Long> = emptyList(),
-    val trackSeriesByKind: Map<OverlayTrackKind, OverlayTrackSeries> = emptyMap()
+    val frameTimesMs: List<Long> = emptyList()
 )
 
 internal data class AttemptPoseOverlayFrame(
     val frameTimeMs: Long,
-    val pose: Pose,
-    val trackedPoints: Map<OverlayTrackKind, OverlayPoint> = emptyMap()
-)
-
-internal data class TrackedPointSample(
-    val frameTimeMs: Long,
-    val point: OverlayPoint
-)
-
-internal data class OverlayTrackSeries(
-    val samples: List<TrackedPointSample> = emptyList(),
-    val sampleTimesMs: List<Long> = emptyList()
-)
-
-internal enum class OverlayTrackKind {
-    HIP_CENTER,
-    LEFT_HAND_CENTER,
-    RIGHT_HAND_CENTER,
-    LEFT_FOOT_CENTER,
-    RIGHT_FOOT_CENTER
-}
-
-internal data class OverlayPoint(
-    val x: Float,
-    val y: Float
+    val pose: Pose
 )
 
 internal fun buildPoseValidityFrames(
@@ -140,30 +113,15 @@ internal fun buildFilteredPoses(
 }
 
 internal fun buildAttemptPoseOverlayCache(
-    poses: List<Pose>,
-    trailWindowMs: Long = ATTEMPT_POSE_TRAIL_WINDOW_MS
+    poses: List<Pose>
 ): AttemptPoseOverlayCache {
-    if (poses.isEmpty()) {
-        return AttemptPoseOverlayCache(trailWindowMs = trailWindowMs)
-    }
+    if (poses.isEmpty()) return AttemptPoseOverlayCache()
 
     val frames = poses
         .sortedBy(Pose::frameTimeMs)
-        .map { pose ->
-        AttemptPoseOverlayFrame(
-            frameTimeMs = pose.frameTimeMs,
-            pose = pose,
-            trackedPoints = buildTrackedPoints(pose)
-        )
-    }
+        .map { pose -> AttemptPoseOverlayFrame(frameTimeMs = pose.frameTimeMs, pose = pose) }
     val frameTimesMs = frames.map(AttemptPoseOverlayFrame::frameTimeMs)
-    val trackSeriesByKind = buildTrackSeriesByKind(frames)
-    return AttemptPoseOverlayCache(
-        trailWindowMs = trailWindowMs,
-        frames = frames,
-        frameTimesMs = frameTimesMs,
-        trackSeriesByKind = trackSeriesByKind
-    )
+    return AttemptPoseOverlayCache(frames = frames, frameTimesMs = frameTimesMs)
 }
 
 internal fun buildSmoothedPoses(
@@ -259,90 +217,6 @@ internal fun findNearestOverlayFrameForPlayback(
     }
 }
 
-internal fun buildOverlayTrackTrailSegments(
-    cache: AttemptPoseOverlayCache,
-    anchorTimeMs: Long,
-    kind: OverlayTrackKind,
-    trailWindowMs: Long = ATTEMPT_POSE_TRAIL_WINDOW_MS,
-    maxGapMs: Long = ATTEMPT_POSE_OVERLAY_MAX_SNAP_GAP_MS
-): List<List<OverlayPoint>> {
-    val trackSeries = cache.trackSeriesByKind[kind] ?: return emptyList()
-    val samples = trackSeries.samples
-    if (samples.isEmpty()) return emptyList()
-
-    val startTimeMs = (anchorTimeMs - trailWindowMs).coerceAtLeast(0L)
-    val startIndex = trackSeries.sampleTimesMs.lowerBound(startTimeMs)
-    val endExclusiveIndex = trackSeries.sampleTimesMs.upperBound(anchorTimeMs)
-    if (startIndex >= endExclusiveIndex) return emptyList()
-
-    val segments = mutableListOf<MutableList<OverlayPoint>>()
-    var previousTimeMs: Long? = null
-
-    samples.subList(startIndex, endExclusiveIndex).forEach { sample ->
-        if (segments.isEmpty() || previousTimeMs == null || sample.frameTimeMs - previousTimeMs!! > maxGapMs) {
-            segments += mutableListOf(sample.point)
-        } else {
-            segments.last() += sample.point
-        }
-        previousTimeMs = sample.frameTimeMs
-    }
-
-    return segments.filter { it.size >= 2 }.map { it.toList() }
-}
-
-private fun buildTrackedPoints(pose: Pose): Map<OverlayTrackKind, OverlayPoint> {
-    val landmarksByIndex = pose.landmarks.associateBy(PoseLandmark::index)
-    return buildMap {
-        averagePoint(
-            landmarksByIndex = landmarksByIndex,
-            indices = HIP_CENTER_INDICES
-        )?.let { point ->
-            put(OverlayTrackKind.HIP_CENTER, point)
-        }
-        averagePoint(
-            landmarksByIndex = landmarksByIndex,
-            indices = LEFT_HAND_CENTER_INDICES
-        )?.let { point ->
-            put(OverlayTrackKind.LEFT_HAND_CENTER, point)
-        }
-        averagePoint(
-            landmarksByIndex = landmarksByIndex,
-            indices = RIGHT_HAND_CENTER_INDICES
-        )?.let { point ->
-            put(OverlayTrackKind.RIGHT_HAND_CENTER, point)
-        }
-        averagePoint(
-            landmarksByIndex = landmarksByIndex,
-            indices = LEFT_FOOT_CENTER_INDICES
-        )?.let { point ->
-            put(OverlayTrackKind.LEFT_FOOT_CENTER, point)
-        }
-        averagePoint(
-            landmarksByIndex = landmarksByIndex,
-            indices = RIGHT_FOOT_CENTER_INDICES
-        )?.let { point ->
-            put(OverlayTrackKind.RIGHT_FOOT_CENTER, point)
-        }
-    }
-}
-
-private fun buildTrackSeriesByKind(
-    frames: List<AttemptPoseOverlayFrame>
-): Map<OverlayTrackKind, OverlayTrackSeries> = OverlayTrackKind.entries.associateWith { kind ->
-    val samples = frames.mapNotNull { frame ->
-        frame.trackedPoints[kind]?.let { point ->
-            TrackedPointSample(
-                frameTimeMs = frame.frameTimeMs,
-                point = point
-            )
-        }
-    }
-    OverlayTrackSeries(
-        samples = samples,
-        sampleTimesMs = samples.map(TrackedPointSample::frameTimeMs)
-    )
-}
-
 private data class IndexedLandmarkObservation(
     val poseIndex: Int,
     val frameTimeMs: Long,
@@ -430,51 +304,5 @@ private fun List<Long>.findNearestIndex(targetMs: Long): Int? {
     }
 }
 
-private fun List<Long>.lowerBound(targetMs: Long): Int {
-    var left = 0
-    var right = size
-    while (left < right) {
-        val mid = (left + right) ushr 1
-        if (this[mid] < targetMs) {
-            left = mid + 1
-        } else {
-            right = mid
-        }
-    }
-    return left
-}
-
-private fun List<Long>.upperBound(targetMs: Long): Int {
-    var left = 0
-    var right = size
-    while (left < right) {
-        val mid = (left + right) ushr 1
-        if (this[mid] <= targetMs) {
-            left = mid + 1
-        } else {
-            right = mid
-        }
-    }
-    return left
-}
-
-private fun averagePoint(
-    landmarksByIndex: Map<Int, PoseLandmark>,
-    indices: List<Int>
-): OverlayPoint? {
-    val landmarks = indices.mapNotNull(landmarksByIndex::get)
-    if (landmarks.isEmpty()) return null
-    return OverlayPoint(
-        x = landmarks.map(PoseLandmark::x).average().toFloat(),
-        y = landmarks.map(PoseLandmark::y).average().toFloat()
-    )
-}
-
 private const val REQUIRED_2D_LANDMARK_COUNT = 33
 private const val REQUIRED_3D_LANDMARK_COUNT = 33
-
-private val HIP_CENTER_INDICES = listOf(23, 24)
-private val LEFT_HAND_CENTER_INDICES = listOf(15, 17, 19, 21)
-private val RIGHT_HAND_CENTER_INDICES = listOf(16, 18, 20, 22)
-private val LEFT_FOOT_CENTER_INDICES = listOf(27, 29, 31)
-private val RIGHT_FOOT_CENTER_INDICES = listOf(28, 30, 32)

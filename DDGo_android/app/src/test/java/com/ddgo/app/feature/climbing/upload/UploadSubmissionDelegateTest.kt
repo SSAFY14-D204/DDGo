@@ -112,6 +112,8 @@ class UploadSubmissionDelegateTest {
                         poseValidityFrames = emptyList(),
                         overlayCache = null,
                         personObservationStartTimeMs = null,
+                        wallArrivalTimeMs = null,
+                        stallSegment = null,
                         climbEndDetection = null,
                         handPeakAnnotation = null,
                         timelinePoints = emptyList(),
