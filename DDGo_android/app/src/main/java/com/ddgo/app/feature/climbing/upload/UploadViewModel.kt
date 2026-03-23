@@ -36,6 +36,7 @@ import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
 import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
 import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
+import com.ddgo.app.domain.usecase.HoldRole
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
@@ -72,6 +73,7 @@ import kotlinx.coroutines.withContext
  */
 
 private const val TAG = "UploadViewModel"
+private const val ATTEMPT_HOLD_ALIGNMENT_LOG_PREFIX = "[DDGO_ATTEMPT_HOLD_ALIGN]"
 
 /**
  * Graph-scoped facade and cross-delegate orchestration owner.
@@ -132,6 +134,13 @@ class UploadViewModel @Inject constructor(
         analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
         attachAiRealtimeContextUseCase = attachAiRealtimeContextUseCase,
         finalizeAiRealtimeSessionUseCase = finalizeAiRealtimeSessionUseCase
+    )
+    private val attemptHoldAlignmentDelegate = UploadAttemptHoldAlignmentDelegate(
+        context = context,
+        personDetector = personDetector,
+        holdDetector = holdDetector,
+        holdColorClassifier = holdColorClassifier,
+        scope = viewModelScope
     )
 
     var videoUri: String?
@@ -333,6 +342,7 @@ class UploadViewModel @Inject constructor(
 
         override fun onPrePoseBatchStateChanged() {
             this@UploadViewModel.maybeStartHoldPrecomputeForCurrentSelection()
+            this@UploadViewModel.refreshAttemptHoldAlignmentTargets()
         }
     }
 
@@ -347,6 +357,8 @@ class UploadViewModel @Inject constructor(
         private set(value) {
             sessionDelegate.prePoseBatchState = value
         }
+    val attemptHoldAlignmentBatchState: AttemptHoldAlignmentBatchState
+        get() = attemptHoldAlignmentDelegate.attemptHoldAlignmentBatchState
 
     private var primaryManagedVideo: ManagedAttemptVideo?
         get() = sessionDelegate.primaryManagedVideo
@@ -532,6 +544,12 @@ class UploadViewModel @Inject constructor(
             submissionDelegate.attemptAnalyzedPoses = value
         }
 
+    private var attemptAlignedHoldSets: List<AttemptAlignedHoldSet>
+        get() = submissionDelegate.attemptAlignedHoldSets
+        private set(value) {
+            submissionDelegate.attemptAlignedHoldSets = value
+        }
+
     /** ?쒕룄蹂??대━怨?????묒큺 ?붾쾭洹?寃곌낵 */
     var attemptPolygonHoldContactDebugResults: List<PolygonHoldContactDebugResult>
         get() = submissionDelegate.attemptPolygonHoldContactDebugResults
@@ -656,6 +674,16 @@ class UploadViewModel @Inject constructor(
     /** ?꾩옱 ?좏깮???쒕룄???대━怨?????묒큺 ?붾쾭洹?寃곌낵 */
     val currentAttemptPolygonHoldContactDebugResult: PolygonHoldContactDebugResult?
         get() = attemptPolygonHoldContactDebugResults.getOrNull(currentAttemptIndex)
+    internal val currentAttemptAlignedSelection: AttemptAlignedHoldSet?
+        get() = playbackAttemptUris
+            .getOrNull(currentAttemptIndex)
+            ?.let { playbackUri ->
+                attemptAlignedHoldSets.firstOrNull { it.playbackUri == playbackUri }
+                    ?: attemptHoldAlignmentDelegate.alignedHoldSetFor(playbackUri)
+            }
+    val currentAttemptDisplayHolds: List<HoldNumbered>
+        get() = currentAttemptAlignedSelection?.alignedHolds.orEmpty()
+            .ifEmpty { numberedHolds }
 
     /** 理쒖쥌 遺꾩꽍 ?붾㈃???쒖떆???됯퇏 ?꾨떖 ???踰덊샇(諛섏삱由? */
     val averageReachedHoldNo: Int
@@ -702,6 +730,7 @@ class UploadViewModel @Inject constructor(
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
         clearHoldPrecomputeState()
+        clearAttemptHoldAlignmentState()
         holdDetectionDelegate.resetHoldDetectionState(clearDebugSource = true)
         resetAllSelectionPreparationJobs()
         attemptOnlyVideoUris = emptyList()
@@ -744,6 +773,7 @@ class UploadViewModel @Inject constructor(
         attemptOnlyManagedVideos = emptyList()
         resetUploadSubmissionState()
         refreshCurrentSelectionPrePoseTargets()
+        refreshAttemptHoldAlignmentTargets()
         cleanupUnusedManagedTempFiles()
         return true
     }
@@ -774,6 +804,7 @@ class UploadViewModel @Inject constructor(
         uploadFlowMode = UploadFlowMode.AttemptOnly
         allowLocalAnalysisWithoutChallenge = false
         clearHoldPrecomputeState()
+        clearAttemptHoldAlignmentState()
         holdDetectionDelegate.resetHoldDetectionState(clearDebugSource = true)
         resetAllSelectionPreparationJobs()
         videoUri = null
@@ -805,8 +836,12 @@ class UploadViewModel @Inject constructor(
         clearPosePrecomputeState(
             preservePlaybackUris = allAttemptUris.toSet() + publishedResultPlaybackUris()
         )
+        clearAttemptHoldAlignmentState(
+            preservePlaybackUris = allAttemptUris.toSet() + publishedResultPlaybackUris()
+        )
         restorePublishedAttemptResultSession()
         refreshCurrentSelectionPrePoseTargets(selectionGeneration)
+        refreshAttemptHoldAlignmentTargets()
         resetUploadSubmissionState()
         cleanupUnusedManagedTempFiles()
     }
@@ -861,6 +896,7 @@ class UploadViewModel @Inject constructor(
                 colorHex = null
             )
         }
+        refreshAttemptHoldAlignmentTargets()
     }
 
     fun markHoldPrecomputeEligibleForCurrentSelection() {
@@ -883,11 +919,13 @@ class UploadViewModel @Inject constructor(
     fun updateSelectedStartHold(hold: Hold) {
         holdDetectionDelegate.updateSelectedStartHold(hold)
         clearHoldReachAnalysis()
+        refreshAttemptHoldAlignmentTargets()
     }
 
     fun updateSelectedEndHold(hold: Hold) {
         holdDetectionDelegate.updateSelectedEndHold(hold)
         clearHoldReachAnalysis()
+        refreshAttemptHoldAlignmentTargets()
     }
 
     fun selectGymGrade(grade: GymGrade) {
@@ -916,6 +954,7 @@ class UploadViewModel @Inject constructor(
         realtimeSessionId: String? = null
     ) {
         clearHoldPrecomputeState()
+        clearAttemptHoldAlignmentState()
         holdDetectionDelegate.resetHoldDetectionState(clearDebugSource = true)
         sessionDelegate.updateVideoUri(
             uri = uri,
@@ -926,6 +965,7 @@ class UploadViewModel @Inject constructor(
 
     fun useDebugBestFrameImage(uri: String) {
         clearHoldPrecomputeState()
+        clearAttemptHoldAlignmentState()
         holdDetectionDelegate.useDebugBestFrameImage(uri)
         clearHoldReachAnalysis()
         _uiState.value = UploadUiState.Idle
@@ -950,6 +990,26 @@ class UploadViewModel @Inject constructor(
         return sessionDelegate.awaitSubmitReadyPrePose(
             playbackUris = playbackUris,
             callbacks = sessionCallbacks
+        )
+    }
+
+    private suspend fun awaitAttemptHoldAlignmentTerminal(playbackUris: List<String>) {
+        if (playbackUris.isEmpty()) {
+            return
+        }
+
+        Log.d(
+            TAG,
+            "$ATTEMPT_HOLD_ALIGNMENT_LOG_PREFIX await terminal start: playbackCount=${playbackUris.size}"
+        )
+        attemptHoldAlignmentDelegate.awaitTerminal(playbackUris) { loadingMessage ->
+            submissionDelegate.setUploadSubmissionLoading(loadingMessage)
+        }
+        Log.d(
+            TAG,
+            "$ATTEMPT_HOLD_ALIGNMENT_LOG_PREFIX await terminal done: " +
+                "ready=${attemptHoldAlignmentBatchState.readyCount}, " +
+                "failed=${attemptHoldAlignmentBatchState.failedCount}"
         )
     }
 
@@ -1019,6 +1079,7 @@ class UploadViewModel @Inject constructor(
             onSuccess = { filterChanged ->
                 if (filterChanged) {
                     clearHoldReachAnalysis()
+                    refreshAttemptHoldAlignmentTargets()
                 }
                 if (updateUiStateOnSuccess) {
                     _uiState.value = UploadUiState.Success
@@ -1043,6 +1104,12 @@ class UploadViewModel @Inject constructor(
         holdPrecomputeJob = null
         holdDetectionEnsureJob?.cancel()
         holdDetectionEnsureJob = null
+    }
+
+    private fun clearAttemptHoldAlignmentState(
+        preservePlaybackUris: Set<String> = emptySet()
+    ) {
+        attemptHoldAlignmentDelegate.clearState(preservePlaybackUris = preservePlaybackUris)
     }
 
     private fun resetAllSelectionPreparationJobs() {
@@ -1083,6 +1150,7 @@ class UploadViewModel @Inject constructor(
     fun applyHoldChanges(toAdd: List<Hold>, toRemove: List<Hold>) {
         holdDetectionDelegate.applyHoldChanges(toAdd, toRemove)
         clearHoldReachAnalysis()
+        refreshAttemptHoldAlignmentTargets()
     }
 
     /** ?꾨낫 ????앹뾽???レ뒿?덈떎. */
@@ -1096,6 +1164,7 @@ class UploadViewModel @Inject constructor(
     fun removeHold(hold: Hold) {
         holdDetectionDelegate.removeHold(hold)
         clearHoldReachAnalysis()
+        refreshAttemptHoldAlignmentTargets()
     }
 
     /**
@@ -1209,6 +1278,8 @@ class UploadViewModel @Inject constructor(
 
         viewModelScope.launch {
             awaitActiveSelectionPreparation()
+            refreshAttemptHoldAlignmentTargets()
+            awaitAttemptHoldAlignmentTerminal(attemptAlignmentTargetUris())
 
             val currentChallengeId = challengeId
             val useLocalAnalysisOnly = allowLocalAnalysisWithoutChallenge &&
@@ -1221,6 +1292,7 @@ class UploadViewModel @Inject constructor(
                     useLocalAnalysisOnly = useLocalAnalysisOnly,
                     isAttemptOnlyUploadMode = isAttemptOnlyUploadMode,
                     attemptUris = allAttemptUris,
+                    attemptAlignedHoldSets = alignedHoldSetsSnapshot(),
                     detectedHolds = detectedHolds,
                     numberedHolds = numberedHolds,
                     bestFrameBitmap = bestFrameBitmap,
@@ -1250,6 +1322,7 @@ class UploadViewModel @Inject constructor(
     private fun clearChallengeFlowState() {
         challengeDelegate.clearSelectionState()
         clearHoldPrecomputeState()
+        clearAttemptHoldAlignmentState()
         clearSelectedHoldSelection()
         clearCreatedChallengeOnly()
     }
@@ -1262,6 +1335,7 @@ class UploadViewModel @Inject constructor(
         clearAiAnalysisState()
         resultPlaybackUris = emptyList()
         publishedAttemptResultSession = null
+        clearAttemptHoldAlignmentState()
         resetUploadSubmissionState()
     }
 
@@ -1304,6 +1378,7 @@ class UploadViewModel @Inject constructor(
         playbackUris: List<String>,
         uploadedVideos: List<UploadedAttemptVideo>,
         currentAttemptIndex: Int,
+        attemptAlignedHoldSets: List<AttemptAlignedHoldSet>,
         holdReachResults: List<AttemptHoldReachResult>,
         poseDtos: List<PoseSequenceDto>,
         analyzedPoses: List<List<Pose>>,
@@ -1315,6 +1390,7 @@ class UploadViewModel @Inject constructor(
             playbackUris = playbackUris,
             uploadedVideos = uploadedVideos,
             currentAttemptIndex = currentAttemptIndex,
+            attemptAlignedHoldSets = attemptAlignedHoldSets,
             holdReachResults = holdReachResults,
             poseDtos = poseDtos,
             analyzedPoses = analyzedPoses,
@@ -1349,6 +1425,87 @@ class UploadViewModel @Inject constructor(
                 }
             )
         }
+    }
+
+    private fun attemptAlignmentTargetUris(): List<String> {
+        return if (isAttemptOnlyUploadMode) {
+            allAttemptUris.distinct()
+        } else {
+            additionalVideoUris.distinct()
+        }
+    }
+
+    private fun refreshAttemptHoldAlignmentTargets() {
+        val targetUris = attemptAlignmentTargetUris()
+        if (targetUris.isEmpty()) {
+            clearAttemptHoldAlignmentState()
+            return
+        }
+
+        val referenceHolds = referenceHoldsForAttemptAlignment()
+        val detectionTargetColor = resolveDetectionTargetHoldColor()
+        Log.d(
+            TAG,
+            "$ATTEMPT_HOLD_ALIGNMENT_LOG_PREFIX refresh targets: " +
+                "generation=$selectionGeneration, targetCount=${targetUris.size}, " +
+                "referenceHoldCount=${referenceHolds.size}, color=${detectionTargetColor.ifBlank { "<all>" }}"
+        )
+        attemptHoldAlignmentDelegate.refreshTargets(
+            selectionGeneration = selectionGeneration,
+            referenceVideoUri = videoUri,
+            referenceFrameWidthPx = bestFrameBitmap?.width,
+            referenceFrameHeightPx = bestFrameBitmap?.height,
+            playbackUris = targetUris,
+            referenceHolds = referenceHolds,
+            detectionTargetColor = detectionTargetColor
+        )
+    }
+
+    private fun alignedHoldSetsSnapshot(): Map<String, AttemptAlignedHoldSet> {
+        return attemptAlignmentTargetUris()
+            .mapNotNull(attemptHoldAlignmentDelegate::alignedHoldSetFor)
+            .associateBy(AttemptAlignedHoldSet::playbackUri)
+    }
+
+    private fun referenceHoldsForAttemptAlignment(): List<HoldNumbered> {
+        if (numberedHolds.isNotEmpty()) {
+            return numberedHolds
+        }
+
+        val saved = savedChallengeHolds?.holds.orEmpty()
+        if (saved.isEmpty()) {
+            return emptyList()
+        }
+
+        val maxHoldNo = saved.maxOf { hold -> hold.holdNo }
+        return saved
+            .sortedBy { hold -> hold.holdNo }
+            .map { hold ->
+                HoldNumbered(
+                    hold = Hold(
+                        holdNo = hold.holdNo,
+                        boundingBox = Hold.BoundingBox(
+                            left = hold.boundingBox.x1,
+                            top = hold.boundingBox.y1,
+                            right = hold.boundingBox.x2,
+                            bottom = hold.boundingBox.y2
+                        ),
+                        confidence = 1f,
+                        polygon = hold.polygon.map { point ->
+                            Hold.Point(x = point.x, y = point.y)
+                        },
+                        colorLabel = resolveDetectionTargetHoldColor(),
+                        colorScore = 1f
+                    ),
+                    progress = (hold.holdNo - 1).toFloat(),
+                    axisDistance = 0f,
+                    role = when (hold.holdNo) {
+                        1 -> HoldRole.START
+                        maxHoldNo -> HoldRole.END
+                        else -> HoldRole.NORMAL
+                    }
+                )
+            }
     }
 
     private fun resolveDetectionTargetHoldColor(): String {

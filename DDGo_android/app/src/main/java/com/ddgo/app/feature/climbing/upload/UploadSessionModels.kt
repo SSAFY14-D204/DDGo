@@ -97,6 +97,7 @@ internal data class PublishedAttemptResultSession(
     val resultPlaybackUris: List<String>,
     val uploadedAttemptVideos: List<UploadedAttemptVideo>,
     val currentAttemptIndex: Int,
+    val attemptAlignedHoldSets: List<AttemptAlignedHoldSet>,
     val holdReachResults: List<AttemptHoldReachResult>,
     val attemptPoseDtos: List<PoseSequenceDto>,
     val attemptAnalyzedPoses: List<List<Pose>>,
