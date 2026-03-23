@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisInsight
 @Composable
 internal fun FailureCausePanel(
     summary: FinalAnalysisAttemptSummary,
+    onTimestampClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -60,7 +62,7 @@ internal fun FailureCausePanel(
         Spacer(modifier = Modifier.height(16.dp))
 
         AnalysisInsightCard(
-            title = "핵심 해석",
+            title = "실패 해석",
             highlights = summary.failureHighlights,
             emptyText = summary.failureNarrative
         )
@@ -81,6 +83,11 @@ internal fun FailureCausePanel(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
+                Text(
+                    text = "타임스탬프를 누르면 해당 시점으로 이동합니다.",
+                    color = AnalysisMuted,
+                    fontSize = 12.sp
+                )
 
                 if (summary.analysisPoints.isEmpty()) {
                     Text(
@@ -90,7 +97,10 @@ internal fun FailureCausePanel(
                     )
                 } else {
                     summary.analysisPoints.forEach { point ->
-                        FailurePointCard(point = point)
+                        FailurePointCard(
+                            point = point,
+                            onTimestampClick = { onTimestampClick(point.timeMs) }
+                        )
                     }
                 }
             }
@@ -101,6 +111,7 @@ internal fun FailureCausePanel(
 @Composable
 private fun FailurePointCard(
     point: AnalysisPoint,
+    onTimestampClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val parsedPoint = point.toDisplayPoint()
@@ -121,6 +132,7 @@ private fun FailurePointCard(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
                         .background(AnalysisPrimary.copy(alpha = 0.16f))
+                        .clickable(onClick = onTimestampClick)
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(

@@ -75,6 +75,7 @@ internal fun FinalAnalysisPage(
     onNavigateBack: () -> Unit,
     onTabSelected: (FinalAnalysisTab) -> Unit,
     onAttemptSelected: (Int) -> Unit,
+    onAnalysisPointSelected: (Long) -> Unit,
     onPrimaryAction: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -133,7 +134,10 @@ internal fun FinalAnalysisPage(
             }
 
             FinalAnalysisTab.Failure -> {
-                FailureCausePanel(summary = state.currentSummary)
+                FailureCausePanel(
+                    summary = state.currentSummary,
+                    onTimestampClick = onAnalysisPointSelected
+                )
             }
         }
 

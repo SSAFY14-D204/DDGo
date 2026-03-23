@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,14 +31,21 @@ fun FinalAnalysisRoute(
     onNavigateBack: () -> Unit = {},
     onNavigateToChallenge: () -> Unit = {}
 ) {
+    val attemptVideoUris = viewModel.playbackAttemptUris.ifEmpty { viewModel.allAttemptUris }
     val totalHolds = viewModel.totalSelectedHoldCount
         .takeIf { it > 0 }
         ?: viewModel.detectedHolds.size.takeIf { it > 0 }
         ?: 0
     val attemptCount = max(
-        viewModel.playbackAttemptUris.size,
+        attemptVideoUris.size,
         viewModel.attemptAiAnalysisResults.size
     ).coerceAtLeast(1)
+    val preferredAttempt = (viewModel.currentAttemptIndex + 1).coerceIn(1, attemptCount)
+    val initialSelectedAttempt = when {
+        attemptVideoUris.isNotEmpty() && preferredAttempt <= attemptVideoUris.size -> preferredAttempt
+        attemptVideoUris.isNotEmpty() -> attemptVideoUris.size.coerceIn(1, attemptCount)
+        else -> attemptCount
+    }
     val attemptSummaries = remember(
         attemptCount,
         totalHolds,
@@ -50,8 +58,14 @@ fun FinalAnalysisRoute(
         )
     }
 
-    var selectedAttempt by rememberSaveable(attemptCount) {
-        mutableIntStateOf(attemptCount)
+    var selectedAttempt by rememberSaveable(attemptCount, initialSelectedAttempt) {
+        mutableIntStateOf(initialSelectedAttempt)
+    }
+    var seekRequestId by rememberSaveable {
+        mutableLongStateOf(0L)
+    }
+    var pendingSeekTimeMs by rememberSaveable {
+        mutableStateOf<Long?>(null)
     }
     var selectedTab by rememberSaveable {
         mutableStateOf(FinalAnalysisTab.Stats)
@@ -59,6 +73,8 @@ fun FinalAnalysisRoute(
 
     val safeSelectedAttempt = selectedAttempt.coerceIn(1, attemptCount)
     val currentSummary = attemptSummaries[(safeSelectedAttempt - 1).coerceIn(0, attemptSummaries.lastIndex)]
+    val selectedAttemptVideoUri = attemptVideoUris
+        .getOrNull((safeSelectedAttempt - 1).coerceAtLeast(0))
     val reachedHoldsSuffix = remember(currentSummary.reachedHolds, totalHolds) {
         if (currentSummary.reachedHolds != null && totalHolds > 0) {
             "/$totalHolds"
@@ -92,6 +108,9 @@ fun FinalAnalysisRoute(
         safeSelectedAttempt,
         attemptCount,
         currentSummary,
+        selectedAttemptVideoUri,
+        seekRequestId,
+        pendingSeekTimeMs,
         reachedHoldsSuffix,
         focusReasonText,
         statsFocusFraction
@@ -107,7 +126,10 @@ fun FinalAnalysisRoute(
                 analysisModeLabel = currentSummary.effectiveModeLabel.takeIf { it.isNotBlank() },
                 fallbackLabel = currentSummary.fallbackLabel,
                 previewBitmap = viewModel.bestFrameBitmap,
-                previewHolds = viewModel.detectedHolds
+                previewHolds = viewModel.detectedHolds,
+                selectedAttemptVideoUri = selectedAttemptVideoUri,
+                seekRequestId = seekRequestId,
+                seekRequestTimeMs = pendingSeekTimeMs
             ),
             selectedAttempt = safeSelectedAttempt,
             totalAttempts = attemptCount,
@@ -134,10 +156,18 @@ fun FinalAnalysisRoute(
             selectedTab = selectedTab,
             onNavigateBack = onNavigateBack,
             onTabSelected = { selectedTab = it },
-            onAttemptSelected = { selectedAttempt = it.coerceIn(1, attemptCount) },
+            onAttemptSelected = {
+                selectedAttempt = it.coerceIn(1, attemptCount)
+                pendingSeekTimeMs = null
+            },
+            onAnalysisPointSelected = { timeMs ->
+                pendingSeekTimeMs = timeMs
+                seekRequestId += 1L
+            },
             onPrimaryAction = {
                 if (attemptCount > 1 && safeSelectedAttempt < attemptCount) {
                     selectedAttempt = safeSelectedAttempt + 1
+                    pendingSeekTimeMs = null
                 } else {
                     onNavigateToChallenge()
                 }
