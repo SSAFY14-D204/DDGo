@@ -114,6 +114,8 @@ fun AttemptResultScreen(
     } ?: currentAttemptResult.first
     val currentAnalysisPoints = currentAttemptResult.second
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence
+    val currentAttemptOverlayCache = viewModel.currentAttemptOverlayCache
+    val currentAttemptOverlayFrames = currentAttemptOverlayCache?.frames.orEmpty()
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
     val personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs
     val usesPoseDetectorTimeline = currentAttemptPrePoseEntry != null
@@ -168,11 +170,39 @@ fun AttemptResultScreen(
         )
     }
 
-    val currentPose = remember(currentAttemptPoses, displayedPositionMs) {
-        findNearestPoseForPlayback(
-            poses = currentAttemptPoses,
-            positionMs = displayedPositionMs
-        )
+    val currentOverlayFrame = remember(currentAttemptOverlayCache, displayedPositionMs) {
+        currentAttemptOverlayCache?.let { overlayCache ->
+            findNearestOverlayFrameForPlayback(
+                cache = overlayCache,
+                positionMs = displayedPositionMs
+            )
+        }
+    }
+    val currentHipTrailSegments = remember(
+        currentAttemptOverlayCache,
+        currentOverlayFrame,
+    ) {
+        currentAttemptOverlayCache?.let { overlayCache ->
+            currentOverlayFrame?.let { overlayFrame ->
+            buildMap {
+                val hipSegments = buildOverlayTrackTrailSegments(
+                    cache = overlayCache,
+                    anchorTimeMs = overlayFrame.frameTimeMs,
+                    kind = OverlayTrackKind.HIP_CENTER,
+                    trailWindowMs = overlayCache.trailWindowMs
+                )
+                if (hipSegments.isNotEmpty()) {
+                    put(OverlayTrackKind.HIP_CENTER, hipSegments)
+                }
+            }
+            }
+        }.orEmpty()
+    }
+    val currentTrackedPoints = remember(currentOverlayFrame) {
+        currentOverlayFrame
+            ?.trackedPoints
+            ?.filterKeys { kind -> kind == OverlayTrackKind.HIP_CENTER }
+            .orEmpty()
     }
 
     val activeIdx by remember(currentAnalysisPoints, displayedPositionMs) {
@@ -321,9 +351,9 @@ fun AttemptResultScreen(
                     }
                 )
 
-                currentPose?.let { pose ->
+                currentOverlayFrame?.let { overlayFrame ->
                     PoseOverlay(
-                        pose = pose,
+                        pose = overlayFrame.pose,
                         contentRect = videoContentRect,
                         modifier = Modifier.fillMaxSize(),
                         lineColor = C_BONE,
@@ -339,6 +369,15 @@ fun AttemptResultScreen(
                             contentRect = videoContentRect
                         )
                     }
+                }
+
+                currentOverlayFrame?.let {
+                    TrackedPointTrailOverlay(
+                        trailSegmentsByKind = currentHipTrailSegments,
+                        currentTrackedPoints = currentTrackedPoints,
+                        contentRect = videoContentRect,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
 
                 if (currentAttemptPrePoseEntry?.status == PrePoseStatus.Failed) {

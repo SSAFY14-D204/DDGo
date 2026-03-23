@@ -610,7 +610,24 @@ class UploadViewModel @Inject constructor(
             ?.poses
             .orEmpty()
 
-    val currentAttemptPrePoseEntry: PrePoseCacheEntry?
+    internal val currentAttemptFilteredPoseSequence: List<Pose>
+        get() = currentAttemptPrePoseEntry
+            ?.takeIf { it.status == PrePoseStatus.Ready }
+            ?.filteredPoses
+            .orEmpty()
+
+    internal val currentAttemptSmoothedPoseSequence: List<Pose>
+        get() = currentAttemptPrePoseEntry
+            ?.takeIf { it.status == PrePoseStatus.Ready }
+            ?.smoothedPoses
+            .orEmpty()
+
+    internal val currentAttemptOverlayCache: AttemptPoseOverlayCache?
+        get() = currentAttemptPrePoseEntry
+            ?.takeIf { it.status == PrePoseStatus.Ready }
+            ?.overlayCache
+
+    internal val currentAttemptPrePoseEntry: PrePoseCacheEntry?
         get() = playbackAttemptUris
             .getOrNull(currentAttemptIndex)
             ?.let(prePoseCacheEntries::get)

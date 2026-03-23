@@ -1741,10 +1741,10 @@ internal class UploadSubmissionDelegate(
                     holds = analysisHolds,
                     frameBitmap = frameBitmap,
                     profile = profile,
-                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri]?.aiPoseSequence
+                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
                 )
             } else {
-                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri]?.aiPoseSequence
+                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
                     ?: return Result.failure(
                         IllegalStateException("Missing cached pre-pose AI sequence for $uri")
                     )
@@ -1813,10 +1813,10 @@ internal class UploadSubmissionDelegate(
                     holds = analysisHolds,
                     frameBitmap = frameBitmap,
                     profile = profile,
-                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri]?.aiPoseSequence
+                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
                 )
             } else {
-                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri]?.aiPoseSequence
+                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
                     ?: return Result.failure(
                         IllegalStateException("Missing cached pre-pose AI sequence for $uri")
                     )
@@ -2184,6 +2184,10 @@ internal class UploadSubmissionDelegate(
             .firstOrNull()
             ?: "pre-pose 분석을 완료하지 못해 업로드를 진행할 수 없습니다."
     }
+}
+
+private fun TerminalPrePoseEntry?.preferredAiPoseSequence(): AiPoseSequence? {
+    return this?.filteredAiPoseSequence ?: this?.aiPoseSequence
 }
 
 private data class AttemptPoseAnalysis(

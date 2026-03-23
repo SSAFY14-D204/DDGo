@@ -334,8 +334,13 @@ internal class UploadSessionDelegate(
                                 selectionGeneration = selectionGeneration,
                                 status = PrePoseStatus.Failed,
                                 aiPoseSequence = null,
+                                filteredAiPoseSequence = null,
                                 poses = emptyList(),
+                                filteredPoses = emptyList(),
+                                smoothedPoses = emptyList(),
                                 processedFrames = emptyList(),
+                                poseValidityFrames = emptyList(),
+                                overlayCache = null,
                                 personObservationStartTimeMs = null,
                                 climbEndDetection = null,
                                 handPeakAnnotation = null,
@@ -532,19 +537,35 @@ internal class UploadSessionDelegate(
                             val aiPoseSequence = prePoseAnalysis?.aiPoseSequence
                             val poses = prePoseAnalysis?.poses.orEmpty()
                             val processedFrames = prePoseAnalysis?.processedFrames.orEmpty()
+                            val poseValidityFrames = aiPoseSequence?.let(::buildPoseValidityFrames).orEmpty()
+                            val filteredAiPoseSequence = aiPoseSequence?.filterWithValidity(
+                                validityFrames = poseValidityFrames,
+                                selector = PoseValidityFrame::isValidForAi
+                            )
+                            val filteredPoses = buildFilteredPoses(
+                                poses = poses,
+                                validityFrames = poseValidityFrames
+                            )
+                            val smoothedPoses = buildSmoothedPoses(filteredPoses)
+                            val overlayCache = buildAttemptPoseOverlayCache(smoothedPoses)
                             val personObservationStartTimeMs = detectStablePersonObservationUseCase(
                                 processedFrames
                             )
                             val handPeakAnnotation = runCatching {
-                                analyzeHandPeakAndEndUseCase(poses.map { pose -> pose.toPoseFrame() })
+                                analyzeHandPeakAndEndUseCase(smoothedPoses.map { pose -> pose.toPoseFrame() })
                             }.onFailure { error ->
                                 Log.w(TAG, "Pre-pose hand peak analysis failed: ${task.playbackUri}", error)
                             }.getOrNull()
                             latestEntry.copy(
                                 status = PrePoseStatus.Ready,
                                 aiPoseSequence = aiPoseSequence,
+                                filteredAiPoseSequence = filteredAiPoseSequence,
                                 poses = poses,
+                                filteredPoses = filteredPoses,
+                                smoothedPoses = smoothedPoses,
                                 processedFrames = processedFrames,
+                                poseValidityFrames = poseValidityFrames,
+                                overlayCache = overlayCache,
                                 personObservationStartTimeMs = personObservationStartTimeMs,
                                 climbEndDetection = null,
                                 handPeakAnnotation = handPeakAnnotation,
@@ -570,8 +591,13 @@ internal class UploadSessionDelegate(
                             latestEntry.copy(
                                 status = PrePoseStatus.Failed,
                                 aiPoseSequence = null,
+                                filteredAiPoseSequence = null,
                                 poses = emptyList(),
+                                filteredPoses = emptyList(),
+                                smoothedPoses = emptyList(),
                                 processedFrames = emptyList(),
+                                poseValidityFrames = emptyList(),
+                                overlayCache = null,
                                 personObservationStartTimeMs = null,
                                 climbEndDetection = null,
                                 handPeakAnnotation = null,
@@ -592,8 +618,11 @@ internal class UploadSessionDelegate(
                         elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
                         details = mapOf(
                             "poseCount" to latestReadyEntry?.poses?.size,
+                            "filteredPoseCount" to latestReadyEntry?.filteredPoses?.size,
+                            "smoothedPoseCount" to latestReadyEntry?.smoothedPoses?.size,
                             "processedFrameCount" to latestReadyEntry?.processedFrames?.size,
-                            "hasAiPoseSequence" to (latestReadyEntry?.aiPoseSequence != null)
+                            "hasAiPoseSequence" to (latestReadyEntry?.aiPoseSequence != null),
+                            "hasFilteredAiPoseSequence" to (latestReadyEntry?.filteredAiPoseSequence != null)
                         )
                     )
                 }
@@ -775,8 +804,13 @@ internal class UploadSessionDelegate(
                     selectionGeneration = selectionGeneration,
                     status = PrePoseStatus.Pending,
                     aiPoseSequence = null,
+                    filteredAiPoseSequence = null,
                     poses = emptyList(),
+                    filteredPoses = emptyList(),
+                    smoothedPoses = emptyList(),
                     processedFrames = emptyList(),
+                    poseValidityFrames = emptyList(),
+                    overlayCache = null,
                     personObservationStartTimeMs = null,
                     climbEndDetection = null,
                     handPeakAnnotation = null,
@@ -908,5 +942,7 @@ internal class UploadSessionDelegate(
 }
 
 private fun TerminalPrePoseEntry?.isReusableForSubmission(): Boolean {
-    return this != null && status == PrePoseStatus.Ready && aiPoseSequence != null
+    return this != null &&
+        status == PrePoseStatus.Ready &&
+        (filteredAiPoseSequence ?: aiPoseSequence) != null
 }
