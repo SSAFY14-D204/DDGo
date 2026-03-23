@@ -32,7 +32,7 @@ public class GlobalExceptionHandler {
                 .map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
                 .collect(Collectors.joining(", "));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error("Validation failed: " + errorMessage));
+                .body(ApiResponse.error("입력값 검증에 실패했습니다: " + errorMessage));
     }
 
     @ExceptionHandler(BindException.class)

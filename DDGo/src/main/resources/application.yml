@@ -1,4 +1,4 @@
-spring:
+﻿spring:
   application:
     name: DDGo
 
@@ -24,8 +24,8 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
-  access-expiration: ${JWT_ACCESS_EXPIRATION} # 30 min in ms
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION} # 14 days in ms
+  access-expiration: ${JWT_ACCESS_EXPIRATION}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION}
 
 management:
   endpoints:
@@ -35,7 +35,14 @@ management:
 
 minio:
   url: ${MINIO_URL}
-  public-url: ${MINIO_PUBLIC_URL:${MINIO_URL}} # 외부 접근용 공개 URL 호스트
+  public-url: ${MINIO_PUBLIC_URL:${MINIO_URL}}
   access-key: ${MINIO_ACCESS_KEY}
   secret-key: ${MINIO_SECRET_KEY}
   bucket: ${MINIO_BUCKET}
+
+social:
+  http:
+    connect-timeout-ms: ${SOCIAL_HTTP_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SOCIAL_HTTP_READ_TIMEOUT_MS:3000}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
