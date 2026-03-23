@@ -2,6 +2,7 @@ package com.ddgo.app.domain.repository
 
 import com.ddgo.app.domain.model.AuthToken
 import com.ddgo.app.domain.model.LogoutResult
+import com.ddgo.app.domain.model.SocialLoginProvider
 import com.ddgo.app.domain.model.User
 
 /**
@@ -25,6 +26,12 @@ interface AuthRepository {
     suspend fun login(
         username: String,
         password: String
+    ): Result<AuthToken>
+
+    suspend fun socialLogin(
+        provider: SocialLoginProvider,
+        accessToken: String? = null,
+        idToken: String? = null
     ): Result<AuthToken>
 
     /** Refresh Token으로 새로운 토큰을 재발급받습니다. */

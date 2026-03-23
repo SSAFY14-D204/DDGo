@@ -20,9 +20,18 @@ data class LoginRequestDto(
 
 /** 로그인 응답 DTO입니다. */
 @Serializable
+data class SocialLoginRequestDto(
+    @SerialName("provider") val provider: String,
+    @SerialName("accessToken") val accessToken: String? = null,
+    @SerialName("idToken") val idToken: String? = null
+)
+
+@Serializable
 data class LoginResponseDto(
     @SerialName("accessToken") val accessToken: String,
-    @SerialName("refreshToken") val refreshToken: String
+    @SerialName("refreshToken") val refreshToken: String,
+    @SerialName("isNewUser") val isNewUser: Boolean? = null,
+    @SerialName("needsOnboarding") val needsOnboarding: Boolean? = null
 )
 
 /** 토큰 재발급 요청 DTO입니다. */
@@ -43,6 +52,7 @@ data class RefreshTokenResponseDto(
 data class UserResponseDto(
     @SerialName("id") val id: Long,
     @SerialName("username") val username: String,
+    @SerialName("email") val email: String? = null,
     @SerialName("nickname") val nickname: String,
     @SerialName("sex") val sex: String? = null,
     @SerialName("heightCm") val heightCm: Float? = null,

@@ -3,6 +3,7 @@ package com.ddgo.app
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.kakao.sdk.common.KakaoSdk
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -18,6 +19,14 @@ class DDGoApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    override fun onCreate() {
+        super.onCreate()
+
+        if (BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()) {
+            KakaoSdk.init(this, BuildConfig.KAKAO_NATIVE_APP_KEY)
+        }
+    }
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()

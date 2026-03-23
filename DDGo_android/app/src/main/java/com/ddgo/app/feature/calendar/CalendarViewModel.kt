@@ -120,13 +120,13 @@ class CalendarViewModel @Inject constructor(
                         entries = emptyList(),
                         summary = currentSummary,
                         errorMessage = throwable.message
-                            ?: "\uCE98\uB9B0\uB354 \uAE30\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."
+                            ?: "캘린더 기록을 불러오지 못했습니다."
                     )
                 }
         }
     }
 
-    // 다른 달로 이동하면 그 달의 1일을 기본 선택값으로 사용한다.
+    // 다른 월로 이동하면 그 달의 1일을 기본 선택값으로 사용한다.
     private fun defaultSelectedDateForMonth(targetMonth: YearMonth): LocalDate {
         return if (targetMonth == initialMonth) {
             today

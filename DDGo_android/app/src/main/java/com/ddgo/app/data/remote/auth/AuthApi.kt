@@ -36,6 +36,11 @@ interface AuthApi {
         @Body request: LoginRequestDto
     ): ApiResponse<LoginResponseDto>
 
+    @POST("v1/users/social/login")
+    suspend fun socialLogin(
+        @Body request: SocialLoginRequestDto
+    ): ApiResponse<LoginResponseDto>
+
     /** 현재 로그인 상태를 종료합니다. */
     @POST("v1/users/logout")
     suspend fun logout(): ApiResponse<EmptyDto>
