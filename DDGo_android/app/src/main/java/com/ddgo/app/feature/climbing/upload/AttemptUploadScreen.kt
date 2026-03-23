@@ -28,18 +28,14 @@ import com.ddgo.app.core.ui.components.SafeAreaScreen
 fun AttemptUploadScreen(
     viewModel: UploadViewModel = hiltViewModel(),
     initialRecordedVideoUri: String? = null,
-    initialRealtimeSessionId: String? = null,
     onNavigateToNext: () -> Unit = {}
 ) {
-    LaunchedEffect(initialRecordedVideoUri, initialRealtimeSessionId) {
+    LaunchedEffect(initialRecordedVideoUri) {
         viewModel.beginNewChallengeUploadFlow()
         initialRecordedVideoUri
             ?.takeIf { it.isNotBlank() }
             ?.let { recordedUri ->
-                viewModel.updateVideoUri(
-                    uri = recordedUri,
-                    realtimeSessionId = initialRealtimeSessionId
-                )
+                viewModel.updateVideoUri(uri = recordedUri)
                 onNavigateToNext()
             }
     }

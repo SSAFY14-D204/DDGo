@@ -18,8 +18,7 @@ internal const val UPLOAD_PREPOSE_ANALYSIS_FPS = 10
 data class ManagedAttemptVideo(
     val sourceUri: String,
     val playbackUri: String,
-    val tempFilePath: String?,
-    val realtimeSessionId: String? = null
+    val tempFilePath: String?
 )
 
 enum class PrePoseStatus {

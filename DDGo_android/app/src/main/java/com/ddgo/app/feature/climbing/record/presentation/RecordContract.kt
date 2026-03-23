@@ -16,7 +16,6 @@ data class RecordThumbnailFrame(
 data class RecordedAttemptDraft(
     val videoUri: String,
     val thumbnailFrame: RecordThumbnailFrame? = null,
-    val realtimeSessionId: String? = null,
     val frameWidthPx: Int? = null,
     val frameHeightPx: Int? = null
 )

@@ -33,9 +33,7 @@ import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
-import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
 import com.ddgo.app.domain.usecase.CloseChallengeUseCase
-import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.HoldRole
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
@@ -96,9 +94,7 @@ class UploadViewModel @Inject constructor(
     private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase,
     private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
     private val getMyInfoUseCase: GetMyInfoUseCase,
-    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase,
-    private val attachAiRealtimeContextUseCase: AttachAiRealtimeContextUseCase,
-    private val finalizeAiRealtimeSessionUseCase: FinalizeAiRealtimeSessionUseCase
+    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase
 ) : ViewModel() {
 
     // UI 레이어에 노출할 상태
@@ -129,9 +125,7 @@ class UploadViewModel @Inject constructor(
         uploadAttemptVideoUseCase = uploadAttemptVideoUseCase,
         endAttemptUseCase = endAttemptUseCase,
         getMyInfoUseCase = getMyInfoUseCase,
-        analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
-        attachAiRealtimeContextUseCase = attachAiRealtimeContextUseCase,
-        finalizeAiRealtimeSessionUseCase = finalizeAiRealtimeSessionUseCase
+        analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase
     )
     private val attemptHoldAlignmentDelegate = UploadAttemptHoldAlignmentDelegate(
         context = context,
@@ -1252,10 +1246,9 @@ class UploadViewModel @Inject constructor(
      * session delegate에 위임합니다.
      */
     fun updateVideoUri(
-        uri: String,
-        realtimeSessionId: String? = null
+        uri: String
     ) {
-        val isRealtimeAttempt = entryMode == UploadEntryMode.Realtime || !realtimeSessionId.isNullOrBlank()
+        val isRealtimeAttempt = entryMode == UploadEntryMode.Realtime
         clearHoldPrecomputeState()
         submissionDelegate.resetFinalAnalysisPreparationState()
         clearAttemptHoldAlignmentState()
@@ -1263,7 +1256,6 @@ class UploadViewModel @Inject constructor(
             entryMode = UploadEntryMode.Realtime
             sessionDelegate.updateRealtimeVideoUri(
                 uri = uri,
-                realtimeSessionId = realtimeSessionId,
                 callbacks = sessionCallbacks
             )
             realtimeAttemptActionState = RealtimeAttemptActionState.Idle
@@ -1276,20 +1268,15 @@ class UploadViewModel @Inject constructor(
         holdDetectionDelegate.resetHoldDetectionState(clearDebugSource = true)
         sessionDelegate.updateVideoUri(
             uri = uri,
-            realtimeSessionId = realtimeSessionId,
             callbacks = sessionCallbacks
         )
     }
 
     fun updateRealtimeVideoUri(
-        uri: String,
-        realtimeSessionId: String? = null
+        uri: String
     ) {
         entryMode = UploadEntryMode.Realtime
-        updateVideoUri(
-            uri = uri,
-            realtimeSessionId = realtimeSessionId
-        )
+        updateVideoUri(uri = uri)
     }
 
     fun needsRealtimeHoldSelection(): Boolean {
@@ -1629,8 +1616,6 @@ class UploadViewModel @Inject constructor(
             numberedHolds = numberedHolds,
             bestFrameBitmap = bestFrameBitmap,
             aiMode = selectedAiAnalysisMode,
-            primaryRealtimeSessionId = primaryManagedVideo?.realtimeSessionId?.takeIf { it.isNotBlank() },
-            primaryRealtimePlaybackUri = videoUri?.takeIf { it.isNotBlank() },
             holdCoordinates = buildChallengeHoldCoordinates()
         )
     }
@@ -1895,7 +1880,7 @@ class UploadViewModel @Inject constructor(
                 entryMode == UploadEntryMode.Realtime &&
                 uploadSubmissionUiState.value is UploadSubmissionUiState.Success
             ) {
-                realtimeAttemptActionState = RealtimeAttemptActionState.ShowingOptions
+                restorePublishedAttemptResultSession()
             }
         }
     }
@@ -2215,8 +2200,15 @@ class UploadViewModel @Inject constructor(
 
     private fun restorePublishedAttemptResultSession() {
         submissionDelegate.restorePublishedAttemptResultSession(submissionCallbacks)
+        refreshRealtimeAttemptActionStateForPublishedSession()
+    }
+
+    private fun refreshRealtimeAttemptActionStateForPublishedSession() {
         realtimeAttemptActionState =
-            if (submissionCallbacks.publishedSession() != null) {
+            if (
+                entryMode == UploadEntryMode.Realtime &&
+                submissionCallbacks.publishedSession() != null
+            ) {
                 RealtimeAttemptActionState.ShowingOptions
             } else {
                 RealtimeAttemptActionState.Idle

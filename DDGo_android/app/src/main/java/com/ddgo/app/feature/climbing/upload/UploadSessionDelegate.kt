@@ -181,7 +181,6 @@ internal class UploadSessionDelegate(
 
     fun updateVideoUri(
         uri: String,
-        realtimeSessionId: String?,
         callbacks: UploadSessionCallbacks
     ) {
         val generation = beginSelectionUpdate(callbacks = callbacks)
@@ -196,8 +195,7 @@ internal class UploadSessionDelegate(
         primarySelectionJob = scope.launch(Dispatchers.IO) {
             val managedVideo = normalizeToManagedVideo(
                 uri = Uri.parse(uri),
-                filePrefix = "primary",
-                realtimeSessionId = realtimeSessionId
+                filePrefix = "primary"
             )
 
             withContext(Dispatchers.Main) {
@@ -224,7 +222,6 @@ internal class UploadSessionDelegate(
 
     fun updateRealtimeVideoUri(
         uri: String,
-        realtimeSessionId: String?,
         callbacks: UploadSessionCallbacks
     ) {
         val generation = beginSelectionUpdate(
@@ -242,8 +239,7 @@ internal class UploadSessionDelegate(
         primarySelectionJob = scope.launch(Dispatchers.IO) {
             val managedVideo = normalizeToManagedVideo(
                 uri = Uri.parse(uri),
-                filePrefix = "primary",
-                realtimeSessionId = realtimeSessionId
+                filePrefix = "primary"
             )
 
             withContext(Dispatchers.Main) {
@@ -922,23 +918,20 @@ internal class UploadSessionDelegate(
         return uris.mapIndexed { index, uriString ->
             normalizeToManagedVideo(
                 uri = Uri.parse(uriString),
-                filePrefix = "${filePrefix}_${index + 1}",
-                realtimeSessionId = null
+                filePrefix = "${filePrefix}_${index + 1}"
             )
         }
     }
 
     private fun normalizeToManagedVideo(
         uri: Uri,
-        filePrefix: String,
-        realtimeSessionId: String?
+        filePrefix: String
     ): ManagedAttemptVideo {
         if (uri.scheme == "file") {
             return ManagedAttemptVideo(
                 sourceUri = uri.toString(),
                 playbackUri = uri.toString(),
-                tempFilePath = null,
-                realtimeSessionId = realtimeSessionId
+                tempFilePath = null
             )
         }
 
@@ -964,16 +957,14 @@ internal class UploadSessionDelegate(
             ManagedAttemptVideo(
                 sourceUri = uri.toString(),
                 playbackUri = Uri.fromFile(tempFile).toString(),
-                tempFilePath = tempFile.absolutePath,
-                realtimeSessionId = realtimeSessionId
+                tempFilePath = tempFile.absolutePath
             )
         } catch (error: Exception) {
             Log.e(TAG, "Failed to cache video, using original uri: ${error.message}")
             ManagedAttemptVideo(
                 sourceUri = uri.toString(),
                 playbackUri = uri.toString(),
-                tempFilePath = null,
-                realtimeSessionId = realtimeSessionId
+                tempFilePath = null
             )
         }
     }

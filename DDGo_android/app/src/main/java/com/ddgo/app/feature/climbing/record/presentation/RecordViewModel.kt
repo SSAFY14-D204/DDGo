@@ -1,23 +1,14 @@
 package com.ddgo.app.feature.climbing.record.presentation
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.data.wear.RecordingStateSyncManager
 import com.ddgo.app.data.wear.WatchRuntimeMonitor
-import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.model.AiVideoMetadata
-import com.ddgo.app.domain.repository.AiRealtimeSessionHandle
-import com.ddgo.app.domain.repository.AiRealtimeSessionStartRequest
 import com.ddgo.app.domain.repository.LivePoseAnalyzerRepository
 import com.ddgo.app.domain.repository.LivePoseFrameInput
 import com.ddgo.app.domain.repository.LivePoseSessionConfig
-import com.ddgo.app.domain.usecase.AbortAiRealtimeSessionUseCase
-import com.ddgo.app.domain.usecase.AppendAiRealtimePoseChunkUseCase
-import com.ddgo.app.domain.usecase.BuildAiUserBodyProfileUseCase
-import com.ddgo.app.domain.usecase.GetMyInfoUseCase
-import com.ddgo.app.domain.usecase.StartAiRealtimeSessionUseCase
 import com.ddgo.shared.model.RecordingState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
@@ -33,12 +24,7 @@ import kotlinx.coroutines.launch
 class RecordViewModel @Inject constructor(
     private val recordingStateSyncManager: RecordingStateSyncManager,
     private val watchRuntimeMonitor: WatchRuntimeMonitor,
-    private val livePoseAnalyzerRepository: LivePoseAnalyzerRepository,
-    private val getMyInfoUseCase: GetMyInfoUseCase,
-    private val buildAiUserBodyProfileUseCase: BuildAiUserBodyProfileUseCase,
-    private val startAiRealtimeSessionUseCase: StartAiRealtimeSessionUseCase,
-    private val appendAiRealtimePoseChunkUseCase: AppendAiRealtimePoseChunkUseCase,
-    private val abortAiRealtimeSessionUseCase: AbortAiRealtimeSessionUseCase
+    private val livePoseAnalyzerRepository: LivePoseAnalyzerRepository
 ) : ViewModel() {
 
     private val sessionConfig = LivePoseSessionConfig(
@@ -51,15 +37,8 @@ class RecordViewModel @Inject constructor(
 
     private var analyzerStartJob: Job? = null
     private var analyzerStopJob: Job? = null
-    private var sessionHandle: AiRealtimeSessionHandle? = null
-    private var sessionStartAttempted = false
-    private var realtimeUploadDisabled = false
-    private var chunkFailureCount = 0
-    private var lastChunkUploadedAtMs: Long = 0L
     private var videoMetadata: AiVideoMetadata? = null
-    private var sessionTransferredToUpload = false
     private var currentRecordingSessionId: String? = null
-    private val bufferedPoseFrames = mutableListOf<AiPoseFrame>()
 
     init {
         watchRuntimeMonitor.start()
@@ -97,7 +76,7 @@ class RecordViewModel @Inject constructor(
         _uiState.update { current ->
             current.copy(
                 hasCameraPermission = granted,
-                cameraErrorMessage = if (granted) null else "카메라 권한이 필요합니다."
+                cameraErrorMessage = if (granted) null else "Camera permission is required."
             )
         }
     }
@@ -107,7 +86,7 @@ class RecordViewModel @Inject constructor(
             it.copy(
                 isCameraBound = true,
                 cameraErrorMessage = null,
-                statusMessage = "촬영 준비가 끝났어요. 바로 녹화를 시작할 수 있어요."
+                statusMessage = "Camera is ready. Live pose analysis will run during recording."
             )
         }
         startLivePoseAnalyzer(forceRestart = !_uiState.value.isLivePoseAnalyzerRunning)
@@ -129,14 +108,7 @@ class RecordViewModel @Inject constructor(
 
     fun onRecordingStarted() {
         currentRecordingSessionId = UUID.randomUUID().toString()
-        sessionTransferredToUpload = false
-        sessionHandle = null
-        sessionStartAttempted = false
-        realtimeUploadDisabled = false
-        chunkFailureCount = 0
-        lastChunkUploadedAtMs = 0L
         videoMetadata = null
-        bufferedPoseFrames.clear()
 
         _uiState.update {
             it.copy(
@@ -151,9 +123,9 @@ class RecordViewModel @Inject constructor(
                 cameraErrorMessage = null,
                 submissionFailureCount = 0,
                 statusMessage = if (it.isLivePoseAnalyzerRunning) {
-                    "녹화 중이에요. MediaPipe Pose를 실시간으로 분석하고 있어요."
+                    "Recording in progress. Live pose is analyzed on-device."
                 } else {
-                    "녹화 중이에요. 실시간 Pose가 준비되지 않아 저장 영상 분석으로 이어집니다."
+                    "Recording in progress. Live pose is unavailable, so upload will continue with batch AI."
                 }
             )
         }
@@ -167,26 +139,17 @@ class RecordViewModel @Inject constructor(
     fun onRecordingStopped(draft: RecordedAttemptDraft) {
         syncRecordingState(isRecording = false)
         viewModelScope.launch {
-            flushBufferedPoseFrames(force = true)
             stopLivePoseAnalyzer()
-
-            val reservedSessionId = sessionHandle?.sessionId?.takeIf { !realtimeUploadDisabled }
-
             _uiState.update {
                 it.copy(
                     isRecording = false,
                     isRealtimeUploadActive = false,
                     bufferedPoseFrameCount = 0,
                     recordedDraft = draft.copy(
-                        realtimeSessionId = reservedSessionId,
                         frameWidthPx = videoMetadata?.frameWidth,
                         frameHeightPx = videoMetadata?.frameHeight
                     ),
-                    statusMessage = if (reservedSessionId != null) {
-                        "촬영이 끝났어요. 홀 선택이 끝나면 서버 세션을 바로 finalize 합니다."
-                    } else {
-                        "촬영이 끝났어요. 기존 저장 영상 분석 흐름으로 이어집니다."
-                    }
+                    statusMessage = "Recording finished. Upload will continue with batch AI analysis."
                 )
             }
         }
@@ -195,35 +158,27 @@ class RecordViewModel @Inject constructor(
     fun onRecordingFailed(message: String) {
         syncRecordingState(isRecording = false)
         viewModelScope.launch {
-            abortRealtimeSessionIfNeeded()
             stopLivePoseAnalyzer()
             _uiState.update {
                 it.copy(
                     isRecording = false,
                     isRealtimeUploadActive = false,
                     cameraErrorMessage = message,
-                    statusMessage = "녹화가 중단되었어요."
+                    statusMessage = "Recording stopped."
                 )
             }
         }
     }
 
     fun onRecordedDraftHandled() {
-        sessionTransferredToUpload = true
         _uiState.update { it.copy(recordedDraft = null) }
     }
 
     fun clearRecordedDraft() {
-        if (!sessionTransferredToUpload) {
-            viewModelScope.launch {
-                abortRealtimeSessionIfNeeded()
-            }
-        }
-        sessionTransferredToUpload = false
         _uiState.update {
             it.copy(
                 recordedDraft = null,
-                statusMessage = "새로운 녹화를 시작할 수 있어요."
+                statusMessage = "Ready for the next recording."
             )
         }
     }
@@ -246,8 +201,6 @@ class RecordViewModel @Inject constructor(
             fps = TARGET_ANALYSIS_FPS.toFloat(),
             frameStep = 1
         )
-
-        ensureRealtimeSessionStarted()
 
         viewModelScope.launch {
             val result = livePoseAnalyzerRepository.submitFrame(frame)
@@ -294,7 +247,7 @@ class RecordViewModel @Inject constructor(
                                 isLivePoseAnalyzerRunning = false,
                                 isLivePoseAnalyzerStarting = false,
                                 livePoseErrorMessage = throwable.message ?: throwable.javaClass.simpleName,
-                                statusMessage = "실시간 Pose 분석이 중단되어 저장 영상 분석으로 전환됩니다."
+                                statusMessage = "Live pose stopped. Upload will continue with batch AI."
                             )
                         }
                     }
@@ -309,20 +262,19 @@ class RecordViewModel @Inject constructor(
                         isLivePoseAnalyzerStarting = false,
                         livePoseErrorMessage = null,
                         statusMessage = if (it.isRecording) {
-                            "녹화 중이에요. MediaPipe Pose를 실시간으로 분석하고 있어요."
+                            "Recording in progress. Live pose is analyzed on-device."
                         } else {
-                            "MediaPipe Pose 실시간 분석 준비가 끝났어요."
+                            "Live pose analysis is ready."
                         }
                     )
                 }
             } else {
-                realtimeUploadDisabled = true
                 _uiState.update {
                     it.copy(
                         isLivePoseAnalyzerRunning = false,
                         isLivePoseAnalyzerStarting = false,
                         livePoseErrorMessage = startError.message ?: startError.javaClass.simpleName,
-                        statusMessage = "실시간 Pose를 시작하지 못해 저장 영상 분석으로 전환됩니다."
+                        statusMessage = "Live pose could not start. Upload will continue with batch AI."
                     )
                 }
             }
@@ -373,109 +325,11 @@ class RecordViewModel @Inject constructor(
             return
         }
 
-        bufferedPoseFrames += frame
         _uiState.update {
             it.copy(
                 latestPoseFrame = frame,
                 detectedPoseFrameCount = it.detectedPoseFrameCount + 1,
-                bufferedPoseFrameCount = bufferedPoseFrames.size
-            )
-        }
-
-        flushBufferedPoseFrames(force = false)
-    }
-
-    private fun ensureRealtimeSessionStarted() {
-        if (sessionStartAttempted || realtimeUploadDisabled || videoMetadata == null) {
-            return
-        }
-
-        sessionStartAttempted = true
-        viewModelScope.launch {
-            val user = getMyInfoUseCase().getOrElse { throwable ->
-                disableRealtimeUpload(
-                    message = throwable.message ?: "사용자 정보를 가져오지 못해 batch 분석으로 전환합니다."
-                )
-                return@launch
-            }
-
-            val profile = buildAiUserBodyProfileUseCase(
-                user = user,
-                allowMissingWeight = true
-            ).getOrElse { throwable ->
-                disableRealtimeUpload(
-                    message = throwable.message ?: "체형 정보를 만들지 못해 batch 분석으로 전환합니다."
-                )
-                return@launch
-            }
-
-            val handle = startAiRealtimeSessionUseCase(
-                AiRealtimeSessionStartRequest(
-                    mode = AiAnalysisMode.PHYSICS,
-                    userBodyProfile = profile,
-                    videoMetadata = videoMetadata ?: return@launch,
-                    frameStep = 1
-                )
-            ).getOrElse { throwable ->
-                disableRealtimeUpload(
-                    message = throwable.message ?: "실시간 세션 시작에 실패해 batch 분석으로 전환합니다."
-                )
-                return@launch
-            }
-
-            sessionHandle = handle
-            chunkFailureCount = 0
-            _uiState.update {
-                it.copy(
-                    isRealtimeUploadActive = true,
-                    statusMessage = "녹화 중이에요. 포즈 프레임을 AI 서버 세션에 선전송하고 있어요."
-                )
-            }
-        }
-    }
-
-    private suspend fun flushBufferedPoseFrames(force: Boolean) {
-        val handle = sessionHandle ?: return
-        if (bufferedPoseFrames.isEmpty()) {
-            return
-        }
-
-        val latestFrameTimestamp = bufferedPoseFrames.last().timestampMs
-        if (!force && bufferedPoseFrames.size < CHUNK_FRAME_COUNT &&
-            latestFrameTimestamp - lastChunkUploadedAtMs < CHUNK_INTERVAL_MS
-        ) {
-            return
-        }
-
-        val framesToSend = bufferedPoseFrames.toList()
-        bufferedPoseFrames.clear()
-
-        val ack = appendAiRealtimePoseChunkUseCase(handle, framesToSend).getOrElse { throwable ->
-            bufferedPoseFrames.addAll(0, framesToSend)
-            chunkFailureCount += 1
-            Log.w(TAG, "Realtime pose chunk upload failed.", throwable)
-            if (chunkFailureCount >= MAX_CHUNK_FAILURES) {
-                disableRealtimeUpload(
-                    message = "실시간 청크 업로드가 반복 실패해 저장 영상 분석으로 전환합니다."
-                )
-            } else {
-                _uiState.update {
-                    it.copy(
-                        bufferedPoseFrameCount = bufferedPoseFrames.size,
-                        livePoseErrorMessage = throwable.message ?: throwable.javaClass.simpleName
-                    )
-                }
-            }
-            return
-        }
-
-        chunkFailureCount = 0
-        lastChunkUploadedAtMs = latestFrameTimestamp
-        _uiState.update {
-            it.copy(
-                isRealtimeUploadActive = true,
-                uploadedPoseFrameCount = it.uploadedPoseFrameCount + ack.acceptedFrames,
-                bufferedPoseFrameCount = bufferedPoseFrames.size
+                bufferedPoseFrameCount = 0
             )
         }
     }
@@ -490,34 +344,15 @@ class RecordViewModel @Inject constructor(
         }
 
         if (updatedCount >= MAX_SUBMISSION_FAILURES) {
-            disableRealtimeUpload(
-                message = "실시간 Pose 프레임 처리가 불안정해 저장 영상 분석으로 전환합니다."
-            )
+            _uiState.update {
+                it.copy(
+                    isRealtimeUploadActive = false,
+                    bufferedPoseFrameCount = 0,
+                    statusMessage = "Live pose became unstable. Upload will continue with batch AI."
+                )
+            }
             stopLivePoseAnalyzer()
         }
-    }
-
-    private suspend fun disableRealtimeUpload(message: String) {
-        realtimeUploadDisabled = true
-        bufferedPoseFrames.clear()
-        abortRealtimeSessionIfNeeded()
-        _uiState.update {
-            it.copy(
-                isRealtimeUploadActive = false,
-                bufferedPoseFrameCount = 0,
-                livePoseErrorMessage = message,
-                statusMessage = message
-            )
-        }
-    }
-
-    private suspend fun abortRealtimeSessionIfNeeded() {
-        val handle = sessionHandle ?: return
-        sessionHandle = null
-        if (sessionTransferredToUpload) {
-            return
-        }
-        abortAiRealtimeSessionUseCase(handle)
     }
 
     private fun syncRecordingState(isRecording: Boolean) {
@@ -542,12 +377,8 @@ class RecordViewModel @Inject constructor(
     }
 
     companion object {
-        private const val TAG = "RecordViewModel"
         private const val TARGET_ANALYSIS_FPS = 10
-        private const val CHUNK_FRAME_COUNT = 10
-        private const val CHUNK_INTERVAL_MS = 1_000L
         private const val MAX_SUBMISSION_FAILURES = 3
-        private const val MAX_CHUNK_FAILURES = 3
         private const val MIN_REQUIRED_LANDMARK_COUNT = 33
     }
 }
