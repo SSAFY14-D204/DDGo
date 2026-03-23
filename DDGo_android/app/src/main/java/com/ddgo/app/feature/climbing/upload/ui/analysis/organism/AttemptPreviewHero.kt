@@ -1,7 +1,9 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
 
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,13 +16,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisText
@@ -38,7 +50,10 @@ internal data class AttemptPreviewHeroState(
     val analysisModeLabel: String? = null,
     val fallbackLabel: String? = null,
     val previewBitmap: Bitmap?,
-    val previewHolds: List<Hold>
+    val previewHolds: List<Hold>,
+    val selectedAttemptVideoUri: String? = null,
+    val seekRequestId: Long = 0L,
+    val seekRequestTimeMs: Long? = null
 )
 
 @Composable
@@ -46,8 +61,32 @@ internal fun AttemptPreviewHero(
     state: AttemptPreviewHeroState,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val holdChipBackground = holdColorToUiColor(state.holdColorLabel)
-    val holdChipIsBright = (holdChipBackground.red + holdChipBackground.green + holdChipBackground.blue) / 3f > 0.7f
+    val holdChipIsBright =
+        (holdChipBackground.red + holdChipBackground.green + holdChipBackground.blue) / 3f > 0.7f
+    val exoPlayer = remember(context, state.selectedAttemptVideoUri) {
+        state.selectedAttemptVideoUri?.let { videoUri ->
+            ExoPlayer.Builder(context).build().apply {
+                playWhenReady = false
+                repeatMode = Player.REPEAT_MODE_OFF
+                setMediaItem(MediaItem.fromUri(Uri.parse(videoUri)))
+                prepare()
+            }
+        }
+    }
+
+    LaunchedEffect(exoPlayer, state.seekRequestId, state.seekRequestTimeMs) {
+        val seekTimeMs = state.seekRequestTimeMs ?: return@LaunchedEffect
+        exoPlayer?.seekTo(seekTimeMs.coerceAtLeast(0L))
+        exoPlayer?.play()
+    }
+
+    DisposableEffect(exoPlayer) {
+        onDispose {
+            exoPlayer?.release()
+        }
+    }
 
     Column(modifier = modifier) {
         Row(
@@ -118,13 +157,39 @@ internal fun AttemptPreviewHero(
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFF101114))
         ) {
-            HoldOverviewPreview(
-                bitmap = state.previewBitmap,
-                holds = state.previewHolds,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(242.dp)
-            )
+            if (exoPlayer != null) {
+                AndroidView(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(242.dp)
+                        .clickable {
+                            if (exoPlayer.isPlaying) {
+                                exoPlayer.pause()
+                            } else {
+                                exoPlayer.play()
+                            }
+                        },
+                    factory = { viewContext ->
+                        PlayerView(viewContext).apply {
+                            player = exoPlayer
+                            useController = false
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            setShutterBackgroundColor(android.graphics.Color.BLACK)
+                        }
+                    },
+                    update = { playerView ->
+                        playerView.player = exoPlayer
+                    }
+                )
+            } else {
+                HoldOverviewPreview(
+                    bitmap = state.previewBitmap,
+                    holds = state.previewHolds,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(242.dp)
+                )
+            }
 
             Text(
                 text = "${state.selectedAttempt}차 시도 ${if (state.isSuccess) "성공" else "실패"}",
