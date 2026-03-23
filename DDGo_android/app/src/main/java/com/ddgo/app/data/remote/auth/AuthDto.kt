@@ -49,6 +49,17 @@ data class RefreshTokenResponseDto(
 
 /** 내 정보 조회 응답 DTO입니다. */
 @Serializable
+data class PasswordResetMailRequestDto(
+    @SerialName("email") val email: String
+)
+
+@Serializable
+data class PasswordResetConfirmRequestDto(
+    @SerialName("token") val token: String,
+    @SerialName("newPassword") val newPassword: String
+)
+
+@Serializable
 data class UserResponseDto(
     @SerialName("id") val id: Long,
     @SerialName("username") val username: String,

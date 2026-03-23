@@ -53,6 +53,46 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="password-reset"
+                    android:scheme="ddgo" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="localhost"
+                    android:pathPrefix="/reset-password"
+                    android:scheme="http" />
+
+                <data
+                    android:host="localhost"
+                    android:pathPrefix="/reset-password"
+                    android:scheme="https" />
+            </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="j14d204.p.ssafy.io"
+                    android:pathPrefix="/reset-password"
+                    android:scheme="https" />
+            </intent-filter>
         </activity>
 
         <!-- WorkManager를 Hilt와 함께 사용하기 위한 초기화 Provider -->
