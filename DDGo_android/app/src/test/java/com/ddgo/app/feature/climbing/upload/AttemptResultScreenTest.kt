@@ -118,6 +118,84 @@ class AttemptResultScreenTest {
     }
 
     @Test
+    fun `playback active card stays on previous point until next timestamp`() {
+        val points = listOf(
+            AnalysisPoint(index = 1, timeMs = 21_000L, description = "1"),
+            AnalysisPoint(index = 2, timeMs = 48_000L, description = "2")
+        )
+
+        assertEquals(
+            0,
+            resolvePlaybackActiveAnalysisCardIndex(
+                points = points,
+                displayedPositionMs = 30_000L
+            )
+        )
+    }
+
+    @Test
+    fun `last tapped card stays active even when preview seek lands earlier`() {
+        val points = listOf(
+            AnalysisPoint(
+                index = 1,
+                timeMs = 12_000L,
+                description = "start",
+                kind = AnalysisPointKind.PERSON_OBSERVATION_START
+            ),
+            AnalysisPoint(
+                index = 2,
+                timeMs = 15_000L,
+                description = "end",
+                kind = AnalysisPointKind.CLIMB_END
+            )
+        )
+
+        assertEquals(
+            1,
+            resolveActiveAnalysisCardIndex(
+                points = points,
+                displayedPositionMs = previewStartMs(15_000L),
+                tappedCardOverrideIdx = 1
+            )
+        )
+    }
+
+    @Test
+    fun `tapped override clears after crossing next timestamp`() {
+        val points = listOf(
+            AnalysisPoint(index = 1, timeMs = 21_000L, description = "1"),
+            AnalysisPoint(index = 2, timeMs = 48_000L, description = "2"),
+            AnalysisPoint(index = 3, timeMs = 66_000L, description = "3")
+        )
+
+        assertEquals(
+            2,
+            resolveActiveAnalysisCardIndex(
+                points = points,
+                displayedPositionMs = 66_000L,
+                tappedCardOverrideIdx = 1
+            )
+        )
+    }
+
+    @Test
+    fun `cleared override falls back to playback active card`() {
+        val points = listOf(
+            AnalysisPoint(index = 1, timeMs = 21_000L, description = "1"),
+            AnalysisPoint(index = 2, timeMs = 48_000L, description = "2")
+        )
+
+        assertEquals(
+            1,
+            resolveActiveAnalysisCardIndex(
+                points = points,
+                displayedPositionMs = 52_000L,
+                tappedCardOverrideIdx = -1
+            )
+        )
+    }
+
+    @Test
     fun `initial playback start snaps to nearest pose timestamp`() {
         assertEquals(
             2_000L,
