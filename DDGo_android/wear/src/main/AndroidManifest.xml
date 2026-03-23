@@ -21,7 +21,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="DDGo Wear"
+        android:label="@string/wear_app_label"
         android:supportsRtl="true">
         <activity
             android:name=".MainActivity"
