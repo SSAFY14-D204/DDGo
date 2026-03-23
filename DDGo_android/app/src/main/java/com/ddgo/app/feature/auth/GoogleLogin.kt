@@ -52,8 +52,14 @@ internal suspend fun startGoogleLogin(
         )
         Result.success(result.toGoogleLoginResult())
     } catch (exception: GetCredentialCancellationException) {
-        Log.w(TAG, "Google login cancelled: ${exception.message}", exception)
-        Result.failure(IllegalStateException(AuthStrings.GoogleLoginFailed, exception))
+        val message = exception.message.orEmpty()
+        if (message.contains("reauth failed", ignoreCase = true)) {
+            Log.e(TAG, "Google account reauth failed: $message", exception)
+            Result.failure(IllegalStateException(AuthStrings.GoogleAccountReauthFailed, exception))
+        } else {
+            Log.w(TAG, "Google login cancelled: $message", exception)
+            Result.failure(IllegalStateException(AuthStrings.GoogleLoginFailed, exception))
+        }
     } catch (exception: GetCredentialException) {
         Log.e(TAG, "Google login credential error: ${exception.javaClass.simpleName}: ${exception.message}", exception)
         Result.failure(IllegalStateException(AuthStrings.GoogleLoginFailed, exception))
