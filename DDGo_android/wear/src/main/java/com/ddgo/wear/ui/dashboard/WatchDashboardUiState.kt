@@ -49,7 +49,7 @@ internal enum class WatchDashboardVisualState {
 }
 
 internal enum class WatchDashboardChipTone {
-    ACTIVE,
+    PRIMARY,
     NEUTRAL,
     WARNING
 }
@@ -65,7 +65,7 @@ internal data class WatchDashboardChipUi(
     val tone: WatchDashboardChipTone
 )
 
-internal data class WatchDashboardInfoItem(
+internal data class WatchDashboardMetricUi(
     val label: String,
     val value: String
 )
@@ -79,13 +79,13 @@ internal data class WatchDashboardUiState(
     val visualState: WatchDashboardVisualState,
     val recordingChip: WatchDashboardChipUi,
     val connectionChip: WatchDashboardChipUi,
-    val heroTitle: String,
-    val heroValue: String,
-    val heroUnit: String?,
-    val messageTitle: String,
-    val messageBody: String,
-    val infoItems: List<WatchDashboardInfoItem>,
-    val sessionLabel: String?,
+    val title: String,
+    val value: String,
+    val unit: String?,
+    val headline: String,
+    val body: String,
+    val metrics: List<WatchDashboardMetricUi>,
+    val footer: String?,
     val primaryAction: WatchDashboardActionUi? = null,
     val secondaryAction: WatchDashboardActionUi? = null
 )
@@ -100,42 +100,72 @@ internal fun buildWatchDashboardUiState(
         runtimeSnapshot.serviceActive ||
         syncSnapshot.isRecording
 
-    val (heroTitle, heroValue, heroUnit) = when (visualState) {
-        WatchDashboardVisualState.PERMISSION_REQUIRED -> Triple("상태", "권한", null)
-        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> Triple("상태", "센서", null)
-        WatchDashboardVisualState.ALERTING,
-        WatchDashboardVisualState.MEASURING -> Triple(
-            "심박수",
-            runtimeSnapshot.latestHeartRate?.toString() ?: "--",
-            runtimeSnapshot.latestHeartRate?.let { "bpm" }
-        )
+    val title = when (visualState) {
+        WatchDashboardVisualState.PERMISSION_REQUIRED,
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "상태"
 
-        else -> Triple("심박수", "--", null)
+        else -> "심박수"
     }
 
-    val (messageTitle, messageBody) = when (visualState) {
-        WatchDashboardVisualState.IDLE ->
-            "휴대폰에서 녹화를 시작하세요" to "워치가 심박 측정을 기다리고 있어요"
+    val value = when (visualState) {
+        WatchDashboardVisualState.PERMISSION_REQUIRED -> "권한"
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "센서"
+        WatchDashboardVisualState.MEASURING,
+        WatchDashboardVisualState.ALERTING -> runtimeSnapshot.latestHeartRate?.toString() ?: "--"
 
-        WatchDashboardVisualState.RECOVERING ->
-            "워치를 연결하는 중이에요" to "세션과 심박 센서를 준비하고 있어요"
+        WatchDashboardVisualState.IDLE,
+        WatchDashboardVisualState.RECOVERING -> "--"
+    }
 
-        WatchDashboardVisualState.MEASURING ->
-            "심박을 측정하고 있어요" to "손목에 밀착되도록 착용해주세요"
+    val unit = when (visualState) {
+        WatchDashboardVisualState.MEASURING,
+        WatchDashboardVisualState.ALERTING -> runtimeSnapshot.latestHeartRate?.let { "bpm" }
 
-        WatchDashboardVisualState.ALERTING ->
-            "심박수가 높아요" to "호흡을 가다듬고 자세를 확인해주세요"
+        else -> null
+    }
 
-        WatchDashboardVisualState.PERMISSION_REQUIRED ->
-            "권한이 필요해요" to permissionState.summary
+    val headline = when (visualState) {
+        WatchDashboardVisualState.IDLE -> "녹화 대기"
+        WatchDashboardVisualState.RECOVERING -> "워치 준비 중"
+        WatchDashboardVisualState.MEASURING -> "심박 측정"
+        WatchDashboardVisualState.ALERTING -> "심박 경고"
+        WatchDashboardVisualState.PERMISSION_REQUIRED -> "권한 필요"
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "센서 오류"
+    }
 
-        WatchDashboardVisualState.SENSOR_UNAVAILABLE ->
-            "센서를 확인해주세요" to "워치를 손목에 맞게 다시 착용해주세요"
+    val body = when (visualState) {
+        WatchDashboardVisualState.IDLE -> "휴대폰에서 시작하세요"
+        WatchDashboardVisualState.RECOVERING -> "세션과 센서를 준비하고 있어요"
+        WatchDashboardVisualState.MEASURING -> "녹화 중 · 연결 정상"
+        WatchDashboardVisualState.ALERTING -> "심박이 높아요 · 강도를 낮춰보세요"
+        WatchDashboardVisualState.PERMISSION_REQUIRED -> permissionState.summary
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "워치를 다시 착용하고 재시도해주세요"
+    }
+
+    val metrics = if (visualState == WatchDashboardVisualState.PERMISSION_REQUIRED ||
+        visualState == WatchDashboardVisualState.SENSOR_UNAVAILABLE
+    ) {
+        emptyList()
+    } else {
+        listOf(
+            WatchDashboardMetricUi(
+                label = "측정",
+                value = runtimeSnapshot.measurementStatus.toMetricLabel(syncSnapshot.isRecording)
+            ),
+            WatchDashboardMetricUi(
+                label = "경고",
+                value = if (runtimeSnapshot.alerting) "주의" else "안전"
+            ),
+            WatchDashboardMetricUi(
+                label = "연결",
+                value = if (isConnected) "정상" else "대기"
+            )
+        )
     }
 
     val primaryAction = when (visualState) {
         WatchDashboardVisualState.PERMISSION_REQUIRED -> WatchDashboardActionUi(
-            label = "권한 허용",
+            label = "허용하기",
             kind = WatchDashboardActionKind.REQUEST_PERMISSION
         )
 
@@ -149,7 +179,7 @@ internal fun buildWatchDashboardUiState(
 
     val secondaryAction = when (visualState) {
         WatchDashboardVisualState.PERMISSION_REQUIRED -> WatchDashboardActionUi(
-            label = "설정 열기",
+            label = "설정",
             kind = WatchDashboardActionKind.OPEN_SETTINGS
         )
 
@@ -159,42 +189,28 @@ internal fun buildWatchDashboardUiState(
     return WatchDashboardUiState(
         visualState = visualState,
         recordingChip = WatchDashboardChipUi(
-            label = if (syncSnapshot.isRecording) "녹화 중" else "대기 중",
+            label = if (syncSnapshot.isRecording) "녹화" else "대기",
             tone = if (syncSnapshot.isRecording) {
-                WatchDashboardChipTone.ACTIVE
+                WatchDashboardChipTone.PRIMARY
             } else {
                 WatchDashboardChipTone.NEUTRAL
             }
         ),
         connectionChip = WatchDashboardChipUi(
-            label = if (isConnected) "연결됨" else "대기",
+            label = if (isConnected) "연결" else "오프",
             tone = if (isConnected) {
-                WatchDashboardChipTone.ACTIVE
+                WatchDashboardChipTone.PRIMARY
             } else {
                 WatchDashboardChipTone.NEUTRAL
             }
         ),
-        heroTitle = heroTitle,
-        heroValue = heroValue,
-        heroUnit = heroUnit,
-        messageTitle = messageTitle,
-        messageBody = messageBody,
-        infoItems = listOf(
-            WatchDashboardInfoItem(
-                label = "연결",
-                value = if (isConnected) "연결됨" else "대기"
-            ),
-            WatchDashboardInfoItem(
-                label = "측정",
-                value = runtimeSnapshot.measurementStatus.toDashboardLabel(syncSnapshot.isRecording)
-            ),
-            WatchDashboardInfoItem(
-                label = "경고",
-                value = if (runtimeSnapshot.alerting) "주의" else "안전"
-            )
-        ),
-        sessionLabel = runtimeSnapshot.sessionId?.take(8)?.let { "세션 $it" }
-            ?: syncSnapshot.recordingState?.sessionId?.take(8)?.let { "세션 $it" },
+        title = title,
+        value = value,
+        unit = unit,
+        headline = headline,
+        body = body,
+        metrics = metrics,
+        footer = runtimeSnapshot.sessionId?.take(8)?.let { "세션 $it" },
         primaryAction = primaryAction,
         secondaryAction = secondaryAction
     )
@@ -232,11 +248,11 @@ private fun resolveVisualState(
     }
 }
 
-private fun MeasurementStatus.toDashboardLabel(isRecording: Boolean): String {
+private fun MeasurementStatus.toMetricLabel(isRecording: Boolean): String {
     return when (this) {
         MeasurementStatus.MEASURING -> "정상"
-        MeasurementStatus.RECOVERING -> "연결 중"
-        MeasurementStatus.PERMISSION_BLOCKED -> "권한 필요"
+        MeasurementStatus.RECOVERING -> "복구 중"
+        MeasurementStatus.PERMISSION_BLOCKED -> "권한"
         MeasurementStatus.UNAVAILABLE -> if (isRecording) "오류" else "대기"
     }
 }
