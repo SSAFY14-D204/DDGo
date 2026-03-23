@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -65,7 +67,8 @@ private enum class WatchDashboardLayoutMode {
 @Composable
 internal fun WatchDashboardScreen(
     uiState: WatchDashboardUiState,
-    onAction: (WatchDashboardActionKind) -> Unit
+    onAction: (WatchDashboardActionKind) -> Unit,
+    onHeaderTap: (() -> Unit)? = null
 ) {
     val palette = paletteFor(uiState.visualState)
     val layoutMode = layoutModeFor(uiState.visualState)
@@ -109,7 +112,8 @@ internal fun WatchDashboardScreen(
                     body = headerBody,
                     bodyMaxLines = headerBodyMaxLines,
                     compact = compact,
-                    accent = palette.accent
+                    accent = palette.accent,
+                    onTap = onHeaderTap
                 )
 
                 when (layoutMode) {
@@ -149,10 +153,21 @@ private fun ContextHeader(
     body: String?,
     bodyMaxLines: Int,
     compact: Boolean,
-    accent: Color
+    accent: Color,
+    onTap: (() -> Unit)?
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onTap != null) {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(onTap = { onTap() })
+                    }
+                } else {
+                    Modifier
+                }
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
