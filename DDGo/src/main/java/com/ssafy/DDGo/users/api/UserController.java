@@ -3,7 +3,10 @@ package com.ssafy.DDGo.users.api;
 import com.ssafy.DDGo.global.common.ApiResponse;
 import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
+import com.ssafy.DDGo.users.application.UserPasswordResetService;
 import com.ssafy.DDGo.users.application.UserService;
+import com.ssafy.DDGo.users.dto.request.PasswordResetConfirmRequest;
+import com.ssafy.DDGo.users.dto.request.PasswordResetMailRequest;
 import com.ssafy.DDGo.users.dto.request.SocialLoginRequest;
 import com.ssafy.DDGo.users.dto.request.TokenRefreshRequest;
 import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
@@ -108,7 +111,35 @@ public class UserController {
             }
             """;
 
+    private static final String PASSWORD_RESET_REQUEST_SUCCESS_EXAMPLE = """
+            {
+              "success": true,
+              "code": null,
+              "message": "입력하신 이메일로 비밀번호 재설정 안내를 보냈습니다.",
+              "data": null
+            }
+            """;
+
+    private static final String PASSWORD_RESET_CONFIRM_SUCCESS_EXAMPLE = """
+            {
+              "success": true,
+              "code": null,
+              "message": "비밀번호가 재설정되었습니다.",
+              "data": null
+            }
+            """;
+
+    private static final String PASSWORD_RESET_TOKEN_INVALID_EXAMPLE = """
+            {
+              "success": false,
+              "code": "A002",
+              "message": "유효하지 않거나 만료된 비밀번호 재설정 토큰입니다.",
+              "data": null
+            }
+            """;
+
     private final UserService userService;
+    private final UserPasswordResetService userPasswordResetService;
 
     @Operation(summary = "회원가입", description = "이메일, 비밀번호, 닉네임으로 DDGo 계정을 생성합니다.")
     @PostMapping("/register")
@@ -252,6 +283,40 @@ public class UserController {
             @RequestBody @Valid UserPasswordUpdateRequest request) {
         userService.updatePassword(authentication.getName(), request);
         return ResponseEntity.ok(ApiResponse.success("비밀번호가 변경되었습니다.", null));
+    }
+
+    @Operation(summary = "비밀번호 재설정 메일 요청", description = "로컬 로그인 계정에 한해 비밀번호 재설정 메일을 전송합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "요청 접수 성공",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(name = "success", value = PASSWORD_RESET_REQUEST_SUCCESS_EXAMPLE)))
+    })
+    @PostMapping("/password/reset/request")
+    public ResponseEntity<ApiResponse<Void>> requestPasswordReset(@RequestBody @Valid PasswordResetMailRequest request) {
+        userPasswordResetService.requestPasswordReset(request);
+        return ResponseEntity.ok(ApiResponse.success("입력하신 이메일로 비밀번호 재설정 안내를 보냈습니다.", null));
+    }
+
+    @Operation(summary = "비밀번호 재설정 완료", description = "이메일로 전달받은 토큰과 새 비밀번호로 비밀번호를 재설정합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "비밀번호 재설정 성공",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(name = "success", value = PASSWORD_RESET_CONFIRM_SUCCESS_EXAMPLE))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "유효하지 않거나 만료된 토큰",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(name = "invalidToken", value = PASSWORD_RESET_TOKEN_INVALID_EXAMPLE)))
+    })
+    @PostMapping("/password/reset/confirm")
+    public ResponseEntity<ApiResponse<Void>> confirmPasswordReset(
+            @RequestBody @Valid PasswordResetConfirmRequest request) {
+        userPasswordResetService.confirmPasswordReset(request);
+        return ResponseEntity.ok(ApiResponse.success("비밀번호가 재설정되었습니다.", null));
     }
 
     @Operation(summary = "토큰 재발급", description = "DDGo 액세스 토큰과 리프레시 토큰을 재발급합니다.")
