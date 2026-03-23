@@ -1,12 +1,5 @@
 package com.ddgo.app.feature.auth
 
-/**
- * 인증 화면에서 사용하는 문구를 한곳에 모아둔 객체입니다.
- *
- * 역할:
- * - 로그인, 회원가입, 후속 안내 문구를 화면마다 중복하지 않게 합니다.
- * - 백엔드 실제 지원 범위에 맞는 안내만 남겨 잘못된 기대를 줄입니다.
- */
 internal object AuthStrings {
 
     const val WelcomeEyebrow = "\uAE30\uB85D\uC774 \uB0A8\uB294 \uD074\uB77C\uC774\uBC0D \uB8E8\uD2F4"
@@ -37,6 +30,27 @@ internal object AuthStrings {
     const val LoginPasswordDescriptionSuffix = "\uB85C \uB85C\uADF8\uC778\uD560\uAC8C\uC694."
     const val LoginPasswordHelper =
         "\uBE44\uBC00\uBC88\uD638\uAC00 \uB9DE\uC9C0 \uC54A\uC73C\uBA74 \uB85C\uADF8\uC778\uB418\uC9C0 \uC54A\uC544\uC694."
+    const val ForgotPasswordAction = "\uBE44\uBC00\uBC88\uD638\uB97C \uC78A\uC73C\uC168\uB098\uC694?"
+    const val PasswordResetTitle = "\uBE44\uBC00\uBC88\uD638 \uC7AC\uC124\uC815"
+    const val PasswordResetDescription =
+        "\uAC00\uC785\uD55C \uC774\uBA54\uC77C\uB85C \uC7AC\uC124\uC815 \uBA54\uC77C\uC744 \uBCF4\uB0B4\uACE0, \uBA54\uC77C\uC5D0\uC11C \uBC1B\uC740 \uB9C1\uD06C\uB098 \uD1A0\uD070\uC73C\uB85C \uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC124\uC815\uD560 \uC218 \uC788\uC5B4\uC694."
+    const val PasswordResetEmailLabel = "\uC774\uBA54\uC77C"
+    const val PasswordResetSendAction = "\uC7AC\uC124\uC815 \uBA54\uC77C \uBCF4\uB0B4\uAE30"
+    const val PasswordResetResendAction = "\uBA54\uC77C \uB2E4\uC2DC \uBCF4\uB0B4\uAE30"
+    const val PasswordResetSentTitle = "\uBA54\uC77C\uC744 \uBCF4\uB0C8\uC5B4\uC694"
+    const val PasswordResetTokenLabel = "\uC7AC\uC124\uC815 \uB9C1\uD06C \uB610\uB294 \uD1A0\uD070"
+    const val PasswordResetTokenPlaceholder = "\uBA54\uC77C\uC5D0\uC11C \uBC1B\uC740 \uB9C1\uD06C \uB610\uB294 token \uC785\uB825"
+    const val PasswordResetLinkHint = "\uBA54\uC77C\uC758 \uB9C1\uD06C \uC804\uCCB4\uB97C \uBD99\uC5EC \uB123\uC5B4\uB3C4 token \uAC12\uC744 \uC790\uB3D9\uC73C\uB85C \uC77D\uC5B4\uC640\uC694."
+    const val PasswordResetNewPasswordLabel = "\uC0C8 \uBE44\uBC00\uBC88\uD638"
+    const val PasswordResetConfirmPasswordLabel = "\uC0C8 \uBE44\uBC00\uBC88\uD638 \uD655\uC778"
+    const val PasswordResetCompleteAction = "\uC0C8 \uBE44\uBC00\uBC88\uD638\uB85C \uBCC0\uACBD"
+    const val PasswordResetTokenRequired = "\uC7AC\uC124\uC815 \uB9C1\uD06C \uB610\uB294 \uD1A0\uD070\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+    const val PasswordResetConfirmRequired = "\uC0C8 \uBE44\uBC00\uBC88\uD638 \uD655\uC778\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+    const val PasswordResetPasswordMismatch = "\uC0C8 \uBE44\uBC00\uBC88\uD638\uAC00 \uC11C\uB85C \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
+    const val PasswordResetRequestFailed =
+        "\uBE44\uBC00\uBC88\uD638 \uC7AC\uC124\uC815 \uBA54\uC77C\uC744 \uBCF4\uB0B4\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
+    const val PasswordResetConfirmFailed =
+        "\uBE44\uBC00\uBC88\uD638 \uC7AC\uC124\uC815\uC744 \uC644\uB8CC\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694. \uB9C1\uD06C \uB610\uB294 \uD1A0\uD070\uC744 \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694."
 
     const val RegisterUsernameTitle = "\uB85C\uADF8\uC778\uC5D0 \uC0AC\uC6A9\uD560 \uC544\uC774\uB514\uB97C \uB9CC\uB4E4\uC5B4 \uC8FC\uC138\uC694"
     const val RegisterUsernameDescription =
@@ -82,5 +96,9 @@ internal object AuthStrings {
 
     fun loginPasswordDescription(username: String): String {
         return "${LoginPasswordDescriptionPrefix} ${username.ifBlank { UsernamePlaceholder }} ${LoginPasswordDescriptionSuffix}"
+    }
+
+    fun passwordResetSentDescription(email: String): String {
+        return "$email \uC8FC\uC18C\uB85C \uC548\uB0B4 \uBA54\uC77C\uC744 \uBCF4\uB0C8\uC5B4\uC694. \uBA54\uC77C\uC5D0 \uC788\uB294 \uB9C1\uD06C \uC804\uCCB4\uB97C \uBD99\uC5EC \uB123\uC5B4\uB3C4 token \uAC12\uC744 \uC790\uB3D9\uC73C\uB85C \uC77D\uC5B4\uC62C\uAC8C\uC694."
     }
 }

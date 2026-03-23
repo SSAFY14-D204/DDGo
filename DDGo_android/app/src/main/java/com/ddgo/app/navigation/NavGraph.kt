@@ -1,5 +1,6 @@
 package com.ddgo.app.navigation
 
+import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,7 +31,10 @@ import com.ddgo.app.feature.splash.SplashScreen
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
-fun NavGraph() {
+fun NavGraph(
+    passwordResetDeepLink: String? = null,
+    onPasswordResetDeepLinkConsumed: () -> Unit = {}
+) {
     val navController: NavHostController = rememberNavController()
     val appSessionViewModel: AppSessionViewModel = hiltViewModel()
     var showSessionExpiredDialog by rememberSaveable { mutableStateOf(false) }
@@ -56,6 +60,19 @@ fun NavGraph() {
                 navController.removeOnDestinationChangedListener(listener)
             }
         }
+    }
+
+    LaunchedEffect(passwordResetDeepLink) {
+        val deepLink = passwordResetDeepLink ?: return@LaunchedEffect
+        val encodedLink = Uri.encode(deepLink)
+
+        navController.navigate(
+            "${ScreenRoutes.Auth.PASSWORD_RESET}?${ScreenRoutes.Auth.ARG_PASSWORD_RESET_LINK}=$encodedLink"
+        ) {
+            launchSingleTop = true
+        }
+
+        onPasswordResetDeepLinkConsumed()
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

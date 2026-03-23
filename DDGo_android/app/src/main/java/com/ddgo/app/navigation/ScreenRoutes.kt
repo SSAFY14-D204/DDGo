@@ -7,6 +7,10 @@ sealed class ScreenRoutes(val route: String) {
         const val WELCOME = "welcome"
         const val LOGIN_EMAIL = "login_email"
         const val LOGIN_PASSWORD = "login_password"
+        const val PASSWORD_RESET = "password_reset"
+        const val ARG_PASSWORD_RESET_LINK = "passwordResetLink"
+        const val PASSWORD_RESET_WITH_ARG =
+            "$PASSWORD_RESET?$ARG_PASSWORD_RESET_LINK={$ARG_PASSWORD_RESET_LINK}"
         const val REGISTER_EMAIL = "register_email"
         const val REGISTER_PASSWORD = "register_password"
     }

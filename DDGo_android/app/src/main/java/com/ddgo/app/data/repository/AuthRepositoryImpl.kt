@@ -5,6 +5,8 @@ import com.ddgo.app.core.datastore.TokenDataStore
 import com.ddgo.app.data.mapper.AuthMapper.toDomain
 import com.ddgo.app.data.remote.auth.AuthApi
 import com.ddgo.app.data.remote.auth.LoginRequestDto
+import com.ddgo.app.data.remote.auth.PasswordResetConfirmRequestDto
+import com.ddgo.app.data.remote.auth.PasswordResetMailRequestDto
 import com.ddgo.app.data.remote.auth.RefreshTokenRequestDto
 import com.ddgo.app.data.remote.auth.RegisterRequestDto
 import com.ddgo.app.data.remote.auth.SocialLoginRequestDto
@@ -84,6 +86,62 @@ class AuthRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Result.failure(Exception(resolveErrorMessage(e, SOCIAL_LOGIN_FAILED_MESSAGE), e))
+        }
+    }
+
+    override suspend fun requestPasswordReset(email: String): Result<Unit> {
+        return try {
+            val response = authApi.requestPasswordReset(
+                PasswordResetMailRequestDto(email = email)
+            )
+            if (response.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifBlank {
+                    "비밀번호 재설정 메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요."
+                }))
+            }
+        } catch (e: Exception) {
+            Result.failure(
+                Exception(
+                    resolveErrorMessage(
+                        e,
+                        "비밀번호 재설정 메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요."
+                    ),
+                    e
+                )
+            )
+        }
+    }
+
+    override suspend fun confirmPasswordReset(
+        token: String,
+        newPassword: String
+    ): Result<Unit> {
+        return try {
+            val response = authApi.confirmPasswordReset(
+                PasswordResetConfirmRequestDto(
+                    token = token,
+                    newPassword = newPassword
+                )
+            )
+            if (response.success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception(response.message.ifBlank {
+                    "비밀번호 재설정을 완료하지 못했어요. 링크 또는 토큰을 다시 확인해 주세요."
+                }))
+            }
+        } catch (e: Exception) {
+            Result.failure(
+                Exception(
+                    resolveErrorMessage(
+                        e,
+                        "비밀번호 재설정을 완료하지 못했어요. 링크 또는 토큰을 다시 확인해 주세요."
+                    ),
+                    e
+                )
+            )
         }
     }
 
