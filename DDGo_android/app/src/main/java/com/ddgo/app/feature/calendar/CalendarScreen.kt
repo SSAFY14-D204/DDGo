@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.core.ui.theme.DDGoTheme
 import com.ddgo.app.domain.model.CalendarMonthSummary
+import com.ddgo.app.feature.main.MainChromeDefaults
 import com.ddgo.app.feature.calendar.components.CalendarErrorSection
 import com.ddgo.app.feature.calendar.components.CalendarHeroSection
 import com.ddgo.app.feature.calendar.components.CalendarMonthSection
@@ -100,7 +101,12 @@ private fun CalendarContent(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                top = 20.dp,
+                bottom = MainChromeDefaults.ContentBottomPadding
+            ),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             if (uiState.errorMessage != null) {

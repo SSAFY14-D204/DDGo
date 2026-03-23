@@ -28,6 +28,7 @@ data class CommunityPostSummary(
     val gymId: Long? = null,
     val gymName: String? = null,
     val createdAt: String,
+    val viewCount: Int,
     val likeCount: Int,
     val commentCount: Int,
     val videoCount: Int,

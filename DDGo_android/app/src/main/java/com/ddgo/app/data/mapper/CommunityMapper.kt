@@ -39,6 +39,7 @@ object CommunityMapper {
         gymId = gymId,
         gymName = gymName,
         createdAt = createdAt,
+        viewCount = viewCount,
         likeCount = likeCount,
         commentCount = commentCount,
         videoCount = videoCount,
