@@ -56,7 +56,7 @@ class OngoingActivityController(
         )
 
         val contentText = buildString {
-            append(snapshot.watchState.name)
+            append(snapshot.watchState.toStatusLabel())
             snapshot.latestHeartRate?.let { heartRate ->
                 append(" | ")
                 append(heartRate)
@@ -66,7 +66,7 @@ class OngoingActivityController(
 
         val builder = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_watch_session)
-            .setContentTitle("DDGo Watch session")
+            .setContentTitle(appContext.getString(R.string.wear_notification_title))
             .setContentText(contentText)
             .setContentIntent(contentIntent)
             .setOngoing(true)
@@ -78,7 +78,7 @@ class OngoingActivityController(
             .setOngoingActivityId(ONGOING_ACTIVITY_ID)
             .setStaticIcon(R.drawable.ic_watch_session)
             .setAnimatedIcon(R.drawable.ic_watch_session)
-            .setTitle("DDGo")
+            .setTitle(appContext.getString(R.string.wear_app_label))
             .setTouchIntent(contentIntent)
             .setStatus(buildStatus(snapshot))
             .build()
@@ -88,14 +88,7 @@ class OngoingActivityController(
     }
 
     private fun buildStatus(snapshot: ExerciseRuntimeSnapshot): Status {
-        val stateText = when (snapshot.watchState) {
-            WatchState.IDLE -> "Idle"
-            WatchState.RECORDING -> "Recording"
-            WatchState.ALERTING -> "Alerting"
-            WatchState.SENSOR_UNAVAILABLE -> "Sensor blocked"
-            WatchState.PERMISSION_BLOCKED -> "Permission blocked"
-            WatchState.SESSION_RECOVERING -> "Recovering"
-        }
+        val stateText = snapshot.watchState.toStatusLabel()
         val heartRateText = snapshot.latestHeartRate?.let { "$it bpm" } ?: "--"
 
         return Status.Builder()
@@ -112,10 +105,10 @@ class OngoingActivityController(
         }
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Watch exercise session",
+            appContext.getString(R.string.wear_notification_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Foreground session for watch health tracking"
+            description = appContext.getString(R.string.wear_notification_channel_description)
             setShowBadge(false)
         }
         appContext.getSystemService(NotificationManager::class.java)
@@ -126,5 +119,16 @@ class OngoingActivityController(
         private const val CHANNEL_ID = "watch_exercise_session"
         private const val NOTIFICATION_ID = 27001
         private const val ONGOING_ACTIVITY_ID = 270
+    }
+}
+
+private fun WatchState.toStatusLabel(): String {
+    return when (this) {
+        WatchState.IDLE -> "대기"
+        WatchState.RECORDING -> "측정 중"
+        WatchState.ALERTING -> "경고"
+        WatchState.SENSOR_UNAVAILABLE -> "센서 오류"
+        WatchState.PERMISSION_BLOCKED -> "권한 필요"
+        WatchState.SESSION_RECOVERING -> "연결 중"
     }
 }
