@@ -17,9 +17,18 @@ sealed class ScreenRoutes(val route: String) {
 
     object Climbing : ScreenRoutes("climbing_graph") {
         object Upload : ScreenRoutes("upload_graph") {
+            const val REALTIME_SETUP = "realtime_setup"
+            const val REALTIME_HOLD = "realtime_hold"
+            const val REALTIME_HOLD_SELECT = "realtime_hold_select"
+            const val REALTIME_RECORDED_ATTEMPT = "realtime_recorded_attempt"
+            const val REALTIME_ANALYSIS_LOADING = "realtime_analysis_loading"
+            const val REALTIME_ATTEMPT_RESULT = "realtime_attempt_result"
+
             const val ATTEMPT_UPLOAD = "attempt_upload"
             const val ARG_RECORDED_VIDEO_URI = "recordedVideoUri"
             const val ARG_REALTIME_SESSION_ID = "realtimeSessionId"
+            const val REALTIME_RECORDED_ATTEMPT_WITH_ARGS =
+                "$REALTIME_RECORDED_ATTEMPT?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}&$ARG_REALTIME_SESSION_ID={$ARG_REALTIME_SESSION_ID}"
             const val ATTEMPT_UPLOAD_WITH_ARGS =
                 "$ATTEMPT_UPLOAD?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}&$ARG_REALTIME_SESSION_ID={$ARG_REALTIME_SESSION_ID}"
 

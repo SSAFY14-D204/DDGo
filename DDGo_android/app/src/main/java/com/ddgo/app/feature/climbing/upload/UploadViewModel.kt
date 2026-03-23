@@ -60,17 +60,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * flow
- * AttemptUploadScreen      : ?곸긽 ?낅줈??
- * ChallengeCreateScreen    : ?대씪?대컢???대쫫 李얘린 -> ?쒖씠??-> ??쒖깋
- *  - in : ?대씪?대컢???대쫫(id), ?쒖씠???덈꺼, ???而щ윭
- * ChallengeHoldScreen      : ?몄떇??????좏깮
- *  - in : ????꾩튂? ???踰붿쐞? ????뺣낫
+ * 업로드 기반 클라이밍 분석 플로우 요약.
  *
- * AttemptUploadScreen      : 梨뚮┛吏????????ㅻⅨ ?곸긽 ?낅줈??
- *  - in : 異붽? ?곸긽
- * AttemptResultScreen      : 紐⑤뱺 ?낅줈?쒖뿉 ???遺꾩꽍 ?곸긽
- *  - out : ?곸긽?????寃껊뱾 寃곌낵??蹂닿린
+ * AttemptUploadScreen   : 영상 업로드
+ * ChallengeCreateScreen : 암장 선택 -> 난이도 선택 -> 홀드 색 선택
+ * ChallengeHoldScreen   : 검출된 홀드 확인 및 시작/종료 홀드 선택
+ * AdditionalUploadScreen: 추가 시도 영상 업로드
+ * AttemptResultScreen   : 업로드한 시도 영상 분석 결과 확인
  */
 
 private const val TAG = "UploadViewModel"
@@ -105,7 +101,7 @@ class UploadViewModel @Inject constructor(
     private val finalizeAiRealtimeSessionUseCase: FinalizeAiRealtimeSessionUseCase
 ) : ViewModel() {
 
-    // UI ?덉씠?댁뿉 ?몄텧???곹깭 (濡쒕뵫, ?깃났, ?ㅽ뙣 ??
+    // UI 레이어에 노출할 상태
     private val _uiState = MutableStateFlow<UploadUiState>(UploadUiState.Idle)
     val uiState = _uiState.asStateFlow()
 
@@ -172,7 +168,7 @@ class UploadViewModel @Inject constructor(
         }
     private var allowLocalAnalysisWithoutChallenge by mutableStateOf(false)
 
-    // ?꾩껜 ?쒕룄 ?곸긽 (珥덇린 + 異붽? ?곸긽 由ъ뒪??
+    // 전체 시도 영상 목록(기본 영상 + 추가 영상)
     val allAttemptUris: List<String>
         get() = sessionDelegate.allAttemptUris
 
@@ -192,10 +188,79 @@ class UploadViewModel @Inject constructor(
     val isAttemptOnlyUploadMode: Boolean
         get() = sessionDelegate.isAttemptOnlyUploadMode
 
+    private var entryMode: UploadEntryMode
+        get() = sessionDelegate.entryMode
+        private set(value) {
+            sessionDelegate.entryMode = value
+        }
+
+    val isRealtimeEntryMode: Boolean
+        get() = entryMode == UploadEntryMode.Realtime
+
+    var realtimeAttemptActionState by mutableStateOf<RealtimeAttemptActionState>(RealtimeAttemptActionState.Idle)
+        private set
+
     val canBypassChallengeCreationForDev: Boolean
         get() = allowLocalAnalysisWithoutChallenge
 
-    // ?몃꽕??/ 硫뷀??곗씠??(PersonDetector 諛⑹떇?쇰줈 異붿텧 ???ㅼ쓬 ?붾㈃?먯꽌 ?쒖슜)
+    val realtimeOverlayUiState: UploadRealtimeOverlayUiState
+        get() = UploadRealtimeOverlayUiState(
+            setupStep = realtimeSetupStep,
+            gymId = gymId,
+            gymName = gymName,
+            searchQuery = realtimeGymSearchQuery,
+            nearbyPlaces = sortedNearbyPlaces,
+            selectedNearbyPlace = selectedNearbyPlace,
+            nearbyPlaceSortMode = challengeDelegate.nearbyPlaceSortMode,
+            gymSearchUiState = gymSearchUiState.value,
+            gymResolveUiState = gymResolveUiState.value,
+            resolvedGym = resolvedGym,
+            resolvedGymGrades = resolvedGymGrades,
+            selectedLevelSortOrder = selectedLevelSortOrder,
+            selectedGymGrade = selectedGymGrade,
+            selectedHoldColorKey = selectedHoldColorKey,
+            holdColor = holdColor,
+            holdColorOptions = realtimeHoldColorOptions,
+            challengeCreationUiState = challengeCreationUiState.value,
+            isHoldColorSheetVisible = realtimeHoldColorSheetVisible,
+            isSetupVisible = isRealtimeEntryMode &&
+                (realtimeSetupStep != RealtimeSetupStep.Ready ||
+                    challengeCreationUiState.value is ChallengeCreationUiState.Loading),
+            isChallengeReady = isRealtimeCaptureReady,
+            isRetakePrepared = realtimeAttemptActionState == RealtimeAttemptActionState.RetakeRequested,
+            canFinishChallenge = canFinishRealtimeChallenge,
+            canRetakeAttempt = canRetakeRealtimeAttempt,
+            lastSearchLatitude = lastSearchLatitude,
+            lastSearchLongitude = lastSearchLongitude
+        )
+
+    val sortedNearbyPlaces: List<NearbyPlace>
+        get() = challengeDelegate.sortedNearbyPlaces
+
+    private val isRealtimeCaptureReady: Boolean
+        get() = isRealtimeEntryMode &&
+            (challengeId ?: 0L) > 0L &&
+            (gymId != null || resolvedGym != null) &&
+            selectedGymGradeId != null &&
+            (selectedHoldColorKey != null || holdColor.isNotBlank())
+
+    val canFinishRealtimeChallenge: Boolean
+        get() = isRealtimeCaptureReady &&
+            uploadedAttemptVideos.isNotEmpty() &&
+            (challengeId ?: 0L) > 0L
+
+    val canRetakeRealtimeAttempt: Boolean
+        get() = isRealtimeCaptureReady && uploadedAttemptVideos.isNotEmpty()
+
+    private fun hasRealtimeGymSelection(): Boolean {
+        return gymId != null || selectedNearbyPlace != null || gymName.isNotBlank()
+    }
+
+    private var realtimeGymSearchQuery by mutableStateOf("")
+    private var realtimeHoldColorSheetVisible by mutableStateOf(false)
+    private var realtimeSetupStep by mutableStateOf(RealtimeSetupStep.GymPrompt)
+
+    // 썸네일/메타데이터(PersonDetector 기반 대표 프레임과 파일 정보)
     var thumbnail: Bitmap?
         get() = sessionDelegate.thumbnail
         private set(value) {
@@ -212,7 +277,7 @@ class UploadViewModel @Inject constructor(
             sessionDelegate.videoDuration = value
         }
 
-    // --- 2. ChallengeCreateScreen (?대씪?대컢?? ?쒖씠?? ??쒖깋) ---
+    // --- 2. ChallengeCreateScreen (암장/난이도/홀드 색 선택) ---
     var gymId: Int?
         get() = challengeDelegate.gymId
         private set(value) {
@@ -415,42 +480,34 @@ class UploadViewModel @Inject constructor(
         }
 
     /**
-     * 二쇰? ?붿옣 寃??UI ?곹깭.
+     * 주변 암장 검색 UI 상태.
      *
-     * ??븷:
-     * - 寃????濡쒕뵫/?깃났/?ㅽ뙣 ?곹깭瑜??붾㈃???꾨떖?⑸땲??
+     * 로딩/성공/실패 상태를 화면에 전달합니다.
      */
     val gymSearchUiState = challengeDelegate.gymSearchUiState
 
     /**
-     * ?좏깮???μ냼??gym resolve UI ?곹깭.
+     * 선택한 장소의 gym resolve UI 상태.
      *
-     * ??븷:
-     * - ?ъ슜?먭? ?μ냼瑜??좏깮?????쒕쾭 resolve 吏꾪뻾 ?곹깭瑜??붾㈃???꾨떖?⑸땲??
+     * 사용자가 장소를 선택했을 때 서버 resolve 진행 상태를 화면에 전달합니다.
      */
     val gymResolveUiState = challengeDelegate.gymResolveUiState
 
-    /**
-     * Kakao Local API?먯꽌 媛?몄삩 二쇰? ?μ냼 紐⑸줉.
-     */
+    /** Kakao Local API에서 가져온 주변 장소 목록 */
     var nearbyPlaces: List<NearbyPlace>
         get() = challengeDelegate.nearbyPlaces
         private set(value) {
             challengeDelegate.nearbyPlaces = value
         }
 
-    /**
-     * ?ъ슜?먭? ?좏깮???μ냼.
-     */
+    /** 사용자가 선택한 장소 */
     var selectedNearbyPlace: NearbyPlace?
         get() = challengeDelegate.selectedNearbyPlace
         private set(value) {
             challengeDelegate.selectedNearbyPlace = value
         }
 
-    /**
-     * ?쒕쾭 resolve 寃곌낵.
-     */
+    /** 서버 resolve 결과 */
     var resolvedGym: ResolvedGym?
         get() = challengeDelegate.resolvedGym
         private set(value) {
@@ -458,9 +515,9 @@ class UploadViewModel @Inject constructor(
         }
 
     /**
-     * resolve 寃곌낵濡??대젮??gym grade 紐⑸줉.
+     * resolve 결과로 내려온 gym grade 목록.
      *
-     * ?ㅼ쓬 ?④퀎?먯꽌 gymGradeId 湲곕컲 ?좏깮 UI濡?諛붽? ???ъ슜?⑸땲??
+     * 다음 단계에서 gymGradeId 기반 선택 UI에 사용합니다.
      */
     var resolvedGymGrades: List<GymGrade>
         get() = challengeDelegate.resolvedGymGrades
@@ -468,9 +525,7 @@ class UploadViewModel @Inject constructor(
             challengeDelegate.resolvedGymGrades = value
         }
 
-    /**
-     * 留덉?留?寃???꾩튂.
-     */
+    /** 마지막 검색 위치 */
     var lastSearchLatitude: Double?
         get() = challengeDelegate.lastSearchLatitude
         private set(value) {
@@ -483,85 +538,85 @@ class UploadViewModel @Inject constructor(
             challengeDelegate.lastSearchLongitude = value
         }
 
-    // --- 3. ChallengeHoldScreen (????먯? 寃곌낵) ---
-    /** PersonDetector媛 ?좏깮??理쒖쟻 ?꾨젅??(????먯????ъ슜???ㅼ젣 ?대?吏) */
+    // --- 3. ChallengeHoldScreen (홀드 검출 결과) ---
+    /** PersonDetector가 찾은 최적 프레임 비트맵 */
     var bestFrameBitmap: Bitmap?
         get() = holdDetectionDelegate.bestFrameBitmap
         private set(value) {
             holdDetectionDelegate.bestFrameBitmap = value
         }
 
-    /** ?붾쾭洹몄슜?쇰줈 ?섎룞 ?좏깮??best frame ?대?吏 URI */
+    /** 디버그용으로 수동 선택한 best frame 이미지 URI */
     var debugBestFrameImageUri: String?
         get() = holdDetectionDelegate.debugBestFrameImageUri
         private set(value) {
             holdDetectionDelegate.debugBestFrameImageUri = value
         }
 
-    /** YOLO媛 ?먯????꾩껜 ???(?됱긽 ?꾪꽣留???. ?섎룞 異붽? ?꾨낫 ?濡??ъ슜 */
+    /** YOLO가 검출한 전체 홀드 목록 */
     var allRawHolds: List<Hold>
         get() = holdDetectionDelegate.allRawHolds
         private set(value) {
             holdDetectionDelegate.allRawHolds = value
         }
 
-    /** ?됱긽 ?꾪꽣留?+ ?섎룞 異붽??????紐⑸줉 (?붾㈃???쒖떆) */
+    /** 색상 필터링과 수동 수정이 반영된 화면용 홀드 목록 */
     var detectedHolds: List<Hold>
         get() = holdDetectionDelegate.detectedHolds
         private set(value) {
             holdDetectionDelegate.detectedHolds = value
         }
 
-    /** ?섎룞 異붽? ?앹뾽???쒖떆???꾨낫 ???紐⑸줉 */
+    /** 수동 추가 팝업에 표시할 후보 홀드 목록 */
     var candidateHolds: List<Hold>
         get() = holdDetectionDelegate.candidateHolds
         private set(value) {
             holdDetectionDelegate.candidateHolds = value
         }
 
-    /** ?섎룞 異붽? ?앹뾽 ?쒖떆 ?щ? */
+    /** 수동 추가 후보 팝업 표시 여부 */
     var showCandidatePopup: Boolean
         get() = holdDetectionDelegate.showCandidatePopup
         private set(value) {
             holdDetectionDelegate.showCandidatePopup = value
         }
 
-    /** ?ъ슜?먭? ?좏깮???쒖옉 ???*/
+    /** 사용자가 선택한 시작 홀드 */
     var selectedStartHold: Hold?
         get() = holdDetectionDelegate.selectedStartHold
         private set(value) {
             holdDetectionDelegate.selectedStartHold = value
         }
 
-    /** ?ъ슜?먭? ?좏깮???????*/
+    /** 사용자가 선택한 종료 홀드 */
     var selectedEndHold: Hold?
         get() = holdDetectionDelegate.selectedEndHold
         private set(value) {
             holdDetectionDelegate.selectedEndHold = value
         }
 
-    /** ?쒖옉/?????湲곗??쇰줈 踰덊샇媛 遺?щ맂 ???紐⑸줉 */
+    /** 시작/중간/종료 역할 기준으로 번호가 부여된 홀드 목록 */
     var numberedHolds: List<HoldNumbered>
         get() = holdDetectionDelegate.numberedHolds
         private set(value) {
             holdDetectionDelegate.numberedHolds = value
         }
 
-    /** ?쒕룄蹂?理쒓퀬 ?꾨떖 ???遺꾩꽍 寃곌낵 */
+    /** 시도별 최고 도달 홀드 분석 결과 */
     var attemptHoldReachResults: List<AttemptHoldReachResult>
         get() = submissionDelegate.attemptHoldReachResults
         private set(value) {
             submissionDelegate.attemptHoldReachResults = value
         }
 
-    /** ?쒕룄蹂?MediaPipe Pose DTO */
+    /** 시도별 MediaPipe Pose DTO */
     var attemptPoseDtos: List<PoseSequenceDto>
         get() = submissionDelegate.attemptPoseDtos
         private set(value) {
             submissionDelegate.attemptPoseDtos = value
         }
 
-    /** ?쒕룄蹂?遺꾩꽍??MediaPipe Pose ?꾨젅??*/
+    /** 시도별 분석용 MediaPipe Pose 프레임 */
     var attemptAnalyzedPoses: List<List<Pose>>
         get() = submissionDelegate.attemptAnalyzedPoses
         private set(value) {
@@ -574,14 +629,14 @@ class UploadViewModel @Inject constructor(
             submissionDelegate.attemptAlignedHoldSets = value
         }
 
-    /** ?쒕룄蹂??대━怨?????묒큺 ?붾쾭洹?寃곌낵 */
+    /** 시도별 폴리곤 홀드 접촉 디버그 결과 */
     var attemptPolygonHoldContactDebugResults: List<PolygonHoldContactDebugResult>
         get() = submissionDelegate.attemptPolygonHoldContactDebugResults
         private set(value) {
             submissionDelegate.attemptPolygonHoldContactDebugResults = value
         }
 
-    /** ?쒕룄蹂?pre-pose ?쒗??罹먯떆 */
+    /** 시도별 pre-pose 포즈 시퀀스 캐시 */
     val attemptPoseSequences: List<List<Pose>>
         get() = playbackAttemptUris.map { playbackUri ->
             prePoseCacheEntries[playbackUri]
@@ -590,16 +645,16 @@ class UploadViewModel @Inject constructor(
                 .orEmpty()
         }
 
-    /** ?щ윭 ?쒕룄???됯퇏 ?꾨떖 ????붿빟 */
+    /** 여러 시도의 평균 도달 홀드 요약 */
     var overallHoldReachSummary: OverallHoldReachSummary?
         get() = submissionDelegate.overallHoldReachSummary
         private set(value) {
             submissionDelegate.overallHoldReachSummary = value
         }
 
-    // --- 4. AttemptResultScreen (?ъ쫰 ?ㅻ쾭?덉씠 + 遺꾩꽍 ??꾨씪?? ---
-    
-    // N李??쒕룄瑜?異붿쟻?섎뒗 ?몃뜳??(0??1李??쒕룄)
+    // --- 4. AttemptResultScreen (재생 오버레이 + 분석 타임라인) ---
+
+    // N차 시도를 추적하는 인덱스(0은 첫 번째 시도)
     var currentAttemptIndex by mutableStateOf(0)
         private set
         
@@ -618,11 +673,11 @@ class UploadViewModel @Inject constructor(
         syncDisplayedAnalysisPoints()
     }
 
-    /** ?꾩옱 ?ъ깮 ?꾨젅?꾩쓽 MediaPipe 33 ?쒕뱶留덊겕 (?ㅼ떆媛??낅뜲?댄듃) */
+    /** 현재 재생 프레임의 MediaPipe 33 랜드마크 */
     var currentPoseLandmarks by mutableStateOf<List<PoseLandmark>>(emptyList())
         private set
 
-    /** ?꾩옱 ?좏깮???쒕룄??pre-pose ?쒗??*/
+    /** 현재 선택한 시도의 pre-pose 포즈 시퀀스 */
     val currentAttemptPoseSequence: List<Pose>
         get() = currentAttemptPrePoseEntry
             ?.takeIf { it.status == PrePoseStatus.Ready }
@@ -651,7 +706,7 @@ class UploadViewModel @Inject constructor(
             .getOrNull(currentAttemptIndex)
             ?.let(prePoseCacheEntries::get)
 
-    /** ?꾩옱 ?좏깮???쒕룄??理쒓퀬 ?꾨떖 ???寃곌낵 */
+    /** 현재 선택한 시도의 최고 도달 홀드 결과 */
     val currentAttemptHoldReachResult: AttemptHoldReachResult?
         get() = attemptHoldReachResults.getOrNull(currentAttemptIndex)
 
@@ -704,15 +759,15 @@ class UploadViewModel @Inject constructor(
             }
         }
 
-    /** ?꾩옱 ?좏깮???쒕룄??MediaPipe Pose DTO */
+    /** 현재 선택한 시도의 MediaPipe Pose DTO */
     val currentAttemptPoseDto: PoseSequenceDto?
         get() = attemptPoseDtos.getOrNull(currentAttemptIndex)
 
-    /** ?꾩옱 ?좏깮???쒕룄??遺꾩꽍??MediaPipe Pose ?꾨젅??*/
+    /** 현재 선택한 시도의 분석용 MediaPipe Pose 프레임 */
     val currentAttemptAnalyzedPoses: List<Pose>
         get() = attemptAnalyzedPoses.getOrNull(currentAttemptIndex).orEmpty()
 
-    /** ?꾩옱 ?좏깮???쒕룄???대━怨?????묒큺 ?붾쾭洹?寃곌낵 */
+    /** 현재 선택한 시도의 폴리곤 홀드 접촉 디버그 결과 */
     val currentAttemptPolygonHoldContactDebugResult: PolygonHoldContactDebugResult?
         get() = attemptPolygonHoldContactDebugResults.getOrNull(currentAttemptIndex)
     internal val currentAttemptAlignedSelection: AttemptAlignedHoldSet?
@@ -726,23 +781,22 @@ class UploadViewModel @Inject constructor(
         get() = currentAttemptAlignedSelection?.alignedHolds.orEmpty()
             .ifEmpty { numberedHolds }
 
-    /** 理쒖쥌 遺꾩꽍 ?붾㈃???쒖떆???됯퇏 ?꾨떖 ???踰덊샇(諛섏삱由? */
+    /** 최종 분석 화면에 표시할 평균 도달 홀드 번호 */
     val averageReachedHoldNo: Int
         get() = overallHoldReachSummary?.roundedAverageHighestReachedHoldNo ?: 0
 
-    /** 理쒖쥌 遺꾩꽍 ?붾㈃ 遺꾨え濡??ъ슜???꾩껜 ?좏깮 ?????*/
+    /** 최종 분석 화면 분모로 사용할 전체 선택 홀드 수 */
     val totalSelectedHoldCount: Int
         get() = overallHoldReachSummary?.totalHoldCount ?: numberedHolds.size
 
     /**
-     * 遺꾩꽍 ?쇰뱶諛??ъ씤??紐⑸줉.
-     * MVP?먯꽌???뚮젅?댁뒪????곗씠?곕? ?ъ슜?섎ŉ, ?쒕쾭 ?곕룞 ??updateAnalysisPoints()濡?援먯껜?⑸땲??
+     * 분석 피드백 타임라인 목록.
+     * MVP 단계에서는 프런트 샘플 데이터를 사용하고, 서버 연동 후 updateAnalysisPoints()로 교체합니다.
      */
     var analysisPoints by mutableStateOf<List<AnalysisPoint>>(defaultUploadAnalysisPoints())
         private set
-        
-    // (?꾩떆) N李??쒕룄蹂꾨줈 ?ㅻⅨ 寃곌낵瑜?蹂댁뿬二쇨린 ?꾪븳 ?붾? ?곗씠??紐⑤뜽 ?뺤옣
-    // 諛깆뿏???곕룞 ??AnalysisResult ?깆쓣 由ъ뒪???뺥깭濡?愿由?
+
+    // 임시 더미 결과. 여러 시도별로 다른 타임라인을 보여주기 위한 샘플 데이터다.
     val attemptDummyResults = listOf(
         Pair(false, defaultUploadAnalysisPoints()),
         Pair(true, listOf(
@@ -752,7 +806,7 @@ class UploadViewModel @Inject constructor(
         ))
     )
 
-    // --- 5. AttemptUploadScreen (異붽? ?곸긽 ?낅줈?? ---
+    // --- 5. AttemptUploadScreen (추가 영상 업로드) ---
     fun updateAdditionalVideoUris(uris: List<String>) {
         invalidateSubmissionAnalysisPrewarm()
         sessionDelegate.updateAdditionalVideoUris(
@@ -762,14 +816,18 @@ class UploadViewModel @Inject constructor(
     }
 
     /**
-     * ??梨뚮┛吏 ?앹꽦 ?먮쫫?쇰줈 吏꾩엯?⑸땲??
+     * 새 챌린지 생성 흐름으로 진입합니다.
      *
-     * ??븷:
-     * - 湲곗〈 異붽? ?쒕룄 ?낅줈??紐⑤뱶媛 耳쒖졇 ?덉뿀?ㅻ㈃ 湲곕낯 ?낅줈??紐⑤뱶濡??섎룎由쎈땲??
-     * - ???낅줈??諛곗튂瑜??쒖옉?????댁쟾 attempt-only ?좏깮媛믪쓣 鍮꾩썎?덈떎.
+     * 기존 추가 시도 업로드 모드가 켜져 있더라도 기본 업로드 모드로 되돌리고,
+     * 이전 attempt-only 선택 상태를 비웁니다.
      */
     fun beginNewChallengeUploadFlow() {
         invalidateSubmissionAnalysisPrewarm()
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Gallery
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        realtimeGymSearchQuery = ""
+        realtimeHoldColorSheetVisible = false
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
         clearHoldPrecomputeState()
@@ -792,7 +850,40 @@ class UploadViewModel @Inject constructor(
         clearAiAnalysisState()
         clearPosePrecomputeState()
         resetUploadSubmissionState()
+        resetFinalAnalysisPreparationState()
         cleanupUnusedManagedTempFiles(forceDeleteAll = true)
+    }
+
+    fun beginRealtimeChallengeUploadFlow() {
+        beginNewChallengeUploadFlow()
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Realtime
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        realtimeGymSearchQuery = ""
+        realtimeHoldColorSheetVisible = false
+        realtimeSetupStep = RealtimeSetupStep.GymPrompt
+    }
+
+    fun beginRealtimeRetakeUploadFlow() {
+        if (!isRealtimeEntryMode) {
+            return
+        }
+
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Realtime
+        uploadFlowMode = UploadFlowMode.AttemptOnly
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        realtimeHoldColorSheetVisible = false
+        realtimeGymSearchQuery = gymName
+        realtimeSetupStep = RealtimeSetupStep.Ready
+        allowLocalAnalysisWithoutChallenge = false
+        captureCurrentAttemptResultSession()
+        clearHoldPrecomputeState()
+        clearAttemptResultState(clearPublishedSession = false)
+        submissionDelegate.resetFinalAnalysisPreparationState()
+        sessionDelegate.resetAllSelectionPreparationJobs()
+        clearPosePrecomputeState(preservePlaybackUris = publishedResultPlaybackUris())
+        cleanupUnusedManagedTempFiles()
     }
 
     /**
@@ -810,12 +901,16 @@ class UploadViewModel @Inject constructor(
 
         invalidateSubmissionAnalysisPrewarm()
         captureCurrentAttemptResultSession()
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Gallery
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
         uploadFlowMode = UploadFlowMode.AttemptOnly
         allowLocalAnalysisWithoutChallenge = false
         resetAllSelectionPreparationJobs()
         attemptOnlyVideoUris = emptyList()
         attemptOnlyManagedVideos = emptyList()
         resetUploadSubmissionState()
+        resetFinalAnalysisPreparationState()
         refreshCurrentSelectionPrePoseTargets()
         refreshAttemptHoldAlignmentTargets()
         cleanupUnusedManagedTempFiles()
@@ -846,6 +941,11 @@ class UploadViewModel @Inject constructor(
                 )
             }
         )
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Gallery
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        realtimeGymSearchQuery = challenge.gymName
+        realtimeHoldColorSheetVisible = false
         uploadFlowMode = UploadFlowMode.AttemptOnly
         allowLocalAnalysisWithoutChallenge = false
         clearHoldPrecomputeState()
@@ -866,6 +966,7 @@ class UploadViewModel @Inject constructor(
         clearAiAnalysisState()
         clearPosePrecomputeState()
         resetUploadSubmissionState()
+        resetFinalAnalysisPreparationState()
         cleanupUnusedManagedTempFiles()
     }
 
@@ -874,6 +975,10 @@ class UploadViewModel @Inject constructor(
      */
     fun cancelAttemptOnlyUploadMode() {
         invalidateSubmissionAnalysisPrewarm()
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Gallery
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        realtimeHoldColorSheetVisible = false
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
         resetAllSelectionPreparationJobs()
@@ -889,6 +994,7 @@ class UploadViewModel @Inject constructor(
         refreshCurrentSelectionPrePoseTargets(selectionGeneration)
         refreshAttemptHoldAlignmentTargets()
         resetUploadSubmissionState()
+        resetFinalAnalysisPreparationState()
         cleanupUnusedManagedTempFiles()
     }
 
@@ -908,32 +1014,60 @@ class UploadViewModel @Inject constructor(
         query: String,
         nearbyOnly: Boolean = false
     ) {
+        realtimeGymSearchQuery = query.trim()
+        val onChallengeFlowCleared =
+            if (isRealtimeEntryMode) {
+                realtimeSetupStep = RealtimeSetupStep.GymList
+                ::clearRealtimeChallengeSelectionStatePreservingHoldPrecompute
+            } else {
+                ::clearChallengeSelectionStatePreservingHoldPrecompute
+            }
+        if (isRealtimeEntryMode) {
+            realtimeSetupStep = RealtimeSetupStep.GymList
+        }
         viewModelScope.launch {
             challengeDelegate.searchNearbyPlaces(
                 latitude = latitude,
                 longitude = longitude,
                 query = query,
                 nearbyOnly = nearbyOnly,
-                onChallengeFlowCleared = ::clearChallengeSelectionStatePreservingHoldPrecompute
+                onChallengeFlowCleared = onChallengeFlowCleared
             )
         }
     }
 
     fun resolveSelectedPlace(place: NearbyPlace) {
+        realtimeGymSearchQuery = place.placeName
+        val onChallengeFlowCleared =
+            if (isRealtimeEntryMode) {
+                ::clearRealtimeChallengeSelectionStatePreservingHoldPrecompute
+            } else {
+                ::clearChallengeSelectionStatePreservingHoldPrecompute
+            }
         viewModelScope.launch {
             challengeDelegate.resolveSelectedPlace(
                 place = place,
-                onChallengeFlowCleared = ::clearChallengeSelectionStatePreservingHoldPrecompute
+                onChallengeFlowCleared = onChallengeFlowCleared
             )
+            if (isRealtimeEntryMode && resolvedGym != null) {
+                realtimeSetupStep = RealtimeSetupStep.Difficulty
+            }
         }
     }
 
     fun selectGymLevel(sortOrder: Int) {
+        val onCreatedChallengeCleared =
+            if (isRealtimeEntryMode) {
+                ::clearRealtimeCreatedChallengeOnly
+            } else {
+                ::clearCreatedChallengeOnly
+            }
         challengeDelegate.selectGymLevel(
             sortOrder = sortOrder,
             formatSelectedLevelLabel = ::formatSelectedLevelLabel,
-            onCreatedChallengeCleared = ::clearCreatedChallengeOnly
+            onCreatedChallengeCleared = onCreatedChallengeCleared
         )
+        ensureRealtimeDefaultHoldColorSetup()
     }
 
     fun updateHoldColor(colorKey: String) {
@@ -945,6 +1079,68 @@ class UploadViewModel @Inject constructor(
             )
         }
         refreshAttemptHoldAlignmentTargets()
+    }
+
+    fun onRealtimeGymSearchQueryChanged(query: String) {
+        realtimeGymSearchQuery = query
+    }
+
+    fun openRealtimeGymList() {
+        entryMode = UploadEntryMode.Realtime
+        realtimeSetupStep = RealtimeSetupStep.GymList
+    }
+
+    fun onRealtimeNearbyPlaceSortChanged(sortMode: NearbyPlaceSortMode) {
+        challengeDelegate.updateNearbyPlaceSortMode(sortMode)
+    }
+
+    fun onRealtimeNearbyPlaceSelected(place: NearbyPlace) {
+        realtimeGymSearchQuery = place.placeName
+        resolveSelectedPlace(place)
+    }
+
+    fun onRealtimeDifficultySelected(sortOrder: Int) {
+        selectGymLevel(sortOrder)
+        resolvedGymGrades.firstOrNull { it.sortOrder == sortOrder }
+            ?.let(::createRealtimeChallengeFromGrade)
+    }
+
+    fun onRealtimeGymGradeSelected(grade: GymGrade) {
+        createRealtimeChallengeFromGrade(grade)
+    }
+
+    fun updateRealtimeHoldColorSheetVisible(visible: Boolean) {
+        if (visible && !isRealtimeCaptureReady) {
+            return
+        }
+        realtimeHoldColorSheetVisible = visible
+    }
+
+    fun toggleRealtimeHoldColorSheetVisible() {
+        updateRealtimeHoldColorSheetVisible(!realtimeHoldColorSheetVisible)
+    }
+
+    fun onRealtimeHoldColorSelected(colorKey: String) {
+        updateHoldColor(colorKey)
+        realtimeHoldColorSheetVisible = false
+    }
+
+    fun ensureRealtimeDefaultHoldColorSetup() {
+        if (selectedHoldColorKey != null && holdColor.isNotBlank()) {
+            return
+        }
+
+        val candidateColorName = selectedGymGrade?.colorName?.takeIf { it.isNotBlank() }
+            ?: resolvedGymGrades.firstOrNull()?.colorName?.takeIf { it.isNotBlank() }
+            ?: createdChallenge?.problemColor?.takeIf { it.isNotBlank() }
+
+        val resolvedKey = candidateColorName
+            ?.let { resolveHoldColorKey(colorName = it, colorHex = null) }
+            ?: candidateColorName
+
+        if (!resolvedKey.isNullOrBlank()) {
+            updateHoldColor(resolvedKey)
+        }
     }
 
     fun markHoldPrecomputeEligibleForCurrentSelection() {
@@ -1017,10 +1213,28 @@ class UploadViewModel @Inject constructor(
     }
 
     fun selectGymGrade(grade: GymGrade) {
+        val onCreatedChallengeCleared =
+            if (isRealtimeEntryMode) {
+                ::clearRealtimeCreatedChallengeOnly
+            } else {
+                ::clearCreatedChallengeOnly
+            }
         challengeDelegate.selectGymGrade(
             grade = grade,
             formatSelectedLevelLabel = ::formatSelectedLevelLabel,
-            onCreatedChallengeCleared = ::clearCreatedChallengeOnly
+            onCreatedChallengeCleared = onCreatedChallengeCleared
+        )
+        ensureRealtimeDefaultHoldColorSetup()
+    }
+
+    private fun createRealtimeChallengeFromGrade(grade: GymGrade) {
+        entryMode = UploadEntryMode.Realtime
+        selectGymGrade(grade)
+        delegateCreateChallengeFromSelection(
+            onSuccess = {
+                realtimeSetupStep = RealtimeSetupStep.Ready
+                realtimeHoldColorSheetVisible = false
+            }
         )
     }
 
@@ -1041,14 +1255,46 @@ class UploadViewModel @Inject constructor(
         uri: String,
         realtimeSessionId: String? = null
     ) {
+        val isRealtimeAttempt = entryMode == UploadEntryMode.Realtime || !realtimeSessionId.isNullOrBlank()
         clearHoldPrecomputeState()
+        submissionDelegate.resetFinalAnalysisPreparationState()
         clearAttemptHoldAlignmentState()
+        if (isRealtimeAttempt) {
+            entryMode = UploadEntryMode.Realtime
+            sessionDelegate.updateRealtimeVideoUri(
+                uri = uri,
+                realtimeSessionId = realtimeSessionId,
+                callbacks = sessionCallbacks
+            )
+            realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+            return
+        }
+
+        entryMode = UploadEntryMode.Gallery
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        invalidateSubmissionAnalysisPrewarm()
         holdDetectionDelegate.resetHoldDetectionState(clearDebugSource = true)
         sessionDelegate.updateVideoUri(
             uri = uri,
             realtimeSessionId = realtimeSessionId,
             callbacks = sessionCallbacks
         )
+    }
+
+    fun updateRealtimeVideoUri(
+        uri: String,
+        realtimeSessionId: String? = null
+    ) {
+        entryMode = UploadEntryMode.Realtime
+        updateVideoUri(
+            uri = uri,
+            realtimeSessionId = realtimeSessionId
+        )
+    }
+
+    fun needsRealtimeHoldSelection(): Boolean {
+        return isRealtimeEntryMode &&
+            (numberedHolds.isEmpty() || bestFrameBitmap == null)
     }
 
     fun useDebugBestFrameImage(uri: String) {
@@ -1114,6 +1360,23 @@ class UploadViewModel @Inject constructor(
         }
 
         videoUri = playbackUri
+        val shouldReuseSelectedHolds =
+            entryMode == UploadEntryMode.Realtime &&
+                numberedHolds.isNotEmpty() &&
+                bestFrameBitmap != null
+        if (shouldReuseSelectedHolds) {
+            pendingPrimaryPrePoseGeneration = null
+            holdPrecomputeRequestedGeneration = null
+            UploadAiTraceLogger.log(
+                event = "PRIMARY_VIDEO_PREPARED_REUSE_SELECTED_HOLDS",
+                generation = generation,
+                playbackUri = playbackUri,
+                details = mapOf("numberedHoldCount" to numberedHolds.size)
+            )
+            invalidateSubmissionAnalysisPrewarm()
+            refreshCurrentSelectionPrePoseTargets(generation)
+            return
+        }
         pendingPrimaryPrePoseGeneration = generation
         holdPrecomputeRequestedGeneration = generation
         UploadAiTraceLogger.log(
@@ -1308,7 +1571,7 @@ class UploadViewModel @Inject constructor(
             )
             return
         }
-        val request = buildCurrentSubmissionRequestOrNull() ?: return
+        val request = buildCurrentSubmissionRequestOrNull(includePublishedAttempts = false) ?: return
         if (request.numberedHolds.isEmpty() || request.bestFrameBitmap == null) {
             UploadAiTraceLogger.log(
                 event = if (request.numberedHolds.isEmpty()) {
@@ -1333,9 +1596,17 @@ class UploadViewModel @Inject constructor(
         )
     }
 
-    private fun buildCurrentSubmissionRequestOrNull(): UploadSubmissionRequest? {
+    private fun buildCurrentSubmissionRequestOrNull(
+        includePublishedAttempts: Boolean
+    ): UploadSubmissionRequest? {
         val currentVideoUri = videoUri
-        if (currentVideoUri == null && allAttemptUris.isEmpty()) {
+        val attemptUris = if (includePublishedAttempts) {
+            playbackAttemptUris.ifEmpty { allAttemptUris }
+        } else {
+            allAttemptUris
+        }
+
+        if (currentVideoUri == null && attemptUris.isEmpty()) {
             return null
         }
 
@@ -1343,19 +1614,23 @@ class UploadViewModel @Inject constructor(
         val useLocalAnalysisOnly = allowLocalAnalysisWithoutChallenge &&
             !isAttemptOnlyUploadMode &&
             (currentChallengeId == null || currentChallengeId <= 0L)
+        val attemptAlignedHoldSetsByPlaybackUri =
+            attemptAlignedHoldSets.associateBy(AttemptAlignedHoldSet::playbackUri) +
+                alignedHoldSetsSnapshot()
 
         return UploadSubmissionRequest(
             selectionGeneration = selectionGeneration,
             challengeId = currentChallengeId,
             useLocalAnalysisOnly = useLocalAnalysisOnly,
             isAttemptOnlyUploadMode = isAttemptOnlyUploadMode,
-            attemptUris = allAttemptUris,
-            attemptAlignedHoldSets = alignedHoldSetsSnapshot(),
+            attemptUris = attemptUris,
+            attemptAlignedHoldSets = attemptAlignedHoldSetsByPlaybackUri,
             detectedHolds = detectedHolds,
             numberedHolds = numberedHolds,
             bestFrameBitmap = bestFrameBitmap,
             aiMode = selectedAiAnalysisMode,
             primaryRealtimeSessionId = primaryManagedVideo?.realtimeSessionId?.takeIf { it.isNotBlank() },
+            primaryRealtimePlaybackUri = videoUri?.takeIf { it.isNotBlank() },
             holdCoordinates = buildChallengeHoldCoordinates()
         )
     }
@@ -1420,7 +1695,9 @@ class UploadViewModel @Inject constructor(
         sessionDelegate.cleanupUnusedManagedTempFiles(forceDeleteAll)
     }
 
-    private fun delegateCreateChallengeFromSelection() {
+    private fun delegateCreateChallengeFromSelection(
+        onSuccess: (() -> Unit)? = null
+    ) {
         viewModelScope.launch {
             val challenge = challengeDelegate.createChallengeFromSelection(
                 startedAt = LocalDateTime.now().toString(),
@@ -1436,6 +1713,7 @@ class UploadViewModel @Inject constructor(
             )
             if (challenge != null) {
                 allowLocalAnalysisWithoutChallenge = false
+                onSuccess?.invoke()
             }
         }
     }
@@ -1445,7 +1723,8 @@ class UploadViewModel @Inject constructor(
     }
 
     /**
-     * ?앹뾽?먯꽌 ?뺤씤 ???몄텧. 異붽?/?쒓굅瑜???踰덉뿉 ?곸슜?⑸땲??
+     * 후보 홀드 팝업에서 선택을 확정합니다.
+     * 추가/제거 목록을 실제 홀드 목록에 반영합니다.
      */
     fun applyHoldChanges(toAdd: List<Hold>, toRemove: List<Hold>) {
         holdDetectionDelegate.applyHoldChanges(toAdd, toRemove)
@@ -1453,13 +1732,13 @@ class UploadViewModel @Inject constructor(
         refreshAttemptHoldAlignmentTargets()
     }
 
-    /** ?꾨낫 ????앹뾽???レ뒿?덈떎. */
+    /** 후보 홀드 팝업을 닫습니다. */
     fun dismissCandidatePopup() {
         holdDetectionDelegate.dismissCandidatePopup()
     }
 
     /**
-     * detectedHolds?먯꽌 ??쒕? ?쒓굅?⑸땲??
+     * detectedHolds 에서 홀드를 제거합니다.
      */
     fun removeHold(hold: Hold) {
         holdDetectionDelegate.removeHold(hold)
@@ -1468,17 +1747,15 @@ class UploadViewModel @Inject constructor(
     }
 
     /**
-     * ?섎룞?쇰줈 ??쒕? detectedHolds??異붽??⑸땲??
-     * allRawHolds?먮뒗 ?덉?留??됱긽 ?꾪꽣留곸쑝濡??꾨씫????쒕? 蹂듦뎄?????ъ슜?⑸땲??
+     * 분석 포인트 타임라인을 교체합니다.
      */
     fun updateAnalysisPoints(points: List<AnalysisPoint>) {
         analysisPoints = points
     }
 
     /**
-     * ExoPlayer TextureView 罹≪쿂 ?꾨젅?꾩쑝濡??ㅼ떆媛??ъ쫰 異붾줎???ㅽ뻾?⑸땲??
-     * AttemptResultScreen??LaunchedEffect 猷⑦봽?먯꽌 150ms 媛꾧꺽?쇰줈 ?몄텧?⑸땲??
-     * ?댁쟾 異붾줎??吏꾪뻾 以묒씠硫??먮룞?쇰줈 嫄대꼫?곷땲??(PoseEstimatorImpl ?대? ?뚮옒洹?.
+     * ExoPlayer TextureView 캡처 프레임으로 현재 포즈를 추정합니다.
+     * AttemptResultScreen 의 LaunchedEffect 루프에서 주기적으로 호출됩니다.
      */
     fun updatePoseFrame(bitmap: Bitmap) {
         viewModelScope.launch(Dispatchers.Default) {
@@ -1495,13 +1772,12 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    // (湲곗〈 ?⑥씪 異붽? URI 硫붿꽌?쒕뒗 ??젣?섍퀬 updateAdditionalVideoUris ?ъ슜)
+    // 기존 개별 추가 URI 메서드는 제거하고 updateAdditionalVideoUris 를 사용합니다.
 
-    // ====== 鍮꾩쫰?덉뒪 濡쒖쭅 ======
+    // ====== 비즈니스 로직 ======
 
     /**
-     * PersonDetector 湲곕컲 理쒖쟻 ?꾨젅???먯깋 ?먮뒗 ?붾쾭洹??대?吏 ?좏깮 ??
-     * HoldDetector ???됱긽 ?꾪꽣留곴퉴吏 ?섑뻾?섎뒗 ?꾩껜 ?뚯씠?꾨씪??
+     * PersonDetector 기반 대표 프레임 탐색과 HoldDetector 색상 필터링 준비를 보장합니다.
      */
     fun ensureHoldDetectionReadyForCurrentColor() {
         val debugImageUri = debugBestFrameImageUri
@@ -1600,7 +1876,7 @@ class UploadViewModel @Inject constructor(
             awaitActiveSelectionPreparation()
             refreshAttemptHoldAlignmentTargets()
             awaitAttemptHoldAlignmentTerminal(attemptAlignmentTargetUris())
-            val request = buildCurrentSubmissionRequestOrNull()
+            val request = buildCurrentSubmissionRequestOrNull(includePublishedAttempts = false)
             if (request == null) {
                 Log.e(
                     TAG,
@@ -1615,6 +1891,12 @@ class UploadViewModel @Inject constructor(
                 request = request,
                 callbacks = submissionCallbacks
             )
+            if (
+                entryMode == UploadEntryMode.Realtime &&
+                uploadSubmissionUiState.value is UploadSubmissionUiState.Success
+            ) {
+                realtimeAttemptActionState = RealtimeAttemptActionState.ShowingOptions
+            }
         }
     }
 
@@ -1627,7 +1909,7 @@ class UploadViewModel @Inject constructor(
             awaitActiveSelectionPreparation()
             refreshAttemptHoldAlignmentTargets()
             awaitAttemptHoldAlignmentTerminal(attemptAlignmentTargetUris())
-            val request = buildCurrentSubmissionRequestOrNull()
+            val request = buildCurrentSubmissionRequestOrNull(includePublishedAttempts = true)
             if (request == null) {
                 Log.e(
                     TAG,
@@ -1644,23 +1926,26 @@ class UploadViewModel @Inject constructor(
         }
     }
 
-    fun closeChallengeForFinalAnalysis(
+    suspend fun closeChallengeForFinalAnalysis(
         challengeResult: String,
         averageCenterStabilityRatio: Double?,
         mostCruxHoldNo: Int?,
         maxCruxDurationMs: Int?,
         finalComment: String?
-    ) {
-        val currentChallengeId = challengeId ?: return
+    ): Boolean {
+        val currentChallengeId = challengeId ?: return false
         if (currentChallengeId <= 0L) {
-            return
+            return false
         }
-        if (closedChallengeId == currentChallengeId || closingChallengeId == currentChallengeId) {
-            return
+        if (closedChallengeId == currentChallengeId) {
+            return true
+        }
+        if (closingChallengeId == currentChallengeId) {
+            return false
         }
 
-        viewModelScope.launch {
-            closingChallengeId = currentChallengeId
+        closingChallengeId = currentChallengeId
+        return try {
             closeChallengeUseCase(
                 challengeId = currentChallengeId,
                 challengeResult = challengeResult,
@@ -1668,15 +1953,21 @@ class UploadViewModel @Inject constructor(
                 mostCruxHoldNo = mostCruxHoldNo,
                 maxCruxDurationMs = maxCruxDurationMs,
                 finalComment = finalComment
-            ).onSuccess { closedChallenge ->
-                closedChallengeId = currentChallengeId
-                createdChallenge = createdChallenge?.copy(
-                    challengeStatus = closedChallenge.challengeStatus
-                )
-            }.onFailure { throwable ->
-                Log.e(TAG, "closeChallengeForFinalAnalysis: failed", throwable)
-            }
-
+            ).fold(
+                onSuccess = { closedChallenge ->
+                    closedChallengeId = currentChallengeId
+                    createdChallenge = createdChallenge?.copy(
+                        challengeStatus = closedChallenge.challengeStatus
+                    )
+                    realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+                    true
+                },
+                onFailure = { throwable ->
+                    Log.e(TAG, "closeChallengeForFinalAnalysis: failed", throwable)
+                    false
+                }
+            )
+        } finally {
             if (closingChallengeId == currentChallengeId) {
                 closingChallengeId = null
             }
@@ -1699,7 +1990,14 @@ class UploadViewModel @Inject constructor(
 
     fun resetState() {
         holdDetectionEnsureJob?.cancel()
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Gallery
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        realtimeGymSearchQuery = ""
+        realtimeHoldColorSheetVisible = false
         _uiState.value = UploadUiState.Idle
+        submissionDelegate.resetUploadSubmissionState()
+        submissionDelegate.resetFinalAnalysisPreparationState()
     }
 
     private fun clearSelectedHoldSelection() {
@@ -1717,12 +2015,38 @@ class UploadViewModel @Inject constructor(
 
     fun prepareAttemptResultAnalysisLoading() {
         analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
         submissionDelegate.resetUploadSubmissionState()
+        submissionDelegate.resetFinalAnalysisPreparationState()
     }
 
     fun prepareFinalAnalysisLoading() {
         analysisLoadingPhase = AnalysisLoadingPhase.FinalAnalysisPreparation
+        realtimeAttemptActionState = RealtimeAttemptActionState.FinalAnalysisRequested
+        realtimeHoldColorSheetVisible = false
         submissionDelegate.resetFinalAnalysisPreparationState()
+    }
+
+    fun prepareRealtimeRetake() {
+        if (!isRealtimeEntryMode) {
+            return
+        }
+
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Realtime
+        uploadFlowMode = UploadFlowMode.AttemptOnly
+        realtimeHoldColorSheetVisible = false
+        realtimeGymSearchQuery = gymName
+        realtimeSetupStep = RealtimeSetupStep.Ready
+        allowLocalAnalysisWithoutChallenge = false
+        captureCurrentAttemptResultSession()
+        clearHoldPrecomputeState()
+        clearAttemptResultState(clearPublishedSession = false)
+        realtimeAttemptActionState = RealtimeAttemptActionState.RetakeRequested
+        submissionDelegate.resetFinalAnalysisPreparationState()
+        sessionDelegate.resetAllSelectionPreparationJobs()
+        clearPosePrecomputeState(preservePlaybackUris = publishedResultPlaybackUris())
+        cleanupUnusedManagedTempFiles()
     }
 
     fun consumeBackgroundUploadNotice(id: Long) {
@@ -1742,22 +2066,75 @@ class UploadViewModel @Inject constructor(
         clearAttemptHoldAlignmentState()
         clearSelectedHoldSelection()
         clearCreatedChallengeOnly()
+        realtimeGymSearchQuery = ""
+        realtimeHoldColorSheetVisible = false
     }
 
     private fun clearChallengeSelectionStatePreservingHoldPrecompute() {
+        clearChallengeSelectionStatePreservingHoldPrecompute(
+            preserveRealtimeMode = false,
+            preserveSearchQuery = false
+        )
+    }
+
+    private fun clearRealtimeChallengeSelectionStatePreservingHoldPrecompute() {
+        clearChallengeSelectionStatePreservingHoldPrecompute(
+            preserveRealtimeMode = true,
+            preserveSearchQuery = true
+        )
+    }
+
+    private fun clearChallengeSelectionStatePreservingHoldPrecompute(
+        preserveRealtimeMode: Boolean,
+        preserveSearchQuery: Boolean
+    ) {
         holdDetectionEnsureJob?.cancel()
         holdDetectionEnsureJob = null
         challengeDelegate.clearSelectionState()
         holdDetectionDelegate.clearAppliedHoldStatePreservingSourceCache()
-        clearCreatedChallengeOnly()
+        clearCreatedChallengeOnly(
+            preserveRealtimeMode = preserveRealtimeMode,
+            preserveSearchQuery = preserveSearchQuery
+        )
+        if (!preserveSearchQuery) {
+            realtimeGymSearchQuery = ""
+        }
+        realtimeHoldColorSheetVisible = false
         _uiState.value = UploadUiState.Idle
     }
 
     private fun clearCreatedChallengeOnly() {
+        clearCreatedChallengeOnly(
+            preserveRealtimeMode = false,
+            preserveSearchQuery = false
+        )
+    }
+
+    private fun clearRealtimeCreatedChallengeOnly() {
+        clearCreatedChallengeOnly(
+            preserveRealtimeMode = true,
+            preserveSearchQuery = true
+        )
+    }
+
+    private fun clearCreatedChallengeOnly(
+        preserveRealtimeMode: Boolean,
+        preserveSearchQuery: Boolean
+    ) {
         challengeDelegate.clearCreatedChallengeState()
         closedChallengeId = null
         closingChallengeId = null
         savedChallengeHolds = null
+        entryMode = if (preserveRealtimeMode) {
+            UploadEntryMode.Realtime
+        } else {
+            UploadEntryMode.Gallery
+        }
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        if (!preserveSearchQuery) {
+            realtimeGymSearchQuery = ""
+        }
+        realtimeHoldColorSheetVisible = false
         uploadedAttemptVideos = emptyList()
         clearHoldReachAnalysis()
         clearAiAnalysisState()
@@ -1803,6 +2180,7 @@ class UploadViewModel @Inject constructor(
             callbacks = submissionCallbacks,
             clearPublishedSession = clearPublishedSession
         )
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
     }
 
     private fun publishAttemptResultSession(
@@ -1823,6 +2201,7 @@ class UploadViewModel @Inject constructor(
             currentAttemptIndex = currentAttemptIndex,
             attemptAlignedHoldSets = attemptAlignedHoldSets,
             holdReachResults = holdReachResults,
+            attemptAiAnalysisResults = attemptAiAnalysisResults,
             poseDtos = poseDtos,
             analyzedPoses = analyzedPoses,
             polygonHoldContactDebugResults = polygonHoldContactDebugResults,
@@ -1836,6 +2215,12 @@ class UploadViewModel @Inject constructor(
 
     private fun restorePublishedAttemptResultSession() {
         submissionDelegate.restorePublishedAttemptResultSession(submissionCallbacks)
+        realtimeAttemptActionState =
+            if (submissionCallbacks.publishedSession() != null) {
+                RealtimeAttemptActionState.ShowingOptions
+            } else {
+                RealtimeAttemptActionState.Idle
+            }
     }
 
     private fun publishedResultPlaybackUris(): Set<String> =

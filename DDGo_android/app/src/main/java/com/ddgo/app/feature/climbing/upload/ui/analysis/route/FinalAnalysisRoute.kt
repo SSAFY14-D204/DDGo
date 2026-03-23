@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -17,12 +18,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.feature.climbing.upload.UploadBackgroundUploadSnackbarHost
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
+import com.ddgo.app.feature.climbing.upload.buildChallengeFinalAnalysisSummary
 import com.ddgo.app.feature.climbing.upload.buildFinalAnalysisAttemptSummaries
 import com.ddgo.app.feature.climbing.upload.formatAnalysisDate
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPage
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPageState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisTab
+import kotlinx.coroutines.launch
 import kotlin.math.max
 
 @Composable
@@ -57,6 +60,50 @@ fun FinalAnalysisRoute(
             aiResults = viewModel.attemptAiAnalysisResults
         )
     }
+    val challengeSummary = remember(attemptSummaries, totalHolds) {
+        buildChallengeFinalAnalysisSummary(
+            attemptSummaries = attemptSummaries,
+            totalHolds = totalHolds
+        )
+    }
+    val closeSummaryPayload = remember(attemptSummaries, challengeSummary) {
+        val averageCenterStabilityRatio = attemptSummaries
+            .mapNotNull { it.insideSupportRatio }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.div(100.0)
+        val mostCruxHoldNo = attemptSummaries
+            .mapNotNull { it.primaryCruxHoldNo }
+            .groupingBy { it }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
+        val maxCruxDurationMs = attemptSummaries
+            .mapNotNull { it.primaryCruxDurationMs }
+            .maxOrNull()
+        val finalComment = listOf(
+            challengeSummary.summaryLine,
+            challengeSummary.completionLine,
+            challengeSummary.challengeNatureLine
+        ).filter { it.isNotBlank() }
+            .joinToString(" ")
+            .takeIf { it.isNotBlank() }
+
+        ChallengeCloseRouteSummary(
+            averageCenterStabilityRatio = averageCenterStabilityRatio,
+            mostCruxHoldNo = mostCruxHoldNo,
+            maxCruxDurationMs = maxCruxDurationMs,
+            finalComment = finalComment
+        )
+    }
+    val challengeResult = remember(challengeSummary.overallSuccess, attemptSummaries) {
+        when {
+            attemptSummaries.isEmpty() -> "UNKNOWN"
+            challengeSummary.overallSuccess -> "SUCCESS"
+            else -> "FAIL"
+        }
+    }
+    val scope = rememberCoroutineScope()
 
     var selectedAttempt by rememberSaveable(attemptCount, initialSelectedAttempt) {
         mutableIntStateOf(initialSelectedAttempt)
@@ -169,7 +216,18 @@ fun FinalAnalysisRoute(
                     selectedAttempt = safeSelectedAttempt + 1
                     pendingSeekTimeMs = null
                 } else {
-                    onNavigateToChallenge()
+                    scope.launch {
+                        val closed = viewModel.closeChallengeForFinalAnalysis(
+                            challengeResult = challengeResult,
+                            averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                            mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                            maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                            finalComment = closeSummaryPayload.finalComment
+                        )
+                        if (closed) {
+                            onNavigateToChallenge()
+                        }
+                    }
                 }
             }
         )
@@ -182,6 +240,13 @@ fun FinalAnalysisRoute(
         )
     }
 }
+
+private data class ChallengeCloseRouteSummary(
+    val averageCenterStabilityRatio: Double?,
+    val mostCruxHoldNo: Int?,
+    val maxCruxDurationMs: Int?,
+    val finalComment: String?
+)
 
 private fun buildFocusReasonText(
     feedbackTypes: List<String>,

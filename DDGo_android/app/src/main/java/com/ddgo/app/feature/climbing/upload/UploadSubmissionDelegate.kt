@@ -65,6 +65,7 @@ internal data class UploadSubmissionRequest(
     val bestFrameBitmap: Bitmap?,
     val aiMode: AiAnalysisMode,
     val primaryRealtimeSessionId: String?,
+    val primaryRealtimePlaybackUri: String?,
     val holdCoordinates: List<ChallengeHoldCoordinate>
 )
 
@@ -123,6 +124,7 @@ internal class UploadSubmissionDelegate(
     var attemptPolygonHoldContactDebugResults by mutableStateOf<List<PolygonHoldContactDebugResult>>(emptyList())
     var overallHoldReachSummary by mutableStateOf<OverallHoldReachSummary?>(null)
     var attemptAiAnalysisResults by mutableStateOf<List<AiAnalysisResult?>>(emptyList())
+    private var finalizedAttemptIds by mutableStateOf<Set<Long>>(emptySet())
     private var analysisPrewarmEntry by mutableStateOf<SubmissionAnalysisPrewarmEntry?>(null)
     private var analysisPrewarmJob: Deferred<Result<SubmissionAnalysisPrewarmResult>>? = null
     private var backgroundUploadJob: Job? = null
@@ -385,6 +387,7 @@ internal class UploadSubmissionDelegate(
                 currentAttemptIndex = 0,
                 attemptAlignedHoldSets = attemptAlignedHoldSets,
                 holdReachResults = attemptHoldReachResults,
+                attemptAiAnalysisResults = attemptAiAnalysisResults,
                 poseDtos = attemptPoseDtos,
                 analyzedPoses = attemptAnalyzedPoses,
                 polygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
@@ -735,6 +738,7 @@ internal class UploadSubmissionDelegate(
                 referenceFrameBitmap = bitmapForAi,
                 mode = request.aiMode,
                 primaryRealtimeSessionId = request.primaryRealtimeSessionId,
+                primaryRealtimePlaybackUri = request.primaryRealtimePlaybackUri,
                 profile = profileForAi,
                 terminalSnapshot = terminalSnapshot,
                 callbacks = callbacks
@@ -785,6 +789,7 @@ internal class UploadSubmissionDelegate(
             currentAttemptIndex = 0,
             attemptAlignedHoldSets = attemptAlignedHoldSets,
             holdReachResults = attemptHoldReachResults,
+            attemptAiAnalysisResults = attemptAiAnalysisResults,
             poseDtos = attemptPoseDtos,
             analyzedPoses = attemptAnalyzedPoses,
             polygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
@@ -950,6 +955,7 @@ internal class UploadSubmissionDelegate(
             currentAttemptIndex = 0,
             attemptAlignedHoldSets = attemptAlignedHoldSets,
             holdReachResults = attemptHoldReachResults,
+            attemptAiAnalysisResults = attemptAiAnalysisResults,
             poseDtos = attemptPoseDtos,
             analyzedPoses = attemptAnalyzedPoses,
             polygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
@@ -1342,6 +1348,7 @@ internal class UploadSubmissionDelegate(
             referenceFrameBitmap = bitmapForAi,
             mode = request.aiMode,
             primaryRealtimeSessionId = request.primaryRealtimeSessionId,
+            primaryRealtimePlaybackUri = request.primaryRealtimePlaybackUri,
             profile = profileForAi,
             terminalSnapshot = terminalSnapshot,
             callbacks = callbacks
@@ -1407,8 +1414,10 @@ internal class UploadSubmissionDelegate(
             referenceFrameBitmap = currentBitmap,
             mode = request.aiMode,
             primaryRealtimeSessionId = request.primaryRealtimeSessionId,
+            primaryRealtimePlaybackUri = request.primaryRealtimePlaybackUri,
             profile = aiProfile,
             terminalSnapshot = terminalSnapshot,
+            seedAiResults = attemptAiAnalysisResults,
             emitLoading = emitLoading
         ).getOrElse { throwable ->
             return@coroutineScope Result.failure(throwable)
@@ -1435,6 +1444,11 @@ internal class UploadSubmissionDelegate(
         callbacks: UploadSubmissionCallbacks
     ) {
         attemptAiAnalysisResults = result.aiAnalysisResults
+        callbacks.setPublishedSession(
+            callbacks.publishedSession()?.copy(
+                attemptAiAnalysisResults = result.aiAnalysisResults
+            )
+        )
         callbacks.clearCurrentPoseLandmarks()
         callbacks.syncDisplayedAnalysisPoints()
     }
@@ -1486,6 +1500,7 @@ internal class UploadSubmissionDelegate(
             numberedHoldsFingerprint = alignedHoldsFingerprint,
             aiMode = request.aiMode,
             primaryRealtimeSessionId = request.primaryRealtimeSessionId,
+            primaryRealtimePlaybackUri = request.primaryRealtimePlaybackUri,
             frameWidthPx = request.bestFrameBitmap.width,
             frameHeightPx = request.bestFrameBitmap.height
         )
@@ -1638,6 +1653,7 @@ internal class UploadSubmissionDelegate(
         clearHoldReachAnalysis(callbacks)
         clearAiAnalysisState(callbacks)
         if (clearPublishedSession) {
+            finalizedAttemptIds = emptySet()
             callbacks.setPublishedSession(null)
         }
     }
@@ -1649,37 +1665,101 @@ internal class UploadSubmissionDelegate(
         currentAttemptIndex: Int,
         attemptAlignedHoldSets: List<AttemptAlignedHoldSet>,
         holdReachResults: List<AttemptHoldReachResult>,
+        attemptAiAnalysisResults: List<AiAnalysisResult?>,
         poseDtos: List<PoseSequenceDto>,
         analyzedPoses: List<List<Pose>>,
         polygonHoldContactDebugResults: List<PolygonHoldContactDebugResult>,
         overallSummary: OverallHoldReachSummary?
     ) {
-        callbacks.setSessionResultPlaybackUris(playbackUris)
-        uploadedAttemptVideos = uploadedVideos
-        callbacks.setCurrentAttemptIndex(
+        val existingSession = callbacks.publishedSession()
+        val existingPlaybackUris = existingSession?.resultPlaybackUris.orEmpty()
+        val shouldAppend = existingSession != null &&
+            existingPlaybackUris.isNotEmpty() &&
+            existingPlaybackUris != playbackUris
+
+        val combinedPlaybackUris = if (shouldAppend) {
+            existingSession!!.resultPlaybackUris + playbackUris.filterNot { it in existingSession.resultPlaybackUris }
+        } else {
+            playbackUris
+        }
+
+        val combinedUploadedVideos = if (shouldAppend) {
+            (existingSession!!.uploadedAttemptVideos + uploadedVideos)
+                .distinctBy(UploadedAttemptVideo::attemptId)
+                .sortedBy(UploadedAttemptVideo::attemptNo)
+        } else {
+            uploadedVideos
+        }
+
+        val combinedHoldReachResults = if (shouldAppend) {
+            existingSession!!.holdReachResults + holdReachResults
+        } else {
+            holdReachResults
+        }
+        val combinedAttemptAlignedHoldSets = if (shouldAppend) {
+            val existingByPlaybackUri =
+                existingSession!!.attemptAlignedHoldSets.associateBy(AttemptAlignedHoldSet::playbackUri)
+            val incomingByPlaybackUri =
+                attemptAlignedHoldSets.associateBy(AttemptAlignedHoldSet::playbackUri)
+            combinedPlaybackUris.mapNotNull { playbackUri ->
+                incomingByPlaybackUri[playbackUri] ?: existingByPlaybackUri[playbackUri]
+            }
+        } else {
+            attemptAlignedHoldSets
+        }
+        val combinedAttemptAiAnalysisResults = if (shouldAppend) {
+            existingSession!!.attemptAiAnalysisResults + attemptAiAnalysisResults
+        } else {
+            attemptAiAnalysisResults
+        }
+        val combinedPoseDtos = if (shouldAppend) {
+            existingSession!!.attemptPoseDtos + poseDtos
+        } else {
+            poseDtos
+        }
+        val combinedAnalyzedPoses = if (shouldAppend) {
+            existingSession!!.attemptAnalyzedPoses + analyzedPoses
+        } else {
+            analyzedPoses
+        }
+        val combinedPolygonHoldContactDebugResults = if (shouldAppend) {
+            existingSession!!.attemptPolygonHoldContactDebugResults + polygonHoldContactDebugResults
+        } else {
+            polygonHoldContactDebugResults
+        }
+        val resolvedCurrentAttemptIndex = if (shouldAppend) {
+            combinedPlaybackUris.lastIndex.coerceAtLeast(0)
+        } else {
             currentAttemptIndex.coerceIn(
                 minimumValue = 0,
-                maximumValue = playbackUris.lastIndex.coerceAtLeast(0)
+                maximumValue = combinedPlaybackUris.lastIndex.coerceAtLeast(0)
             )
-        )
-        this.attemptAlignedHoldSets = attemptAlignedHoldSets
-        attemptHoldReachResults = holdReachResults
-        attemptPoseDtos = poseDtos
-        attemptAnalyzedPoses = analyzedPoses
-        attemptPolygonHoldContactDebugResults = polygonHoldContactDebugResults
-        overallHoldReachSummary = overallSummary
+        }
+        val resolvedOverallSummary = overallSummary ?: existingSession?.overallHoldReachSummary
+
+        callbacks.setSessionResultPlaybackUris(combinedPlaybackUris)
+        uploadedAttemptVideos = combinedUploadedVideos
+        callbacks.setCurrentAttemptIndex(resolvedCurrentAttemptIndex)
+        this.attemptAlignedHoldSets = combinedAttemptAlignedHoldSets
+        attemptHoldReachResults = combinedHoldReachResults
+        this.attemptAiAnalysisResults = combinedAttemptAiAnalysisResults
+        attemptPoseDtos = combinedPoseDtos
+        attemptAnalyzedPoses = combinedAnalyzedPoses
+        attemptPolygonHoldContactDebugResults = combinedPolygonHoldContactDebugResults
+        overallHoldReachSummary = resolvedOverallSummary
         callbacks.syncDisplayedAnalysisPoints()
         callbacks.setPublishedSession(
             PublishedAttemptResultSession(
-                resultPlaybackUris = playbackUris,
-                uploadedAttemptVideos = uploadedVideos,
-                currentAttemptIndex = callbacks.currentAttemptIndex(),
-                attemptAlignedHoldSets = attemptAlignedHoldSets,
-                holdReachResults = holdReachResults,
-                attemptPoseDtos = poseDtos,
-                attemptAnalyzedPoses = analyzedPoses,
-                attemptPolygonHoldContactDebugResults = polygonHoldContactDebugResults,
-                overallHoldReachSummary = overallSummary
+                resultPlaybackUris = combinedPlaybackUris,
+                uploadedAttemptVideos = combinedUploadedVideos,
+                currentAttemptIndex = resolvedCurrentAttemptIndex,
+                attemptAlignedHoldSets = combinedAttemptAlignedHoldSets,
+                holdReachResults = combinedHoldReachResults,
+                attemptAiAnalysisResults = combinedAttemptAiAnalysisResults,
+                attemptPoseDtos = combinedPoseDtos,
+                attemptAnalyzedPoses = combinedAnalyzedPoses,
+                attemptPolygonHoldContactDebugResults = combinedPolygonHoldContactDebugResults,
+                overallHoldReachSummary = resolvedOverallSummary
             )
         )
     }
@@ -1717,6 +1797,7 @@ internal class UploadSubmissionDelegate(
                 ),
                 attemptAlignedHoldSets = attemptAlignedHoldSets,
                 holdReachResults = attemptHoldReachResults,
+                attemptAiAnalysisResults = attemptAiAnalysisResults,
                 attemptPoseDtos = attemptPoseDtos,
                 attemptAnalyzedPoses = attemptAnalyzedPoses,
                 attemptPolygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
@@ -1741,6 +1822,7 @@ internal class UploadSubmissionDelegate(
         )
         attemptAlignedHoldSets = session.attemptAlignedHoldSets
         attemptHoldReachResults = session.holdReachResults
+        attemptAiAnalysisResults = session.attemptAiAnalysisResults
         attemptPoseDtos = session.attemptPoseDtos
         attemptAnalyzedPoses = session.attemptAnalyzedPoses
         attemptPolygonHoldContactDebugResults = session.attemptPolygonHoldContactDebugResults
@@ -1882,8 +1964,10 @@ internal class UploadSubmissionDelegate(
         referenceFrameBitmap: Bitmap,
         mode: AiAnalysisMode,
         primaryRealtimeSessionId: String?,
+        primaryRealtimePlaybackUri: String?,
         profile: ResolvedAiProfile,
         terminalSnapshot: TerminalPrePoseSnapshot,
+        seedAiResults: List<AiAnalysisResult?> = emptyList(),
         emitLoading: Boolean
     ): Result<List<AiAnalysisResult>> {
         if (alignedHoldSets.isEmpty()) {
@@ -1915,7 +1999,16 @@ internal class UploadSubmissionDelegate(
                 )
             }
 
-            val result = if (index == 0 && primaryRealtimeSessionId != null) {
+            val seededResult = seedAiResults.getOrNull(index)
+            if (seededResult != null) {
+                results += seededResult
+                return@forEachIndexed
+            }
+
+            val shouldFinalizeRealtime = primaryRealtimeSessionId != null && (
+                primaryRealtimePlaybackUri?.let { it == uri } ?: index == 0
+            )
+            val result = if (shouldFinalizeRealtime) {
                 finalizeRealtimeAttemptOrFallback(
                     sessionId = primaryRealtimeSessionId,
                     requestedMode = mode,
@@ -1971,6 +2064,7 @@ internal class UploadSubmissionDelegate(
         referenceFrameBitmap: Bitmap,
         mode: AiAnalysisMode,
         primaryRealtimeSessionId: String?,
+        primaryRealtimePlaybackUri: String?,
         profile: ResolvedAiProfile,
         terminalSnapshot: TerminalPrePoseSnapshot,
         callbacks: UploadSubmissionCallbacks
@@ -1987,10 +2081,13 @@ internal class UploadSubmissionDelegate(
                 "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${alignedHoldSets.size})"
             )
 
+            val shouldFinalizeRealtime = primaryRealtimeSessionId != null && (
+                primaryRealtimePlaybackUri?.let { it == alignedHoldSet.playbackUri } ?: index == 0
+            )
             val analysisHolds = alignedHoldSet.alignedHolds.toHolds()
             val frameWidthPx = alignedHoldSet.frameWidthPx.takeIf { it > 0 } ?: referenceFrameBitmap.width
             val frameHeightPx = alignedHoldSet.frameHeightPx.takeIf { it > 0 } ?: referenceFrameBitmap.height
-            val result = if (index == 0 && primaryRealtimeSessionId != null) {
+            val result = if (shouldFinalizeRealtime) {
                 finalizeRealtimeAttemptOrFallback(
                     sessionId = primaryRealtimeSessionId,
                     requestedMode = mode,
@@ -2230,6 +2327,9 @@ internal class UploadSubmissionDelegate(
         )
 
         uploadedVideos.forEachIndexed { index, uploadedVideo ->
+            if (uploadedVideo.attemptId in finalizedAttemptIds) {
+                return@forEachIndexed
+            }
             val playbackUri = playbackUris.getOrNull(index) ?: uploadedVideo.videoUri
             val payload = buildAttemptCompletionPayload(
                 playbackUri = playbackUri,
@@ -2249,6 +2349,7 @@ internal class UploadSubmissionDelegate(
             if (result.isFailure) {
                 return result
             }
+            finalizedAttemptIds = finalizedAttemptIds + uploadedVideo.attemptId
         }
 
         return Result.success(Unit)
@@ -2425,6 +2526,7 @@ private data class SubmissionAnalysisPrewarmKey(
     val numberedHoldsFingerprint: String,
     val aiMode: AiAnalysisMode,
     val primaryRealtimeSessionId: String?,
+    val primaryRealtimePlaybackUri: String?,
     val frameWidthPx: Int,
     val frameHeightPx: Int
 )

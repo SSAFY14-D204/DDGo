@@ -80,6 +80,7 @@ private val ANIM_HOLDS = listOf(
 @Composable
 fun ChallengeHoldScreen(
     viewModel: UploadViewModel = hiltViewModel(),
+    allowAdditionalUpload: Boolean = true,
     onNavigateToAdditional: () -> Unit = {},
     onNavigateToHoldSelect: () -> Unit = {}
 ) {
@@ -187,7 +188,13 @@ fun ChallengeHoldScreen(
             if (isSuccess) {
                 HoldReviewContent(
                     viewModel = viewModel,
-                    onProceed = { showDialog = true }
+                    onProceed = {
+                        if (allowAdditionalUpload) {
+                            showDialog = true
+                        } else {
+                            onNavigateToHoldSelect()
+                        }
+                    }
                 )
             } else {
                 HoldLoadingContent(uiState = displayedUiState)

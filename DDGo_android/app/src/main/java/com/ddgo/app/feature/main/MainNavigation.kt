@@ -4,7 +4,6 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
-import com.ddgo.app.feature.climbing.record.navigateToRecord
 import com.ddgo.app.feature.climbing.record.recordGraph
 import com.ddgo.app.feature.climbing.upload.uploadGraph
 import com.ddgo.app.navigation.ScreenRoutes
@@ -36,7 +35,7 @@ fun NavGraphBuilder.mainGraph(
                     navController.navigate(ScreenRoutes.Climbing.Upload.route)
                 },
                 onNavigateToRecord = {
-                    navController.navigateToRecord()
+                    navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_SETUP)
                 },
                 onNavigateToAuth = onNavigateToAuth,
                 onNavigateToDebug = onNavigateToDebug

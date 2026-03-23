@@ -1,16 +1,21 @@
 package com.ddgo.app.feature.climbing.record.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.graphics.YuvImage
+import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
+import android.os.CancellationSignal
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -24,6 +29,7 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,11 +44,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
+import androidx.core.util.Consumer
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.domain.model.GymGrade
+import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.repository.LivePoseFrameInput
 import com.ddgo.app.feature.climbing.record.presentation.RecordThumbnailFrame
 import com.ddgo.app.feature.climbing.record.presentation.RecordViewModel
 import com.ddgo.app.feature.climbing.record.presentation.RecordedAttemptDraft
+import com.ddgo.app.feature.climbing.upload.RealtimeAttemptActionState
+import com.ddgo.app.feature.climbing.upload.UploadRealtimeOverlayUiState
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -57,7 +69,19 @@ private const val CAMERA_FRAME_THROTTLE_MS = 100L
 @Composable
 fun RecordRoute(
     onNavigateBack: () -> Unit,
-    onRecordedDraftReady: (RecordedAttemptDraft) -> Unit = {}
+    onRecordedDraftReady: (RecordedAttemptDraft) -> Unit = {},
+    realtimeOverlayUiState: UploadRealtimeOverlayUiState? = null,
+    realtimeAttemptActionState: RealtimeAttemptActionState = RealtimeAttemptActionState.Idle,
+    onOpenGymList: () -> Unit = {},
+    onSearchNearbyGyms: (Double, Double, String, Boolean) -> Unit = { _, _, _, _ -> },
+    onSearchQueryChange: (String) -> Unit = {},
+    onSelectGym: (NearbyPlace) -> Unit = {},
+    onSelectDifficulty: (GymGrade) -> Unit = {},
+    onSelectHoldColor: (String) -> Unit = {},
+    onSetHoldColorSheetVisible: (Boolean) -> Unit = {},
+    onTapFinish: () -> Unit = {},
+    onTapRetake: () -> Unit = {},
+    onTorchToggle: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -70,18 +94,81 @@ fun RecordRoute(
         }
     }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    var locationMessage by remember { mutableStateOf<String?>(null) }
+    var isResolvingLocation by remember { mutableStateOf(false) }
+    var pendingSearchRequest by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         viewModel.onPermissionChanged(granted)
     }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            result[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            pendingSearchRequest?.let { (query, nearbyOnly) ->
+                requestNearbyGymSearch(
+                    context = context,
+                    overlayUiState = realtimeOverlayUiState,
+                    query = query,
+                    nearbyOnly = nearbyOnly,
+                    onSearchNearbyGyms = onSearchNearbyGyms,
+                    onLocationResolvingChanged = { isResolvingLocation = it },
+                    onLocationMessageChanged = { locationMessage = it }
+                )
+            }
+        } else {
+            isResolvingLocation = false
+            locationMessage = "위치 권한이 필요해요."
+        }
+    }
 
     var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
     var currentRecording by remember { mutableStateOf<Recording?>(null) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
+    var torchEnabled by remember { mutableStateOf(false) }
     val nextFrameIndex = remember { AtomicInteger(0) }
     val lastSubmittedFrameTimestampMs = remember { AtomicLong(0L) }
     val latestThumbnailFrame = remember { AtomicReference<RecordThumbnailFrame?>(null) }
+
+    fun resetDraftState() {
+        latestThumbnailFrame.set(null)
+        nextFrameIndex.set(0)
+        lastSubmittedFrameTimestampMs.set(0L)
+        viewModel.clearRecordedDraft()
+        if (uiState.livePoseErrorMessage != null) {
+            viewModel.retryLivePoseAnalysis()
+        }
+    }
+
+    fun startLocationBackedGymSearch(
+        query: String = realtimeOverlayUiState?.searchQuery.orEmpty(),
+        nearbyOnly: Boolean = query.isBlank()
+    ) {
+        pendingSearchRequest = query to nearbyOnly
+        if (!hasLocationPermission(context)) {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+            return
+        }
+
+        requestNearbyGymSearch(
+            context = context,
+            overlayUiState = realtimeOverlayUiState,
+            query = query,
+            nearbyOnly = nearbyOnly,
+            onSearchNearbyGyms = onSearchNearbyGyms,
+            onLocationResolvingChanged = { isResolvingLocation = it },
+            onLocationMessageChanged = { locationMessage = it }
+        )
+    }
 
     LaunchedEffect(Unit) {
         val granted = ContextCompat.checkSelfPermission(
@@ -112,6 +199,9 @@ fun RecordRoute(
             currentRecording?.stop()
             currentRecording = null
             videoCapture = null
+            camera?.cameraControl?.enableTorch(false)
+            camera = null
+            torchEnabled = false
             cameraProvider?.unbindAll()
             cameraProvider = null
             viewModel.onCameraUnbound()
@@ -144,7 +234,7 @@ fun RecordRoute(
                 val capture = VideoCapture.withOutput(recorder)
 
                 provider.unbindAll()
-                provider.bindToLifecycle(
+                val boundCamera = provider.bindToLifecycle(
                     lifecycleOwner,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     preview,
@@ -152,10 +242,13 @@ fun RecordRoute(
                     capture
                 )
 
+                camera = boundCamera
                 cameraProvider = provider
                 videoCapture = capture
                 nextFrameIndex.set(0)
                 lastSubmittedFrameTimestampMs.set(0L)
+                torchEnabled = false
+                boundCamera.cameraControl.enableTorch(false)
                 viewModel.onCameraBound()
             }
 
@@ -165,6 +258,9 @@ fun RecordRoute(
                 currentRecording?.stop()
                 currentRecording = null
                 videoCapture = null
+                camera?.cameraControl?.enableTorch(false)
+                camera = null
+                torchEnabled = false
                 cameraProvider?.unbindAll()
                 cameraProvider = null
                 viewModel.onCameraUnbound()
@@ -172,57 +268,183 @@ fun RecordRoute(
         }
     }
 
-    RecordPage(
-        uiState = uiState,
-        previewContent = {
-            AndroidView(
-                factory = { previewView },
-                modifier = Modifier.fillMaxSize()
-            )
-        },
-        onNavigateBack = onNavigateBack,
-        onRequestPermission = {
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        },
-        onStartRecording = {
-            val capture = videoCapture ?: return@RecordPage
-            val outputFile = context.createRecordedVideoFile()
-            val outputOptions = FileOutputOptions.Builder(outputFile).build()
-            currentRecording = capture.output
-                .prepareRecording(context, outputOptions)
-                .start(ContextCompat.getMainExecutor(context)) { event ->
-                    when (event) {
-                        is VideoRecordEvent.Start -> {
-                            latestThumbnailFrame.set(null)
-                            viewModel.onRecordingStarted()
-                        }
+    fun startRecording() {
+        if (currentRecording != null) {
+            return
+        }
+        if (realtimeOverlayUiState != null && !realtimeOverlayUiState.isChallengeReady) {
+            return
+        }
 
-                        is VideoRecordEvent.Finalize -> {
-                            currentRecording = null
-                            if (event.hasError()) {
-                                viewModel.onRecordingFailed(
-                                    event.cause?.message ?: "Recording failed."
+        val capture = videoCapture ?: return
+        val outputFile = context.createRecordedVideoFile()
+        val outputOptions = FileOutputOptions.Builder(outputFile).build()
+        onSetHoldColorSheetVisible(false)
+        currentRecording = capture.output
+            .prepareRecording(context, outputOptions)
+            .start(ContextCompat.getMainExecutor(context)) { event ->
+                when (event) {
+                    is VideoRecordEvent.Start -> {
+                        latestThumbnailFrame.set(null)
+                        viewModel.onRecordingStarted()
+                    }
+
+                    is VideoRecordEvent.Finalize -> {
+                        currentRecording = null
+                        if (event.hasError()) {
+                            viewModel.onRecordingFailed(
+                                event.cause?.message ?: "Recording failed."
+                            )
+                        } else {
+                            val outputUri = event.outputResults.outputUri
+                                .takeIf { it != Uri.EMPTY }
+                                ?: Uri.fromFile(outputFile)
+                            viewModel.onRecordingStopped(
+                                RecordedAttemptDraft(
+                                    videoUri = outputUri.toString(),
+                                    thumbnailFrame = latestThumbnailFrame.get()
                                 )
-                            } else {
-                                val outputUri = event.outputResults.outputUri
-                                    .takeIf { it != Uri.EMPTY }
-                                    ?: Uri.fromFile(outputFile)
-                                viewModel.onRecordingStopped(
-                                    RecordedAttemptDraft(
-                                        videoUri = outputUri.toString(),
-                                        thumbnailFrame = latestThumbnailFrame.get()
-                                    )
-                                )
-                            }
+                            )
                         }
                     }
                 }
+            }
+    }
+
+    val previewContent: @Composable BoxScope.() -> Unit = {
+        AndroidView(
+            factory = { previewView },
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+    val overlayContent: @Composable BoxScope.() -> Unit = {
+        LivePoseOverlay(
+            modifier = Modifier.fillMaxSize(),
+            poseFrame = uiState.latestPoseFrame
+        )
+    }
+
+    if (realtimeOverlayUiState != null) {
+        RealtimeRecordPage(
+            uiState = uiState,
+            realtimeOverlayUiState = realtimeOverlayUiState,
+            isTorchEnabled = torchEnabled,
+            isTorchAvailable = camera?.cameraInfo?.hasFlashUnit() == true,
+            locationMessage = locationMessage,
+            isResolvingLocation = isResolvingLocation,
+            attemptStatusLabel = realtimeAttemptActionState.toLabel(),
+            previewContent = previewContent,
+            overlayContent = overlayContent,
+            onNavigateBack = onNavigateBack,
+            onRequestCameraPermission = {
+                permissionLauncher.launch(Manifest.permission.CAMERA)
+            },
+            onOpenGymSelector = {
+                onOpenGymList()
+                startLocationBackedGymSearch()
+            },
+            onSearchQueryChange = onSearchQueryChange,
+            onSearchSubmit = { query ->
+                onSearchQueryChange(query)
+                startLocationBackedGymSearch(
+                    query = query,
+                    nearbyOnly = query.isBlank()
+                )
+            },
+            onSelectGym = {
+                locationMessage = null
+                onSelectGym(it)
+            },
+            onSelectDifficulty = onSelectDifficulty,
+            onTapShutter = {
+                if (uiState.isRecording) {
+                    currentRecording?.stop()
+                } else {
+                    startRecording()
+                }
+            },
+            onLongPressShutter = {
+                if (!uiState.isRecording && realtimeOverlayUiState.isChallengeReady) {
+                    onSetHoldColorSheetVisible(true)
+                }
+            },
+            onTapFinish = onTapFinish,
+            onTapRetake = {
+                resetDraftState()
+                onTapRetake()
+            },
+            onTapFlash = {
+                if (camera?.cameraInfo?.hasFlashUnit() == true) {
+                    val nextEnabled = !torchEnabled
+                    torchEnabled = nextEnabled
+                    runCatching {
+                        camera?.cameraControl?.enableTorch(nextEnabled)
+                    }
+                    onTorchToggle(nextEnabled)
+                }
+            },
+            onSelectHoldColor = onSelectHoldColor,
+            onDismissHoldColorSheet = {
+                onSetHoldColorSheetVisible(false)
+            }
+        )
+    } else {
+        RecordPage(
+            uiState = uiState,
+            previewContent = previewContent,
+            onNavigateBack = onNavigateBack,
+            onRequestPermission = {
+                permissionLauncher.launch(Manifest.permission.CAMERA)
+            },
+            onStartRecording = ::startRecording,
+            onStopRecording = {
+                currentRecording?.stop()
+            },
+            onRetryLivePose = viewModel::retryLivePoseAnalysis,
+            onClearDraft = ::resetDraftState
+        )
+    }
+}
+
+private fun RealtimeAttemptActionState.toLabel(): String? {
+    return when (this) {
+        RealtimeAttemptActionState.Idle -> null
+        RealtimeAttemptActionState.ShowingOptions -> "실시간 분석 준비"
+        RealtimeAttemptActionState.RetakeRequested -> "재촬영 준비 완료"
+        RealtimeAttemptActionState.FinalAnalysisRequested -> "최종 분석 준비"
+    }
+}
+
+private fun requestNearbyGymSearch(
+    context: Context,
+    overlayUiState: UploadRealtimeOverlayUiState?,
+    query: String,
+    nearbyOnly: Boolean,
+    onSearchNearbyGyms: (Double, Double, String, Boolean) -> Unit,
+    onLocationResolvingChanged: (Boolean) -> Unit,
+    onLocationMessageChanged: (String?) -> Unit
+) {
+    val cachedLatitude = overlayUiState?.lastSearchLatitude
+    val cachedLongitude = overlayUiState?.lastSearchLongitude
+    if (cachedLatitude != null && cachedLongitude != null) {
+        onLocationResolvingChanged(false)
+        onLocationMessageChanged(null)
+        onSearchNearbyGyms(cachedLatitude, cachedLongitude, query, nearbyOnly)
+        return
+    }
+
+    onLocationResolvingChanged(true)
+    requestBestLocation(
+        context = context,
+        onSuccess = { latitude, longitude ->
+            onLocationResolvingChanged(false)
+            onLocationMessageChanged(null)
+            onSearchNearbyGyms(latitude, longitude, query, nearbyOnly)
         },
-        onStopRecording = {
-            currentRecording?.stop()
-        },
-        onRetryLivePose = viewModel::retryLivePoseAnalysis,
-        onClearDraft = viewModel::clearRecordedDraft
+        onError = { message ->
+            onLocationResolvingChanged(false)
+            onLocationMessageChanged(message)
+        }
     )
 }
 
@@ -359,3 +581,121 @@ private fun ImageProxy.toArgb8888Bytes(): ByteArray? {
 
 private fun Context.createRecordedVideoFile() =
     java.io.File(cacheDir, "recorded-${System.currentTimeMillis()}.mp4")
+
+private fun hasLocationPermission(context: Context): Boolean {
+    val fineGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    val coarseGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    return fineGranted || coarseGranted
+}
+
+@SuppressLint("MissingPermission")
+private fun requestBestLocation(
+    context: Context,
+    onSuccess: (Double, Double) -> Unit,
+    onError: (String) -> Unit
+) {
+    if (!hasLocationPermission(context)) {
+        onError("위치 권한이 필요해요.")
+        return
+    }
+
+    val locationManager = context.getSystemService(LocationManager::class.java)
+        ?: run {
+            onError("위치 서비스를 사용할 수 없어요.")
+            return
+        }
+
+    val providers = listOf(
+        LocationManager.NETWORK_PROVIDER,
+        LocationManager.GPS_PROVIDER,
+        LocationManager.PASSIVE_PROVIDER
+    ).filter(locationManager::isProviderEnabled)
+
+    if (providers.isEmpty()) {
+        onError("위치 서비스를 켜주세요.")
+        return
+    }
+
+    val cachedLocation = providers
+        .mapNotNull(locationManager::getLastKnownLocation)
+        .maxByOrNull { it.time }
+
+    if (cachedLocation != null) {
+        onSuccess(cachedLocation.latitude, cachedLocation.longitude)
+        return
+    }
+
+    requestCurrentLocation(
+        context = context,
+        locationManager = locationManager,
+        providers = providers,
+        providerIndex = 0,
+        onSuccess = onSuccess,
+        onError = onError
+    )
+}
+
+@SuppressLint("MissingPermission")
+private fun requestCurrentLocation(
+    context: Context,
+    locationManager: LocationManager,
+    providers: List<String>,
+    providerIndex: Int,
+    onSuccess: (Double, Double) -> Unit,
+    onError: (String) -> Unit
+) {
+    if (providerIndex >= providers.size) {
+        onError("현재 위치를 가져오지 못했어요.")
+        return
+    }
+
+    val provider = providers[providerIndex]
+    val cancellationSignal = CancellationSignal()
+    var completed = false
+
+    val locationConsumer = Consumer<Location> { location ->
+        if (completed) {
+            return@Consumer
+        }
+
+        if (location != null) {
+            completed = true
+            onSuccess(location.latitude, location.longitude)
+        } else {
+            completed = true
+            requestCurrentLocation(
+                context = context,
+                locationManager = locationManager,
+                providers = providers,
+                providerIndex = providerIndex + 1,
+                onSuccess = onSuccess,
+                onError = onError
+            )
+        }
+    }
+
+    runCatching {
+        LocationManagerCompat.getCurrentLocation(
+            locationManager,
+            provider,
+            cancellationSignal,
+            ContextCompat.getMainExecutor(context),
+            locationConsumer
+        )
+    }.onFailure {
+        requestCurrentLocation(
+            context = context,
+            locationManager = locationManager,
+            providers = providers,
+            providerIndex = providerIndex + 1,
+            onSuccess = onSuccess,
+            onError = onError
+        )
+    }
+}

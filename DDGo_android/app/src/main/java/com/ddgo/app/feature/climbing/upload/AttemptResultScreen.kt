@@ -1,4 +1,4 @@
-package com.ddgo.app.feature.climbing.upload
+﻿package com.ddgo.app.feature.climbing.upload
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -88,6 +88,7 @@ private val HIDDEN_FACE_LANDMARK_INDICES = (1..10).toSet()
 @Composable
 fun AttemptResultScreen(
     viewModel: UploadViewModel = hiltViewModel(),
+    isRealtimeAttemptFlow: Boolean = false,
     onNavigateToCompare: () -> Unit = {},
     onNavigateToAddAttempt: () -> Unit = {}
 ) {
@@ -545,10 +546,26 @@ fun AttemptResultScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             val isLastAttempt = currentAttemptIndex >= playbackAttemptUris.size - 1
+            val primaryButtonText = when {
+                isRealtimeAttemptFlow -> "최종 분석 보기"
+                isLastAttempt -> "최종 분석 결과 보기"
+                else -> "다음 시도 보기"
+            }
+            val primaryButtonColor = when {
+                isRealtimeAttemptFlow -> Color(0xFF673AB7)
+                isLastAttempt -> Color(0xFF673AB7)
+                else -> Color(0xFF03A9F4)
+            }
+            val secondaryButtonText = if (isRealtimeAttemptFlow) {
+                "다시 찍기"
+            } else {
+                "같은 문제 다시 시도 업로드"
+            }
+            val showSecondaryAction = isRealtimeAttemptFlow || hasChallenge
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = {
-                        if (isLastAttempt) {
+                        if (isRealtimeAttemptFlow || isLastAttempt) {
                             onNavigateToCompare()
                         } else {
                             viewModel.nextAttempt()
@@ -559,18 +576,18 @@ fun AttemptResultScreen(
                         .height(56.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isLastAttempt) Color(0xFF673AB7) else Color(0xFF03A9F4)
+                        containerColor = primaryButtonColor
                     )
                 ) {
                     Text(
-                        text = if (isLastAttempt) "최종 분석 결과 보기" else "다음 시도 보기",
+                        text = primaryButtonText,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                 }
 
-                if (hasChallenge) {
+                if (showSecondaryAction) {
                     Button(
                         onClick = onNavigateToAddAttempt,
                         modifier = Modifier
@@ -583,7 +600,7 @@ fun AttemptResultScreen(
                         )
                     ) {
                         Text(
-                            text = "같은 문제 다시 시도 업로드",
+                            text = secondaryButtonText,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -788,3 +805,5 @@ private fun DrawScope.drawHoldNumbers(
 
 private fun Long.toTimeString() =
     "%02d:%02d".format(this / 60_000L, (this / 1_000L) % 60L)
+
+
