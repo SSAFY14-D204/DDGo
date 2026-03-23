@@ -3,6 +3,7 @@ package com.ddgo.wear
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -123,19 +124,34 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun maybeRequestBackgroundPermission() {
-        if (
-            WearPermissionHelper.isBackgroundBodySensorsRequired() &&
-            !WearPermissionHelper.hasBackgroundBodySensorsPermission(this)
-        ) {
-            backgroundPermissionLauncher.launch(Manifest.permission.BODY_SENSORS_BACKGROUND)
+        val backgroundPermission = WearPermissionHelper.backgroundPermissionToRequest()
+        if (backgroundPermission == null) {
+            return
+        }
+        val needsPermission = when {
+            WearPermissionHelper.isBackgroundHealthDataRequired() ->
+                !WearPermissionHelper.hasBackgroundHealthDataPermission(this)
+
+            WearPermissionHelper.isBackgroundBodySensorsRequired() ->
+                !WearPermissionHelper.hasBackgroundBodySensorsPermission(this)
+
+            else -> false
+        }
+        if (needsPermission) {
+            backgroundPermissionLauncher.launch(backgroundPermission)
         }
     }
 
     private fun refreshPermissionState() {
         permissionUiState.value = PermissionUiState(
             missingForegroundPermissions = WearPermissionHelper.missingForegroundPermissions(this),
-            needsBackgroundBodySensors = WearPermissionHelper.isBackgroundBodySensorsRequired() &&
-                !WearPermissionHelper.hasBackgroundBodySensorsPermission(this)
+            needsBackgroundBodySensors = (
+                WearPermissionHelper.isBackgroundBodySensorsRequired() &&
+                    !WearPermissionHelper.hasBackgroundBodySensorsPermission(this)
+                ) || (
+                WearPermissionHelper.isBackgroundHealthDataRequired() &&
+                    !WearPermissionHelper.hasBackgroundHealthDataPermission(this)
+                )
         )
     }
 
@@ -418,10 +434,22 @@ private data class PermissionUiState(
         get() {
             val parts = buildList {
                 if (missingForegroundPermissions.isNotEmpty()) {
-                    add("Grant body sensors and activity recognition")
+                    add(
+                        if (Build.VERSION.SDK_INT >= 36) {
+                            "Grant heart rate and activity recognition"
+                        } else {
+                            "Grant body sensors and activity recognition"
+                        }
+                    )
                 }
                 if (needsBackgroundBodySensors) {
-                    add("Enable background body sensors")
+                    add(
+                        if (Build.VERSION.SDK_INT >= 36) {
+                            "Enable background health data"
+                        } else {
+                            "Enable background body sensors"
+                        }
+                    )
                 }
             }
             return parts.joinToString(separator = " | ")
