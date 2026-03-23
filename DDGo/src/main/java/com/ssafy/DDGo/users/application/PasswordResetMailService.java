@@ -1,12 +1,12 @@
 package com.ssafy.DDGo.users.application;
 
 import com.ssafy.DDGo.global.config.PasswordResetProperties;
-import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.mail.javamail.MimeMessagePreparator;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -31,6 +31,7 @@ public class PasswordResetMailService {
         }
 
         String resetLink = passwordResetProperties.getResetUrl() + "?token=" + token;
+
         String plainText = """
                 안녕하세요, DDGo입니다.
 
@@ -61,18 +62,16 @@ public class PasswordResetMailService {
                 """.formatted(resetLink, resetLink, resetLink, passwordResetProperties.getTokenTtlSeconds());
 
         try {
-            var mimeMessage = javaMailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "UTF-8");
-            helper.setTo(toEmail);
-            helper.setFrom(passwordResetProperties.getFrom());
-            helper.setSubject("[DDGo] 비밀번호 재설정 안내");
-            helper.setText(plainText, htmlText);
+            MimeMessagePreparator preparator = mimeMessage -> {
+                MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "UTF-8");
+                helper.setTo(toEmail);
+                helper.setFrom(passwordResetProperties.getFrom());
+                helper.setSubject("[DDGo] 비밀번호 재설정 안내");
+                helper.setText(plainText, htmlText);
+            };
 
-            javaMailSender.send(mimeMessage);
+            javaMailSender.send(preparator);
             return true;
-        } catch (MessagingException e) {
-            log.error("비밀번호 재설정 메일 메시지 생성에 실패했습니다. email={}", toEmail, e);
-            return false;
         } catch (MailException e) {
             log.error("비밀번호 재설정 메일 전송에 실패했습니다. email={}", toEmail, e);
             return false;
