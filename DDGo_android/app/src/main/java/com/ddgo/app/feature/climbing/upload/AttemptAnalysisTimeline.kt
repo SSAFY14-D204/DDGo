@@ -57,6 +57,46 @@ internal fun resolveAnalysisSeekTimeMs(
     else -> point.timeMs.coerceAtLeast(0L)
 }
 
+internal fun resolvePlaybackActiveAnalysisCardIndex(
+    points: List<AnalysisPoint>,
+    displayedPositionMs: Long
+): Int = points.indexOfLast { point -> point.timeMs <= displayedPositionMs }
+
+internal fun shouldKeepTappedAnalysisCardOverride(
+    points: List<AnalysisPoint>,
+    tappedCardOverrideIdx: Int,
+    displayedPositionMs: Long
+): Boolean {
+    if (tappedCardOverrideIdx !in points.indices) {
+        return false
+    }
+
+    val nextPointTimeMs = points.getOrNull(tappedCardOverrideIdx + 1)?.timeMs ?: return true
+    return displayedPositionMs < nextPointTimeMs
+}
+
+internal fun resolveActiveAnalysisCardIndex(
+    points: List<AnalysisPoint>,
+    displayedPositionMs: Long,
+    tappedCardOverrideIdx: Int
+): Int {
+    val playbackActiveIdx = resolvePlaybackActiveAnalysisCardIndex(
+        points = points,
+        displayedPositionMs = displayedPositionMs
+    )
+    return if (
+        shouldKeepTappedAnalysisCardOverride(
+            points = points,
+            tappedCardOverrideIdx = tappedCardOverrideIdx,
+            displayedPositionMs = displayedPositionMs
+        )
+    ) {
+        tappedCardOverrideIdx
+    } else {
+        playbackActiveIdx
+    }
+}
+
 internal fun resolveInitialAttemptPlaybackStartTimeMs(
     personObservationStartTimeMs: Long?,
     poseTimestamps: List<Long>

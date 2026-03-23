@@ -1,16 +1,21 @@
 package com.ddgo.app.feature.climbing.upload
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -18,12 +23,16 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.Dp
 import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.usecase.HoldNumbered
 import androidx.media3.common.VideoSize
 import kotlin.math.abs
 
@@ -33,6 +42,14 @@ internal data class VideoContentRect(
     val width: Float,
     val height: Float
 )
+
+internal data class VideoFrameMask(
+    val topHeightPx: Float,
+    val bottomHeightPx: Float
+) {
+    val isVisible: Boolean
+        get() = topHeightPx > 0f || bottomHeightPx > 0f
+}
 
 internal data class PoseScrubberColors(
     val trackColor: Color,
@@ -214,6 +231,118 @@ internal fun calculateVideoContentRect(
             width = fittedWidth,
             height = fittedHeight
         )
+    }
+}
+
+internal fun calculateVerticalVideoFrameMask(
+    holds: List<HoldNumbered>,
+    contentRect: VideoContentRect,
+    videoAspectRatio: Float,
+    safeInsetPx: Float
+): VideoFrameMask {
+    if (videoAspectRatio >= 1f) {
+        return VideoFrameMask(topHeightPx = 0f, bottomHeightPx = 0f)
+    }
+    if (holds.isEmpty() || contentRect.width <= 0f || contentRect.height <= 0f) {
+        return VideoFrameMask(topHeightPx = 0f, bottomHeightPx = 0f)
+    }
+
+    val topmostHoldTopPx = holds.minOf { hold ->
+        contentRect.top + (hold.hold.boundingBox.top.coerceIn(0f, 1f) * contentRect.height)
+    }
+    val bottommostHoldBottomPx = holds.maxOf { hold ->
+        contentRect.top + (hold.hold.boundingBox.bottom.coerceIn(0f, 1f) * contentRect.height)
+    }
+
+    val videoBottomPx = contentRect.top + contentRect.height
+    val visibleTopPx = (topmostHoldTopPx - safeInsetPx).coerceIn(contentRect.top, videoBottomPx)
+    val visibleBottomPx = (bottommostHoldBottomPx + safeInsetPx).coerceIn(contentRect.top, videoBottomPx)
+
+    return VideoFrameMask(
+        topHeightPx = (visibleTopPx - contentRect.top).coerceAtLeast(0f),
+        bottomHeightPx = (videoBottomPx - visibleBottomPx).coerceAtLeast(0f)
+    )
+}
+
+@Composable
+internal fun VerticalVideoFrameMaskOverlay(
+    frameMask: VideoFrameMask,
+    contentRect: VideoContentRect,
+    backgroundColor: Color,
+    edgeFade: Dp,
+    modifier: Modifier = Modifier
+) {
+    if (!frameMask.isVisible || contentRect.width <= 0f || contentRect.height <= 0f) return
+
+    val density = LocalDensity.current
+    val contentLeft = with(density) { contentRect.left.toDp() }
+    val contentTop = with(density) { contentRect.top.toDp() }
+    val contentWidth = with(density) { contentRect.width.toDp() }
+    val contentBottom = with(density) { (contentRect.top + contentRect.height).toDp() }
+    val topMaskHeight = with(density) { frameMask.topHeightPx.toDp() }
+    val bottomMaskHeight = with(density) { frameMask.bottomHeightPx.toDp() }
+    val safeEdgeFade = minOf(edgeFade, topMaskHeight)
+    val bottomEdgeFade = minOf(edgeFade, bottomMaskHeight)
+
+    Box(modifier = modifier) {
+        if (frameMask.topHeightPx > 0f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = contentLeft, y = contentTop)
+                    .width(contentWidth)
+                    .height(topMaskHeight)
+                    .background(backgroundColor)
+            )
+            if (safeEdgeFade > 0.dp) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(
+                            x = contentLeft,
+                            y = contentTop + topMaskHeight - safeEdgeFade
+                        )
+                        .width(contentWidth)
+                        .height(safeEdgeFade)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(backgroundColor.copy(alpha = 0.94f), Color.Transparent)
+                            )
+                        )
+                )
+            }
+        }
+
+        if (frameMask.bottomHeightPx > 0f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(
+                        x = contentLeft,
+                        y = contentBottom - bottomMaskHeight
+                    )
+                    .width(contentWidth)
+                    .height(bottomMaskHeight)
+                    .background(backgroundColor)
+            )
+            if (bottomEdgeFade > 0.dp) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(
+                            x = contentLeft,
+                            y = contentBottom - bottomMaskHeight
+                        )
+                        .width(contentWidth)
+                        .height(bottomEdgeFade)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, backgroundColor.copy(alpha = 0.94f))
+                            )
+                        )
+                )
+            }
+        }
     }
 }
 
