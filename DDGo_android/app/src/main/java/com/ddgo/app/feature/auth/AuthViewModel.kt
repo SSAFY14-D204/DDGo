@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.auth
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 private const val NICKNAME_KEYWORD = "\uB2C9\uB124\uC784"
+private const val TAG = "AuthViewModel"
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -124,11 +126,13 @@ class AuthViewModel @Inject constructor(
                 accessToken = accessToken
             )
                 .onSuccess {
+                    Log.d(TAG, "Kakao social login succeeded")
                     syncKakaoNicknameIfNeeded()
                     clearErrorState()
                     _uiState.value = AuthUiState.Success
                 }
                 .onFailure { throwable ->
+                    Log.e(TAG, "Kakao social login failed: ${throwable.message}", throwable)
                     setError(throwable.message ?: AuthStrings.KakaoLoginFailed)
                 }
         }
@@ -149,11 +153,13 @@ class AuthViewModel @Inject constructor(
                 idToken = idToken
             )
                 .onSuccess {
+                    Log.d(TAG, "Google social login succeeded")
                     syncGoogleNicknameIfNeeded(displayName)
                     clearErrorState()
                     _uiState.value = AuthUiState.Success
                 }
                 .onFailure { throwable ->
+                    Log.e(TAG, "Google social login failed: ${throwable.message}", throwable)
                     setError(throwable.message ?: AuthStrings.GoogleLoginFailed)
                 }
         }
