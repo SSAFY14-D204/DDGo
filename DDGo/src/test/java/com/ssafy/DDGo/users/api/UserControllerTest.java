@@ -2,6 +2,7 @@ package com.ssafy.DDGo.users.api;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -15,7 +16,10 @@ import com.ssafy.DDGo.global.config.SecurityConfig;
 import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
 import com.ssafy.DDGo.global.exception.GlobalExceptionHandler;
+import com.ssafy.DDGo.users.application.UserPasswordResetService;
 import com.ssafy.DDGo.users.application.UserService;
+import com.ssafy.DDGo.users.dto.request.PasswordResetConfirmRequest;
+import com.ssafy.DDGo.users.dto.request.PasswordResetMailRequest;
 import com.ssafy.DDGo.users.domain.SocialProvider;
 import com.ssafy.DDGo.users.dto.request.SocialLoginRequest;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
@@ -43,6 +47,9 @@ class UserControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private UserPasswordResetService userPasswordResetService;
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
@@ -120,6 +127,59 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.message").value("소셜 계정 연동이 완료되었습니다."));
 
         verify(userService).linkSocialAccount(eq("local@example.com"), any(SocialLoginRequest.class));
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 메일 요청은 인증 없이 가능하다")
+    void requestPasswordReset_returnsSuccess() throws Exception {
+        PasswordResetMailRequest request = new PasswordResetMailRequest();
+        ReflectionTestUtils.setField(request, "email", "local@example.com");
+
+        mockMvc.perform(post("/v1/users/password/reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("입력하신 이메일로 비밀번호 재설정 안내를 보냈습니다."));
+
+        verify(userPasswordResetService).requestPasswordReset(any(PasswordResetMailRequest.class));
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 완료는 유효한 토큰이면 성공한다")
+    void confirmPasswordReset_returnsSuccess() throws Exception {
+        PasswordResetConfirmRequest request = new PasswordResetConfirmRequest();
+        ReflectionTestUtils.setField(request, "token", "reset-token");
+        ReflectionTestUtils.setField(request, "newPassword", "NewPassword123!");
+
+        mockMvc.perform(post("/v1/users/password/reset/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("비밀번호가 재설정되었습니다."));
+
+        verify(userPasswordResetService).confirmPasswordReset(any(PasswordResetConfirmRequest.class));
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 완료 시 만료된 토큰은 에러를 반환한다")
+    void confirmPasswordReset_returnsInvalidTokenError() throws Exception {
+        PasswordResetConfirmRequest request = new PasswordResetConfirmRequest();
+        ReflectionTestUtils.setField(request, "token", "expired-token");
+        ReflectionTestUtils.setField(request, "newPassword", "NewPassword123!");
+
+        doThrow(new CustomException(ErrorCode.INVALID_TOKEN, "유효하지 않거나 만료된 비밀번호 재설정 토큰입니다."))
+                .when(userPasswordResetService)
+                .confirmPasswordReset(any(PasswordResetConfirmRequest.class));
+
+        mockMvc.perform(post("/v1/users/password/reset/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("A002"))
+                .andExpect(jsonPath("$.message").value("유효하지 않거나 만료된 비밀번호 재설정 토큰입니다."));
     }
 
     private SocialLoginRequest socialRequest(SocialProvider provider, String accessToken, String idToken) {

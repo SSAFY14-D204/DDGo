@@ -13,6 +13,18 @@
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
 
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+
   jpa:
     hibernate:
       ddl-auto: none
@@ -46,3 +58,10 @@ social:
     read-timeout-ms: ${SOCIAL_HTTP_READ_TIMEOUT_MS:3000}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
+
+password-reset:
+  enabled: ${PASSWORD_RESET_ENABLED:false}
+  from: ${PASSWORD_RESET_FROM:}
+  reset-url: ${PASSWORD_RESET_URL:http://localhost:3000/reset-password}
+  token-ttl-seconds: ${PASSWORD_RESET_TOKEN_TTL_SECONDS:900}
+  request-cooldown-seconds: ${PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS:60}
