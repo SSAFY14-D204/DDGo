@@ -50,6 +50,7 @@ import retrofit2.HttpException
 private const val SUBMISSION_TAG = "UploadSubmissionDelegate"
 private const val HOLD_CONTACT_ANALYSIS_TAG = "HoldContactAnalysis"
 private const val HOLD_CONTACT_LOG_PREFIX = "[DDGO_HOLD_CONTACT]"
+private const val ATTEMPT_ALIGNMENT_LOG_PREFIX = "[DDGO_ATTEMPT_HOLD_ALIGN]"
 private const val DEFAULT_AI_REQUEST_FRAME_STEP = 1
 
 internal data class UploadSubmissionRequest(
@@ -58,6 +59,7 @@ internal data class UploadSubmissionRequest(
     val useLocalAnalysisOnly: Boolean,
     val isAttemptOnlyUploadMode: Boolean,
     val attemptUris: List<String>,
+    val attemptAlignedHoldSets: Map<String, AttemptAlignedHoldSet>,
     val detectedHolds: List<Hold>,
     val numberedHolds: List<HoldNumbered>,
     val bestFrameBitmap: Bitmap?,
@@ -114,6 +116,7 @@ internal class UploadSubmissionDelegate(
     val backgroundUploadNotice: StateFlow<BackgroundUploadNotice?> = _backgroundUploadNotice.asStateFlow()
 
     var uploadedAttemptVideos by mutableStateOf<List<UploadedAttemptVideo>>(emptyList())
+    var attemptAlignedHoldSets by mutableStateOf<List<AttemptAlignedHoldSet>>(emptyList())
     var attemptHoldReachResults by mutableStateOf<List<AttemptHoldReachResult>>(emptyList())
     var attemptPoseDtos by mutableStateOf<List<PoseSequenceDto>>(emptyList())
     var attemptAnalyzedPoses by mutableStateOf<List<List<Pose>>>(emptyList())
@@ -126,6 +129,7 @@ internal class UploadSubmissionDelegate(
     private var backgroundUploadRequest: BackgroundUploadRequest? = null
     private var backgroundUploadKey: BackgroundUploadKey? = null
     private var nextBackgroundUploadNoticeId = 1L
+    private var attemptResultPreparationInFlight = false
 
     fun invalidateAnalysisPrewarm() {
         analysisPrewarmJob?.cancel()
@@ -214,173 +218,202 @@ internal class UploadSubmissionDelegate(
         request: UploadSubmissionRequest,
         callbacks: UploadSubmissionCallbacks
     ) = coroutineScope {
-        if (_uploadSubmissionUiState.value is UploadSubmissionUiState.Loading) {
-            return@coroutineScope
-        }
-        val startedAt = UploadAiTraceLogger.now()
-        UploadAiTraceLogger.log(
-            event = "ATTEMPT_RESULT_PREP_BEGIN",
-            generation = request.selectionGeneration,
-            playbackUri = request.attemptUris.firstOrNull(),
-            phase = "AttemptResultPreparation",
-            details = mapOf(
-                "attemptCount" to request.attemptUris.size,
-                "numberedHoldCount" to request.numberedHolds.size
-            )
-        )
-
-        val currentChallengeId = request.challengeId
-        if (!request.useLocalAnalysisOnly && (currentChallengeId == null || currentChallengeId <= 0L)) {
-            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("생성된 챌린지가 없습니다.")
-            return@coroutineScope
-        }
-
-        val currentBitmap = request.bestFrameBitmap
-        val numberedHoldsForAnalysis = request.numberedHolds.takeIf { it.isNotEmpty() }
-
-        if (!request.isAttemptOnlyUploadMode) {
-            if (currentBitmap == null) {
-                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("대표 기준 이미지가 없습니다.")
-                return@coroutineScope
-            }
-
-            if (request.detectedHolds.isEmpty()) {
-                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("저장할 홀드가 없습니다.")
-                return@coroutineScope
-            }
-
-            if (numberedHoldsForAnalysis == null) {
-                _uploadSubmissionUiState.value =
-                    UploadSubmissionUiState.Error("시작 홀드와 종료 홀드를 먼저 선택해 주세요.")
-                return@coroutineScope
-            }
-        }
-
-        if (request.attemptUris.isEmpty()) {
-            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("업로드할 영상이 없습니다.")
-            return@coroutineScope
-        }
-
-        if (!request.isAttemptOnlyUploadMode && !request.useLocalAnalysisOnly) {
-            _uploadSubmissionUiState.value =
-                UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있어요.")
-
+        if (attemptResultPreparationInFlight) {
             UploadAiTraceLogger.log(
-                event = "ATTEMPT_RESULT_HOLDS_SAVE_BEGIN",
+                event = "ATTEMPT_RESULT_PREP_SKIPPED",
                 generation = request.selectionGeneration,
                 playbackUri = request.attemptUris.firstOrNull(),
-                phase = "AttemptResultPreparation"
+                phase = "AttemptResultPreparation",
+                status = "already_running"
             )
-            saveChallengeHoldsUseCase(
-                challengeId = currentChallengeId!!,
-                holds = request.holdCoordinates
-            ).onSuccess { saved ->
-                callbacks.setSavedChallengeHolds(saved)
-                UploadAiTraceLogger.log(
-                    event = "ATTEMPT_RESULT_HOLDS_SAVE_DONE",
-                    generation = request.selectionGeneration,
-                    playbackUri = request.attemptUris.firstOrNull(),
-                    phase = "AttemptResultPreparation",
-                    status = "success",
-                    details = mapOf(
-                        "challengeId" to saved.challengeId,
-                        "holdCount" to saved.holdCount
-                    )
+            return@coroutineScope
+        }
+        attemptResultPreparationInFlight = true
+        try {
+            val startedAt = UploadAiTraceLogger.now()
+            UploadAiTraceLogger.log(
+                event = "ATTEMPT_RESULT_PREP_BEGIN",
+                generation = request.selectionGeneration,
+                playbackUri = request.attemptUris.firstOrNull(),
+                phase = "AttemptResultPreparation",
+                details = mapOf(
+                    "attemptCount" to request.attemptUris.size,
+                    "numberedHoldCount" to request.numberedHolds.size
                 )
-                Log.d(
-                    SUBMISSION_TAG,
-                    "submitUploadForAttemptResult: holds saved, challengeId=${saved.challengeId}, holdCount=${saved.holdCount}"
-                )
-            }.onFailure { throwable ->
-                Log.e(SUBMISSION_TAG, "submitUploadForAttemptResult: save holds failed", throwable)
+            )
+
+            val currentChallengeId = request.challengeId
+            if (!request.useLocalAnalysisOnly && (currentChallengeId == null || currentChallengeId <= 0L)) {
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("생성된 챌린지가 없습니다.")
+                return@coroutineScope
+            }
+
+            val currentBitmap = request.bestFrameBitmap
+            val alignedHoldSets = resolveAlignedHoldSets(request)
+            attemptAlignedHoldSets = alignedHoldSets
+            val numberedHoldsForAnalysis = resolveNumberedHoldsForAnalysis(
+                request = request,
+                alignedHoldSets = alignedHoldSets
+            )
+            logAlignedHoldSets(alignedHoldSets)
+
+            if (!request.isAttemptOnlyUploadMode) {
+                if (currentBitmap == null) {
+                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("대표 기준 이미지가 없습니다.")
+                    return@coroutineScope
+                }
+
+                if (request.detectedHolds.isEmpty()) {
+                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("저장할 홀드가 없습니다.")
+                    return@coroutineScope
+                }
+
+                if (numberedHoldsForAnalysis == null) {
+                    _uploadSubmissionUiState.value =
+                        UploadSubmissionUiState.Error("시작 홀드와 종료 홀드를 먼저 선택해 주세요.")
+                    return@coroutineScope
+                }
+            }
+
+            if (request.attemptUris.isEmpty()) {
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("업로드할 영상이 없습니다.")
+                return@coroutineScope
+            }
+
+            if (request.isAttemptOnlyUploadMode && numberedHoldsForAnalysis == null) {
                 _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
-                    throwable.message ?: "홀드 정보를 저장하지 못했습니다."
+                    "기존 챌린지의 기준 홀드를 찾지 못했습니다. 챌린지 생성 화면에서 다시 시도해주세요."
                 )
                 return@coroutineScope
             }
-        }
 
-        startBackgroundAttemptUploads(
-            scope = scope,
-            request = request,
-            challengeId = currentChallengeId,
-            callbacks = callbacks
-        )
+            if (!request.isAttemptOnlyUploadMode && !request.useLocalAnalysisOnly) {
+                _uploadSubmissionUiState.value =
+                    UploadSubmissionUiState.Loading("홀드 정보를 저장하고 있어요.")
 
-        if (
-            !request.isAttemptOnlyUploadMode &&
-            numberedHoldsForAnalysis != null &&
-            currentBitmap != null
-        ) {
-            requestAnalysisPrewarm(
+                UploadAiTraceLogger.log(
+                    event = "ATTEMPT_RESULT_HOLDS_SAVE_BEGIN",
+                    generation = request.selectionGeneration,
+                    playbackUri = request.attemptUris.firstOrNull(),
+                    phase = "AttemptResultPreparation"
+                )
+                saveChallengeHoldsUseCase(
+                    challengeId = currentChallengeId!!,
+                    holds = request.holdCoordinates
+                ).onSuccess { saved ->
+                    callbacks.setSavedChallengeHolds(saved)
+                    UploadAiTraceLogger.log(
+                        event = "ATTEMPT_RESULT_HOLDS_SAVE_DONE",
+                        generation = request.selectionGeneration,
+                        playbackUri = request.attemptUris.firstOrNull(),
+                        phase = "AttemptResultPreparation",
+                        status = "success",
+                        details = mapOf(
+                            "challengeId" to saved.challengeId,
+                            "holdCount" to saved.holdCount
+                        )
+                    )
+                    Log.d(
+                        SUBMISSION_TAG,
+                        "submitUploadForAttemptResult: holds saved, challengeId=${saved.challengeId}, holdCount=${saved.holdCount}"
+                    )
+                }.onFailure { throwable ->
+                    Log.e(SUBMISSION_TAG, "submitUploadForAttemptResult: save holds failed", throwable)
+                    _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                        throwable.message ?: "홀드 정보를 저장하지 못했습니다."
+                    )
+                    return@coroutineScope
+                }
+            }
+
+            startBackgroundAttemptUploads(
                 scope = scope,
                 request = request,
+                challengeId = currentChallengeId,
                 callbacks = callbacks
             )
-        }
 
-        _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading("자세 데이터를 준비하고 있어요.")
+            if (
+                !request.isAttemptOnlyUploadMode &&
+                numberedHoldsForAnalysis != null &&
+                currentBitmap != null
+            ) {
+                requestAnalysisPrewarm(
+                    scope = scope,
+                    request = request,
+                    callbacks = callbacks
+                )
+            }
 
-        val analysisResult = runAttemptResultPreparationPipeline(
-            request = request,
-            numberedHoldsForAnalysis = numberedHoldsForAnalysis,
-            callbacks = callbacks
-        )
-        if (analysisResult.isFailure) {
-            val throwable = analysisResult.exceptionOrNull()
-            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
-                throwable?.extractHttpErrorDetail()
-                    ?: throwable?.message
-                    ?: "업로드 분석을 완료하지 못했습니다."
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading("자세 데이터를 준비하고 있어요.")
+
+            val analysisResult = runAttemptResultPreparationPipeline(
+                request = request,
+                alignedHoldSets = alignedHoldSets,
+                callbacks = callbacks
             )
-            return@coroutineScope
-        }
+            if (analysisResult.isFailure) {
+                val throwable = analysisResult.exceptionOrNull()
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                    throwable?.extractHttpErrorDetail()
+                        ?: throwable?.message
+                        ?: "업로드 분석을 완료하지 못했습니다."
+                )
+                return@coroutineScope
+            }
 
-        finalizeUploadedAttemptsIfReady(
-            challengeId = currentChallengeId,
-            uploadedVideos = uploadedAttemptVideos,
-            playbackUris = request.attemptUris,
-            totalHoldCount = numberedHoldsForAnalysis?.size ?: 0
-        ).onFailure { throwable ->
-            Log.e(SUBMISSION_TAG, "submitUploadForAttemptResult: end attempt failed", throwable)
-            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
-                throwable.message ?: "Failed to finalize uploaded attempts."
+            finalizeUploadedAttemptsIfReady(
+                challengeId = currentChallengeId,
+                uploadedVideos = uploadedAttemptVideos,
+                playbackUris = request.attemptUris,
+                totalHoldCount = resolveTotalHoldCount(
+                    request = request,
+                    alignedHoldSets = alignedHoldSets
+                )
+            ).onFailure { throwable ->
+                Log.e(SUBMISSION_TAG, "submitUploadForAttemptResult: end attempt failed", throwable)
+                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                    throwable.message ?: "Failed to finalize uploaded attempts."
+                )
+                return@coroutineScope
+            }
+ 
+            publishAttemptResultSession(
+                callbacks = callbacks,
+                playbackUris = request.attemptUris,
+                uploadedVideos = uploadedAttemptVideos,
+                currentAttemptIndex = 0,
+                attemptAlignedHoldSets = attemptAlignedHoldSets,
+                holdReachResults = attemptHoldReachResults,
+                poseDtos = attemptPoseDtos,
+                analyzedPoses = attemptAnalyzedPoses,
+                polygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
+                overallSummary = overallHoldReachSummary
             )
-            return@coroutineScope
+            UploadAiTraceLogger.log(
+                event = "ATTEMPT_RESULT_SESSION_PUBLISH_DONE",
+                generation = request.selectionGeneration,
+                playbackUri = request.attemptUris.firstOrNull(),
+                phase = "AttemptResultPreparation",
+                status = "success",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt)
+            )
+            UploadAiTraceLogger.log(
+                event = "ATTEMPT_RESULT_PREP_DONE",
+                generation = request.selectionGeneration,
+                playbackUri = request.attemptUris.firstOrNull(),
+                phase = "AttemptResultPreparation",
+                status = "success",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                details = mapOf(
+                    "uploadedVideoCount" to uploadedAttemptVideos.size,
+                    "holdReachCount" to attemptHoldReachResults.size
+                )
+            )
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedAttemptVideos)
+        } finally {
+            attemptResultPreparationInFlight = false
         }
-
-        publishAttemptResultSession(
-            callbacks = callbacks,
-            playbackUris = request.attemptUris,
-            uploadedVideos = uploadedAttemptVideos,
-            currentAttemptIndex = 0,
-            holdReachResults = attemptHoldReachResults,
-            poseDtos = attemptPoseDtos,
-            analyzedPoses = attemptAnalyzedPoses,
-            polygonHoldContactDebugResults = attemptPolygonHoldContactDebugResults,
-            overallSummary = overallHoldReachSummary
-        )
-        UploadAiTraceLogger.log(
-            event = "ATTEMPT_RESULT_SESSION_PUBLISH_DONE",
-            generation = request.selectionGeneration,
-            playbackUri = request.attemptUris.firstOrNull(),
-            phase = "AttemptResultPreparation",
-            status = "success",
-            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt)
-        )
-        UploadAiTraceLogger.log(
-            event = "ATTEMPT_RESULT_PREP_DONE",
-            generation = request.selectionGeneration,
-            playbackUri = request.attemptUris.firstOrNull(),
-            phase = "AttemptResultPreparation",
-            status = "success",
-            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
-            details = mapOf(
-                "uploadedVideoCount" to uploadedAttemptVideos.size,
-                "holdReachCount" to attemptHoldReachResults.size
-            )
-        )
-        _uploadSubmissionUiState.value = UploadSubmissionUiState.Success(uploadedAttemptVideos)
     }
 
     suspend fun ensureFinalAnalysisReady(
@@ -508,7 +541,45 @@ internal class UploadSubmissionDelegate(
         }
 
         val currentBitmap = request.bestFrameBitmap
-        val numberedHoldsForAnalysis = request.numberedHolds.takeIf { it.isNotEmpty() }
+        val alignedHoldSets = request.attemptUris.map { playbackUri ->
+            request.attemptAlignedHoldSets[playbackUri] ?: AttemptAlignedHoldSet(
+                playbackUri = playbackUri,
+                frameWidthPx = currentBitmap?.width ?: 1000,
+                frameHeightPx = currentBitmap?.height ?: 1000,
+                mode = AttemptHoldAlignmentMode.ReferenceFallback,
+                confidence = 0f,
+                matchedHoldCount = 0,
+                warpOnlyHoldCount = request.numberedHolds.size,
+                alignedHolds = request.numberedHolds,
+                debugSummary = "reference fallback"
+            )
+        }
+        attemptAlignedHoldSets = alignedHoldSets
+        val numberedHoldsForAnalysis = alignedHoldSets
+            .firstOrNull { it.alignedHolds.isNotEmpty() }
+            ?.alignedHolds
+            ?.takeIf { it.isNotEmpty() }
+            ?: request.numberedHolds.takeIf { it.isNotEmpty() }
+        alignedHoldSets.forEach { alignedHoldSet ->
+            Log.d(
+                SUBMISSION_TAG,
+                "$ATTEMPT_ALIGNMENT_LOG_PREFIX submit uses aligned holds: " +
+                    "uri=${alignedHoldSet.playbackUri}, mode=${alignedHoldSet.mode}, " +
+                    "matched=${alignedHoldSet.matchedHoldCount}, warpOnly=${alignedHoldSet.warpOnlyHoldCount}, " +
+                "confidence=${"%.3f".format(alignedHoldSet.confidence)}"
+            )
+        }
+
+        if (request.isAttemptOnlyUploadMode && numberedHoldsForAnalysis == null) {
+            Log.e(
+                SUBMISSION_TAG,
+                "$ATTEMPT_ALIGNMENT_LOG_PREFIX missing reference holds for attempt-only upload"
+            )
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                "기존 챌린지의 기준 홀드를 찾지 못했습니다. 챌린지 생성 화면에서 다시 시도해주세요."
+            )
+            return
+        }
 
         if (!request.isAttemptOnlyUploadMode) {
             if (currentBitmap == null) {
@@ -642,8 +713,7 @@ internal class UploadSubmissionDelegate(
                 UploadSubmissionUiState.Loading("최고 도달 홀드를 분석하고 있습니다.")
 
             analyzeAllAttemptHoldReach(
-                attemptUris = request.attemptUris,
-                holds = numberedHoldsForAnalysis,
+                alignedHoldSets = alignedHoldSets,
                 terminalSnapshot = terminalSnapshot
             )
         } else {
@@ -655,19 +725,14 @@ internal class UploadSubmissionDelegate(
                 _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("AI 분석용 홀드 기준 이미지가 없습니다.")
                 return
             }
-            val holdsForAi = numberedHoldsForAnalysis ?: run {
-                _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("AI 분석용 홀드 번호가 없습니다.")
-                return
-            }
             val profileForAi = aiProfile ?: run {
                 _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("AI 분석용 사용자 프로필을 확인할 수 없습니다.")
                 return
             }
 
             analyzeAllAttemptsWithAi(
-                attemptUris = request.attemptUris,
-                holds = holdsForAi,
-                frameBitmap = bitmapForAi,
+                alignedHoldSets = alignedHoldSets,
+                referenceFrameBitmap = bitmapForAi,
                 mode = request.aiMode,
                 primaryRealtimeSessionId = request.primaryRealtimeSessionId,
                 profile = profileForAi,
@@ -680,7 +745,10 @@ internal class UploadSubmissionDelegate(
                     uploadedVideos = uploadedVideos,
                     playbackUris = request.attemptUris,
                     terminalSnapshot = terminalSnapshot,
-                    totalHoldCount = holdsForAi.size
+                    totalHoldCount = resolveTotalHoldCount(
+                        request = request,
+                        alignedHoldSets = alignedHoldSets
+                    )
                 )
                 Log.e(
                     SUBMISSION_TAG,
@@ -715,6 +783,7 @@ internal class UploadSubmissionDelegate(
             playbackUris = request.attemptUris,
             uploadedVideos = uploadedVideos,
             currentAttemptIndex = 0,
+            attemptAlignedHoldSets = attemptAlignedHoldSets,
             holdReachResults = attemptHoldReachResults,
             poseDtos = attemptPoseDtos,
             analyzedPoses = attemptAnalyzedPoses,
@@ -741,7 +810,13 @@ internal class UploadSubmissionDelegate(
         }
 
         val currentBitmap = request.bestFrameBitmap
-        val numberedHoldsForAnalysis = request.numberedHolds.takeIf { it.isNotEmpty() }
+        val alignedHoldSets = resolveAlignedHoldSets(request)
+        attemptAlignedHoldSets = alignedHoldSets
+        val numberedHoldsForAnalysis = resolveNumberedHoldsForAnalysis(
+            request = request,
+            alignedHoldSets = alignedHoldSets
+        )
+        logAlignedHoldSets(alignedHoldSets)
 
         if (!request.isAttemptOnlyUploadMode) {
             if (currentBitmap == null) {
@@ -763,6 +838,13 @@ internal class UploadSubmissionDelegate(
 
         if (request.attemptUris.isEmpty()) {
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Error("업로드할 영상이 없습니다.")
+            return@coroutineScope
+        }
+
+        if (request.isAttemptOnlyUploadMode && numberedHoldsForAnalysis == null) {
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                "기존 챌린지의 기준 홀드를 찾지 못했습니다. 챌린지 생성 화면에서 다시 시도해주세요."
+            )
             return@coroutineScope
         }
 
@@ -818,7 +900,7 @@ internal class UploadSubmissionDelegate(
 
         val analysisResult = runAnalysisPipelineForSubmit(
             request = request,
-            numberedHoldsForAnalysis = numberedHoldsForAnalysis,
+            alignedHoldSets = alignedHoldSets,
             currentBitmap = currentBitmap,
             aiProfile = aiProfile,
             callbacks = callbacks
@@ -849,7 +931,10 @@ internal class UploadSubmissionDelegate(
             uploadedVideos = uploadedVideos,
             playbackUris = request.attemptUris,
             terminalSnapshot = null,
-            totalHoldCount = numberedHoldsForAnalysis?.size ?: 0
+            totalHoldCount = resolveTotalHoldCount(
+                request = request,
+                alignedHoldSets = alignedHoldSets
+            )
         ).onFailure { throwable ->
             Log.e(SUBMISSION_TAG, "submitUpload(background): end attempt failed", throwable)
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
@@ -863,6 +948,7 @@ internal class UploadSubmissionDelegate(
             playbackUris = request.attemptUris,
             uploadedVideos = uploadedVideos,
             currentAttemptIndex = 0,
+            attemptAlignedHoldSets = attemptAlignedHoldSets,
             holdReachResults = attemptHoldReachResults,
             poseDtos = attemptPoseDtos,
             analyzedPoses = attemptAnalyzedPoses,
@@ -899,7 +985,10 @@ internal class UploadSubmissionDelegate(
                 ),
                 challengeId = resolvedChallengeId,
                 attemptUris = request.attemptUris,
-                totalHoldCount = request.numberedHolds.size
+                totalHoldCount = resolveTotalHoldCount(
+                    request = request,
+                    alignedHoldSets = resolveAlignedHoldSets(request)
+                )
             ),
             callbacks = callbacks
         )
@@ -1112,7 +1201,7 @@ internal class UploadSubmissionDelegate(
 
     private suspend fun runAttemptResultPreparationPipeline(
         request: UploadSubmissionRequest,
-        numberedHoldsForAnalysis: List<HoldNumbered>?,
+        alignedHoldSets: List<AttemptAlignedHoldSet>,
         callbacks: UploadSubmissionCallbacks
     ): Result<Unit> {
         val startedAt = UploadAiTraceLogger.now()
@@ -1138,17 +1227,21 @@ internal class UploadSubmissionDelegate(
             )
         }
 
-        if (numberedHoldsForAnalysis != null) {
+        if (alignedHoldSets.any { it.alignedHolds.isNotEmpty() }) {
             UploadAiTraceLogger.log(
                 event = "ATTEMPT_RESULT_HOLD_REACH_BEGIN",
                 generation = request.selectionGeneration,
                 playbackUri = request.attemptUris.firstOrNull(),
                 phase = "AttemptResultPreparation",
-                details = mapOf("numberedHoldCount" to numberedHoldsForAnalysis.size)
+                details = mapOf(
+                    "numberedHoldCount" to resolveTotalHoldCount(
+                        request = request,
+                        alignedHoldSets = alignedHoldSets
+                    )
+                )
             )
             analyzeAllAttemptHoldReach(
-                attemptUris = request.attemptUris,
-                holds = numberedHoldsForAnalysis,
+                alignedHoldSets = alignedHoldSets,
                 terminalSnapshot = terminalSnapshot
             )
             UploadAiTraceLogger.log(
@@ -1169,11 +1262,15 @@ internal class UploadSubmissionDelegate(
 
     private suspend fun runAnalysisPipelineForSubmit(
         request: UploadSubmissionRequest,
-        numberedHoldsForAnalysis: List<HoldNumbered>?,
+        alignedHoldSets: List<AttemptAlignedHoldSet>,
         currentBitmap: Bitmap?,
         aiProfile: ResolvedAiProfile?,
         callbacks: UploadSubmissionCallbacks
     ): Result<Unit> {
+        val numberedHoldsForAnalysis = resolveNumberedHoldsForAnalysis(
+            request = request,
+            alignedHoldSets = alignedHoldSets
+        )
         val shouldUsePrewarm =
             !request.isAttemptOnlyUploadMode &&
                 numberedHoldsForAnalysis != null &&
@@ -1216,10 +1313,9 @@ internal class UploadSubmissionDelegate(
             )
         }
 
-        if (numberedHoldsForAnalysis != null) {
+        if (alignedHoldSets.any { it.alignedHolds.isNotEmpty() }) {
             analyzeAllAttemptHoldReach(
-                attemptUris = request.attemptUris,
-                holds = numberedHoldsForAnalysis,
+                alignedHoldSets = alignedHoldSets,
                 terminalSnapshot = terminalSnapshot
             )
         } else {
@@ -1238,15 +1334,12 @@ internal class UploadSubmissionDelegate(
 
         val bitmapForAi = currentBitmap
             ?: return Result.failure(IllegalStateException("AI 분석용 대표 이미지가 없습니다."))
-        val holdsForAi = numberedHoldsForAnalysis
-            ?: return Result.failure(IllegalStateException("AI 분석용 홀드 번호가 없습니다."))
         val profileForAi = aiProfile
             ?: return Result.failure(IllegalStateException("AI 분석용 프로필이 없습니다."))
 
         return analyzeAllAttemptsWithAi(
-            attemptUris = request.attemptUris,
-            holds = holdsForAi,
-            frameBitmap = bitmapForAi,
+            alignedHoldSets = alignedHoldSets,
+            referenceFrameBitmap = bitmapForAi,
             mode = request.aiMode,
             primaryRealtimeSessionId = request.primaryRealtimeSessionId,
             profile = profileForAi,
@@ -1273,10 +1366,12 @@ internal class UploadSubmissionDelegate(
                 "aiMode" to request.aiMode.name
             )
         )
-        val numberedHoldsForAnalysis = request.numberedHolds.takeIf { it.isNotEmpty() }
-            ?: return@coroutineScope Result.failure(
+        val alignedHoldSets = resolveAlignedHoldSets(request)
+        if (alignedHoldSets.none { it.alignedHolds.isNotEmpty() }) {
+            return@coroutineScope Result.failure(
                 IllegalStateException("AI 분석용 홀드 번호가 없습니다.")
             )
+        }
         val currentBitmap = request.bestFrameBitmap
             ?: return@coroutineScope Result.failure(
                 IllegalStateException("AI 분석용 대표 이미지가 없습니다.")
@@ -1308,9 +1403,8 @@ internal class UploadSubmissionDelegate(
         }
 
         val aiResults = analyzeAllAttemptsWithAiResult(
-            attemptUris = request.attemptUris,
-            holds = numberedHoldsForAnalysis,
-            frameBitmap = currentBitmap,
+            alignedHoldSets = alignedHoldSets,
+            referenceFrameBitmap = currentBitmap,
             mode = request.aiMode,
             primaryRealtimeSessionId = request.primaryRealtimeSessionId,
             profile = aiProfile,
@@ -1381,29 +1475,102 @@ internal class UploadSubmissionDelegate(
             return null
         }
 
+        val alignedHoldsFingerprint = buildAlignedHoldsFingerprint(resolveAlignedHoldSets(request))
+        if (alignedHoldsFingerprint.isBlank()) {
+            return null
+        }
+
         return SubmissionAnalysisPrewarmKey(
             selectionGeneration = request.selectionGeneration,
             attemptUrisSignature = request.attemptUris.joinToString("|"),
-            numberedHoldsFingerprint = request.numberedHolds.joinToString("|") { hold ->
-                buildString {
-                    append(hold.hold.holdNo)
-                    append(':')
-                    append(hold.role.name)
-                    append(':')
-                    append(hold.hold.boundingBox.left)
-                    append(':')
-                    append(hold.hold.boundingBox.top)
-                    append(':')
-                    append(hold.hold.boundingBox.right)
-                    append(':')
-                    append(hold.hold.boundingBox.bottom)
-                }
-            },
+            numberedHoldsFingerprint = alignedHoldsFingerprint,
             aiMode = request.aiMode,
             primaryRealtimeSessionId = request.primaryRealtimeSessionId,
             frameWidthPx = request.bestFrameBitmap.width,
             frameHeightPx = request.bestFrameBitmap.height
         )
+    }
+
+    private fun resolveAlignedHoldSets(request: UploadSubmissionRequest): List<AttemptAlignedHoldSet> {
+        val currentBitmap = request.bestFrameBitmap
+        return request.attemptUris.map { playbackUri ->
+            request.attemptAlignedHoldSets[playbackUri] ?: AttemptAlignedHoldSet(
+                playbackUri = playbackUri,
+                frameWidthPx = currentBitmap?.width ?: 1000,
+                frameHeightPx = currentBitmap?.height ?: 1000,
+                mode = AttemptHoldAlignmentMode.ReferenceFallback,
+                confidence = 0f,
+                matchedHoldCount = 0,
+                warpOnlyHoldCount = request.numberedHolds.size,
+                alignedHolds = request.numberedHolds,
+                debugSummary = "reference fallback"
+            )
+        }
+    }
+
+    private fun resolveNumberedHoldsForAnalysis(
+        request: UploadSubmissionRequest,
+        alignedHoldSets: List<AttemptAlignedHoldSet>
+    ): List<HoldNumbered>? {
+        return alignedHoldSets
+            .firstOrNull { it.alignedHolds.isNotEmpty() }
+            ?.alignedHolds
+            ?.takeIf { it.isNotEmpty() }
+            ?: request.numberedHolds.takeIf { it.isNotEmpty() }
+    }
+
+    private fun resolveTotalHoldCount(
+        request: UploadSubmissionRequest,
+        alignedHoldSets: List<AttemptAlignedHoldSet>
+    ): Int {
+        return resolveNumberedHoldsForAnalysis(
+            request = request,
+            alignedHoldSets = alignedHoldSets
+        )?.size ?: 0
+    }
+
+    private fun logAlignedHoldSets(alignedHoldSets: List<AttemptAlignedHoldSet>) {
+        alignedHoldSets.forEach { alignedHoldSet ->
+            Log.d(
+                SUBMISSION_TAG,
+                "$ATTEMPT_ALIGNMENT_LOG_PREFIX submit uses aligned holds: " +
+                    "uri=${alignedHoldSet.playbackUri}, mode=${alignedHoldSet.mode}, " +
+                    "matched=${alignedHoldSet.matchedHoldCount}, warpOnly=${alignedHoldSet.warpOnlyHoldCount}, " +
+                    "confidence=${"%.3f".format(alignedHoldSet.confidence)}"
+            )
+        }
+    }
+
+    private fun buildAlignedHoldsFingerprint(alignedHoldSets: List<AttemptAlignedHoldSet>): String {
+        return alignedHoldSets.joinToString("||") { alignedHoldSet ->
+            buildString {
+                append(alignedHoldSet.playbackUri)
+                append('#')
+                append(alignedHoldSet.mode.name)
+                append('#')
+                append(
+                    alignedHoldSet.alignedHolds.joinToString(";") { hold ->
+                        buildHoldFingerprint(hold)
+                    }
+                )
+            }
+        }
+    }
+
+    private fun buildHoldFingerprint(hold: HoldNumbered): String {
+        return buildString {
+            append(hold.hold.holdNo)
+            append(':')
+            append(hold.role.name)
+            append(':')
+            append(hold.hold.boundingBox.left)
+            append(':')
+            append(hold.hold.boundingBox.top)
+            append(':')
+            append(hold.hold.boundingBox.right)
+            append(':')
+            append(hold.hold.boundingBox.bottom)
+        }
     }
 
     private suspend fun awaitBackgroundUploadsOrThrow(
@@ -1434,6 +1601,14 @@ internal class UploadSubmissionDelegate(
         _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(message)
     }
 
+    fun setUploadSubmissionError(message: String) {
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(message)
+    }
+
+    fun setFinalAnalysisPreparationError(message: String) {
+        _finalAnalysisPreparationUiState.value = FinalAnalysisPreparationUiState.Error(message)
+    }
+
     fun clearAiAnalysisState(callbacks: UploadSubmissionCallbacks) {
         invalidateAnalysisPrewarm()
         attemptAiAnalysisResults = emptyList()
@@ -1441,6 +1616,7 @@ internal class UploadSubmissionDelegate(
     }
 
     fun clearHoldReachAnalysis(callbacks: UploadSubmissionCallbacks) {
+        attemptAlignedHoldSets = emptyList()
         invalidateAnalysisPrewarm()
         attemptHoldReachResults = emptyList()
         attemptPoseDtos = emptyList()
@@ -1471,6 +1647,7 @@ internal class UploadSubmissionDelegate(
         playbackUris: List<String>,
         uploadedVideos: List<UploadedAttemptVideo>,
         currentAttemptIndex: Int,
+        attemptAlignedHoldSets: List<AttemptAlignedHoldSet>,
         holdReachResults: List<AttemptHoldReachResult>,
         poseDtos: List<PoseSequenceDto>,
         analyzedPoses: List<List<Pose>>,
@@ -1485,6 +1662,7 @@ internal class UploadSubmissionDelegate(
                 maximumValue = playbackUris.lastIndex.coerceAtLeast(0)
             )
         )
+        this.attemptAlignedHoldSets = attemptAlignedHoldSets
         attemptHoldReachResults = holdReachResults
         attemptPoseDtos = poseDtos
         attemptAnalyzedPoses = analyzedPoses
@@ -1496,6 +1674,7 @@ internal class UploadSubmissionDelegate(
                 resultPlaybackUris = playbackUris,
                 uploadedAttemptVideos = uploadedVideos,
                 currentAttemptIndex = callbacks.currentAttemptIndex(),
+                attemptAlignedHoldSets = attemptAlignedHoldSets,
                 holdReachResults = holdReachResults,
                 attemptPoseDtos = poseDtos,
                 attemptAnalyzedPoses = analyzedPoses,
@@ -1536,6 +1715,7 @@ internal class UploadSubmissionDelegate(
                     minimumValue = 0,
                     maximumValue = playbackUris.lastIndex.coerceAtLeast(0)
                 ),
+                attemptAlignedHoldSets = attemptAlignedHoldSets,
                 holdReachResults = attemptHoldReachResults,
                 attemptPoseDtos = attemptPoseDtos,
                 attemptAnalyzedPoses = attemptAnalyzedPoses,
@@ -1559,6 +1739,7 @@ internal class UploadSubmissionDelegate(
                 maximumValue = session.resultPlaybackUris.lastIndex.coerceAtLeast(0)
             )
         )
+        attemptAlignedHoldSets = session.attemptAlignedHoldSets
         attemptHoldReachResults = session.holdReachResults
         attemptPoseDtos = session.attemptPoseDtos
         attemptAnalyzedPoses = session.attemptAnalyzedPoses
@@ -1621,11 +1802,10 @@ internal class UploadSubmissionDelegate(
     }
 
     private suspend fun analyzeAllAttemptHoldReach(
-        attemptUris: List<String>,
-        holds: List<HoldNumbered>,
+        alignedHoldSets: List<AttemptAlignedHoldSet>,
         terminalSnapshot: TerminalPrePoseSnapshot
     ) {
-        if (attemptUris.isEmpty() || holds.isEmpty()) {
+        if (alignedHoldSets.isEmpty()) {
             attemptHoldReachResults = emptyList()
             attemptPoseDtos = emptyList()
             attemptAnalyzedPoses = emptyList()
@@ -1634,15 +1814,15 @@ internal class UploadSubmissionDelegate(
             return
         }
 
-        val analyses = attemptUris.mapIndexed { index, uri ->
+        val analyses = alignedHoldSets.mapIndexed { index, alignedHoldSet ->
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
-                "최고 도달 홀드를 분석하고 있습니다. (${index + 1}/${attemptUris.size})"
+                "최고 도달 홀드를 분석하고 있습니다. (${index + 1}/${alignedHoldSets.size})"
             )
 
             analyzeSingleAttemptPoseAnalysis(
-                playbackUri = uri,
-                poses = terminalSnapshot.entriesByPlaybackUri[uri]?.poses.orEmpty(),
-                holds = holds
+                playbackUri = alignedHoldSet.playbackUri,
+                poses = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]?.poses.orEmpty(),
+                holds = alignedHoldSet.alignedHolds
             )
         }
 
@@ -1653,7 +1833,7 @@ internal class UploadSubmissionDelegate(
             analyses.map(AttemptPoseAnalysis::polygonHoldContactDebugResult)
         overallHoldReachSummary = summarizeHoldReachResults(
             results = attemptHoldReachResults,
-            totalHoldCount = holds.size
+            totalHoldCount = alignedHoldSets.firstOrNull()?.alignedHolds?.size ?: 0
         )
     }
 
@@ -1698,23 +1878,25 @@ internal class UploadSubmissionDelegate(
     }
 
     private suspend fun analyzeAllAttemptsWithAiResult(
-        attemptUris: List<String>,
-        holds: List<HoldNumbered>,
-        frameBitmap: Bitmap,
+        alignedHoldSets: List<AttemptAlignedHoldSet>,
+        referenceFrameBitmap: Bitmap,
         mode: AiAnalysisMode,
         primaryRealtimeSessionId: String?,
         profile: ResolvedAiProfile,
         terminalSnapshot: TerminalPrePoseSnapshot,
         emitLoading: Boolean
     ): Result<List<AiAnalysisResult>> {
-        if (attemptUris.isEmpty()) {
+        if (alignedHoldSets.isEmpty()) {
             return Result.success(emptyList())
         }
 
         val results = mutableListOf<AiAnalysisResult>()
-        val analysisHolds = holds.toHolds()
 
-        attemptUris.forEachIndexed { index, uri ->
+        alignedHoldSets.forEachIndexed { index, alignedHoldSet ->
+            val uri = alignedHoldSet.playbackUri
+            val analysisHolds = alignedHoldSet.alignedHolds.toHolds()
+            val frameWidthPx = alignedHoldSet.frameWidthPx.takeIf { it > 0 } ?: referenceFrameBitmap.width
+            val frameHeightPx = alignedHoldSet.frameHeightPx.takeIf { it > 0 } ?: referenceFrameBitmap.height
             val attemptStartedAt = UploadAiTraceLogger.now()
             UploadAiTraceLogger.log(
                 event = "FINAL_AI_ATTEMPT_BEGIN",
@@ -1723,13 +1905,13 @@ internal class UploadSubmissionDelegate(
                 status = "running",
                 details = mapOf(
                     "attemptIndex" to index,
-                    "attemptCount" to attemptUris.size,
+                    "attemptCount" to alignedHoldSets.size,
                     "mode" to mode.name
                 )
             )
             if (emitLoading) {
                 _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
-                    "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${attemptUris.size})"
+                    "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${alignedHoldSets.size})"
                 )
             }
 
@@ -1739,7 +1921,8 @@ internal class UploadSubmissionDelegate(
                     requestedMode = mode,
                     videoUri = uri,
                     holds = analysisHolds,
-                    frameBitmap = frameBitmap,
+                    frameWidthPx = frameWidthPx,
+                    frameHeightPx = frameHeightPx,
                     profile = profile,
                     cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
                 )
@@ -1752,7 +1935,8 @@ internal class UploadSubmissionDelegate(
                     mode = mode,
                     videoUri = uri,
                     holds = analysisHolds,
-                    frameBitmap = frameBitmap,
+                    frameWidthPx = frameWidthPx,
+                    frameHeightPx = frameHeightPx,
                     profile = profile,
                     cachedPoseSequence = cachedPoseSequence
                 )
@@ -1774,7 +1958,7 @@ internal class UploadSubmissionDelegate(
                 elapsedMs = UploadAiTraceLogger.elapsedSince(attemptStartedAt),
                 details = mapOf(
                     "attemptIndex" to index,
-                    "attemptCount" to attemptUris.size
+                    "attemptCount" to alignedHoldSets.size
                 )
             )
         }
@@ -1783,48 +1967,55 @@ internal class UploadSubmissionDelegate(
     }
 
     private suspend fun analyzeAllAttemptsWithAi(
-        attemptUris: List<String>,
-        holds: List<HoldNumbered>,
-        frameBitmap: Bitmap,
+        alignedHoldSets: List<AttemptAlignedHoldSet>,
+        referenceFrameBitmap: Bitmap,
         mode: AiAnalysisMode,
         primaryRealtimeSessionId: String?,
         profile: ResolvedAiProfile,
         terminalSnapshot: TerminalPrePoseSnapshot,
         callbacks: UploadSubmissionCallbacks
     ): Result<List<AiAnalysisResult>> {
-        if (attemptUris.isEmpty()) {
+        if (alignedHoldSets.isEmpty()) {
             clearAiAnalysisState(callbacks)
             return Result.success(emptyList())
         }
 
         val results = mutableListOf<AiAnalysisResult>()
-        val analysisHolds = holds.toHolds()
 
-        attemptUris.forEachIndexed { index, uri ->
+        alignedHoldSets.forEachIndexed { index, alignedHoldSet ->
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
-                "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${attemptUris.size})"
+                "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${alignedHoldSets.size})"
             )
 
+            val analysisHolds = alignedHoldSet.alignedHolds.toHolds()
+            val frameWidthPx = alignedHoldSet.frameWidthPx.takeIf { it > 0 } ?: referenceFrameBitmap.width
+            val frameHeightPx = alignedHoldSet.frameHeightPx.takeIf { it > 0 } ?: referenceFrameBitmap.height
             val result = if (index == 0 && primaryRealtimeSessionId != null) {
                 finalizeRealtimeAttemptOrFallback(
                     sessionId = primaryRealtimeSessionId,
                     requestedMode = mode,
-                    videoUri = uri,
+                    videoUri = alignedHoldSet.playbackUri,
                     holds = analysisHolds,
-                    frameBitmap = frameBitmap,
+                    frameWidthPx = frameWidthPx,
+                    frameHeightPx = frameHeightPx,
                     profile = profile,
-                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
+                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
+                        .preferredAiPoseSequence()
                 )
             } else {
-                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
+                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
+                    .preferredAiPoseSequence()
                     ?: return Result.failure(
-                        IllegalStateException("Missing cached pre-pose AI sequence for $uri")
+                        IllegalStateException(
+                            "Missing cached pre-pose AI sequence for ${alignedHoldSet.playbackUri}"
+                        )
                     )
                 analyzeAttemptWithBatchAi(
                     mode = mode,
-                    videoUri = uri,
+                    videoUri = alignedHoldSet.playbackUri,
                     holds = analysisHolds,
-                    frameBitmap = frameBitmap,
+                    frameWidthPx = frameWidthPx,
+                    frameHeightPx = frameHeightPx,
                     profile = profile,
                     cachedPoseSequence = cachedPoseSequence
                 )
@@ -1838,7 +2029,7 @@ internal class UploadSubmissionDelegate(
             }
 
             results += result.getOrThrow()
-            attemptAiAnalysisResults = results + List(attemptUris.size - results.size) { null }
+            attemptAiAnalysisResults = results + List(alignedHoldSets.size - results.size) { null }
             callbacks.syncDisplayedAnalysisPoints()
         }
 
@@ -1852,7 +2043,8 @@ internal class UploadSubmissionDelegate(
         requestedMode: AiAnalysisMode,
         videoUri: String,
         holds: List<Hold>,
-        frameBitmap: Bitmap,
+        frameWidthPx: Int,
+        frameHeightPx: Int,
         profile: ResolvedAiProfile,
         cachedPoseSequence: AiPoseSequence?
     ): Result<AiAnalysisResult> {
@@ -1866,7 +2058,10 @@ internal class UploadSubmissionDelegate(
             session = sessionHandle,
             request = AiRealtimeSessionContextRequest(
                 holds = holds,
-                videoMetadata = buildRealtimeVideoMetadata(frameBitmap)
+                videoMetadata = buildRealtimeVideoMetadata(
+                    frameWidthPx = frameWidthPx,
+                    frameHeightPx = frameHeightPx
+                )
             )
         )
 
@@ -1909,7 +2104,8 @@ internal class UploadSubmissionDelegate(
             mode = requestedMode,
             videoUri = videoUri,
             holds = holds,
-            frameBitmap = frameBitmap,
+            frameWidthPx = frameWidthPx,
+            frameHeightPx = frameHeightPx,
             profile = profile,
             cachedPoseSequence = cachedPoseSequence
                 ?: return Result.failure(
@@ -1922,7 +2118,8 @@ internal class UploadSubmissionDelegate(
         mode: AiAnalysisMode,
         videoUri: String,
         holds: List<Hold>,
-        frameBitmap: Bitmap,
+        frameWidthPx: Int,
+        frameHeightPx: Int,
         profile: ResolvedAiProfile,
         cachedPoseSequence: AiPoseSequence
     ): Result<AiAnalysisResult> {
@@ -1930,8 +2127,8 @@ internal class UploadSubmissionDelegate(
             mode = mode,
             videoUri = videoUri,
             holds = holds,
-            frameWidthPx = frameBitmap.width,
-            frameHeightPx = frameBitmap.height,
+            frameWidthPx = frameWidthPx,
+            frameHeightPx = frameHeightPx,
             heightCm = profile.heightCm,
             weightKg = profile.weightKg,
             wingspanCm = profile.wingspanCm,
@@ -1966,6 +2163,17 @@ internal class UploadSubmissionDelegate(
         return AiVideoMetadata(
             frameWidth = frameBitmap.width,
             frameHeight = frameBitmap.height,
+            frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
+        )
+    }
+
+    private fun buildRealtimeVideoMetadata(
+        frameWidthPx: Int,
+        frameHeightPx: Int
+    ): AiVideoMetadata {
+        return AiVideoMetadata(
+            frameWidth = frameWidthPx,
+            frameHeight = frameHeightPx,
             frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
         )
     }

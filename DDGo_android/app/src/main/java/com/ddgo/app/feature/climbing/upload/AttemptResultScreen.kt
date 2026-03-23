@@ -119,7 +119,7 @@ fun AttemptResultScreen(
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
     val personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs
     val usesPoseDetectorTimeline = currentAttemptPrePoseEntry != null
-    val numberedHolds = viewModel.numberedHolds
+    val numberedHolds = viewModel.currentAttemptDisplayHolds
     val endpointStatusMessage = remember(currentAttemptPrePoseEntry, currentAnalysisPoints) {
         when {
             currentAttemptPrePoseEntry == null -> null

@@ -5,6 +5,7 @@ import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
 import com.ddgo.app.feature.climbing.upload.UploadAiTraceLogger
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 
 @Singleton
 class OptimizedPrePoseVideoAnalysisProvider @Inject constructor(
@@ -33,23 +34,34 @@ class OptimizedPrePoseVideoAnalysisProvider @Inject constructor(
             )
         )
 
-        return runCatching {
+        return try {
             optimizedAnalyzer.analyze(
                 videoUri = videoUri,
                 analysisFpsLimit = analysisFpsLimit
-            )
-        }.onSuccess { result ->
+            ).also { result ->
+                UploadAiTraceLogger.log(
+                    event = "UPLOAD_PREPOSE_PROVIDER_OPTIMIZED_SUCCESS",
+                    playbackUri = videoUri,
+                    elapsedMs = UploadAiTraceLogger.elapsedSince(optimizedStartedAt),
+                    status = "success",
+                    details = mapOf(
+                        "poseCount" to result.poses.size,
+                        "processedFrameCount" to result.processedFrames.size
+                    )
+                )
+            }
+        } catch (cancellation: CancellationException) {
             UploadAiTraceLogger.log(
-                event = "UPLOAD_PREPOSE_PROVIDER_OPTIMIZED_SUCCESS",
+                event = "UPLOAD_PREPOSE_PROVIDER_OPTIMIZED_CANCELLED",
                 playbackUri = videoUri,
                 elapsedMs = UploadAiTraceLogger.elapsedSince(optimizedStartedAt),
-                status = "success",
+                status = "cancelled",
                 details = mapOf(
-                    "poseCount" to result.poses.size,
-                    "processedFrameCount" to result.processedFrames.size
+                    "message" to (cancellation.message ?: cancellation::class.simpleName)
                 )
             )
-        }.getOrElse { error ->
+            throw cancellation
+        } catch (error: Throwable) {
             UploadAiTraceLogger.log(
                 event = "UPLOAD_PREPOSE_PROVIDER_OPTIMIZED_FAILED",
                 playbackUri = videoUri,

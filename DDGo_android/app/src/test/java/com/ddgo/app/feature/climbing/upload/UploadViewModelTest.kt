@@ -89,6 +89,7 @@ class UploadViewModelTest {
     fun tearDown() {
         unmockkStatic(BitmapFactory::class)
         unmockkStatic(android.net.Uri::class)
+        UploadPrePoseTimeoutConfig.reset()
         tempDirs.forEach(File::deleteRecursively)
         tempDirs.clear()
     }
@@ -406,6 +407,89 @@ class UploadViewModelTest {
         coVerify(atLeast = 2) { prePoseVideoAnalysisProvider.analyze(videoUri, any()) }
         assertTrue(viewModel.currentAttemptPoseSequence.isEmpty())
         assertEquals(PrePoseStatus.Failed, viewModel.currentAttemptPrePoseEntry?.status)
+    }
+
+    @Test
+    fun `submitUpload shows error when pre-pose analysis times out twice`() = runTest {
+        UploadPrePoseTimeoutConfig.analysisTimeoutMs = 20L
+        UploadPrePoseTimeoutConfig.awaitTimeoutMs = 500L
+        UploadPrePoseTimeoutConfig.pollIntervalMs = 10L
+
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } coAnswers {
+            delay(100L)
+            prePoseAnalysisResult(
+                poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f))),
+                processedFrames = listOf(processedFrame(0L, true))
+            )
+        }
+
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider
+        )
+        val videoUri = "file:///timed_out_prepose.mp4"
+
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true))
+        setPrivateField(viewModel, "detectedHolds", listOf(hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START))
+        )
+        setPrivateField(viewModel, "videoUri", videoUri)
+
+        viewModel.submitUpload()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Error
+        }
+
+        coVerify(atLeast = 1) { prePoseVideoAnalysisProvider.analyze(videoUri, any()) }
+        assertEquals(PrePoseStatus.Failed, viewModel.currentAttemptPrePoseEntry?.status)
+    }
+
+    @Test
+    fun `submitUpload shows error when there are no upload targets`() = runTest {
+        val viewModel = createViewModel(
+            poseEstimator = mockk<PoseEstimator>(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
+
+        viewModel.submitUpload()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Error
+        }
+
+        assertEquals(
+            "분석할 업로드 영상이 없습니다.",
+            (viewModel.uploadSubmissionUiState.value as UploadSubmissionUiState.Error).message
+        )
+    }
+
+    @Test
+    fun `ensureFinalAnalysisReady shows error when there are no upload targets`() = runTest {
+        val viewModel = createViewModel(
+            poseEstimator = mockk<PoseEstimator>(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
+
+        viewModel.ensureFinalAnalysisReady()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.finalAnalysisPreparationUiState.value is FinalAnalysisPreparationUiState.Error
+        }
+
+        assertEquals(
+            "최종 분석에 필요한 영상이 없습니다.",
+            (viewModel.finalAnalysisPreparationUiState.value as FinalAnalysisPreparationUiState.Error).message
+        )
     }
 
     @Test
