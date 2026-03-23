@@ -17,6 +17,7 @@ if (localPropertiesFile.exists()) {
 
 val kakaoRestApiKey = localProperties.getProperty("kakao.rest.api.key") ?: ""
 val kakaoNativeAppKey = localProperties.getProperty("kakao.native.app.key") ?: ""
+val googleWebClientId = localProperties.getProperty("google.web.client.id") ?: ""
 
 android {
     namespace = "com.ddgo.app"
@@ -60,6 +61,11 @@ android {
             "String",
             "KAKAO_LOCAL_BASE_URL",
             "\"https://dapi.kakao.com/\""
+        )
+        buildConfigField(
+            "String",
+            "GOOGLE_WEB_CLIENT_ID",
+            "\"$googleWebClientId\""
         )
 
         manifestPlaceholders["kakaoScheme"] = "kakao$kakaoNativeAppKey"
@@ -152,6 +158,9 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kakao.user)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     // 4. Local Storage (Security & DataStore)
     implementation(libs.security.crypto.ktx)

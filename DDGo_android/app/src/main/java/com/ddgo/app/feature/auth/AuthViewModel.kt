@@ -34,6 +34,7 @@ class AuthViewModel @Inject constructor(
     private companion object {
         const val PROVISIONAL_NICKNAME_PREFIX = "DDGoUser"
         const val KAKAO_USERNAME_PREFIX = "kakao_"
+        const val GOOGLE_USERNAME_PREFIX = "google_"
     }
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -133,6 +134,31 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    fun loginWithGoogleIdToken(idToken: String, displayName: String?) {
+        if (idToken.isBlank()) {
+            setError(AuthStrings.GoogleLoginFailed)
+            return
+        }
+
+        viewModelScope.launch {
+            clearErrorState()
+            _uiState.value = AuthUiState.Loading
+
+            socialLoginUseCase(
+                provider = SocialLoginProvider.GOOGLE,
+                idToken = idToken
+            )
+                .onSuccess {
+                    syncGoogleNicknameIfNeeded(displayName)
+                    clearErrorState()
+                    _uiState.value = AuthUiState.Success
+                }
+                .onFailure { throwable ->
+                    setError(throwable.message ?: AuthStrings.GoogleLoginFailed)
+                }
+        }
+    }
+
     fun register() {
         val normalizedUsername = when (val validation = AuthInputPolicy.validateUsername(username)) {
             is ValidationResult.Invalid -> {
@@ -183,10 +209,6 @@ class AuthViewModel @Inject constructor(
 
     fun reportExternalLoginError(message: String) {
         setError(message)
-    }
-
-    fun notifyGoogleLoginPending() {
-        setError(AuthStrings.GoogleLoginPending)
     }
 
     fun resetUiState() {
@@ -245,8 +267,25 @@ class AuthViewModel @Inject constructor(
         updateNicknameUseCase(kakaoNickname)
     }
 
+    private suspend fun syncGoogleNicknameIfNeeded(displayName: String?) {
+        val googleNickname = displayName
+            ?.trim()
+            ?.takeUnless { it.isBlank() }
+            ?: return
+
+        val currentUser = getMyInfoUseCase().getOrNull() ?: return
+        if (!shouldSyncGoogleNickname(currentUser)) return
+
+        updateNicknameUseCase(googleNickname)
+    }
+
     private fun shouldSyncKakaoNickname(user: User): Boolean {
         return user.username.startsWith(KAKAO_USERNAME_PREFIX) &&
+            user.nickname.startsWith(PROVISIONAL_NICKNAME_PREFIX)
+    }
+
+    private fun shouldSyncGoogleNickname(user: User): Boolean {
+        return user.username.startsWith(GOOGLE_USERNAME_PREFIX) &&
             user.nickname.startsWith(PROVISIONAL_NICKNAME_PREFIX)
     }
 }

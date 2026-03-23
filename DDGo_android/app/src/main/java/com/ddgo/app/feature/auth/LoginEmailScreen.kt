@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
+import kotlinx.coroutines.launch
 
 private const val TAGLINE_TEXT = "\uCD94\uB77D\uC758 \uB370\uC774\uD130\uB97C \uBC14\uAFB8\uB294"
 private const val EMAIL_LABEL = "\uC774\uBA54\uC77C"
@@ -54,6 +56,7 @@ fun LoginEmailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val errorMessage = viewModel.errorMessage
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.clearErrorState()
@@ -191,19 +194,43 @@ fun LoginEmailScreen(
                 }
 
                 Button(
-                    onClick = viewModel::notifyGoogleLoginPending,
+                    onClick = {
+                        coroutineScope.launch {
+                            startGoogleLogin(context)
+                                .onSuccess { result ->
+                                    viewModel.loginWithGoogleIdToken(
+                                        idToken = result.idToken,
+                                        displayName = result.displayName
+                                    )
+                                }
+                                .onFailure { throwable ->
+                                    viewModel.reportExternalLoginError(
+                                        throwable.message ?: AuthStrings.GoogleLoginFailed
+                                    )
+                                }
+                        }
+                    },
+                    enabled = uiState !is AuthUiState.Loading,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
                     shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF121212))
                 ) {
-                    Text(
-                        GOOGLE_LOGIN_LABEL,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontFamily = PretendardFamily
-                    )
+                    if (uiState is AuthUiState.Loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            GOOGLE_LOGIN_LABEL,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = PretendardFamily
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
