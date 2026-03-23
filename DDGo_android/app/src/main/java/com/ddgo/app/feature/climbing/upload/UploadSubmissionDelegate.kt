@@ -336,6 +336,19 @@ internal class UploadSubmissionDelegate(
             return@coroutineScope
         }
 
+        finalizeUploadedAttemptsIfReady(
+            challengeId = currentChallengeId,
+            uploadedVideos = uploadedAttemptVideos,
+            playbackUris = request.attemptUris,
+            totalHoldCount = numberedHoldsForAnalysis?.size ?: 0
+        ).onFailure { throwable ->
+            Log.e(SUBMISSION_TAG, "submitUploadForAttemptResult: end attempt failed", throwable)
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                throwable.message ?: "Failed to finalize uploaded attempts."
+            )
+            return@coroutineScope
+        }
+
         publishAttemptResultSession(
             callbacks = callbacks,
             playbackUris = request.attemptUris,
@@ -448,6 +461,18 @@ internal class UploadSubmissionDelegate(
             result = result.getOrThrow(),
             callbacks = callbacks
         )
+        finalizeUploadedAttemptsIfReady(
+            challengeId = request.challengeId,
+            uploadedVideos = uploadedAttemptVideos,
+            playbackUris = request.attemptUris,
+            totalHoldCount = request.numberedHolds.size
+        ).onFailure { throwable ->
+            _finalAnalysisPreparationUiState.value =
+                FinalAnalysisPreparationUiState.Error(
+                    throwable.message ?: "Failed to finalize uploaded attempts."
+                )
+            return
+        }
         UploadAiTraceLogger.log(
             event = "FINAL_ANALYSIS_READY_DONE",
             generation = request.selectionGeneration,
@@ -819,6 +844,20 @@ internal class UploadSubmissionDelegate(
         }
 
         val uploadedVideos = uploadedVideosResult.getOrThrow()
+        finalizeUploadedAttempts(
+            challengeId = currentChallengeId,
+            uploadedVideos = uploadedVideos,
+            playbackUris = request.attemptUris,
+            terminalSnapshot = null,
+            totalHoldCount = numberedHoldsForAnalysis?.size ?: 0
+        ).onFailure { throwable ->
+            Log.e(SUBMISSION_TAG, "submitUpload(background): end attempt failed", throwable)
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
+                throwable.message ?: "Failed to finalize uploaded attempts."
+            )
+            return@coroutineScope
+        }
+
         publishAttemptResultSession(
             callbacks = callbacks,
             playbackUris = request.attemptUris,
@@ -859,7 +898,8 @@ internal class UploadSubmissionDelegate(
                     attemptUrisSignature = request.attemptUris.joinToString("|")
                 ),
                 challengeId = resolvedChallengeId,
-                attemptUris = request.attemptUris
+                attemptUris = request.attemptUris,
+                totalHoldCount = request.numberedHolds.size
             ),
             callbacks = callbacks
         )
@@ -938,6 +978,20 @@ internal class UploadSubmissionDelegate(
                     callbacks = callbacks,
                     uploadedVideos = videos
                 )
+                finalizeUploadedAttemptsIfReady(
+                    challengeId = request.challengeId,
+                    uploadedVideos = videos,
+                    playbackUris = request.attemptUris,
+                    totalHoldCount = request.totalHoldCount
+                ).onFailure { throwable ->
+                    Log.e(SUBMISSION_TAG, "background upload finalize failed", throwable)
+                    _backgroundUploadState.value = BackgroundUploadState.Failed
+                    _backgroundUploadNotice.value = BackgroundUploadNotice(
+                        id = nextBackgroundUploadNoticeId++,
+                        message = throwable.message ?: "업로드된 시도 결과를 저장하지 못했습니다.",
+                        actionLabel = "다시 시도"
+                    )
+                }
             }.onFailure { throwable ->
                 Log.e(SUBMISSION_TAG, "background upload failed", throwable)
                 _backgroundUploadState.value = BackgroundUploadState.Failed
@@ -994,15 +1048,6 @@ internal class UploadSubmissionDelegate(
                 videoUri = uri
             ).getOrElse { throwable ->
                 Log.e(SUBMISSION_TAG, "submitUpload(background): attempt upload failed", throwable)
-                return Result.failure(throwable)
-            }
-
-            endAttemptUseCase(
-                challengeId = challengeId,
-                attemptId = uploaded.attemptId,
-                payload = AttemptCompletionPayload()
-            ).getOrElse { throwable ->
-                Log.e(SUBMISSION_TAG, "submitUpload(background): end attempt failed", throwable)
                 return Result.failure(throwable)
             }
 
@@ -1963,7 +2008,7 @@ internal class UploadSubmissionDelegate(
         challengeId: Long?,
         uploadedVideos: List<UploadedAttemptVideo>,
         playbackUris: List<String>,
-        terminalSnapshot: TerminalPrePoseSnapshot,
+        terminalSnapshot: TerminalPrePoseSnapshot?,
         totalHoldCount: Int
     ): Result<Unit> {
         if (challengeId == null || challengeId <= 0L || uploadedVideos.isEmpty()) {
@@ -2001,11 +2046,37 @@ internal class UploadSubmissionDelegate(
         return Result.success(Unit)
     }
 
+    private suspend fun finalizeUploadedAttemptsIfReady(
+        challengeId: Long?,
+        uploadedVideos: List<UploadedAttemptVideo>,
+        playbackUris: List<String>,
+        totalHoldCount: Int
+    ): Result<Unit> {
+        if (uploadedVideos.isEmpty()) {
+            return Result.success(Unit)
+        }
+
+        val expectedAttemptCount = playbackUris.size
+        val holdReachReady = attemptHoldReachResults.size >= expectedAttemptCount
+        val aiReady = attemptAiAnalysisResults.count { it != null } >= expectedAttemptCount
+        if (!holdReachReady && !aiReady && totalHoldCount > 0) {
+            return Result.success(Unit)
+        }
+
+        return finalizeUploadedAttempts(
+            challengeId = challengeId,
+            uploadedVideos = uploadedVideos,
+            playbackUris = playbackUris,
+            terminalSnapshot = null,
+            totalHoldCount = totalHoldCount
+        )
+    }
+
     private fun buildAttemptCompletionPayload(
         playbackUri: String,
         holdReachResult: AttemptHoldReachResult?,
         aiSummary: FinalAnalysisAttemptSummary,
-        terminalSnapshot: TerminalPrePoseSnapshot,
+        terminalSnapshot: TerminalPrePoseSnapshot?,
         totalHoldCount: Int
     ): AttemptCompletionPayload {
         val attemptResult = resolveAttemptResult(
@@ -2013,7 +2084,7 @@ internal class UploadSubmissionDelegate(
             aiSummary = aiSummary,
             totalHoldCount = totalHoldCount
         )
-        val durationMs = terminalSnapshot.resolveDurationMs(playbackUri)
+        val durationMs = terminalSnapshot?.resolveDurationMs(playbackUri)
         val maxHoldNo = holdReachResult?.highestReachedHoldNo ?: aiSummary.reachedHolds
         val failureReason = aiSummary.feedbackLine.takeIf { it.isNotBlank() }
             ?: defaultFailureReason(attemptResult)
@@ -2166,7 +2237,8 @@ private data class BackgroundUploadKey(
 private data class BackgroundUploadRequest(
     val key: BackgroundUploadKey,
     val challengeId: Long,
-    val attemptUris: List<String>
+    val attemptUris: List<String>,
+    val totalHoldCount: Int
 )
 
 private data class ResolvedAiProfile(

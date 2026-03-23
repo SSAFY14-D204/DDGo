@@ -239,13 +239,13 @@ private fun GrowthTrendChart(
             ) {
                 if (points.isEmpty()) return@Canvas
 
-                val minValue = points.minOf { it.value }
-                val maxValue = points.maxOf { it.value }
-                val range = (maxValue - minValue).takeIf { it > 0f } ?: 1f
+                val minValue = 0f
+                val maxValue = 1f
+                val range = 1f
                 val stepX = if (points.size == 1) 0f else size.width / (points.size - 1)
 
                 val offsets = points.mapIndexed { index, point ->
-                    val progress = (point.value - minValue) / range
+                    val progress = ((point.value - minValue) / range).coerceIn(0f, 1f)
                     Offset(
                         x = stepX * index,
                         y = size.height - (progress * (size.height - 18.dp.toPx())) - 9.dp.toPx()
@@ -307,7 +307,7 @@ private fun GrowthTrendChart(
                             ) {}
                         }
                         Text(
-                            text = "${(point.value * 100).toInt()}%",
+                            text = AnalysisFormatters.formatPercent(point.value),
                             style = MaterialTheme.typography.labelLarge,
                             color = AnalysisPalette.TextPrimary
                         )
