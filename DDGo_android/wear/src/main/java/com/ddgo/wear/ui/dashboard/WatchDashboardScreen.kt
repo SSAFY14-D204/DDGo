@@ -91,11 +91,13 @@ internal fun WatchDashboardScreen(
             val heroSize = when (layoutMode) {
                 WatchDashboardLayoutMode.METRIC -> if (compact) 118.dp else 154.dp
                 WatchDashboardLayoutMode.PASSIVE -> if (compact) 106.dp else 138.dp
-                WatchDashboardLayoutMode.ACTION -> if (compact) 94.dp else 108.dp
+                WatchDashboardLayoutMode.ACTION -> if (compact) 100.dp else 118.dp
             }
-            val headerBody = if (layoutMode == WatchDashboardLayoutMode.ACTION) null else uiState.body
+            val headerBody = uiState.body
             val headerBodyMaxLines = when (uiState.visualState) {
                 WatchDashboardVisualState.ALERTING -> 2
+                WatchDashboardVisualState.PERMISSION_REQUIRED,
+                WatchDashboardVisualState.SENSOR_UNAVAILABLE -> 2
                 WatchDashboardVisualState.RECOVERING -> 1
                 else -> 1
             }
@@ -275,21 +277,13 @@ private fun ActionStateContent(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.weight(0.12f))
-        ActionStatusCard(
-            title = uiState.title,
-            value = uiState.value,
+        Spacer(modifier = Modifier.weight(0.16f))
+        HeartHero(
+            uiState = uiState,
             palette = palette,
-            compact = compact
-        )
-        Spacer(modifier = Modifier.height(if (compact) 10.dp else 14.dp))
-        Text(
-            text = uiState.body,
-            color = TextSecondary,
-            textAlign = TextAlign.Center,
-            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            compact = compact,
+            heroSize = heroSize,
+            mode = WatchDashboardLayoutMode.ACTION
         )
         Spacer(modifier = Modifier.weight(0.18f))
         ActionArea(
@@ -335,9 +329,9 @@ private fun HeartHero(
         }
 
         WatchDashboardLayoutMode.ACTION -> if (compact) {
-            TextStyle(fontSize = 36.sp, lineHeight = 34.sp)
+            TextStyle(fontSize = 46.sp, lineHeight = 44.sp)
         } else {
-            TextStyle(fontSize = 42.sp, lineHeight = 40.sp)
+            TextStyle(fontSize = 52.sp, lineHeight = 50.sp)
         }
     }
 
@@ -465,58 +459,6 @@ private fun StatusDock(
 }
 
 @Composable
-private fun ActionStatusCard(
-    title: String,
-    value: String,
-    palette: WatchDashboardPalette,
-    compact: Boolean
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(if (compact) 0.72f else 0.66f),
-        shape = RoundedCornerShape(32.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceRaised.copy(alpha = 0.94f)),
-        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.18f))
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = if (compact) 18.dp else 22.dp, vertical = if (compact) 16.dp else 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(palette.accent.copy(alpha = 0.14f))
-                    .border(
-                        width = 1.dp,
-                        color = palette.accent.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(999.dp)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = title,
-                    color = palette.accent,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Text(
-                text = value,
-                color = TextPrimary,
-                fontWeight = FontWeight.ExtraBold,
-                style = if (compact) {
-                    TextStyle(fontSize = 32.sp, lineHeight = 32.sp)
-                } else {
-                    TextStyle(fontSize = 38.sp, lineHeight = 38.sp)
-                },
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
 private fun ActionArea(
     primaryAction: WatchDashboardActionUi?,
     secondaryAction: WatchDashboardActionUi?,
@@ -527,27 +469,10 @@ private fun ActionArea(
 ) {
     if (primaryAction == null && secondaryAction == null) return
 
-    if (primaryAction != null && secondaryAction != null) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            PrimaryActionButton(
-                modifier = Modifier.weight(1f),
-                label = primaryAction.label,
-                compact = compact,
-                accentBrush = accentBrush,
-                onClick = { onAction(primaryAction.kind) }
-            )
-            SecondaryActionButton(
-                modifier = Modifier.weight(1f),
-                label = secondaryAction.label,
-                compact = compact,
-                accent = accent,
-                onClick = { onAction(secondaryAction.kind) }
-            )
-        }
-    } else {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
+    ) {
         primaryAction?.let { action ->
             PrimaryActionButton(
                 modifier = Modifier.fillMaxWidth(),
@@ -652,7 +577,7 @@ private fun paletteFor(visualState: WatchDashboardVisualState): WatchDashboardPa
         WatchDashboardVisualState.RECOVERING -> listOf(DdigoBlue, DdigoGradientEnd)
         WatchDashboardVisualState.ALERTING -> listOf(DdigoAlert, DdigoGradientEnd)
         WatchDashboardVisualState.PERMISSION_REQUIRED -> listOf(DdigoGradientStart, DdigoGradientEnd)
-        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> listOf(DdigoSensor, DdigoBlue)
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> listOf(DdigoBlue, DdigoGradientEnd)
         WatchDashboardVisualState.MEASURING -> listOf(DdigoGradientStart, DdigoGradientEnd)
     }
 
