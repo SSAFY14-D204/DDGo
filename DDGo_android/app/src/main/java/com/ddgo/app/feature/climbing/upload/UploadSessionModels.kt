@@ -28,13 +28,18 @@ enum class PrePoseStatus {
     Failed
 }
 
-data class PrePoseCacheEntry(
+internal data class PrePoseCacheEntry(
     val playbackUri: String,
     val selectionGeneration: Long,
     val status: PrePoseStatus,
     val aiPoseSequence: AiPoseSequence? = null,
+    val filteredAiPoseSequence: AiPoseSequence? = null,
     val poses: List<Pose> = emptyList(),
+    val filteredPoses: List<Pose> = emptyList(),
+    val smoothedPoses: List<Pose> = emptyList(),
     val processedFrames: List<ProcessedPoseDetectionFrame> = emptyList(),
+    val poseValidityFrames: List<PoseValidityFrame> = emptyList(),
+    val overlayCache: AttemptPoseOverlayCache? = null,
     val personObservationStartTimeMs: Long? = null,
     val climbEndDetection: ClimbEndDetection? = null,
     val handPeakAnnotation: HandPeakAnnotation? = null,
@@ -48,8 +53,13 @@ internal fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = Termina
     selectionGeneration = selectionGeneration,
     status = status,
     aiPoseSequence = aiPoseSequence,
+    filteredAiPoseSequence = filteredAiPoseSequence,
     poses = poses,
+    filteredPoses = filteredPoses,
+    smoothedPoses = smoothedPoses,
     processedFrames = processedFrames,
+    poseValidityFrames = poseValidityFrames,
+    overlayCache = overlayCache,
     personObservationStartTimeMs = personObservationStartTimeMs,
     climbEndDetection = climbEndDetection,
     handPeakAnnotation = handPeakAnnotation,
@@ -57,18 +67,23 @@ internal fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = Termina
     errorMessage = errorMessage
 )
 
-data class TerminalPrePoseSnapshot(
+internal data class TerminalPrePoseSnapshot(
     val generation: Long,
     val entriesByPlaybackUri: Map<String, TerminalPrePoseEntry>
 )
 
-data class TerminalPrePoseEntry(
+internal data class TerminalPrePoseEntry(
     val playbackUri: String,
     val selectionGeneration: Long,
     val status: PrePoseStatus,
     val aiPoseSequence: AiPoseSequence?,
+    val filteredAiPoseSequence: AiPoseSequence?,
     val poses: List<Pose>,
+    val filteredPoses: List<Pose>,
+    val smoothedPoses: List<Pose>,
     val processedFrames: List<ProcessedPoseDetectionFrame>,
+    val poseValidityFrames: List<PoseValidityFrame>,
+    val overlayCache: AttemptPoseOverlayCache?,
     val personObservationStartTimeMs: Long?,
     val climbEndDetection: ClimbEndDetection?,
     val handPeakAnnotation: HandPeakAnnotation?,

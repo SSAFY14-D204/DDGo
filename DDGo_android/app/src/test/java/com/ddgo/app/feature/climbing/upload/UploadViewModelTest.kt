@@ -33,6 +33,7 @@ import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
 import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
+import com.ddgo.app.domain.usecase.CloseChallengeUseCase
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
@@ -157,6 +158,60 @@ class UploadViewModelTest {
         assertEquals(listOf(videoUri), viewModel.playbackAttemptUris)
         assertEquals(1, viewModel.attemptHoldReachResults.size)
         assertEquals(2, viewModel.currentAttemptPoseSequence.size)
+    }
+
+    @Test
+    fun `pre-pose ready keeps raw poses and exposes filtered overlay cache`() = runTest {
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = listOf(
+                poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)),
+                poseAt(100L, handLandmark(index = 19, x = 0.24f, y = 0.78f)),
+                poseAt(200L, handLandmark(index = 19, x = 0.27f, y = 0.74f)),
+                poseAt(4_000L, handLandmark(index = 19, x = 0.55f, y = 0.42f))
+            ),
+            processedFrames = listOf(
+                processedFrame(0L, true),
+                processedFrame(100L, true),
+                processedFrame(200L, true),
+                processedFrame(4_000L, true)
+            )
+        )
+
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider
+        )
+        val videoUri = "file:///overlay_filtered.mp4"
+
+        setPrivateField(viewModel, "videoUri", videoUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.prePoseBatchState.readyCount == 1
+        }
+
+        assertEquals(4, viewModel.currentAttemptPoseSequence.size)
+        assertEquals(3, viewModel.currentAttemptFilteredPoseSequence.size)
+        assertEquals(3, viewModel.currentAttemptSmoothedPoseSequence.size)
+        assertEquals(3, viewModel.currentAttemptOverlayCache?.frames?.size)
+        assertEquals(
+            viewModel.currentAttemptSmoothedPoseSequence.firstOrNull(),
+            viewModel.currentAttemptOverlayCache?.frames?.firstOrNull()?.pose
+        )
+        assertEquals(4, viewModel.currentAttemptPrePoseEntry?.poseValidityFrames?.size)
+        assertEquals(3, viewModel.currentAttemptPrePoseEntry?.smoothedPoses?.size)
+        assertFalse(
+            viewModel.currentAttemptPrePoseEntry
+                ?.poseValidityFrames
+                ?.last()
+                ?.isValidForEndpoint
+                ?: true
+        )
     }
 
     @Test
@@ -1804,6 +1859,7 @@ class UploadViewModelTest {
             searchNearbyClimbingGymsUseCase = SearchNearbyClimbingGymsUseCase(gymRepository),
             resolveGymUseCase = ResolveGymUseCase(gymRepository),
             createChallengeUseCase = CreateChallengeUseCase(challengeRepository),
+            closeChallengeUseCase = CloseChallengeUseCase(challengeRepository),
             saveChallengeHoldsUseCase = SaveChallengeHoldsUseCase(challengeRepository),
             uploadAttemptVideoUseCase = UploadAttemptVideoUseCase(attemptRepository),
             endAttemptUseCase = EndAttemptUseCase(attemptRepository),
@@ -1943,12 +1999,12 @@ class UploadViewModelTest {
                     timestampMs = frame.timestampMs,
                     poseDetected = frame.poseDetected,
                     poseLandmarks = if (frame.poseDetected) {
-                        listOf(AiLandmark3D(index = 0, x = 0.1f, y = 0.2f, z = 0.3f))
+                        sampleAiLandmarks(offset = 0f)
                     } else {
                         emptyList()
                     },
                     poseWorldLandmarks = if (frame.poseDetected) {
-                        listOf(AiLandmark3D(index = 0, x = 1.1f, y = 1.2f, z = 1.3f))
+                        sampleAiLandmarks(offset = 1f)
                     } else {
                         emptyList()
                     }
@@ -1962,6 +2018,17 @@ class UploadViewModelTest {
             timestampMs = timestampMs,
             poseDetected = poseDetected
         )
+
+    private fun sampleAiLandmarks(offset: Float): List<AiLandmark3D> = List(33) { index ->
+        AiLandmark3D(
+            index = index,
+            x = offset + (index * 0.01f),
+            y = offset + (index * 0.02f),
+            z = offset + (index * 0.03f),
+            visibility = 0.9f,
+            presence = 0.8f
+        )
+    }
 
     private fun handLandmark(index: Int, x: Float, y: Float): PoseLandmark = PoseLandmark(
         index = index,
