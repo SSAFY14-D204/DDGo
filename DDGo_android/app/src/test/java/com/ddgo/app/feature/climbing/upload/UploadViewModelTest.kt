@@ -1499,6 +1499,106 @@ class UploadViewModelTest {
     }
 
     @Test
+    fun `buildCurrentSubmissionRequest uses numberedHolds order and polygons for saved challenge holds`() {
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
+
+        val detectedStart = Hold(
+            holdNo = 99,
+            boundingBox = Hold.BoundingBox(0.70f, 0.70f, 0.80f, 0.80f),
+            confidence = 0.5f,
+            polygon = listOf(Hold.Point(0.70f, 0.70f)),
+            colorLabel = "red",
+            colorScore = 0.9f
+        )
+        val detectedEnd = Hold(
+            holdNo = 88,
+            boundingBox = Hold.BoundingBox(0.10f, 0.10f, 0.20f, 0.20f),
+            confidence = 0.5f,
+            polygon = listOf(Hold.Point(0.10f, 0.10f)),
+            colorLabel = "red",
+            colorScore = 0.9f
+        )
+        val startNumbered = HoldNumbered(
+            hold = Hold(
+                holdNo = 1,
+                boundingBox = Hold.BoundingBox(0.44f, 0.31f, 0.52f, 0.38f),
+                confidence = 0.95f,
+                polygon = listOf(
+                    Hold.Point(0.45f, 0.32f),
+                    Hold.Point(0.48f, 0.30f),
+                    Hold.Point(0.52f, 0.33f),
+                    Hold.Point(0.50f, 0.38f),
+                    Hold.Point(0.46f, 0.36f)
+                ),
+                colorLabel = "purple",
+                colorScore = 0.98f
+            ),
+            progress = 0f,
+            axisDistance = 0f,
+            role = HoldRole.START
+        )
+        val middleNumbered = HoldNumbered(
+            hold = Hold(
+                holdNo = 2,
+                boundingBox = Hold.BoundingBox(0.53f, 0.41f, 0.58f, 0.47f),
+                confidence = 0.91f,
+                polygon = listOf(
+                    Hold.Point(0.53f, 0.42f),
+                    Hold.Point(0.56f, 0.41f),
+                    Hold.Point(0.58f, 0.45f),
+                    Hold.Point(0.55f, 0.47f)
+                ),
+                colorLabel = "purple",
+                colorScore = 0.94f
+            ),
+            progress = 0.5f,
+            axisDistance = 0.02f,
+            role = HoldRole.NORMAL
+        )
+        val endNumbered = HoldNumbered(
+            hold = Hold(
+                holdNo = 3,
+                boundingBox = Hold.BoundingBox(0.60f, 0.48f, 0.68f, 0.55f),
+                confidence = 0.92f,
+                polygon = listOf(
+                    Hold.Point(0.60f, 0.50f),
+                    Hold.Point(0.65f, 0.48f),
+                    Hold.Point(0.68f, 0.53f),
+                    Hold.Point(0.63f, 0.55f)
+                ),
+                colorLabel = "purple",
+                colorScore = 0.95f
+            ),
+            progress = 1f,
+            axisDistance = 0f,
+            role = HoldRole.END
+        )
+
+        setPrivateField(viewModel, "videoUri", "file:///numbered_payload.mp4")
+        setPrivateField(viewModel, "detectedHolds", listOf(detectedStart, detectedEnd))
+        setPrivateField(viewModel, "numberedHolds", listOf(endNumbered, startNumbered, middleNumbered))
+
+        val request = invokePrivateMethodWithResult(viewModel, "buildCurrentSubmissionRequestOrNull")!!
+        val holdCoordinates = readField<List<com.ddgo.app.domain.model.ChallengeHoldCoordinate>>(
+            target = request,
+            fieldName = "holdCoordinates"
+        )
+
+        assertEquals(listOf(1, 2, 3), holdCoordinates.map { it.holdNo })
+        assertEquals(
+            listOf(0.45f, 0.48f, 0.52f, 0.50f, 0.46f),
+            holdCoordinates.first().polygon.map { it.x }
+        )
+        assertEquals(
+            listOf(0.60f, 0.65f, 0.68f, 0.63f),
+            holdCoordinates.last().polygon.map { it.x }
+        )
+    }
+
+    @Test
     fun `submitUpload keeps attempt result success when quiet background upload fails and retry succeeds`() = runTest {
         val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
         val attemptRepository = mockk<AttemptRepository>()
@@ -1913,6 +2013,23 @@ class UploadViewModelTest {
             return state.value
         }
         return field.get(owner)
+    }
+
+    private fun invokePrivateMethodWithResult(target: Any, methodName: String, vararg args: Any?): Any? {
+        val method = target.javaClass.declaredMethods.firstOrNull { method ->
+            method.name == methodName && method.parameterCount == args.size
+        }
+            ?: throw NoSuchMethodException(methodName)
+        method.isAccessible = true
+        return method.invoke(target, *args)
+    }
+
+    private fun <T> readField(target: Any, fieldName: String): T {
+        val field = target.javaClass.declaredFields.firstOrNull { it.name == fieldName }
+            ?: throw NoSuchFieldException(fieldName)
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        return field.get(target) as T
     }
 
     private fun resolveFieldOwner(

@@ -1749,7 +1749,11 @@ class UploadViewModel @Inject constructor(
         sessionDelegate.publishedResultPlaybackUris()
 
     private fun buildChallengeHoldCoordinates(): List<ChallengeHoldCoordinate> {
-        return detectedHolds.mapIndexed { index, hold ->
+        val holdsForSave = numberedHolds
+            .sortedBy { it.holdNo }
+            .map { it.hold }
+
+        return holdsForSave.mapIndexed { index, hold ->
             ChallengeHoldCoordinate(
                 holdNo = hold.holdNo.takeIf { it > 0 } ?: (index + 1),
                 boundingBox = HoldBoundingBox(

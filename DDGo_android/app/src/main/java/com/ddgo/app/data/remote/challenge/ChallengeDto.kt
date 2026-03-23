@@ -51,13 +51,20 @@ data class BoundingBoxDto(
 @Serializable
 data class HoldItemDto(
     val holdNo: Int,
+    val boundingBox: BoundingBoxDto? = null,
+    val polygon: List<PointItemDto>
+)
+
+@Serializable
+data class HoldSaveRequestItemDto(
+    val holdNo: Int,
     val boundingBox: BoundingBoxDto,
     val polygon: List<PointItemDto>
 )
 
 @Serializable
 data class HoldSaveRequestDto(
-    val holds: List<HoldItemDto>
+    val holds: List<HoldSaveRequestItemDto>
 )
 
 @Serializable
