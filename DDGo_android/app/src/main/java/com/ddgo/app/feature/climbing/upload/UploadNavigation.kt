@@ -402,7 +402,6 @@ fun NavController.navigateToUpload(
     }
     navigate(route)
 }
-
 fun NavController.navigateToRealtimeRecordedAttempt(
     recordedVideoUri: String? = null
 ) {

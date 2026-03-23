@@ -49,8 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -89,6 +91,7 @@ private val C_ACCENT = Color(0xFF2979FF)
 private val C_ACCENT_GLOW = Color(0xFF82B1FF)
 private val C_BONE = Color(0xFF00E5FF).copy(alpha = 0.85f)
 private val C_JOINT = Color.White
+private val C_STALL = Color(0xFFFFB300)
 private val C_TIMESTAMP_CARD = Color(0xFF1294FF)
 private val C_TIMESTAMP_TEXT = Color(0xFF626262)
 private val C_TIMESTAMP_BORDER = Color(0xFF121212)
@@ -132,9 +135,10 @@ fun AttemptResultScreen(
     val currentAnalysisPoints = currentAttemptResult.second
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence
     val currentAttemptOverlayCache = viewModel.currentAttemptOverlayCache
-    val currentAttemptOverlayFrames = currentAttemptOverlayCache?.frames.orEmpty()
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
+    val wallArrivalTimeMs = currentAttemptPrePoseEntry?.wallArrivalTimeMs
     val personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs
+    val stallSegment = currentAttemptPrePoseEntry?.stallSegment
     val usesPoseDetectorTimeline = currentAttemptPrePoseEntry != null
     val numberedHolds = viewModel.currentAttemptDisplayHolds
     val endpointStatusMessage = remember(currentAttemptPrePoseEntry, currentAnalysisPoints) {
@@ -204,31 +208,10 @@ fun AttemptResultScreen(
             )
         }
     }
-    val currentHipTrailSegments = remember(
-        currentAttemptOverlayCache,
-        currentOverlayFrame,
-    ) {
-        currentAttemptOverlayCache?.let { overlayCache ->
-            currentOverlayFrame?.let { overlayFrame ->
-            buildMap {
-                val hipSegments = buildOverlayTrackTrailSegments(
-                    cache = overlayCache,
-                    anchorTimeMs = overlayFrame.frameTimeMs,
-                    kind = OverlayTrackKind.HIP_CENTER,
-                    trailWindowMs = overlayCache.trailWindowMs
-                )
-                if (hipSegments.isNotEmpty()) {
-                    put(OverlayTrackKind.HIP_CENTER, hipSegments)
-                }
-            }
-            }
-        }.orEmpty()
-    }
-    val currentTrackedPoints = remember(currentOverlayFrame) {
-        currentOverlayFrame
-            ?.trackedPoints
-            ?.filterKeys { kind -> kind == OverlayTrackKind.HIP_CENTER }
-            .orEmpty()
+    val isStallSegmentActive = remember(stallSegment, displayedPositionMs) {
+        stallSegment?.let { segment ->
+            displayedPositionMs in segment.startTimeMs..segment.endTimeMs
+        } == true
     }
 
     val activeIdx by remember(currentAnalysisPoints, displayedPositionMs, tappedCardOverrideIdx) {
@@ -283,10 +266,17 @@ fun AttemptResultScreen(
         }
     }
 
-    LaunchedEffect(currentVideoUri, personObservationStartTimeMs, poseTimestamps, hasInitialAutoSeekApplied) {
+    LaunchedEffect(
+        currentVideoUri,
+        wallArrivalTimeMs,
+        personObservationStartTimeMs,
+        poseTimestamps,
+        hasInitialAutoSeekApplied
+    ) {
         if (currentVideoUri == null || hasInitialAutoSeekApplied) return@LaunchedEffect
         val initialStartMs = resolveInitialAttemptPlaybackStartTimeMs(
-            personObservationStartTimeMs = personObservationStartTimeMs,
+            wallArrivalTimeMs = wallArrivalTimeMs,
+            fallbackPersonObservationStartTimeMs = personObservationStartTimeMs,
             poseTimestamps = poseTimestamps
         ) ?: return@LaunchedEffect
         exoPlayer.seekTo(initialStartMs)
@@ -423,15 +413,6 @@ fun AttemptResultScreen(
                         }
                     }
 
-                    currentOverlayFrame?.let {
-                        TrackedPointTrailOverlay(
-                            trailSegmentsByKind = currentHipTrailSegments,
-                            currentTrackedPoints = currentTrackedPoints,
-                            contentRect = videoContentRect,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-
                     VerticalVideoFrameMaskOverlay(
                         frameMask = verticalVideoFrameMask,
                         contentRect = videoContentRect,
@@ -439,6 +420,45 @@ fun AttemptResultScreen(
                         edgeFade = VIDEO_FRAME_MASK_EDGE_FADE,
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    if (isStallSegmentActive) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black.copy(alpha = 0.72f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "정체 구간",
+                                color = C_STALL,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            if (videoContentRect.width <= 0f || videoContentRect.height <= 0f) {
+                                return@Canvas
+                            }
+
+                            val horizontalInset = 16.dp.toPx()
+                            val barHeight = 4.dp.toPx()
+                            val barWidth = (videoContentRect.width - (horizontalInset * 2f)).coerceAtLeast(0f)
+                            if (barWidth <= 0f) return@Canvas
+
+                            drawRoundRect(
+                                color = C_STALL.copy(alpha = 0.95f),
+                                topLeft = Offset(
+                                    x = videoContentRect.left + horizontalInset,
+                                    y = videoContentRect.top + videoContentRect.height - barHeight - 10.dp.toPx()
+                                ),
+                                size = Size(width = barWidth, height = barHeight),
+                                cornerRadius = CornerRadius(barHeight / 2f, barHeight / 2f)
+                            )
+                        }
+                    }
                 }
 
                 if (currentAttemptPrePoseEntry?.status == PrePoseStatus.Failed) {
@@ -894,5 +914,4 @@ private fun DrawScope.drawHoldNumbers(
 
 private fun Long.toTimeString() =
     "%02d:%02d".format(this / 60_000L, (this / 1_000L) % 60L)
-
 

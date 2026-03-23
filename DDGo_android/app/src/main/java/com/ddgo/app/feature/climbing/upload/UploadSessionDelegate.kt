@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 import com.ddgo.app.domain.poseanalysis.toPoseFrame
 import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
+import com.ddgo.app.domain.usecase.DetectStallSegmentFromPoseUseCase
+import com.ddgo.app.domain.usecase.DetectWallArrivalTimeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import java.io.File
 import java.util.ArrayDeque
@@ -63,6 +65,8 @@ internal class UploadSessionDelegate(
     private val context: Context,
     private val prePoseVideoAnalysisProvider: PrePoseVideoAnalysisProvider,
     private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase,
+    private val detectStallSegmentFromPoseUseCase: DetectStallSegmentFromPoseUseCase,
+    private val detectWallArrivalTimeUseCase: DetectWallArrivalTimeUseCase,
     private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
     private val scope: CoroutineScope
 ) {
@@ -91,6 +95,7 @@ internal class UploadSessionDelegate(
     var latestCallbacks: UploadSessionCallbacks? = null
 
     val prePoseTaskQueue = ArrayDeque<PrePoseTask>()
+    private val prePoseQueueLock = Any()
     val managedTempFilePaths = mutableSetOf<String>()
     val managedVideosByPlaybackUri = mutableMapOf<String, ManagedAttemptVideo>()
     val activePrePosePlaybackUris = mutableSetOf<String>()
@@ -289,7 +294,9 @@ internal class UploadSessionDelegate(
         val currentUriSet = currentUris.toSet()
         val updatedEntries = prePoseCacheEntries.toMutableMap()
 
-        prePoseTaskQueue.removeAll { task -> task.playbackUri !in currentUriSet }
+        synchronized(prePoseQueueLock) {
+            prePoseTaskQueue.removeAll { task -> task.playbackUri !in currentUriSet }
+        }
 
         currentUris.forEach { playbackUri ->
             val existingEntry = updatedEntries[playbackUri]
@@ -301,12 +308,14 @@ internal class UploadSessionDelegate(
                     status = PrePoseStatus.Pending,
                     taskId = taskId
                 )
-                prePoseTaskQueue.addLast(
-                    PrePoseTask(
-                        playbackUri = playbackUri,
-                        taskId = taskId
+                synchronized(prePoseQueueLock) {
+                    prePoseTaskQueue.addLast(
+                        PrePoseTask(
+                            playbackUri = playbackUri,
+                            taskId = taskId
+                        )
                     )
-                )
+                }
                 UploadAiTraceLogger.log(
                     event = "PREPOSE_QUEUE_ENQUEUED",
                     generation = generation,
@@ -324,16 +333,20 @@ internal class UploadSessionDelegate(
             if (
                 existingEntry.status == PrePoseStatus.Pending &&
                 existingEntry.taskId != null &&
-                prePoseTaskQueue.none { queued ->
-                    queued.playbackUri == playbackUri && queued.taskId == existingEntry.taskId
+                synchronized(prePoseQueueLock) {
+                    prePoseTaskQueue.none { queued ->
+                        queued.playbackUri == playbackUri && queued.taskId == existingEntry.taskId
+                    }
                 }
             ) {
-                prePoseTaskQueue.addLast(
-                    PrePoseTask(
-                        playbackUri = playbackUri,
-                        taskId = existingEntry.taskId
+                synchronized(prePoseQueueLock) {
+                    prePoseTaskQueue.addLast(
+                        PrePoseTask(
+                            playbackUri = playbackUri,
+                            taskId = existingEntry.taskId
+                        )
                     )
-                )
+                }
                 UploadAiTraceLogger.log(
                     event = "PREPOSE_QUEUE_REUSED_PENDING",
                     generation = generation,
@@ -574,6 +587,8 @@ internal class UploadSessionDelegate(
             poseValidityFrames = emptyList(),
             overlayCache = null,
             personObservationStartTimeMs = null,
+            wallArrivalTimeMs = null,
+            stallSegment = null,
             climbEndDetection = null,
             handPeakAnnotation = null,
             timelinePoints = emptyList(),
@@ -593,7 +608,9 @@ internal class UploadSessionDelegate(
         val updatedEntries = prePoseCacheEntries.toMutableMap()
         val failedPlaybackUris = mutableListOf<String>()
 
-        prePoseTaskQueue.removeAll { task -> task.playbackUri in targetPlaybackUris }
+        synchronized(prePoseQueueLock) {
+            prePoseTaskQueue.removeAll { task -> task.playbackUri in targetPlaybackUris }
+        }
 
         targetPlaybackUris.forEach { playbackUri ->
             val currentEntry = updatedEntries[playbackUri] ?: return@forEach
@@ -612,6 +629,8 @@ internal class UploadSessionDelegate(
                 poseValidityFrames = emptyList(),
                 overlayCache = null,
                 personObservationStartTimeMs = null,
+                wallArrivalTimeMs = null,
+                stallSegment = null,
                 climbEndDetection = null,
                 handPeakAnnotation = null,
                 timelinePoints = emptyList(),
@@ -635,13 +654,17 @@ internal class UploadSessionDelegate(
     ) {
         selectionGeneration += 1
         if (preservePlaybackUris.isEmpty()) {
-            prePoseTaskQueue.clear()
+            synchronized(prePoseQueueLock) {
+                prePoseTaskQueue.clear()
+            }
             prePoseCacheEntries = emptyMap()
             prePoseBatchState = PrePoseBatchState()
             return
         }
 
-        prePoseTaskQueue.removeAll { task -> task.playbackUri !in preservePlaybackUris }
+        synchronized(prePoseQueueLock) {
+            prePoseTaskQueue.removeAll { task -> task.playbackUri !in preservePlaybackUris }
+        }
         prePoseCacheEntries = prePoseCacheEntries.filterKeys { playbackUri ->
             playbackUri in preservePlaybackUris
         }
@@ -700,10 +723,12 @@ internal class UploadSessionDelegate(
         )
         prePoseWorkerJob = scope.launch(Dispatchers.Default) {
             while (true) {
-                val task = if (prePoseTaskQueue.isEmpty()) {
-                    null
-                } else {
-                    prePoseTaskQueue.removeFirst()
+                val task = synchronized(prePoseQueueLock) {
+                    if (prePoseTaskQueue.isEmpty()) {
+                        null
+                    } else {
+                        prePoseTaskQueue.removeFirst()
+                    }
                 } ?: break
                 val currentEntry = prePoseCacheEntries[task.playbackUri] ?: continue
 
@@ -791,10 +816,27 @@ internal class UploadSessionDelegate(
                             val personObservationStartTimeMs = detectStablePersonObservationUseCase(
                                 processedFrames
                             )
+                            val wallArrivalTimeMs = runCatching {
+                                detectWallArrivalTimeUseCase(
+                                    frames = filteredPoses.map { pose -> pose.toPoseFrame() },
+                                    personObservationStartTimeMs = personObservationStartTimeMs
+                                )
+                            }.onFailure { error ->
+                                Log.w(TAG, "Pre-pose wall arrival analysis failed: ${task.playbackUri}", error)
+                            }.getOrNull()
                             val handPeakAnnotation = runCatching {
                                 analyzeHandPeakAndEndUseCase(smoothedPoses.map { pose -> pose.toPoseFrame() })
                             }.onFailure { error ->
                                 Log.w(TAG, "Pre-pose hand peak analysis failed: ${task.playbackUri}", error)
+                            }.getOrNull()
+                            val stallSegment = runCatching {
+                                detectStallSegmentFromPoseUseCase(
+                                    poses = smoothedPoses,
+                                    wallArrivalTimeMs = wallArrivalTimeMs,
+                                    endTimeMs = handPeakAnnotation?.endTimeMs
+                                )
+                            }.onFailure { error ->
+                                Log.w(TAG, "Pre-pose stall analysis failed: ${task.playbackUri}", error)
                             }.getOrNull()
                             latestEntry.copy(
                                 status = PrePoseStatus.Ready,
@@ -807,10 +849,13 @@ internal class UploadSessionDelegate(
                                 poseValidityFrames = poseValidityFrames,
                                 overlayCache = overlayCache,
                                 personObservationStartTimeMs = personObservationStartTimeMs,
+                                wallArrivalTimeMs = wallArrivalTimeMs,
+                                stallSegment = stallSegment,
                                 climbEndDetection = null,
                                 handPeakAnnotation = handPeakAnnotation,
                                 timelinePoints = buildAttemptTimelinePoints(
-                                    personObservationStartTimeMs = personObservationStartTimeMs,
+                                    wallArrivalTimeMs = wallArrivalTimeMs ?: personObservationStartTimeMs,
+                                    stallSegment = stallSegment,
                                     endTimeMs = handPeakAnnotation?.endTimeMs
                                 ),
                                 errorMessage = null,
@@ -839,6 +884,8 @@ internal class UploadSessionDelegate(
                                 poseValidityFrames = emptyList(),
                                 overlayCache = null,
                                 personObservationStartTimeMs = null,
+                                wallArrivalTimeMs = null,
+                                stallSegment = null,
                                 climbEndDetection = null,
                                 handPeakAnnotation = null,
                                 timelinePoints = emptyList(),
@@ -1033,7 +1080,9 @@ internal class UploadSessionDelegate(
             .filter { playbackUri -> playbackUri in currentUris }
             .forEach { playbackUri ->
                 val taskId = nextPrePoseTaskId()
-                prePoseTaskQueue.removeAll { task -> task.playbackUri == playbackUri }
+                synchronized(prePoseQueueLock) {
+                    prePoseTaskQueue.removeAll { task -> task.playbackUri == playbackUri }
+                }
                 updatedEntries[playbackUri] = PrePoseCacheEntry(
                     playbackUri = playbackUri,
                     selectionGeneration = selectionGeneration,
@@ -1047,18 +1096,22 @@ internal class UploadSessionDelegate(
                     poseValidityFrames = emptyList(),
                     overlayCache = null,
                     personObservationStartTimeMs = null,
+                    wallArrivalTimeMs = null,
+                    stallSegment = null,
                     climbEndDetection = null,
                     handPeakAnnotation = null,
                     timelinePoints = emptyList(),
                     errorMessage = null,
                     taskId = taskId
                 )
-                prePoseTaskQueue.addLast(
-                    PrePoseTask(
-                        playbackUri = playbackUri,
-                        taskId = taskId
+                synchronized(prePoseQueueLock) {
+                    prePoseTaskQueue.addLast(
+                        PrePoseTask(
+                            playbackUri = playbackUri,
+                            taskId = taskId
+                        )
                     )
-                )
+                }
             }
 
         prePoseCacheEntries = updatedEntries

@@ -83,45 +83,6 @@ internal fun findNearestPoseForPlayback(
     }
 }
 
-@Composable
-internal fun TrackedPointTrailOverlay(
-    trailSegmentsByKind: Map<OverlayTrackKind, List<List<OverlayPoint>>>,
-    currentTrackedPoints: Map<OverlayTrackKind, OverlayPoint>,
-    contentRect: VideoContentRect,
-    modifier: Modifier = Modifier
-) {
-    Canvas(modifier = modifier) {
-        if (contentRect.width <= 0f || contentRect.height <= 0f) return@Canvas
-
-        val trailStrokeWidth = 3.dp.toPx()
-        val currentPointRadius = 6.dp.toPx()
-
-        trailSegmentsByKind.forEach { (kind, segments) ->
-            val color = overlayTrackColor(kind)
-            segments.forEach { segment ->
-                if (segment.size < 2) return@forEach
-                segment.zipWithNext().forEach { (start, end) ->
-                    drawLine(
-                        color = color.copy(alpha = 0.78f),
-                        start = start.toScreenOffset(contentRect),
-                        end = end.toScreenOffset(contentRect),
-                        strokeWidth = trailStrokeWidth,
-                        cap = StrokeCap.Round
-                    )
-                }
-            }
-        }
-
-        currentTrackedPoints.forEach { (kind, point) ->
-            drawCircle(
-                color = overlayTrackColor(kind),
-                radius = currentPointRadius,
-                center = point.toScreenOffset(contentRect)
-            )
-        }
-    }
-}
-
 internal fun List<Long>.findNearestTimestamp(targetMs: Long): Long? {
     if (isEmpty()) return null
 
@@ -394,19 +355,6 @@ internal fun PoseOverlay(
             )
         }
     }
-}
-
-private fun OverlayPoint.toScreenOffset(contentRect: VideoContentRect): Offset = Offset(
-    x = contentRect.left + (x.coerceIn(0f, 1f) * contentRect.width),
-    y = contentRect.top + (y.coerceIn(0f, 1f) * contentRect.height)
-)
-
-private fun overlayTrackColor(kind: OverlayTrackKind): Color = when (kind) {
-    OverlayTrackKind.HIP_CENTER -> Color(0xFFFFC857)
-    OverlayTrackKind.LEFT_HAND_CENTER -> Color(0xFF66BB6A)
-    OverlayTrackKind.RIGHT_HAND_CENTER -> Color(0xFF42A5F5)
-    OverlayTrackKind.LEFT_FOOT_CENTER -> Color(0xFFFF7043)
-    OverlayTrackKind.RIGHT_FOOT_CENTER -> Color(0xFFAB47BC)
 }
 
 @Composable

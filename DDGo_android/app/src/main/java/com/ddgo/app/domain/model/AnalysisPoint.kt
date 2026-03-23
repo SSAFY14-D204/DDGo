@@ -20,5 +20,6 @@ data class AnalysisPoint(
 enum class AnalysisPointKind {
     GENERIC,
     PERSON_OBSERVATION_START,
+    STALL,
     CLIMB_END
 }

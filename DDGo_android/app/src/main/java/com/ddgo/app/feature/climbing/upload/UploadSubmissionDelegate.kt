@@ -369,7 +369,7 @@ internal class UploadSubmissionDelegate(
                 )
                 return@coroutineScope
             }
- 
+
             publishAttemptResultSession(
                 callbacks = callbacks,
                 playbackUris = request.attemptUris,

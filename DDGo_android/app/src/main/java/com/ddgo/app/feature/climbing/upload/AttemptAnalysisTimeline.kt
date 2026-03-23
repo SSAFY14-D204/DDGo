@@ -3,24 +3,39 @@ package com.ddgo.app.feature.climbing.upload
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.poseanalysis.HandPeakAnnotation
+import com.ddgo.app.domain.usecase.StallSegmentAnnotation
 
 internal const val POSE_END_PREVIEW_LOOKBACK_MS = 3_000L
 
-private const val PERSON_OBSERVATION_DESCRIPTION = "사람이 처음 안정적으로 관찰된 지점"
-private const val CLIMB_END_DESCRIPTION = "등반 종료 지점"
+private const val WALL_ARRIVAL_DESCRIPTION =
+    "\uB4F1\uBC18 \uC900\uBE44 \uC2DC\uC810"
+private const val STALL_DESCRIPTION =
+    "\uBAB8\uC774 \uC815\uCCB4\uB41C \uAD6C\uAC04"
+private const val CLIMB_END_DESCRIPTION =
+    "\uB4F1\uBC18 \uC885\uB8CC \uC9C0\uC810"
 
 internal fun buildAttemptTimelinePoints(
-    personObservationStartTimeMs: Long?,
+    wallArrivalTimeMs: Long?,
+    stallSegment: StallSegmentAnnotation?,
     endTimeMs: Long?
 ): List<AnalysisPoint> {
     val points = mutableListOf<AnalysisPoint>()
 
-    personObservationStartTimeMs?.let { startTimeMs ->
+    wallArrivalTimeMs?.let { startTimeMs ->
         points += AnalysisPoint(
             index = 0,
             timeMs = startTimeMs,
-            description = PERSON_OBSERVATION_DESCRIPTION,
+            description = WALL_ARRIVAL_DESCRIPTION,
             kind = AnalysisPointKind.PERSON_OBSERVATION_START
+        )
+    }
+
+    stallSegment?.let { segment ->
+        points += AnalysisPoint(
+            index = 0,
+            timeMs = segment.startTimeMs,
+            description = STALL_DESCRIPTION,
+            kind = AnalysisPointKind.STALL
         )
     }
 
@@ -39,7 +54,8 @@ internal fun buildAttemptTimelinePoints(
 }
 
 internal fun HandPeakAnnotation?.toAnalysisPoints(): List<AnalysisPoint> = buildAttemptTimelinePoints(
-    personObservationStartTimeMs = null,
+    wallArrivalTimeMs = null,
+    stallSegment = null,
     endTimeMs = this?.endTimeMs
 )
 
@@ -98,10 +114,11 @@ internal fun resolveActiveAnalysisCardIndex(
 }
 
 internal fun resolveInitialAttemptPlaybackStartTimeMs(
-    personObservationStartTimeMs: Long?,
+    wallArrivalTimeMs: Long?,
+    fallbackPersonObservationStartTimeMs: Long?,
     poseTimestamps: List<Long>
 ): Long? {
-    val anchorMs = personObservationStartTimeMs ?: return null
+    val anchorMs = (wallArrivalTimeMs ?: fallbackPersonObservationStartTimeMs) ?: return null
     if (poseTimestamps.isEmpty()) {
         return anchorMs.coerceAtLeast(0L)
     }
