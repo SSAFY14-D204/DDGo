@@ -4,6 +4,7 @@ import json
 import socket
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -23,16 +24,28 @@ def get_text(url: str) -> tuple[int, str]:
         return response.status, response.read().decode("utf-8")
 
 
-def post_json(url: str, payload: dict[str, object]) -> tuple[int, dict[str, object]]:
-    body = json.dumps(payload).encode("utf-8")
+def decode_json_payload(text: str) -> object:
+    if not text:
+        return {}
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {"raw": text}
+
+
+def request_json(url: str, payload: dict[str, object] | None = None) -> tuple[int, object]:
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(
         url,
         data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+        headers={"Content-Type": "application/json"} if payload is not None else {},
+        method="POST" if payload is not None else "GET",
     )
-    with urllib.request.urlopen(request, timeout=300) as response:
-        return response.status, json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=300) as response:
+            return response.status, decode_json_payload(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return exc.code, decode_json_payload(exc.read().decode("utf-8"))
 
 
 def main() -> None:
@@ -66,22 +79,40 @@ def main() -> None:
     }
 
     docs_status, docs_body = get_text(f"http://{HOST}:{PORT}/docs")
-    health_status, health_body = get_text(f"http://{HOST}:{PORT}/health")
-    fast_status, fast_body = post_json(f"http://{HOST}:{PORT}/api/v1/mujoco-complete/analyze/fast", payload)
-    physics_status, physics_body = post_json(f"http://{HOST}:{PORT}/api/v1/mujoco-complete/analyze/physics", payload)
+    health_status, health_body = request_json(f"http://{HOST}:{PORT}/health")
+    openapi_status, openapi_body = request_json(f"http://{HOST}:{PORT}/openapi.json")
+    fast_status, fast_body = request_json(f"http://{HOST}:{PORT}/api/v1/mujoco-complete/analyze/fast", payload)
+    physics_status, physics_body = request_json(f"http://{HOST}:{PORT}/api/v1/mujoco-complete/analyze/physics", payload)
+    fast_probe_status, fast_probe_body = request_json(
+        f"http://{HOST}:{PORT}/api/v1/mujoco-complete/analyze/fast",
+        {},
+    )
+    realtime_start_probe_status, realtime_start_probe_body = request_json(
+        f"http://{HOST}:{PORT}/api/v1/mujoco-complete/session/start",
+        {},
+    )
+    openapi_paths = openapi_body.get("paths", {}) if isinstance(openapi_body, dict) else {}
+    health_payload = health_body if isinstance(health_body, dict) else {"raw": health_body}
 
     report = {
         "docs_status": docs_status,
         "docs_contains_swagger": "Swagger UI" in docs_body,
         "health_status": health_status,
-        "health_body": json.loads(health_body),
+        "health_body": health_payload,
+        "openapi_status": openapi_status,
+        "openapi_contains_analyze_fast": "/api/v1/mujoco-complete/analyze/fast" in openapi_paths,
+        "openapi_contains_realtime_session_start": "/api/v1/mujoco-complete/session/start" in openapi_paths,
         "fast_status": fast_status,
-        "fast_mode": fast_body.get("mode"),
-        "fast_timings_s": fast_body.get("timings_s"),
+        "fast_mode": fast_body.get("mode") if isinstance(fast_body, dict) else None,
+        "fast_timings_s": fast_body.get("timings_s") if isinstance(fast_body, dict) else None,
         "physics_status": physics_status,
-        "physics_mode": physics_body.get("mode"),
-        "physics_timings_s": physics_body.get("timings_s"),
-        "physics_summary": physics_body.get("physics_summary"),
+        "physics_mode": physics_body.get("mode") if isinstance(physics_body, dict) else None,
+        "physics_timings_s": physics_body.get("timings_s") if isinstance(physics_body, dict) else None,
+        "physics_summary": physics_body.get("physics_summary") if isinstance(physics_body, dict) else None,
+        "fast_probe_status": fast_probe_status,
+        "fast_probe_body": fast_probe_body,
+        "realtime_session_start_probe_status": realtime_start_probe_status,
+        "realtime_session_start_probe_body": realtime_start_probe_body,
     }
     OUT.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
