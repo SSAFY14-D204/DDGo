@@ -68,6 +68,8 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - MINIO_BUCKET=ddgo_videos
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+
     depends_on:
       - mariadb
       - redis

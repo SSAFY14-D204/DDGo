@@ -1,5 +1,6 @@
 -- =========================================================
--- DDgo DDL (MariaDB + MinIO / Soft Delete)
+-- DDGo DDL (MariaDB + MinIO / Soft Delete)
+-- - users / user_social_accounts 분리
 -- - climbing_brands 추가
 -- - climbing_gyms에 지도 API 매칭/외부 장소 정보 컬럼 추가
 -- - 암장 선택 필수
@@ -10,7 +11,9 @@
 CREATE DATABASE IF NOT EXISTS `ddgo_db`;
 USE `ddgo_db`;
 
+-- =========================================================
 -- 1) Drop (트리거 -> 자식 -> 부모)
+-- =========================================================
 DROP TRIGGER IF EXISTS `trg_challenges_init_attempt_counter`;
 
 DROP TABLE IF EXISTS `community_comment_likes`;
@@ -19,26 +22,34 @@ DROP TABLE IF EXISTS `community_comments`;
 DROP TABLE IF EXISTS `community_post_videos`;
 DROP TABLE IF EXISTS `community_posts`;
 
-DROP TABLE IF EXISTS `challenge_attempt_counters`;
 DROP TABLE IF EXISTS `attempt_metrics`;
 DROP TABLE IF EXISTS `attempt_video`;
 DROP TABLE IF EXISTS `attempt_feedbacks`;
 DROP TABLE IF EXISTS `attempts`;
+DROP TABLE IF EXISTS `challenge_attempt_counters`;
 DROP TABLE IF EXISTS `challenge_summaries`;
 DROP TABLE IF EXISTS `challenges`;
+
 DROP TABLE IF EXISTS `climbing_gym_grades`;
 DROP TABLE IF EXISTS `climbing_gyms`;
 DROP TABLE IF EXISTS `climbing_brands`;
+
 DROP TABLE IF EXISTS `user_profiles`;
+DROP TABLE IF EXISTS `user_social_accounts`;
 DROP TABLE IF EXISTS `users`;
 
 -- =========================================================
--- 1) users
+-- 2) users
+--   - 앱 사용자 본체
+--   - username: 앱 내부 식별자 / JWT subject
+--   - email: 로컬 로그인 이메일, 소셜은 null 가능
+--   - password: 로컬 계정만 사용, 소셜은 null 가능
 -- =========================================================
 CREATE TABLE `users` (
   `id` INT NOT NULL AUTO_INCREMENT,
-  `username` VARCHAR(255) NOT NULL,
-  `password` VARCHAR(255) NOT NULL,
+  `username` VARCHAR(255) NOT NULL COMMENT '앱 내부 식별자/JWT subject',
+  `email` VARCHAR(255) NULL COMMENT '사용자 이메일(소셜은 null 가능)',
+  `password` VARCHAR(255) NULL COMMENT 'LOCAL 계정만 사용, 소셜은 null 가능',
   `nickname` VARCHAR(30) NOT NULL,
 
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -47,11 +58,39 @@ CREATE TABLE `users` (
 
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_users_username` (`username`),
+  UNIQUE KEY `uk_users_email` (`email`),
   KEY `ix_users_deleted_at` (`deleted_at`)
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 2) user_profiles
+-- 3) user_social_accounts
+--   - 소셜 계정 연결 정보
+--   - provider + provider_user_id 로 외부 계정 식별
+-- =========================================================
+CREATE TABLE `user_social_accounts` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `user_id` INT NOT NULL,
+  `provider` ENUM('KAKAO','GOOGLE') NOT NULL,
+  `provider_user_id` VARCHAR(191) NOT NULL,
+  `provider_email` VARCHAR(255) NULL,
+  `email_verified` TINYINT(1) NOT NULL DEFAULT 0,
+
+  `connected_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_login_at` DATETIME NULL,
+
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at` DATETIME NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_social_accounts_provider_user` (`provider`, `provider_user_id`),
+  UNIQUE KEY `uk_user_social_accounts_user_provider` (`user_id`, `provider`),
+  KEY `ix_user_social_accounts_user_id` (`user_id`),
+  KEY `ix_user_social_accounts_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB;
+
+-- =========================================================
+-- 4) user_profiles
 -- =========================================================
 CREATE TABLE `user_profiles` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -73,7 +112,7 @@ CREATE TABLE `user_profiles` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 3) climbing_brands
+-- 5) climbing_brands
 --   - 브랜드 마스터
 --   - 브랜드 로고는 MinIO 참조 정보로 관리
 -- =========================================================
@@ -102,7 +141,7 @@ CREATE TABLE `climbing_brands` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 4) climbing_gyms
+-- 6) climbing_gyms
 --   - 사용자가 challenge 생성 시 실제로 선택하는 클라이밍장
 --   - 브랜드와 FK로 연결
 --   - 지도 API 외부 장소 정보 / 매칭 상태 관리
@@ -154,7 +193,7 @@ CREATE TABLE `climbing_gyms` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 5) climbing_gym_grades
+-- 7) climbing_gym_grades
 --   - 클라이밍장별 난이도 색상 체계
 --   - 같은 color_name이라도 gym마다 의미가 다름
 -- =========================================================
@@ -184,7 +223,7 @@ CREATE TABLE `climbing_gym_grades` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 6) challenges
+-- 8) challenges
 --   - gym_id 필수
 --   - gym_grade_id 필수
 --   - snapshot 컬럼은 생성 시점 표시 안정성 보존용
@@ -225,7 +264,7 @@ CREATE TABLE `challenges` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 7) challenge_summaries (Challenge 1개당 1개)
+-- 9) challenge_summaries (Challenge 1개당 1개)
 -- =========================================================
 CREATE TABLE `challenge_summaries` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -248,7 +287,7 @@ CREATE TABLE `challenge_summaries` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 8) challenge_attempt_counters
+-- 10) challenge_attempt_counters
 -- =========================================================
 CREATE TABLE `challenge_attempt_counters` (
   `challenge_id` INT NOT NULL,
@@ -261,7 +300,7 @@ CREATE TABLE `challenge_attempt_counters` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 9) attempts
+-- 11) attempts
 -- =========================================================
 CREATE TABLE `attempts` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -290,7 +329,7 @@ CREATE TABLE `attempts` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 10) attempt_feedbacks
+-- 12) attempt_feedbacks
 -- =========================================================
 CREATE TABLE `attempt_feedbacks` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -315,7 +354,7 @@ CREATE TABLE `attempt_feedbacks` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 11) attempt_video
+-- 13) attempt_video
 -- =========================================================
 CREATE TABLE `attempt_video` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -343,7 +382,7 @@ CREATE TABLE `attempt_video` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 12) attempt_metrics
+-- 14) attempt_metrics
 -- =========================================================
 CREATE TABLE `attempt_metrics` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -365,7 +404,7 @@ CREATE TABLE `attempt_metrics` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 13) community_posts
+-- 15) community_posts
 --   - 커뮤니티 게시글
 --   - gym 만 선택적으로 연결
 --   - challenge 는 저장하지 않음
@@ -405,7 +444,7 @@ CREATE TABLE `community_posts` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 14) community_post_videos
+-- 16) community_post_videos
 --   - 게시글당 최대 3개 영상
 --   - sort_order 0~2 로 제한
 -- =========================================================
@@ -436,7 +475,7 @@ CREATE TABLE `community_post_videos` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 15) community_comments
+-- 17) community_comments
 --   - depth 0: 루트 댓글
 --   - depth 1: 대댓글
 -- =========================================================
@@ -475,7 +514,7 @@ CREATE TABLE `community_comments` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 16) community_post_likes
+-- 18) community_post_likes
 --   - 게시글 좋아요는 hard delete 로 토글
 -- =========================================================
 CREATE TABLE `community_post_likes` (
@@ -493,7 +532,7 @@ CREATE TABLE `community_post_likes` (
 ) ENGINE=InnoDB;
 
 -- =========================================================
--- 17) community_comment_likes
+-- 19) community_comment_likes
 --   - 댓글 좋아요는 hard delete 로 토글
 -- =========================================================
 CREATE TABLE `community_comment_likes` (
@@ -513,52 +552,8 @@ CREATE TABLE `community_comment_likes` (
 -- =========================================================
 -- FK 설정 (Soft delete 운영 전제: ON DELETE CASCADE 사용 X)
 -- =========================================================
-ALTER TABLE `community_posts`
-  ADD CONSTRAINT `fk_community_posts_users`
-  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT,
-  ADD CONSTRAINT `fk_community_posts_climbing_gyms`
-  FOREIGN KEY (`gym_id`) REFERENCES `climbing_gyms` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT;
-
-ALTER TABLE `community_post_videos`
-  ADD CONSTRAINT `fk_community_post_videos_community_posts`
-  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT;
-
-ALTER TABLE `community_comments`
-  ADD CONSTRAINT `fk_community_comments_community_posts`
-  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT,
-  ADD CONSTRAINT `fk_community_comments_users`
-  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT,
-  ADD CONSTRAINT `fk_community_comments_parent_comment`
-  FOREIGN KEY (`parent_comment_id`) REFERENCES `community_comments` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT;
-
-ALTER TABLE `community_post_likes`
-  ADD CONSTRAINT `fk_community_post_likes_community_posts`
-  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT,
-  ADD CONSTRAINT `fk_community_post_likes_users`
-  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT;
-
-ALTER TABLE `community_comment_likes`
-  ADD CONSTRAINT `fk_community_comment_likes_community_comments`
-  FOREIGN KEY (`comment_id`) REFERENCES `community_comments` (`id`)
-  ON UPDATE RESTRICT
-  ON DELETE RESTRICT,
-  ADD CONSTRAINT `fk_community_comment_likes_users`
+ALTER TABLE `user_social_accounts`
+  ADD CONSTRAINT `fk_user_social_accounts_users`
   FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
   ON UPDATE RESTRICT
   ON DELETE RESTRICT;
@@ -628,6 +623,56 @@ ALTER TABLE `attempt_video`
 ALTER TABLE `attempt_metrics`
   ADD CONSTRAINT `fk_attempt_metrics_attempts`
   FOREIGN KEY (`attempt_id`) REFERENCES `attempts` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_posts`
+  ADD CONSTRAINT `fk_community_posts_users`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_posts_climbing_gyms`
+  FOREIGN KEY (`gym_id`) REFERENCES `climbing_gyms` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_post_videos`
+  ADD CONSTRAINT `fk_community_post_videos_community_posts`
+  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_comments`
+  ADD CONSTRAINT `fk_community_comments_community_posts`
+  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_comments_users`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_comments_parent_comment`
+  FOREIGN KEY (`parent_comment_id`) REFERENCES `community_comments` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_post_likes`
+  ADD CONSTRAINT `fk_community_post_likes_community_posts`
+  FOREIGN KEY (`post_id`) REFERENCES `community_posts` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_post_likes_users`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT;
+
+ALTER TABLE `community_comment_likes`
+  ADD CONSTRAINT `fk_community_comment_likes_community_comments`
+  FOREIGN KEY (`comment_id`) REFERENCES `community_comments` (`id`)
+  ON UPDATE RESTRICT
+  ON DELETE RESTRICT,
+  ADD CONSTRAINT `fk_community_comment_likes_users`
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
   ON UPDATE RESTRICT
   ON DELETE RESTRICT;
 
