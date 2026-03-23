@@ -15,27 +15,33 @@ internal data class ExercisePermissionUiState(
 
     val summary: String
         get() {
-            val parts = buildList {
-                if (missingForegroundPermissions.isNotEmpty()) {
-                    add(
-                        if (Build.VERSION.SDK_INT >= 36) {
-                            "심박과 활동 인식을 허용해주세요"
-                        } else {
-                            "센서와 활동 인식을 허용해주세요"
-                        }
-                    )
+            return when {
+                missingForegroundPermissions.isNotEmpty() && needsBackgroundPermission -> {
+                    if (Build.VERSION.SDK_INT >= 36) {
+                        "심박·활동 인식과 백그라운드 접근을 허용해주세요"
+                    } else {
+                        "센서·활동 인식과 백그라운드 접근을 허용해주세요"
+                    }
                 }
-                if (needsBackgroundPermission) {
-                    add(
-                        if (Build.VERSION.SDK_INT >= 36) {
-                            "백그라운드 건강 데이터를 허용해주세요"
-                        } else {
-                            "백그라운드 센서를 허용해주세요"
-                        }
-                    )
+
+                missingForegroundPermissions.isNotEmpty() -> {
+                    if (Build.VERSION.SDK_INT >= 36) {
+                        "심박과 활동 인식을 허용해주세요"
+                    } else {
+                        "센서와 활동 인식을 허용해주세요"
+                    }
                 }
+
+                needsBackgroundPermission -> {
+                    if (Build.VERSION.SDK_INT >= 36) {
+                        "백그라운드 건강 데이터를 허용해주세요"
+                    } else {
+                        "백그라운드 센서를 허용해주세요"
+                    }
+                }
+
+                else -> ""
             }
-            return parts.joinToString(separator = " · ")
         }
 }
 
@@ -134,12 +140,12 @@ internal fun buildWatchDashboardUiState(
     }
 
     val body = when (visualState) {
-        WatchDashboardVisualState.IDLE -> "휴대폰에서 녹화를 시작해주세요"
+        WatchDashboardVisualState.IDLE -> "휴대폰에서 시작해주세요"
         WatchDashboardVisualState.RECOVERING -> "세션을 복구하고 있어요"
         WatchDashboardVisualState.MEASURING -> "녹화 중 · 연결 정상"
-        WatchDashboardVisualState.ALERTING -> "호흡을 고르고 잠시 강도를 낮춰보세요"
+        WatchDashboardVisualState.ALERTING -> "강도를 낮추고 호흡을 고르세요"
         WatchDashboardVisualState.PERMISSION_REQUIRED -> permissionState.summary
-        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "착용 상태를 확인한 뒤 다시 시도하세요"
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "착용 상태를 확인하고 다시 시도하세요"
     }
 
     val metrics = if (visualState == WatchDashboardVisualState.PERMISSION_REQUIRED ||
@@ -162,7 +168,7 @@ internal fun buildWatchDashboardUiState(
             WatchDashboardVisualState.RECOVERING -> listOf(
                 WatchDashboardMetricUi(
                     label = "세션",
-                    value = "복구 중"
+                    value = "복구"
                 ),
                 WatchDashboardMetricUi(
                     label = "연결",
@@ -275,7 +281,7 @@ private fun resolveVisualState(
 private fun MeasurementStatus.toMetricLabel(isRecording: Boolean): String {
     return when (this) {
         MeasurementStatus.MEASURING -> "정상"
-        MeasurementStatus.RECOVERING -> "복구 중"
+        MeasurementStatus.RECOVERING -> "복구"
         MeasurementStatus.PERMISSION_BLOCKED -> "권한"
         MeasurementStatus.UNAVAILABLE -> if (isRecording) "오류" else "대기"
     }

@@ -147,7 +147,7 @@ internal fun WatchDashboardDevModeScreen(
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center,
-                                            maxLines = 1,
+                                            maxLines = 2,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
@@ -176,8 +176,10 @@ internal fun WatchDashboardDevModeScreen(
                     Text(
                         text = if (selectedPreset == WatchDashboardDevPreset.LIVE) "돌아가기" else "실시간 복귀",
                         color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

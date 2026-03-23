@@ -97,7 +97,7 @@ internal fun WatchDashboardScreen(
             val headerBodyMaxLines = when (uiState.visualState) {
                 WatchDashboardVisualState.ALERTING -> 2
                 WatchDashboardVisualState.PERMISSION_REQUIRED,
-                WatchDashboardVisualState.SENSOR_UNAVAILABLE -> 2
+                WatchDashboardVisualState.SENSOR_UNAVAILABLE -> if (compact) 3 else 2
                 WatchDashboardVisualState.RECOVERING -> 1
                 else -> 1
             }
@@ -160,7 +160,7 @@ private fun ContextHeader(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxWidth(if (compact) 0.9f else 0.84f)
             .then(
                 if (onTap != null) {
                     Modifier.pointerInput(Unit) {
@@ -196,8 +196,13 @@ private fun ContextHeader(
         body?.let {
             Text(
                 text = it,
+                modifier = Modifier.fillMaxWidth(),
                 color = TextSecondary,
-                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
+                style = if (compact) {
+                    MaterialTheme.typography.labelSmall.copy(lineHeight = 16.sp)
+                } else {
+                    MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
+                },
                 maxLines = bodyMaxLines,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
@@ -407,7 +412,7 @@ private fun StatusDock(
     if (metrics.isEmpty()) return
 
     val valueStyle = if (compact || subtle) {
-        MaterialTheme.typography.bodySmall
+        MaterialTheme.typography.labelMedium
     } else {
         MaterialTheme.typography.labelLarge
     }
@@ -443,6 +448,7 @@ private fun StatusDock(
                         text = metric.label,
                         color = TextSecondary,
                         style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
                         maxLines = 1
                     )
                     Text(
@@ -450,7 +456,9 @@ private fun StatusDock(
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
                         style = valueStyle,
-                        maxLines = 1
+                        textAlign = TextAlign.Center,
+                        maxLines = if (compact) 2 else 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -470,7 +478,7 @@ private fun ActionArea(
     if (primaryAction == null && secondaryAction == null) return
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(if (compact) 0.88f else 0.92f),
         verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
     ) {
         primaryAction?.let { action ->
@@ -504,7 +512,7 @@ private fun PrimaryActionButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.height(if (compact) 42.dp else 46.dp),
+        modifier = modifier.height(if (compact) 44.dp else 46.dp),
         shape = RoundedCornerShape(999.dp),
         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
         contentPadding = ButtonDefaults.ContentPadding
@@ -520,7 +528,9 @@ private fun PrimaryActionButton(
                 text = label,
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold,
-                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
+                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -536,7 +546,7 @@ private fun SecondaryActionButton(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.height(if (compact) 42.dp else 46.dp),
+        modifier = modifier.height(if (compact) 44.dp else 46.dp),
         shape = RoundedCornerShape(999.dp),
         border = BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -547,7 +557,9 @@ private fun SecondaryActionButton(
         Text(
             text = label,
             color = TextPrimary,
-            style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
+            style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
