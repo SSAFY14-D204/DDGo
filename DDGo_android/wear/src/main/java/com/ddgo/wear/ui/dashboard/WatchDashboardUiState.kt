@@ -19,23 +19,23 @@ internal data class ExercisePermissionUiState(
                 if (missingForegroundPermissions.isNotEmpty()) {
                     add(
                         if (Build.VERSION.SDK_INT >= 36) {
-                            "심박수와 활동 인식 권한을 허용해주세요"
+                            "심박과 활동 인식을 허용해주세요"
                         } else {
-                            "센서와 활동 인식 권한을 허용해주세요"
+                            "센서와 활동 인식을 허용해주세요"
                         }
                     )
                 }
                 if (needsBackgroundPermission) {
                     add(
                         if (Build.VERSION.SDK_INT >= 36) {
-                            "백그라운드 건강 데이터 접근을 허용해주세요"
+                            "백그라운드 건강 데이터를 허용해주세요"
                         } else {
-                            "백그라운드 센서 접근을 허용해주세요"
+                            "백그라운드 센서를 허용해주세요"
                         }
                     )
                 }
             }
-            return parts.joinToString(separator = " / ")
+            return parts.joinToString(separator = " · ")
         }
 }
 
@@ -134,12 +134,12 @@ internal fun buildWatchDashboardUiState(
     }
 
     val body = when (visualState) {
-        WatchDashboardVisualState.IDLE -> "휴대폰에서 시작하세요"
-        WatchDashboardVisualState.RECOVERING -> "세션과 센서를 준비하고 있어요"
+        WatchDashboardVisualState.IDLE -> "휴대폰에서 녹화를 시작해주세요"
+        WatchDashboardVisualState.RECOVERING -> "세션을 복구하고 있어요"
         WatchDashboardVisualState.MEASURING -> "녹화 중 · 연결 정상"
-        WatchDashboardVisualState.ALERTING -> "심박이 높아요 · 강도를 낮춰보세요"
+        WatchDashboardVisualState.ALERTING -> "호흡을 고르고 잠시 강도를 낮춰보세요"
         WatchDashboardVisualState.PERMISSION_REQUIRED -> permissionState.summary
-        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "워치를 다시 착용하고 재시도해주세요"
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "착용 상태를 확인한 뒤 다시 시도하세요"
     }
 
     val metrics = if (visualState == WatchDashboardVisualState.PERMISSION_REQUIRED ||
@@ -147,20 +147,44 @@ internal fun buildWatchDashboardUiState(
     ) {
         emptyList()
     } else {
-        listOf(
-            WatchDashboardMetricUi(
-                label = "측정",
-                value = runtimeSnapshot.measurementStatus.toMetricLabel(syncSnapshot.isRecording)
-            ),
-            WatchDashboardMetricUi(
-                label = "경고",
-                value = if (runtimeSnapshot.alerting) "주의" else "안전"
-            ),
-            WatchDashboardMetricUi(
-                label = "연결",
-                value = if (isConnected) "정상" else "대기"
+        when (visualState) {
+            WatchDashboardVisualState.IDLE -> listOf(
+                WatchDashboardMetricUi(
+                    label = "측정",
+                    value = "대기"
+                ),
+                WatchDashboardMetricUi(
+                    label = "연결",
+                    value = if (isConnected) "정상" else "대기"
+                )
             )
-        )
+
+            WatchDashboardVisualState.RECOVERING -> listOf(
+                WatchDashboardMetricUi(
+                    label = "세션",
+                    value = "복구 중"
+                ),
+                WatchDashboardMetricUi(
+                    label = "연결",
+                    value = if (isConnected) "정상" else "대기"
+                )
+            )
+
+            else -> listOf(
+                WatchDashboardMetricUi(
+                    label = "측정",
+                    value = runtimeSnapshot.measurementStatus.toMetricLabel(syncSnapshot.isRecording)
+                ),
+                WatchDashboardMetricUi(
+                    label = "경고",
+                    value = if (runtimeSnapshot.alerting) "주의" else "안전"
+                ),
+                WatchDashboardMetricUi(
+                    label = "연결",
+                    value = if (isConnected) "정상" else "대기"
+                )
+            )
+        }
     }
 
     val primaryAction = when (visualState) {
