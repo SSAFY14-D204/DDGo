@@ -104,6 +104,7 @@ class PersonDetectorImpl @Inject constructor(
                     Log.d(TAG, "   [First] ${firstPts / 1000}ms → 사람 ${det.size}명")
                     if (det.isEmpty()) {
                         Log.d(TAG, "⚡ Fast Path hit: 첫 프레임")
+                        Log.d(TAG, "PERSON_DETECT_FAST_PATH_HIT mode=first timeMs=${firstPts / 1000}")
                         interpreter.close(); return firstPts
                     }
                 }
@@ -125,6 +126,7 @@ class PersonDetectorImpl @Inject constructor(
                 Log.d(TAG, "   [Last] ${lastPts / 1000}ms → 사람 ${det.size}명")
                 if (det.isEmpty()) {
                     Log.d(TAG, "⚡ Fast Path hit: 마지막 프레임")
+                    Log.d(TAG, "PERSON_DETECT_FAST_PATH_HIT mode=last timeMs=${lastPts / 1000}")
                     interpreter.close(); return lastPts
                 }
             }
@@ -133,6 +135,8 @@ class PersonDetectorImpl @Inject constructor(
             val iFrames = meta.iFrameTimestampsUs
             Log.d(TAG, "   I-frame ${iFrames.size}개 → ${if (iFrames.size >= MIN_IFRAMES) "OPTION_CLOSEST_SYNC" else "MediaCodec 순차 디코딩"}")
 
+            val sampleMode = if (iFrames.size >= MIN_IFRAMES) "iframe_sync" else "mediacodec_fallback"
+            Log.d(TAG, "PERSON_DETECT_SAMPLE_MODE mode=$sampleMode iFrameCount=${iFrames.size}")
             val sampledFrames: List<Pair<Long, Bitmap>> = if (iFrames.size >= MIN_IFRAMES) {
                 // 2-A: 각 I-frame을 OPTION_CLOSEST_SYNC로 가져오기
                 iFrames.mapNotNull { ts ->
@@ -150,6 +154,7 @@ class PersonDetectorImpl @Inject constructor(
             }
             Log.d(TAG, "   샘플 수: ${sampledFrames.size}개")
 
+            Log.d(TAG, "PERSON_DETECT_SAMPLE_COUNT count=${sampledFrames.size}")
             var bestCandidate: FrameCandidate? = null
 
             for ((timestampUs, frame) in sampledFrames) {

@@ -383,10 +383,14 @@ internal class UploadHoldDetectionDelegate(
 
         val precomputed = withContext(Dispatchers.IO) {
             val preparedFrame = prepareBestFrame(sourceKey)
-            val rawHolds = detectRawHoldsFromBestFrame(preparedFrame.bitmap)
+            val rawHolds = detectRawHoldsFromBestFrame(
+                bitmap = preparedFrame.bitmap,
+                bestFrameTimeUs = preparedFrame.bestFrameTimeUs
+            )
             val classified = classifyAllHoldsFromBestFrame(
                 bitmap = preparedFrame.bitmap,
-                rawHolds = rawHolds
+                rawHolds = rawHolds,
+                bestFrameTimeUs = preparedFrame.bestFrameTimeUs
             )
             PreparedHoldPrecomputeResult(
                 bitmap = preparedFrame.bitmap,
@@ -662,10 +666,14 @@ internal class UploadHoldDetectionDelegate(
         sourceKey: HoldDetectionPrecomputeSourceKey
     ): PreparedHoldPrecomputeResult = withContext(Dispatchers.IO) {
         val preparedFrame = prepareBestFrame(sourceKey)
-        val rawHolds = detectRawHoldsFromBestFrame(preparedFrame.bitmap)
+        val rawHolds = detectRawHoldsFromBestFrame(
+            bitmap = preparedFrame.bitmap,
+            bestFrameTimeUs = preparedFrame.bestFrameTimeUs
+        )
         val classified = classifyAllHoldsFromBestFrame(
             bitmap = preparedFrame.bitmap,
-            rawHolds = rawHolds
+            rawHolds = rawHolds,
+            bestFrameTimeUs = preparedFrame.bestFrameTimeUs
         )
         PreparedHoldPrecomputeResult(
             bitmap = preparedFrame.bitmap,
@@ -817,11 +825,16 @@ internal class UploadHoldDetectionDelegate(
         return bitmap ?: throw IllegalStateException("선택한 이미지를 읽을 수 없습니다.")
     }
 
-    private suspend fun detectRawHoldsFromBestFrame(bitmap: Bitmap): List<Hold> {
+    private suspend fun detectRawHoldsFromBestFrame(
+        bitmap: Bitmap,
+        bestFrameTimeUs: Long? = null
+    ): List<Hold> {
+        val startedAt = UploadAiTraceLogger.now()
         UploadAiTraceLogger.log(
             event = "HOLD_YOLO_BEGIN",
             generation = holdDetectionPrecomputeEntry?.selectionGeneration,
-            playbackUri = holdDetectionPrecomputeEntry?.sourceVideoUri ?: holdDetectionPrecomputeEntry?.debugBestFrameImageUri
+            playbackUri = holdDetectionPrecomputeEntry?.sourceVideoUri ?: holdDetectionPrecomputeEntry?.debugBestFrameImageUri,
+            details = mapOf("bestTimeUs" to bestFrameTimeUs)
         )
         Log.d(TAG, "detectHoldsFromBestFrame: HoldDetector start")
         val rawHolds = holdDetector.detectFromFrame(bitmap)
@@ -830,20 +843,29 @@ internal class UploadHoldDetectionDelegate(
             event = "HOLD_YOLO_DONE",
             generation = holdDetectionPrecomputeEntry?.selectionGeneration,
             playbackUri = holdDetectionPrecomputeEntry?.sourceVideoUri ?: holdDetectionPrecomputeEntry?.debugBestFrameImageUri,
-            details = mapOf("rawHoldCount" to rawHolds.size)
+            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+            details = mapOf(
+                "bestTimeUs" to bestFrameTimeUs,
+                "rawHoldCount" to rawHolds.size
+            )
         )
         return rawHolds
     }
 
     private fun classifyAllHoldsFromBestFrame(
         bitmap: Bitmap,
-        rawHolds: List<Hold>
+        rawHolds: List<Hold>,
+        bestFrameTimeUs: Long? = null
     ): HoldColorClassifier.ClassifiedHoldPrecomputeResult {
+        val startedAt = UploadAiTraceLogger.now()
         UploadAiTraceLogger.log(
             event = "HOLD_CLASSIFY_ALL_BEGIN",
             generation = holdDetectionPrecomputeEntry?.selectionGeneration,
             playbackUri = holdDetectionPrecomputeEntry?.sourceVideoUri ?: holdDetectionPrecomputeEntry?.debugBestFrameImageUri,
-            details = mapOf("rawHoldCount" to rawHolds.size)
+            details = mapOf(
+                "bestTimeUs" to bestFrameTimeUs,
+                "rawHoldCount" to rawHolds.size
+            )
         )
         Log.d(TAG, "detectHoldsFromBestFrame: classify all colors")
         return holdColorClassifier.classifyAllRich(
@@ -855,7 +877,12 @@ internal class UploadHoldDetectionDelegate(
                 event = "HOLD_CLASSIFY_ALL_DONE",
                 generation = holdDetectionPrecomputeEntry?.selectionGeneration,
                 playbackUri = holdDetectionPrecomputeEntry?.sourceVideoUri ?: holdDetectionPrecomputeEntry?.debugBestFrameImageUri,
-                details = mapOf("allHoldCount" to classified.allHolds.size)
+                elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                details = mapOf(
+                    "bestTimeUs" to bestFrameTimeUs,
+                    "rawHoldCount" to rawHolds.size,
+                    "allHoldCount" to classified.allHolds.size
+                )
             )
         }
     }
@@ -881,9 +908,42 @@ internal class UploadHoldDetectionDelegate(
         val uri = sourceKey.sourceVideoUri
             ?: throw IllegalStateException("videoUri ?놁쓬")
 
-        Log.d(TAG, "prepareBestFrame: PersonDetector start")
-        val bestTimeUs = personDetector.findBestFrameTime(uri)
-        Log.d(TAG, "prepareBestFrame: best frame at ${bestTimeUs / 1000}ms")
+        val personDetectStartedAt = UploadAiTraceLogger.now()
+        UploadAiTraceLogger.log(
+            event = "HOLD_PERSON_DETECT_BEGIN",
+            generation = holdDetectionPrecomputeEntry?.selectionGeneration,
+            playbackUri = sourceKey.sourceVideoUri,
+            details = mapOf("requestedPlaybackUri" to uri)
+        )
+        val bestTimeUs = try {
+            Log.d(TAG, "prepareBestFrame: PersonDetector start")
+            personDetector.findBestFrameTime(uri).also { resolvedBestTimeUs ->
+                Log.d(TAG, "prepareBestFrame: best frame at ${resolvedBestTimeUs / 1000}ms")
+                UploadAiTraceLogger.log(
+                    event = "HOLD_PERSON_DETECT_DONE",
+                    generation = holdDetectionPrecomputeEntry?.selectionGeneration,
+                    playbackUri = sourceKey.sourceVideoUri,
+                    elapsedMs = UploadAiTraceLogger.elapsedSince(personDetectStartedAt),
+                    details = mapOf(
+                        "requestedPlaybackUri" to uri,
+                        "bestTimeUs" to resolvedBestTimeUs
+                    )
+                )
+            }
+        } catch (throwable: Throwable) {
+            UploadAiTraceLogger.log(
+                event = "HOLD_PERSON_DETECT_FAILED",
+                generation = holdDetectionPrecomputeEntry?.selectionGeneration,
+                playbackUri = sourceKey.sourceVideoUri,
+                status = "failed",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(personDetectStartedAt),
+                details = mapOf(
+                    "requestedPlaybackUri" to uri,
+                    "error" to throwable.message
+                )
+            )
+            throw throwable
+        }
 
         val retriever = FFmpegMediaMetadataRetriever()
         val parsedUri = Uri.parse(uri)
@@ -941,6 +1001,7 @@ internal class UploadHoldDetectionDelegate(
         generation: Long?,
         playbackUri: String?
     ): ExtractedBestFrame {
+        val startedAt = UploadAiTraceLogger.now()
         val durationUs = retriever
             .extractMetadata(FFmpegMediaMetadataRetriever.METADATA_KEY_DURATION)
             ?.toLongOrNull()
@@ -975,6 +1036,7 @@ internal class UploadHoldDetectionDelegate(
                     event = "HOLD_BEST_FRAME_EXTRACT_SUCCESS",
                     generation = generation,
                     playbackUri = playbackUri,
+                    elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
                     details = mapOf(
                         "requestedBestTimeUs" to requestedBestTimeUs,
                         "resolvedBestTimeUs" to attempt.timeUs,
@@ -1020,6 +1082,7 @@ internal class UploadHoldDetectionDelegate(
             generation = generation,
             playbackUri = playbackUri,
             status = "failed",
+            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
             details = mapOf(
                 "requestedBestTimeUs" to requestedBestTimeUs,
                 "durationUs" to durationUs,

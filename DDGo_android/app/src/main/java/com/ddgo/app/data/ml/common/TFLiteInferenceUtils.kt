@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import com.ddgo.app.feature.climbing.upload.UploadAiTraceLogger
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
@@ -100,6 +101,37 @@ object TFLiteInferenceUtils {
         val values: FloatArray
     )
 
+    private data class MaskResizePlan(
+        val cropLeft: Int,
+        val cropTop: Int,
+        val cropWidth: Int,
+        val cropHeight: Int,
+        val targetWidth: Int,
+        val targetHeight: Int,
+        val sourceRowOffsets0: IntArray,
+        val sourceRowOffsets1: IntArray,
+        val x0Indices: IntArray,
+        val x1Indices: IntArray,
+        val xWeights: FloatArray,
+        val yWeights: FloatArray
+    ) {
+        val originalPixelCount: Int = targetWidth * targetHeight
+    }
+
+    private class MaskResizeScratch(
+        val outputMask: BooleanArray
+    )
+
+    private data class MaskBounds(
+        val x1: Int,
+        val y1: Int,
+        val x2: Int,
+        val y2: Int
+    ) {
+        val width: Int get() = x2 - x1
+        val height: Int get() = y2 - y1
+    }
+
     private data class IntPoint(
         val x: Int,
         val y: Int
@@ -118,6 +150,16 @@ object TFLiteInferenceUtils {
         val offsetY: Int
     )
 
+    private data class LocalPolygonBuildResult(
+        val polygon: List<NormalizedPoint>,
+        val bboxWidthPx: Int,
+        val bboxHeightPx: Int,
+        val localMaskWidth: Int,
+        val localMaskHeight: Int,
+        val localMaskElapsedMs: Long,
+        val polygonTraceElapsedMs: Long
+    )
+
     private data class BoundaryLoopTrace(
         val points: List<IntPoint>,
         val segmentIndices: List<Int>,
@@ -125,6 +167,13 @@ object TFLiteInferenceUtils {
     )
 
     private const val MAX_SEGMENTATION_POLYGON_POINTS = 180
+
+    private enum class SegmentationPolygonMode {
+        FULL_FRAME_BASELINE,
+        BBOX_LOCAL
+    }
+
+    private val DEFAULT_SEGMENTATION_POLYGON_MODE = SegmentationPolygonMode.BBOX_LOCAL
 
     // ──────────────────────────────────────────────────────────────────────────
     // 1. Letterbox 리사이즈
@@ -490,11 +539,53 @@ object TFLiteInferenceUtils {
         targetClassIndices: Set<Int>? = null,
         maxDetections: Int = 300
     ): List<SegmentationDetection> {
+        val preprocessStartedAt = UploadAiTraceLogger.now()
+        UploadAiTraceLogger.log(
+            event = "HOLD_YOLO_PREPROCESS_BEGIN",
+            details = mapOf(
+                "bitmapWidth" to bitmap.width,
+                "bitmapHeight" to bitmap.height,
+                "modelSize" to modelSize
+            )
+        )
         val lbInfo = letterbox(bitmap, modelSize)
         try {
             val inputBuffer = normalizeToByteBuffer(lbInfo.bitmap, modelSize)
-            val outputs = runMultiOutputFloatInference(interpreter, inputBuffer)
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_PREPROCESS_DONE",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(preprocessStartedAt),
+                details = mapOf(
+                    "bitmapWidth" to bitmap.width,
+                    "bitmapHeight" to bitmap.height,
+                    "modelSize" to modelSize,
+                    "letterboxWidth" to lbInfo.bitmap.width,
+                    "letterboxHeight" to lbInfo.bitmap.height
+                )
+            )
 
+            val inferenceStartedAt = UploadAiTraceLogger.now()
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_INFERENCE_BEGIN",
+                details = mapOf("modelSize" to modelSize)
+            )
+            val outputs = runMultiOutputFloatInference(interpreter, inputBuffer)
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_INFERENCE_DONE",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(inferenceStartedAt),
+                details = mapOf(
+                    "modelSize" to modelSize,
+                    "outputCount" to outputs.size
+                )
+            )
+
+            val parseStartedAt = UploadAiTraceLogger.now()
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_PARSE_BEGIN",
+                details = mapOf(
+                    "outputCount" to outputs.size,
+                    "numClasses" to numClasses
+                )
+            )
             val (candidates, proto) = parseSegmentationCandidates(
                 outputs = outputs,
                 numClasses = numClasses,
@@ -503,9 +594,24 @@ object TFLiteInferenceUtils {
                 inputHeight = modelSize,
                 targetClassIndices = targetClassIndices
             )
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_PARSE_DONE",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(parseStartedAt),
+                details = mapOf(
+                    "candidateCount" to candidates.size,
+                    "protoChannels" to proto.channels,
+                    "protoHeight" to proto.height,
+                    "protoWidth" to proto.width
+                )
+            )
 
             if (candidates.isEmpty()) return emptyList()
 
+            val nmsStartedAt = UploadAiTraceLogger.now()
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_NMS_BEGIN",
+                details = mapOf("candidateCount" to candidates.size)
+            )
             val boxesOnOriginal = scaleLetterboxDetectionsToOriginalPixels(
                 detections = candidates.map { it.detection },
                 info = lbInfo
@@ -515,10 +621,88 @@ object TFLiteInferenceUtils {
                 iouThreshold = iouThreshold,
                 maxDetections = maxDetections
             )
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_NMS_DONE",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(nmsStartedAt),
+                details = mapOf(
+                    "candidateCount" to candidates.size,
+                    "boxCount" to boxesOnOriginal.size,
+                    "keptCount" to keepIndices.size
+                )
+            )
 
+            val maskResizePlan = buildMaskResizePlan(
+                inputWidth = modelSize,
+                inputHeight = modelSize,
+                info = lbInfo
+            )
+            val maskResizeScratch = MaskResizeScratch(
+                outputMask = BooleanArray(maskResizePlan.originalPixelCount)
+            )
+            val maskPolygonStartedAt = UploadAiTraceLogger.now()
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_MASK_POLYGON_BEGIN",
+                details = mapOf(
+                    "keptCount" to keepIndices.size,
+                    "originalWidth" to lbInfo.originalWidth,
+                    "originalHeight" to lbInfo.originalHeight,
+                    "mode" to DEFAULT_SEGMENTATION_POLYGON_MODE.name
+                )
+            )
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_MASK_BUILD_BEGIN",
+                details = mapOf(
+                    "keptCount" to keepIndices.size,
+                    "timingMode" to "accumulated_per_detection"
+                )
+            )
+            when (DEFAULT_SEGMENTATION_POLYGON_MODE) {
+                SegmentationPolygonMode.FULL_FRAME_BASELINE -> UploadAiTraceLogger.log(
+                    event = "HOLD_YOLO_MASK_RESIZE_BEGIN",
+                    details = mapOf(
+                        "keptCount" to keepIndices.size,
+                        "originalWidth" to lbInfo.originalWidth,
+                        "originalHeight" to lbInfo.originalHeight,
+                        "cropWidth" to maskResizePlan.cropWidth,
+                        "cropHeight" to maskResizePlan.cropHeight,
+                        "originalPixelCount" to maskResizePlan.originalPixelCount,
+                        "timingMode" to "accumulated_per_detection",
+                        "mode" to DEFAULT_SEGMENTATION_POLYGON_MODE.name
+                    )
+                )
+                SegmentationPolygonMode.BBOX_LOCAL -> UploadAiTraceLogger.log(
+                    event = "HOLD_YOLO_LOCAL_MASK_BEGIN",
+                    details = mapOf(
+                        "keptCount" to keepIndices.size,
+                        "originalWidth" to lbInfo.originalWidth,
+                        "originalHeight" to lbInfo.originalHeight,
+                        "timingMode" to "accumulated_per_detection",
+                        "mode" to DEFAULT_SEGMENTATION_POLYGON_MODE.name
+                    )
+                )
+            }
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_POLYGON_TRACE_BEGIN",
+                details = mapOf(
+                    "keptCount" to keepIndices.size,
+                    "originalWidth" to lbInfo.originalWidth,
+                    "originalHeight" to lbInfo.originalHeight,
+                    "timingMode" to "accumulated_per_detection",
+                    "mode" to DEFAULT_SEGMENTATION_POLYGON_MODE.name
+                )
+            )
+            var maskBuildElapsedMs = 0L
+            var maskResizeElapsedMs = 0L
+            var localMaskElapsedMs = 0L
+            var polygonTraceElapsedMs = 0L
+            var maxBboxWidthPx = 0
+            var maxBboxHeightPx = 0
+            var maxLocalMaskWidth = 0
+            var maxLocalMaskHeight = 0
             return keepIndices.map { index ->
                 val candidate = candidates[index]
                 val boxOnOriginal = boxesOnOriginal[index]
+                val maskBuildStartedAt = UploadAiTraceLogger.now()
                 val inputMask = buildInputSpaceMask(
                     proto = proto,
                     maskCoefficients = candidate.maskCoefficients,
@@ -526,18 +710,41 @@ object TFLiteInferenceUtils {
                     inputWidth = modelSize,
                     inputHeight = modelSize
                 )
-                val originalMask = scaleMaskToOriginal(
-                    mask = inputMask,
-                    inputWidth = modelSize,
-                    inputHeight = modelSize,
-                    info = lbInfo
-                )
-                val polygon = buildNormalizedPolygon(
-                    mask = originalMask,
-                    maskWidth = lbInfo.originalWidth,
-                    maskHeight = lbInfo.originalHeight,
-                    fallbackBox = boxOnOriginal
-                )
+                maskBuildElapsedMs += UploadAiTraceLogger.elapsedSince(maskBuildStartedAt)
+                val polygon = when (DEFAULT_SEGMENTATION_POLYGON_MODE) {
+                    SegmentationPolygonMode.FULL_FRAME_BASELINE -> {
+                        val maskResizeStartedAt = UploadAiTraceLogger.now()
+                        val originalMask = scaleMaskToOriginal(
+                            mask = inputMask,
+                            plan = maskResizePlan,
+                            scratch = maskResizeScratch
+                        )
+                        maskResizeElapsedMs += UploadAiTraceLogger.elapsedSince(maskResizeStartedAt)
+                        val polygonTraceStartedAt = UploadAiTraceLogger.now()
+                        buildNormalizedPolygon(
+                            mask = originalMask,
+                            maskWidth = lbInfo.originalWidth,
+                            maskHeight = lbInfo.originalHeight,
+                            fallbackBox = boxOnOriginal
+                        ).also {
+                            polygonTraceElapsedMs += UploadAiTraceLogger.elapsedSince(polygonTraceStartedAt)
+                        }
+                    }
+                    SegmentationPolygonMode.BBOX_LOCAL -> {
+                        val localPolygon = buildNormalizedPolygonFromLocalMask(
+                            inputMask = inputMask,
+                            resizePlan = maskResizePlan,
+                            fallbackBox = boxOnOriginal
+                        )
+                        localMaskElapsedMs += localPolygon.localMaskElapsedMs
+                        polygonTraceElapsedMs += localPolygon.polygonTraceElapsedMs
+                        maxBboxWidthPx = maxOf(maxBboxWidthPx, localPolygon.bboxWidthPx)
+                        maxBboxHeightPx = maxOf(maxBboxHeightPx, localPolygon.bboxHeightPx)
+                        maxLocalMaskWidth = maxOf(maxLocalMaskWidth, localPolygon.localMaskWidth)
+                        maxLocalMaskHeight = maxOf(maxLocalMaskHeight, localPolygon.localMaskHeight)
+                        localPolygon.polygon
+                    }
+                }
 
                 SegmentationDetection(
                     left = (boxOnOriginal.x1 / lbInfo.originalWidth).coerceIn(0f, 1f),
@@ -547,6 +754,71 @@ object TFLiteInferenceUtils {
                     confidence = boxOnOriginal.confidence,
                     classIndex = boxOnOriginal.classIndex,
                     polygon = polygon
+                )
+            }.also { detections ->
+                UploadAiTraceLogger.log(
+                    event = "HOLD_YOLO_MASK_BUILD_DONE",
+                    elapsedMs = maskBuildElapsedMs,
+                    details = mapOf(
+                        "keptCount" to keepIndices.size,
+                        "detectionCount" to detections.size,
+                        "timingMode" to "accumulated_per_detection"
+                    )
+                )
+                when (DEFAULT_SEGMENTATION_POLYGON_MODE) {
+                    SegmentationPolygonMode.FULL_FRAME_BASELINE -> UploadAiTraceLogger.log(
+                        event = "HOLD_YOLO_MASK_RESIZE_DONE",
+                        elapsedMs = maskResizeElapsedMs,
+                        details = mapOf(
+                            "keptCount" to keepIndices.size,
+                            "detectionCount" to detections.size,
+                            "originalWidth" to lbInfo.originalWidth,
+                            "originalHeight" to lbInfo.originalHeight,
+                            "cropWidth" to maskResizePlan.cropWidth,
+                            "cropHeight" to maskResizePlan.cropHeight,
+                            "originalPixelCount" to maskResizePlan.originalPixelCount,
+                            "timingMode" to "accumulated_per_detection",
+                            "mode" to DEFAULT_SEGMENTATION_POLYGON_MODE.name
+                        )
+                    )
+                    SegmentationPolygonMode.BBOX_LOCAL -> UploadAiTraceLogger.log(
+                        event = "HOLD_YOLO_LOCAL_MASK_DONE",
+                        elapsedMs = localMaskElapsedMs,
+                        details = mapOf(
+                            "keptCount" to keepIndices.size,
+                            "detectionCount" to detections.size,
+                            "bboxWidthPx" to maxBboxWidthPx,
+                            "bboxHeightPx" to maxBboxHeightPx,
+                            "localMaskWidth" to maxLocalMaskWidth,
+                            "localMaskHeight" to maxLocalMaskHeight,
+                            "timingMode" to "accumulated_per_detection",
+                            "mode" to DEFAULT_SEGMENTATION_POLYGON_MODE.name,
+                            "dimensionAggregation" to "max_observed"
+                        )
+                    )
+                }
+                UploadAiTraceLogger.log(
+                    event = "HOLD_YOLO_POLYGON_TRACE_DONE",
+                    elapsedMs = polygonTraceElapsedMs,
+                    details = mapOf(
+                        "keptCount" to keepIndices.size,
+                        "detectionCount" to detections.size,
+                        "originalWidth" to lbInfo.originalWidth,
+                        "originalHeight" to lbInfo.originalHeight,
+                        "timingMode" to "accumulated_per_detection",
+                        "mode" to DEFAULT_SEGMENTATION_POLYGON_MODE.name
+                    )
+                )
+                UploadAiTraceLogger.log(
+                    event = "HOLD_YOLO_MASK_POLYGON_DONE",
+                    elapsedMs = UploadAiTraceLogger.elapsedSince(maskPolygonStartedAt),
+                    details = mapOf(
+                        "keptCount" to keepIndices.size,
+                        "detectionCount" to detections.size,
+                        "originalWidth" to lbInfo.originalWidth,
+                        "originalHeight" to lbInfo.originalHeight,
+                        "mode" to DEFAULT_SEGMENTATION_POLYGON_MODE.name
+                    )
                 )
             }
         } finally {
@@ -870,8 +1142,66 @@ object TFLiteInferenceUtils {
         info: LetterboxInfo,
         threshold: Float = 0.5f
     ): BooleanArray {
-        if (mask.isEmpty()) return BooleanArray(info.originalWidth * info.originalHeight)
+        val plan = buildMaskResizePlan(
+            inputWidth = inputWidth,
+            inputHeight = inputHeight,
+            info = info
+        )
+        val scratch = MaskResizeScratch(
+            outputMask = BooleanArray(plan.originalPixelCount)
+        )
+        return scaleMaskToOriginal(
+            mask = mask,
+            plan = plan,
+            scratch = scratch,
+            threshold = threshold
+        )
+    }
 
+    private fun scaleMaskToOriginal(
+        mask: FloatArray,
+        plan: MaskResizePlan,
+        scratch: MaskResizeScratch,
+        threshold: Float = 0.5f
+    ): BooleanArray {
+        val outputMask = scratch.outputMask
+        if (mask.isEmpty()) {
+            outputMask.fill(false)
+            return outputMask
+        }
+
+        for (y in 0 until plan.targetHeight) {
+            val topRowOffset = plan.sourceRowOffsets0[y]
+            val bottomRowOffset = plan.sourceRowOffsets1[y]
+            val yWeight = plan.yWeights[y]
+            val rowOffset = y * plan.targetWidth
+
+            for (x in 0 until plan.targetWidth) {
+                val x0 = plan.x0Indices[x]
+                val x1 = plan.x1Indices[x]
+                val xWeight = plan.xWeights[x]
+
+                val topLeft = mask[topRowOffset + x0]
+                val topRight = mask[topRowOffset + x1]
+                val bottomLeft = mask[bottomRowOffset + x0]
+                val bottomRight = mask[bottomRowOffset + x1]
+
+                val top = topLeft + (topRight - topLeft) * xWeight
+                val bottom = bottomLeft + (bottomRight - bottomLeft) * xWeight
+                val interpolated = top + (bottom - top) * yWeight
+
+                outputMask[rowOffset + x] = interpolated >= threshold
+            }
+        }
+
+        return outputMask
+    }
+
+    private fun buildMaskResizePlan(
+        inputWidth: Int,
+        inputHeight: Int,
+        info: LetterboxInfo
+    ): MaskResizePlan {
         val scaledWidth = (info.originalWidth * info.scale).toInt().coerceIn(1, inputWidth)
         val scaledHeight = (info.originalHeight * info.scale).toInt().coerceIn(1, inputHeight)
         val cropLeft = info.padLeft.coerceIn(0, inputWidth - 1)
@@ -879,24 +1209,67 @@ object TFLiteInferenceUtils {
         val cropWidth = minOf(scaledWidth, inputWidth - cropLeft).coerceAtLeast(1)
         val cropHeight = minOf(scaledHeight, inputHeight - cropTop).coerceAtLeast(1)
 
-        val cropped = FloatArray(cropWidth * cropHeight)
-        for (y in 0 until cropHeight) {
-            val srcOffset = (cropTop + y) * inputWidth + cropLeft
-            val dstOffset = y * cropWidth
-            for (x in 0 until cropWidth) {
-                cropped[dstOffset + x] = mask[srcOffset + x]
-            }
-        }
-
-        val resized = resizeFloatGrid(
-            source = cropped,
-            sourceWidth = cropWidth,
-            sourceHeight = cropHeight,
-            targetWidth = info.originalWidth,
-            targetHeight = info.originalHeight
+        val x0Indices = IntArray(info.originalWidth)
+        val x1Indices = IntArray(info.originalWidth)
+        val xWeights = FloatArray(info.originalWidth)
+        populateResizeAxisLookup(
+            sourceSize = cropWidth,
+            targetSize = info.originalWidth,
+            lowerIndices = x0Indices,
+            upperIndices = x1Indices,
+            weights = xWeights
         )
 
-        return BooleanArray(resized.size) { index -> resized[index] >= threshold }
+        val y0Indices = IntArray(info.originalHeight)
+        val y1Indices = IntArray(info.originalHeight)
+        val yWeights = FloatArray(info.originalHeight)
+        populateResizeAxisLookup(
+            sourceSize = cropHeight,
+            targetSize = info.originalHeight,
+            lowerIndices = y0Indices,
+            upperIndices = y1Indices,
+            weights = yWeights
+        )
+
+        val sourceRowOffsets0 = IntArray(info.originalHeight) { index ->
+            (cropTop + y0Indices[index]) * inputWidth + cropLeft
+        }
+        val sourceRowOffsets1 = IntArray(info.originalHeight) { index ->
+            (cropTop + y1Indices[index]) * inputWidth + cropLeft
+        }
+
+        return MaskResizePlan(
+            cropLeft = cropLeft,
+            cropTop = cropTop,
+            cropWidth = cropWidth,
+            cropHeight = cropHeight,
+            targetWidth = info.originalWidth,
+            targetHeight = info.originalHeight,
+            sourceRowOffsets0 = sourceRowOffsets0,
+            sourceRowOffsets1 = sourceRowOffsets1,
+            x0Indices = x0Indices,
+            x1Indices = x1Indices,
+            xWeights = xWeights,
+            yWeights = yWeights
+        )
+    }
+
+    private fun populateResizeAxisLookup(
+        sourceSize: Int,
+        targetSize: Int,
+        lowerIndices: IntArray,
+        upperIndices: IntArray,
+        weights: FloatArray
+    ) {
+        val scale = if (targetSize > 1) (sourceSize - 1).toFloat() / (targetSize - 1) else 0f
+        for (targetIndex in 0 until targetSize) {
+            val sourcePosition = targetIndex * scale
+            val lowerIndex = floor(sourcePosition).toInt().coerceIn(0, sourceSize - 1)
+            val upperIndex = minOf(lowerIndex + 1, sourceSize - 1)
+            lowerIndices[targetIndex] = lowerIndex
+            upperIndices[targetIndex] = upperIndex
+            weights[targetIndex] = sourcePosition - lowerIndex
+        }
     }
 
     private fun resizeFloatGrid(
@@ -946,16 +1319,174 @@ object TFLiteInferenceUtils {
         maskHeight: Int,
         fallbackBox: RawDetection
     ): List<NormalizedPoint> {
-        val polygon = traceLargestBoundaryPolygon(mask, maskWidth, maskHeight, fallbackBox)
-            .takeIf { it.size >= 3 }
-            ?: fallbackPolygonFromBox(fallbackBox)
+        val polygon = buildPolygonPoints(
+            mask = mask,
+            maskWidth = maskWidth,
+            maskHeight = maskHeight,
+            fallbackBox = fallbackBox
+        )
+        return normalizePolygonPoints(
+            points = polygon,
+            maskWidth = maskWidth,
+            maskHeight = maskHeight
+        )
+    }
 
-        return polygon.map { point ->
-            NormalizedPoint(
-                x = (point.x.toFloat() / maskWidth).coerceIn(0f, 1f),
-                y = (point.y.toFloat() / maskHeight).coerceIn(0f, 1f)
+    private fun buildNormalizedPolygonFromLocalMask(
+        inputMask: FloatArray,
+        inputWidth: Int,
+        inputHeight: Int,
+        info: LetterboxInfo,
+        fallbackBox: RawDetection,
+        threshold: Float = 0.5f
+    ): LocalPolygonBuildResult = buildNormalizedPolygonFromLocalMask(
+        inputMask = inputMask,
+        resizePlan = buildMaskResizePlan(
+            inputWidth = inputWidth,
+            inputHeight = inputHeight,
+            info = info
+        ),
+        fallbackBox = fallbackBox,
+        threshold = threshold
+    )
+
+    private fun buildNormalizedPolygonFromLocalMask(
+        inputMask: FloatArray,
+        resizePlan: MaskResizePlan,
+        fallbackBox: RawDetection,
+        threshold: Float = 0.5f
+    ): LocalPolygonBuildResult {
+        val bounds = resolveMaskBounds(
+            fallbackBox = fallbackBox,
+            maskWidth = resizePlan.targetWidth,
+            maskHeight = resizePlan.targetHeight
+        )
+        if (bounds == null) {
+            val fallbackPolygon = normalizePolygonPoints(
+                points = fallbackPolygonFromBox(fallbackBox),
+                maskWidth = resizePlan.targetWidth,
+                maskHeight = resizePlan.targetHeight
+            )
+            return LocalPolygonBuildResult(
+                polygon = fallbackPolygon,
+                bboxWidthPx = 0,
+                bboxHeightPx = 0,
+                localMaskWidth = 0,
+                localMaskHeight = 0,
+                localMaskElapsedMs = 0L,
+                polygonTraceElapsedMs = 0L
             )
         }
+
+        val localMaskStartedAt = UploadAiTraceLogger.now()
+        val localMask = buildLocalMaskFromInputMask(
+            inputMask = inputMask,
+            resizePlan = resizePlan,
+            bounds = bounds,
+            threshold = threshold
+        )
+        val localMaskElapsedMs = UploadAiTraceLogger.elapsedSince(localMaskStartedAt)
+
+        val localFallbackBox = RawDetection(
+            x1 = 0f,
+            y1 = 0f,
+            x2 = bounds.width.toFloat(),
+            y2 = bounds.height.toFloat(),
+            confidence = fallbackBox.confidence,
+            classIndex = fallbackBox.classIndex
+        )
+        val polygonTraceStartedAt = UploadAiTraceLogger.now()
+        val localPolygon = buildPolygonPoints(
+            mask = localMask,
+            maskWidth = bounds.width,
+            maskHeight = bounds.height,
+            fallbackBox = localFallbackBox
+        )
+        val polygonTraceElapsedMs = UploadAiTraceLogger.elapsedSince(polygonTraceStartedAt)
+
+        return LocalPolygonBuildResult(
+            polygon = mapPolygonPointsToOriginalNormalized(
+                points = localPolygon,
+                bounds = bounds,
+                originalWidth = resizePlan.targetWidth,
+                originalHeight = resizePlan.targetHeight
+            ),
+            bboxWidthPx = bounds.width,
+            bboxHeightPx = bounds.height,
+            localMaskWidth = bounds.width,
+            localMaskHeight = bounds.height,
+            localMaskElapsedMs = localMaskElapsedMs,
+            polygonTraceElapsedMs = polygonTraceElapsedMs
+        )
+    }
+
+    private fun buildPolygonPoints(
+        mask: BooleanArray,
+        maskWidth: Int,
+        maskHeight: Int,
+        fallbackBox: RawDetection
+    ): List<IntPoint> = traceLargestBoundaryPolygon(mask, maskWidth, maskHeight, fallbackBox)
+        .takeIf { it.size >= 3 }
+        ?: fallbackPolygonFromBox(fallbackBox)
+
+    private fun normalizePolygonPoints(
+        points: List<IntPoint>,
+        maskWidth: Int,
+        maskHeight: Int
+    ): List<NormalizedPoint> = points.map { point ->
+        NormalizedPoint(
+            x = (point.x.toFloat() / maskWidth).coerceIn(0f, 1f),
+            y = (point.y.toFloat() / maskHeight).coerceIn(0f, 1f)
+        )
+    }
+
+    private fun mapPolygonPointsToOriginalNormalized(
+        points: List<IntPoint>,
+        bounds: MaskBounds,
+        originalWidth: Int,
+        originalHeight: Int
+    ): List<NormalizedPoint> = points.map { point ->
+        NormalizedPoint(
+            x = ((bounds.x1 + point.x).toFloat() / originalWidth).coerceIn(0f, 1f),
+            y = ((bounds.y1 + point.y).toFloat() / originalHeight).coerceIn(0f, 1f)
+        )
+    }
+
+    private fun buildLocalMaskFromInputMask(
+        inputMask: FloatArray,
+        resizePlan: MaskResizePlan,
+        bounds: MaskBounds,
+        threshold: Float
+    ): BooleanArray {
+        val localMask = BooleanArray(bounds.width * bounds.height)
+        if (inputMask.isEmpty()) return localMask
+
+        for (localY in 0 until bounds.height) {
+            val originalY = bounds.y1 + localY
+            val topRowOffset = resizePlan.sourceRowOffsets0[originalY]
+            val bottomRowOffset = resizePlan.sourceRowOffsets1[originalY]
+            val yWeight = resizePlan.yWeights[originalY]
+            val rowOffset = localY * bounds.width
+
+            for (localX in 0 until bounds.width) {
+                val originalX = bounds.x1 + localX
+                val x0 = resizePlan.x0Indices[originalX]
+                val x1 = resizePlan.x1Indices[originalX]
+                val xWeight = resizePlan.xWeights[originalX]
+
+                val topLeft = inputMask[topRowOffset + x0]
+                val topRight = inputMask[topRowOffset + x1]
+                val bottomLeft = inputMask[bottomRowOffset + x0]
+                val bottomRight = inputMask[bottomRowOffset + x1]
+
+                val top = topLeft + (topRight - topLeft) * xWeight
+                val bottom = bottomLeft + (bottomRight - bottomLeft) * xWeight
+                val interpolated = top + (bottom - top) * yWeight
+                localMask[rowOffset + localX] = interpolated >= threshold
+            }
+        }
+
+        return localMask
     }
 
     private fun traceLargestBoundaryPolygon(
@@ -964,19 +1495,19 @@ object TFLiteInferenceUtils {
         maskHeight: Int,
         fallbackBox: RawDetection
     ): List<IntPoint> {
-        val boxX1 = floor(fallbackBox.x1).toInt().coerceIn(0, maskWidth.saturatingSub(1))
-        val boxY1 = floor(fallbackBox.y1).toInt().coerceIn(0, maskHeight.saturatingSub(1))
-        val boxX2 = ceil(fallbackBox.x2).toInt().coerceIn(0, maskWidth)
-        val boxY2 = ceil(fallbackBox.y2).toInt().coerceIn(0, maskHeight)
-        if (boxX2 <= boxX1 || boxY2 <= boxY1) return emptyList()
+        val bounds = resolveMaskBounds(
+            fallbackBox = fallbackBox,
+            maskWidth = maskWidth,
+            maskHeight = maskHeight
+        ) ?: return emptyList()
         val componentMask = extractLargestComponentMask(
             mask = mask,
             maskWidth = maskWidth,
             maskHeight = maskHeight,
-            boxX1 = boxX1,
-            boxY1 = boxY1,
-            boxX2 = boxX2,
-            boxY2 = boxY2
+            boxX1 = bounds.x1,
+            boxY1 = bounds.y1,
+            boxX2 = bounds.x2,
+            boxY2 = bounds.y2
         ) ?: return emptyList()
 
         val contour = traceBoundaryContour(
@@ -992,6 +1523,24 @@ object TFLiteInferenceUtils {
 
         val simplified = simplifyBoundaryLoop(contour)
         return simplified.takeIf { it.size >= 3 } ?: emptyList()
+    }
+
+    private fun resolveMaskBounds(
+        fallbackBox: RawDetection,
+        maskWidth: Int,
+        maskHeight: Int
+    ): MaskBounds? {
+        val boxX1 = floor(fallbackBox.x1).toInt().coerceIn(0, maskWidth.saturatingSub(1))
+        val boxY1 = floor(fallbackBox.y1).toInt().coerceIn(0, maskHeight.saturatingSub(1))
+        val boxX2 = ceil(fallbackBox.x2).toInt().coerceIn(0, maskWidth)
+        val boxY2 = ceil(fallbackBox.y2).toInt().coerceIn(0, maskHeight)
+        if (boxX2 <= boxX1 || boxY2 <= boxY1) return null
+        return MaskBounds(
+            x1 = boxX1,
+            y1 = boxY1,
+            x2 = boxX2,
+            y2 = boxY2
+        )
     }
 
     private fun extractLargestComponentMask(

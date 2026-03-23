@@ -7,6 +7,7 @@ import com.ddgo.app.data.mapper.VisionMapper
 import com.ddgo.app.data.ml.common.TFLiteInferenceUtils
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.repository.HoldDetector
+import com.ddgo.app.feature.climbing.upload.UploadAiTraceLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
@@ -35,12 +36,29 @@ class HoldDetectorImpl @Inject constructor(
     override suspend fun detectFromFrame(bitmap: Bitmap): List<Hold> {
         Log.d(TAG, "▶ detectFromFrame 시작 (size: ${bitmap.width}x${bitmap.height})")
 
+        val modelLoadStartedAt = UploadAiTraceLogger.now()
+        UploadAiTraceLogger.log(
+            event = "HOLD_YOLO_MODEL_LOAD_BEGIN",
+            details = mapOf(
+                "bitmapWidth" to bitmap.width,
+                "bitmapHeight" to bitmap.height
+            )
+        )
         val holdInterp = try {
             TFLiteInferenceUtils.createInterpreter(context, HOLD_MODEL_PATH)
         } catch (e: Exception) {
             Log.e(TAG, "❌ 모델 로드 실패", e)
             return emptyList()
         }
+        UploadAiTraceLogger.log(
+            event = "HOLD_YOLO_MODEL_LOAD_DONE",
+            elapsedMs = UploadAiTraceLogger.elapsedSince(modelLoadStartedAt),
+            details = mapOf(
+                "bitmapWidth" to bitmap.width,
+                "bitmapHeight" to bitmap.height,
+                "modelSize" to HOLD_SIZE
+            )
+        )
 
         return try {
             val holdDetections = TFLiteInferenceUtils.runSegmentationInference(
@@ -56,6 +74,11 @@ class HoldDetectorImpl @Inject constructor(
 
             Log.d(TAG, "✅ 감지된 홀드 수: ${holdDetections.size}")
 
+            val mapStartedAt = UploadAiTraceLogger.now()
+            UploadAiTraceLogger.log(
+                event = "HOLD_YOLO_MAP_RESULT_BEGIN",
+                details = mapOf("segmentationDetectionCount" to holdDetections.size)
+            )
             holdDetections.map { d ->
                 VisionMapper.toHold(
                     left = d.left,
@@ -66,6 +89,15 @@ class HoldDetectorImpl @Inject constructor(
                     polygon = d.polygon.map { point ->
                         Hold.Point(point.x, point.y)
                     }
+                )
+            }.also { holds ->
+                UploadAiTraceLogger.log(
+                    event = "HOLD_YOLO_MAP_RESULT_DONE",
+                    elapsedMs = UploadAiTraceLogger.elapsedSince(mapStartedAt),
+                    details = mapOf(
+                        "segmentationDetectionCount" to holdDetections.size,
+                        "holdCount" to holds.size
+                    )
                 )
             }
         } catch (e: Exception) {
