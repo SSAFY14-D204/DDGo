@@ -113,7 +113,7 @@ fun HoldContactDebugScreen(
     val currentAttemptIndex = viewModel.currentAttemptIndex
     val playbackAttemptUris = viewModel.playbackAttemptUris
     val currentVideoUri = playbackAttemptUris.getOrNull(currentAttemptIndex)
-    val numberedHolds = viewModel.numberedHolds
+    val numberedHolds = viewModel.currentAttemptDisplayHolds
     val analyzedPoses = viewModel.currentAttemptAnalyzedPoses
     val polygonDebugResult = viewModel.currentAttemptPolygonHoldContactDebugResult
     var debugMode by remember { mutableStateOf(HoldDebugMode.POLYGON) }

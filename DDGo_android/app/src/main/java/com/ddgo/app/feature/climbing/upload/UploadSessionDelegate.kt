@@ -17,13 +17,28 @@ import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import java.io.File
 import java.util.ArrayDeque
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 import wseemann.media.FFmpegMediaMetadataRetriever
+
+internal object UploadPrePoseTimeoutConfig {
+    var analysisTimeoutMs: Long = 45_000L
+    var awaitTimeoutMs: Long = 60_000L
+    var pollIntervalMs: Long = 100L
+
+    fun reset() {
+        analysisTimeoutMs = 45_000L
+        awaitTimeoutMs = 60_000L
+        pollIntervalMs = 100L
+    }
+}
 
 internal interface UploadSessionCallbacks {
     fun clearAttemptResultState(clearPublishedSession: Boolean)
@@ -317,47 +332,107 @@ internal class UploadSessionDelegate(
         }
 
         refreshCurrentSelectionPrePoseTargets(selectionGeneration)
+        val startedAt = UploadAiTraceLogger.now()
+        var missingEntriesRetried = false
 
-        while (true) {
-            val entries = playbackUris.mapNotNull { prePoseCacheEntries[it] }
-            val activeCount = entries.count { entry ->
-                entry.status == PrePoseStatus.Pending || entry.status == PrePoseStatus.Running
-            }
-            if (entries.size == playbackUris.size && activeCount == 0) {
-                updatePrePoseBatchState()
-                return TerminalPrePoseSnapshot(
-                    generation = selectionGeneration,
-                    entriesByPlaybackUri = playbackUris.associateWith { playbackUri ->
-                        prePoseCacheEntries[playbackUri]?.toTerminalEntry()
-                            ?: TerminalPrePoseEntry(
-                                playbackUri = playbackUri,
-                                selectionGeneration = selectionGeneration,
-                                status = PrePoseStatus.Failed,
-                                aiPoseSequence = null,
-                                filteredAiPoseSequence = null,
-                                poses = emptyList(),
-                                filteredPoses = emptyList(),
-                                smoothedPoses = emptyList(),
-                                processedFrames = emptyList(),
-                                poseValidityFrames = emptyList(),
-                                overlayCache = null,
-                                personObservationStartTimeMs = null,
-                                climbEndDetection = null,
-                                handPeakAnnotation = null,
-                                timelinePoints = emptyList(),
-                                errorMessage = "Missing pre-pose cache entry."
+        return try {
+            withTimeout(UploadPrePoseTimeoutConfig.awaitTimeoutMs) {
+                var terminalSnapshot: TerminalPrePoseSnapshot? = null
+                while (terminalSnapshot == null) {
+                    val missingPlaybackUris = playbackUris.filterNot(prePoseCacheEntries::containsKey)
+                    if (missingPlaybackUris.isNotEmpty()) {
+                        val trackedPlaybackUris = allAttemptUris.toSet()
+                        UploadAiTraceLogger.log(
+                            event = "PREPOSE_AWAIT_MISSING_ENTRIES",
+                            generation = selectionGeneration,
+                            playbackUri = missingPlaybackUris.firstOrNull(),
+                            status = if (
+                                !missingEntriesRetried &&
+                                missingPlaybackUris.all { it in trackedPlaybackUris }
+                            ) {
+                                "retry"
+                            } else {
+                                "failed"
+                            },
+                            elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                            details = mapOf(
+                                "missingCount" to missingPlaybackUris.size,
+                                "missingPlaybackUris" to missingPlaybackUris.joinToString(","),
+                                "trackedPlaybackUris" to trackedPlaybackUris.joinToString(",")
                             )
-                    }
-                )
-            }
+                        )
 
-            val completedCount = entries.count { entry ->
-                entry.status == PrePoseStatus.Ready || entry.status == PrePoseStatus.Failed
+                        if (
+                            !missingEntriesRetried &&
+                            missingPlaybackUris.all { it in trackedPlaybackUris }
+                        ) {
+                            retryPrePoseEntries(missingPlaybackUris)
+                            missingEntriesRetried = true
+                            delay(UploadPrePoseTimeoutConfig.pollIntervalMs)
+                            continue
+                        }
+
+                        terminalSnapshot = buildTerminalPrePoseSnapshot(
+                            playbackUris = playbackUris,
+                            fallbackErrors = missingPlaybackUris.associateWith {
+                                "Missing pre-pose cache entry."
+                            }
+                        )
+                        continue
+                    }
+
+                    val entries = playbackUris.mapNotNull { prePoseCacheEntries[it] }
+                    val activeCount = entries.count { entry ->
+                        entry.status == PrePoseStatus.Pending || entry.status == PrePoseStatus.Running
+                    }
+                    if (entries.size == playbackUris.size && activeCount == 0) {
+                        updatePrePoseBatchState()
+                        terminalSnapshot = buildTerminalPrePoseSnapshot(playbackUris)
+                        continue
+                    }
+
+                    val completedCount = entries.count { entry ->
+                        entry.status == PrePoseStatus.Ready || entry.status == PrePoseStatus.Failed
+                    }
+                    if (emitLoading) callbacks?.setUploadSubmissionLoading(
+                        "pre-pose 준비 중입니다. (${completedCount}/${playbackUris.size})"
+                    )
+                    delay(UploadPrePoseTimeoutConfig.pollIntervalMs)
+                }
+                terminalSnapshot ?: buildTerminalPrePoseSnapshot(playbackUris)
             }
-            if (emitLoading) callbacks?.setUploadSubmissionLoading(
-                "pre-pose 준비 중입니다. (${completedCount}/${playbackUris.size})"
+        } catch (timeout: TimeoutCancellationException) {
+            val unresolvedPlaybackUris = playbackUris.filter { playbackUri ->
+                when (prePoseCacheEntries[playbackUri]?.status) {
+                    PrePoseStatus.Pending,
+                    PrePoseStatus.Running,
+                    null -> true
+                    PrePoseStatus.Ready,
+                    PrePoseStatus.Failed -> false
+                }
+            }
+            val timeoutMessage = "Pre-pose 준비 시간이 초과되었습니다."
+            val failedPlaybackUris = markPrePoseEntriesFailed(
+                playbackUris = unresolvedPlaybackUris,
+                errorMessage = timeoutMessage
             )
-            delay(100L)
+            UploadAiTraceLogger.log(
+                event = "PREPOSE_AWAIT_TIMEOUT",
+                generation = selectionGeneration,
+                playbackUri = unresolvedPlaybackUris.firstOrNull() ?: playbackUris.firstOrNull(),
+                status = "timeout",
+                elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                details = mapOf(
+                    "playbackCount" to playbackUris.size,
+                    "unresolvedCount" to unresolvedPlaybackUris.size,
+                    "failedCount" to failedPlaybackUris.size,
+                    "unresolvedPlaybackUris" to unresolvedPlaybackUris.joinToString(",")
+                )
+            )
+            buildTerminalPrePoseSnapshot(
+                playbackUris = playbackUris,
+                fallbackErrors = unresolvedPlaybackUris.associateWith { timeoutMessage }
+            )
         }
     }
 
@@ -405,14 +480,110 @@ internal class UploadSessionDelegate(
             callbacks = callbacks,
             emitLoading = emitLoading
         )
+        val unresolvedAfterRetry = playbackUris.filter { playbackUri ->
+            snapshot.entriesByPlaybackUri[playbackUri].isReusableForSubmission().not()
+        }
         UploadAiTraceLogger.log(
             event = "PREPOSE_AWAIT_DONE",
             generation = selectionGeneration,
             playbackUri = playbackUris.firstOrNull(),
-            status = "retried",
-            details = mapOf("playbackCount" to playbackUris.size)
+            status = if (unresolvedAfterRetry.isEmpty()) "retried_success" else "retried_failed",
+            details = mapOf(
+                "playbackCount" to playbackUris.size,
+                "unresolvedCount" to unresolvedAfterRetry.size,
+                "unresolvedPlaybackUris" to unresolvedAfterRetry.joinToString(",")
+            )
         )
         return snapshot
+    }
+
+    private fun buildTerminalPrePoseSnapshot(
+        playbackUris: List<String>,
+        fallbackErrors: Map<String, String> = emptyMap()
+    ): TerminalPrePoseSnapshot {
+        return TerminalPrePoseSnapshot(
+            generation = selectionGeneration,
+            entriesByPlaybackUri = playbackUris.associateWith { playbackUri ->
+                prePoseCacheEntries[playbackUri]?.toTerminalEntry()
+                    ?: buildFailedTerminalPrePoseEntry(
+                        playbackUri = playbackUri,
+                        errorMessage = fallbackErrors[playbackUri] ?: "Missing pre-pose cache entry."
+                    )
+            }
+        )
+    }
+
+    private fun buildFailedTerminalPrePoseEntry(
+        playbackUri: String,
+        errorMessage: String
+    ): TerminalPrePoseEntry {
+        return TerminalPrePoseEntry(
+            playbackUri = playbackUri,
+            selectionGeneration = selectionGeneration,
+            status = PrePoseStatus.Failed,
+            aiPoseSequence = null,
+            filteredAiPoseSequence = null,
+            poses = emptyList(),
+            filteredPoses = emptyList(),
+            smoothedPoses = emptyList(),
+            processedFrames = emptyList(),
+            poseValidityFrames = emptyList(),
+            overlayCache = null,
+            personObservationStartTimeMs = null,
+            climbEndDetection = null,
+            handPeakAnnotation = null,
+            timelinePoints = emptyList(),
+            errorMessage = errorMessage
+        )
+    }
+
+    private fun markPrePoseEntriesFailed(
+        playbackUris: List<String>,
+        errorMessage: String
+    ): List<String> {
+        if (playbackUris.isEmpty()) {
+            return emptyList()
+        }
+
+        val targetPlaybackUris = playbackUris.distinct().toSet()
+        val updatedEntries = prePoseCacheEntries.toMutableMap()
+        val failedPlaybackUris = mutableListOf<String>()
+
+        prePoseTaskQueue.removeAll { task -> task.playbackUri in targetPlaybackUris }
+
+        targetPlaybackUris.forEach { playbackUri ->
+            val currentEntry = updatedEntries[playbackUri] ?: return@forEach
+            if (currentEntry.status == PrePoseStatus.Ready || currentEntry.status == PrePoseStatus.Failed) {
+                return@forEach
+            }
+
+            updatedEntries[playbackUri] = currentEntry.copy(
+                status = PrePoseStatus.Failed,
+                aiPoseSequence = null,
+                filteredAiPoseSequence = null,
+                poses = emptyList(),
+                filteredPoses = emptyList(),
+                smoothedPoses = emptyList(),
+                processedFrames = emptyList(),
+                poseValidityFrames = emptyList(),
+                overlayCache = null,
+                personObservationStartTimeMs = null,
+                climbEndDetection = null,
+                handPeakAnnotation = null,
+                timelinePoints = emptyList(),
+                errorMessage = errorMessage,
+                taskId = null
+            )
+            failedPlaybackUris += playbackUri
+        }
+
+        if (failedPlaybackUris.isNotEmpty()) {
+            prePoseCacheEntries = updatedEntries
+            activePrePosePlaybackUris.removeAll(targetPlaybackUris)
+            updatePrePoseBatchState()
+        }
+
+        return failedPlaybackUris
     }
 
     fun clearPosePrecomputeState(
@@ -516,11 +687,36 @@ internal class UploadSessionDelegate(
                 )
                 updatePrePoseBatchState()
 
-                val result = runCatching {
-                    prePoseVideoAnalysisProvider.analyze(
-                        videoUri = task.playbackUri,
-                        analysisFpsLimit = UPLOAD_PREPOSE_ANALYSIS_FPS
+                val result = try {
+                    Result.success(
+                        withTimeout(UploadPrePoseTimeoutConfig.analysisTimeoutMs) {
+                            prePoseVideoAnalysisProvider.analyze(
+                                videoUri = task.playbackUri,
+                                analysisFpsLimit = UPLOAD_PREPOSE_ANALYSIS_FPS
+                            )
+                        }
                     )
+                } catch (timeout: TimeoutCancellationException) {
+                    UploadAiTraceLogger.log(
+                        event = "PREPOSE_TASK_TIMEOUT",
+                        generation = currentEntry.selectionGeneration,
+                        playbackUri = task.playbackUri,
+                        status = "timeout",
+                        elapsedMs = UploadAiTraceLogger.elapsedSince(startedAt),
+                        details = mapOf(
+                            "taskId" to task.taskId,
+                            "timeoutMs" to UploadPrePoseTimeoutConfig.analysisTimeoutMs
+                        )
+                    )
+                    Result.failure(
+                        IllegalStateException(
+                            "Pre-pose 분석 시간이 초과되었습니다. (${UploadPrePoseTimeoutConfig.analysisTimeoutMs}ms)"
+                        )
+                    )
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (throwable: Throwable) {
+                    Result.failure(throwable)
                 }
 
                 val latestEntry = prePoseCacheEntries[task.playbackUri]

@@ -6,9 +6,11 @@ import com.ddgo.app.domain.model.ProcessedPoseDetectionFrame
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertSame
+import org.junit.Assert.fail
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -57,6 +59,30 @@ class OptimizedPrePoseVideoAnalysisProviderTest {
         assertSame(expected, actual)
         coVerify(exactly = 1) { optimizedAnalyzer.analyze("file:///upload.mp4", 10) }
         coVerify(exactly = 1) { sequentialAnalyzer.analyze("file:///upload.mp4", 10) }
+    }
+
+    @Test
+    fun `optimized analysis cancellation does not fall back to sequential analyzer`() = runTest {
+        val optimizedAnalyzer = mockk<UploadOptimizedPrePoseVideoAnalyzer>()
+        val sequentialAnalyzer = mockk<SequentialPoseVideoAnalyzer>()
+        val provider = OptimizedPrePoseVideoAnalysisProvider(
+            optimizedAnalyzer = optimizedAnalyzer,
+            sequentialAnalyzer = sequentialAnalyzer
+        )
+
+        coEvery {
+            optimizedAnalyzer.analyze("file:///upload.mp4", 10)
+        } throws CancellationException("timed out")
+
+        try {
+            provider.analyze("file:///upload.mp4", 10)
+            fail("Expected CancellationException to be rethrown.")
+        } catch (_: CancellationException) {
+            // expected
+        }
+
+        coVerify(exactly = 1) { optimizedAnalyzer.analyze("file:///upload.mp4", 10) }
+        coVerify(exactly = 0) { sequentialAnalyzer.analyze(any(), any()) }
     }
 
     private fun prePoseAnalysisResult(
