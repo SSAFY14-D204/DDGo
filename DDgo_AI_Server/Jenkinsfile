@@ -2,6 +2,7 @@ def aiChanged = false
 def deployBranch = ""
 def deployCommitMsg = ""
 def deployCommitAuthor = ""
+def deployCommitSha = ""
 def shortHash = ""
 def tag = ""
 
@@ -41,6 +42,11 @@ pipeline {
             returnStdout: true
           ).trim()
 
+          deployCommitSha = sh(
+            script: "git rev-parse HEAD || true",
+            returnStdout: true
+          ).trim()
+
           def webhookBranch = env.gitlabSourceBranch?.trim() ?:
                               env.gitlabBranch?.trim() ?:
                               env.BRANCH_NAME?.trim()
@@ -55,6 +61,7 @@ pipeline {
           echo "Deploy branch: ${deployBranch}"
           echo "Commit message: ${deployCommitMsg}"
           echo "Commit author: ${deployCommitAuthor}"
+          echo "Commit SHA: ${deployCommitSha}"
         }
       }
     }
@@ -226,9 +233,21 @@ Status: ${aiChanged ? 'DDgo_AI_Server changed' : 'No DDgo_AI_Server changes'}
             returnStdout: true
           ).trim()
 
+          def prevCommitSha = sh(
+            script: """
+              cd ${env.DEPLOY_DIR}
+              if [ -f deploy.env ]; then
+                grep '^DDGO_GIT_COMMIT=' deploy.env | cut -d'=' -f2-
+              fi
+            """,
+            returnStdout: true
+          ).trim()
+
           echo "Previous image: ${prevImage ?: '(none)'}"
           echo "Previous app version: ${prevAppVersion ?: '(none)'}"
+          echo "Previous git commit: ${prevCommitSha ?: '(none)'}"
           echo "New image: ${env.IMAGE}:${tag}"
+          echo "New git commit: ${deployCommitSha ?: '(unknown)'}"
 
           try {
             sh """
@@ -251,6 +270,12 @@ Status: ${aiChanged ? 'DDgo_AI_Server changed' : 'No DDgo_AI_Server changes'}
                 sed -i 's|^DDGO_APP_VERSION=.*|DDGO_APP_VERSION=${tag}|' deploy.env
               else
                 echo 'DDGO_APP_VERSION=${tag}' >> deploy.env
+              fi
+
+              if grep -q '^DDGO_GIT_COMMIT=' deploy.env; then
+                sed -i 's|^DDGO_GIT_COMMIT=.*|DDGO_GIT_COMMIT=${deployCommitSha}|' deploy.env
+              else
+                echo 'DDGO_GIT_COMMIT=${deployCommitSha}' >> deploy.env
               fi
 
               docker compose --env-file deploy.env pull ${env.SERVICE_NAME}
@@ -287,12 +312,45 @@ Status: ${aiChanged ? 'DDgo_AI_Server changed' : 'No DDgo_AI_Server changes'}
               error("Health check failed after deploy")
             }
 
+            def realtimeRouteFound = sh(
+              script: "curl -fsS http://127.0.0.1:8000/openapi.json | grep -F '\"/api/v1/mujoco-complete/session/start\"' >/dev/null && echo true || echo false",
+              returnStdout: true
+            ).trim()
+
+            echo "OpenAPI contains realtime session start: ${realtimeRouteFound}"
+
+            if (realtimeRouteFound != "true") {
+              sh "cd ${env.DEPLOY_DIR} && docker compose --env-file deploy.env logs --tail=100 ${env.SERVICE_NAME} || true"
+              error("Realtime session start endpoint missing from OpenAPI after deploy")
+            }
+
+            def smokeChecks = [
+              [name: 'batch analyze route', path: '/api/v1/mujoco-complete/analyze/fast', expected: '422'],
+              [name: 'realtime session start route', path: '/api/v1/mujoco-complete/session/start', expected: '422'],
+            ]
+
+            smokeChecks.each { check ->
+              def code = sh(
+                script: "curl -s -o /tmp/ddgo-ai-smoke-response.json -w '%{http_code}' -H 'Content-Type: application/json' -X POST http://127.0.0.1:8000${check.path} --data '{}' || true",
+                returnStdout: true
+              ).trim()
+
+              echo "Smoke Check ${check.name} -> HTTP ${code}"
+
+              if (code != check.expected) {
+                sh "cat /tmp/ddgo-ai-smoke-response.json || true"
+                sh "cd ${env.DEPLOY_DIR} && docker compose --env-file deploy.env logs --tail=100 ${env.SERVICE_NAME} || true"
+                error("Smoke check failed for ${check.name}: expected ${check.expected}, got ${code}")
+              }
+            }
+
             currentBuild.description = """
 Branch: ${deployBranch}
 Commit: ${deployCommitMsg}
 Author: ${deployCommitAuthor}
 Status: AI deploy success
 Image: ${env.IMAGE}:${tag}
+Commit SHA: ${deployCommitSha}
 """.trim()
 
             echo "===== Deploy Success ====="
@@ -318,6 +376,16 @@ Image: ${env.IMAGE}:${tag}
                   else
                     echo 'DDGO_APP_VERSION=${prevAppVersion}' >> deploy.env
                   fi
+                fi
+
+                if [ -n "${prevCommitSha}" ]; then
+                  if grep -q '^DDGO_GIT_COMMIT=' deploy.env; then
+                    sed -i 's|^DDGO_GIT_COMMIT=.*|DDGO_GIT_COMMIT=${prevCommitSha}|' deploy.env
+                  else
+                    echo 'DDGO_GIT_COMMIT=${prevCommitSha}' >> deploy.env
+                  fi
+                else
+                  sed -i '/^DDGO_GIT_COMMIT=/d' deploy.env || true
                 fi
 
                 docker compose --env-file deploy.env pull ${env.SERVICE_NAME} || true
