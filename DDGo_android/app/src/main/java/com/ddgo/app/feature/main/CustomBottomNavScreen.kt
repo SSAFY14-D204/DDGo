@@ -52,7 +52,12 @@ object MainTab {
 
 object MainChromeDefaults {
     val NavBarHeight = 110.dp
+    val ContentBottomPadding = 120.dp
+    val OverlayFabBottomPadding = 132.dp
     val MenuOverlayBottomPadding = 110.dp
+    val NavBarContentTopPadding = 36.dp
+    val NavBarItemHorizontalPadding = 8.dp
+    val NavBarItemVerticalPadding = 4.dp
 }
 
 class BumpShape(
@@ -93,15 +98,15 @@ fun CustomBottomNavBarBase(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .shadow(8.dp, shape = BumpShape())
             .background(Color.White, shape = BumpShape())
+            .navigationBarsPadding()
             .height(MainChromeDefaults.NavBarHeight)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 50.dp),
+                .padding(top = MainChromeDefaults.NavBarContentTopPadding),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -196,7 +201,10 @@ fun BottomNavItem(
     Column(
         modifier = Modifier
             .let { m -> if (onLongClick != null) m.combinedClickable(onClick = onClick, onLongClick = onLongClick) else m.clickable(onClick = onClick) }
-            .padding(8.dp),
+            .padding(
+                horizontal = MainChromeDefaults.NavBarItemHorizontalPadding,
+                vertical = MainChromeDefaults.NavBarItemVerticalPadding
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

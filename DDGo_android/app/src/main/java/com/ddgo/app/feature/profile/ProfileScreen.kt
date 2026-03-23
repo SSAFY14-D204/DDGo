@@ -27,6 +27,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.core.ui.theme.DDGoTheme
+import com.ddgo.app.feature.main.MainChromeDefaults
 import com.ddgo.app.feature.profile.components.ProfileActionConfirmationDialog
 import com.ddgo.app.feature.profile.components.ProfileBodyProfileEditorDialog
 import com.ddgo.app.feature.profile.components.ProfileDangerZoneCard
@@ -191,7 +192,7 @@ internal fun ProfileScreenContent(
                 start = 20.dp,
                 end = 20.dp,
                 top = 20.dp,
-                bottom = 120.dp
+                bottom = MainChromeDefaults.ContentBottomPadding
             ),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {

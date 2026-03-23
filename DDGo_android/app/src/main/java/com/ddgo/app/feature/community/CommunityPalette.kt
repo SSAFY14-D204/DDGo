@@ -4,25 +4,32 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 internal object CommunityPalette {
-    val BrandBlue = Color(0xFF4396FB)
-    val BrandGray = Color(0xFF505050)
-    val BrandGreen = Color(0xFF6FFF98)
-    val NeutralBlack = Color(0xFF0B0B0E)
-    val NeutralGray = Color(0xFF999999)
+    val BrandBlue = Color(0xFF42A5F5)
+    val BrandGray = Color(0xFF6C7B8A)
+    val BrandGreen = Color(0xFFE8F3FF)
+    val NeutralBlack = Color(0xFF1E232C)
+    val NeutralGray = Color(0xFF90A0AF)
     val NeutralWhite = Color(0xFFFFFFFF)
-    val NeutralBackground = Color(0xFFF7F4F4)
-    val LightBlue = Color(0xFF71A3D0)
-    val LightPurple = Color(0xFFC9C5FF)
+    val NeutralBackground = Color(0xFFF7FBFF)
+    val LightBlue = Color(0xFFE8F3FF)
+    val LightPurple = Color(0xFFD7E5F5)
+    val Surface = Color(0xFFFFFFFF)
+    val SurfaceMuted = Color(0xFFF4F8FD)
+    val Border = Color(0xFFD7E5F5)
+    val TextPrimary = Color(0xFF1E232C)
+    val TextSecondary = Color(0xFF6C7B8A)
+    val Accent = Color(0xFF42A5F5)
+    val AccentStrong = Color(0xFF1E88E5)
+    val AccentSoft = Color(0xFFE8F3FF)
+    val OnAccent = Color.White
 
     val PageGradient = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFFF7F4F4),
-            Color(0xFFF9FBFF),
-            Color(0xFFFFFFFF)
+            Color(0xFFF7FBFF),
+            Color(0xFFEAF3FF),
+            Color(0xFFF7FBFF)
         )
     )
 
-    val HeroGradient = Brush.horizontalGradient(
-        colors = listOf(Color(0xFF8458FF), Color(0xFF42A7FF))
-    )
+    val HeroGradient = Brush.horizontalGradient(colors = listOf(Accent, AccentStrong))
 }
