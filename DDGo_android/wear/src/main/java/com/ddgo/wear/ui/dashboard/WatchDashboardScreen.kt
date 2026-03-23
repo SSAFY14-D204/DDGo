@@ -1,5 +1,6 @@
 package com.ddgo.wear.ui.dashboard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,11 +9,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -27,10 +29,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -46,13 +47,20 @@ private val DdigoGray = Color(0xFF505050)
 private val DdigoGradientStart = Color(0xFF8458FF)
 private val DdigoGradientEnd = Color(0xFF42A7FF)
 private val DdigoAlert = Color(0xFFFF6F8D)
-private val DdigoIdleStart = Color(0xFF4B5064)
-private val DdigoIdleEnd = Color(0xFF6A7391)
+private val DdigoIdleStart = Color(0xFF505769)
+private val DdigoIdleEnd = Color(0xFF6A7490)
+private val DdigoSensor = Color(0xFF8DA4C7)
 private val SurfaceBase = Color(0xFF0C0F17)
 private val SurfaceRaised = Color(0xFF151A24)
 private val SurfaceSoft = Color(0xFF1D2330)
 private val TextPrimary = Color(0xFFF7F8FB)
 private val TextSecondary = Color(0xFFAFB8CC)
+
+private enum class WatchDashboardLayoutMode {
+    METRIC,
+    PASSIVE,
+    ACTION
+}
 
 @Composable
 internal fun WatchDashboardScreen(
@@ -60,6 +68,7 @@ internal fun WatchDashboardScreen(
     onAction: (WatchDashboardActionKind) -> Unit
 ) {
     val palette = paletteFor(uiState.visualState)
+    val layoutMode = layoutModeFor(uiState.visualState)
 
     Surface(modifier = Modifier.fillMaxSize()) {
         BoxWithConstraints(
@@ -71,16 +80,21 @@ internal fun WatchDashboardScreen(
                             Color(0xFF12162A),
                             SurfaceBase
                         )
-                        )
                     )
+                )
         ) {
             val compact = maxWidth <= 200.dp || maxHeight <= 200.dp
-            val hasActions = uiState.primaryAction != null || uiState.secondaryAction != null
-            val contentPadding = if (compact) 10.dp else 18.dp
-            val heroSize = when {
-                compact && hasActions -> 100.dp
-                compact -> 114.dp
-                else -> 150.dp
+            val contentPadding = if (compact) 12.dp else 18.dp
+            val heroSize = when (layoutMode) {
+                WatchDashboardLayoutMode.METRIC -> if (compact) 118.dp else 154.dp
+                WatchDashboardLayoutMode.PASSIVE -> if (compact) 106.dp else 138.dp
+                WatchDashboardLayoutMode.ACTION -> if (compact) 94.dp else 108.dp
+            }
+            val headerBody = if (layoutMode == WatchDashboardLayoutMode.ACTION) null else uiState.body
+            val headerBodyMaxLines = when (uiState.visualState) {
+                WatchDashboardVisualState.ALERTING -> 2
+                WatchDashboardVisualState.RECOVERING -> 1
+                else -> 1
             }
 
             Column(
@@ -91,46 +105,38 @@ internal fun WatchDashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)
             ) {
                 ContextHeader(
-                    uiState = uiState,
-                    compact = compact
+                    headline = uiState.headline,
+                    body = headerBody,
+                    bodyMaxLines = headerBodyMaxLines,
+                    compact = compact,
+                    accent = palette.accent
                 )
 
-                Spacer(modifier = Modifier.weight(if (compact) 0.12f else 0.14f))
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    HeartHero(
+                when (layoutMode) {
+                    WatchDashboardLayoutMode.METRIC -> MetricStateContent(
+                        modifier = Modifier.weight(1f),
                         uiState = uiState,
                         palette = palette,
                         compact = compact,
                         heroSize = heroSize
                     )
 
-                    if (hasActions) {
-                        Spacer(modifier = Modifier.size(if (compact) 10.dp else 14.dp))
-                        HeadlineBlock(
-                            headline = uiState.headline,
-                            body = uiState.body,
-                            compact = compact
-                        )
-                    }
-                }
-
-                if (hasActions) {
-                    ActionArea(
-                        primaryAction = uiState.primaryAction,
-                        secondaryAction = uiState.secondaryAction,
+                    WatchDashboardLayoutMode.PASSIVE -> PassiveStateContent(
+                        modifier = Modifier.weight(1f),
+                        uiState = uiState,
+                        palette = palette,
                         compact = compact,
-                        accentBrush = palette.primaryBrush,
+                        heroSize = heroSize
+                    )
+
+                    WatchDashboardLayoutMode.ACTION -> ActionStateContent(
+                        modifier = Modifier.weight(1f),
+                        uiState = uiState,
+                        palette = palette,
+                        compact = compact,
+                        heroSize = heroSize,
                         onAction = onAction
                     )
-                } else if (compact) {
-                    StatusDock(metrics = uiState.metrics, compact = true)
-                } else {
-                    StatusDock(metrics = uiState.metrics, compact = false)
                 }
             }
         }
@@ -139,44 +145,145 @@ internal fun WatchDashboardScreen(
 
 @Composable
 private fun ContextHeader(
-    uiState: WatchDashboardUiState,
-    compact: Boolean
+    headline: String,
+    body: String?,
+    bodyMaxLines: Int,
+    compact: Boolean,
+    accent: Color
 ) {
-    val accent = when (uiState.recordingChip.tone) {
-        WatchDashboardChipTone.PRIMARY -> DdigoBlue
-        WatchDashboardChipTone.WARNING -> DdigoAlert
-        WatchDashboardChipTone.NEUTRAL -> DdigoGray
-    }
     Column(
+        modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(if (compact) 6.dp else 8.dp)
+                    .size(if (compact) 7.dp else 8.dp)
                     .clip(CircleShape)
                     .background(accent)
             )
             Text(
-                text = uiState.headline,
+                text = headline,
                 color = TextPrimary,
-                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
+                style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
+
+        body?.let {
+            Text(
+                text = it,
+                color = TextSecondary,
+                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
+                maxLines = bodyMaxLines,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricStateContent(
+    modifier: Modifier = Modifier,
+    uiState: WatchDashboardUiState,
+    palette: WatchDashboardPalette,
+    compact: Boolean,
+    heroSize: Dp
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.weight(0.12f))
+        HeartHero(
+            uiState = uiState,
+            palette = palette,
+            compact = compact,
+            heroSize = heroSize,
+            mode = WatchDashboardLayoutMode.METRIC
+        )
+        Spacer(modifier = Modifier.weight(0.18f))
+        StatusDock(
+            metrics = uiState.metrics,
+            compact = compact,
+            subtle = false
+        )
+    }
+}
+
+@Composable
+private fun PassiveStateContent(
+    modifier: Modifier = Modifier,
+    uiState: WatchDashboardUiState,
+    palette: WatchDashboardPalette,
+    compact: Boolean,
+    heroSize: Dp
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.weight(0.16f))
+        HeartHero(
+            uiState = uiState,
+            palette = palette,
+            compact = compact,
+            heroSize = heroSize,
+            mode = WatchDashboardLayoutMode.PASSIVE
+        )
+        Spacer(modifier = Modifier.weight(0.16f))
+        StatusDock(
+            metrics = uiState.metrics,
+            compact = compact,
+            subtle = true
+        )
+    }
+}
+
+@Composable
+private fun ActionStateContent(
+    modifier: Modifier = Modifier,
+    uiState: WatchDashboardUiState,
+    palette: WatchDashboardPalette,
+    compact: Boolean,
+    heroSize: Dp,
+    onAction: (WatchDashboardActionKind) -> Unit
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.weight(0.12f))
+        ActionStatusCard(
+            title = uiState.title,
+            value = uiState.value,
+            palette = palette,
+            compact = compact
+        )
+        Spacer(modifier = Modifier.height(if (compact) 10.dp else 14.dp))
         Text(
             text = uiState.body,
             color = TextSecondary,
+            textAlign = TextAlign.Center,
             style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
-            maxLines = if (uiState.primaryAction == null && uiState.secondaryAction == null) 1 else 2,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.weight(0.18f))
+        ActionArea(
+            primaryAction = uiState.primaryAction,
+            secondaryAction = uiState.secondaryAction,
+            compact = compact,
+            accentBrush = palette.primaryBrush,
+            accent = palette.accent,
+            onAction = onAction
         )
     }
 }
@@ -186,51 +293,71 @@ private fun HeartHero(
     uiState: WatchDashboardUiState,
     palette: WatchDashboardPalette,
     compact: Boolean,
-    heroSize: androidx.compose.ui.unit.Dp
+    heroSize: Dp,
+    mode: WatchDashboardLayoutMode
 ) {
+    val glowAlpha = when (mode) {
+        WatchDashboardLayoutMode.METRIC -> if (uiState.visualState == WatchDashboardVisualState.ALERTING) 0.22f else 0.16f
+        WatchDashboardLayoutMode.PASSIVE -> 0.07f
+        WatchDashboardLayoutMode.ACTION -> 0.12f
+    }
+    val ringAlpha = when (mode) {
+        WatchDashboardLayoutMode.METRIC -> 0.95f
+        WatchDashboardLayoutMode.PASSIVE -> 0.28f
+        WatchDashboardLayoutMode.ACTION -> 0.6f
+    }
+    val valueStyle = when (mode) {
+        WatchDashboardLayoutMode.METRIC -> if (compact) {
+            TextStyle(fontSize = 52.sp, lineHeight = 50.sp)
+        } else {
+            TextStyle(fontSize = 60.sp, lineHeight = 58.sp)
+        }
+
+        WatchDashboardLayoutMode.PASSIVE -> if (compact) {
+            TextStyle(fontSize = 46.sp, lineHeight = 44.sp)
+        } else {
+            TextStyle(fontSize = 52.sp, lineHeight = 50.sp)
+        }
+
+        WatchDashboardLayoutMode.ACTION -> if (compact) {
+            TextStyle(fontSize = 36.sp, lineHeight = 34.sp)
+        } else {
+            TextStyle(fontSize = 42.sp, lineHeight = 40.sp)
+        }
+    }
+
     Box(
-        modifier = Modifier.size(heroSize + if (compact) 32.dp else 40.dp),
+        modifier = Modifier.size(heroSize + if (compact) 34.dp else 44.dp),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            val outerRadius = size.minDimension / 2f - 12.dp.toPx()
-            val innerRadius = heroSize.toPx() / 2f - 6.dp.toPx()
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val outerRadius = size.minDimension / 2f - 10.dp.toPx()
+            val innerRadius = heroSize.toPx() / 2f
 
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        palette.glow.copy(alpha = 0.18f),
-                        palette.glow.copy(alpha = 0.04f),
+                        palette.glow.copy(alpha = glowAlpha),
+                        palette.glow.copy(alpha = glowAlpha * 0.22f),
                         Color.Transparent
                     ),
-                    radius = outerRadius * 1.08f
+                    radius = outerRadius * 1.12f
                 ),
-                radius = outerRadius * 1.08f
+                radius = outerRadius * 1.12f
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.06f),
-                radius = innerRadius + 10.dp.toPx(),
-                style = Stroke(width = 1.dp.toPx())
+                brush = palette.primaryBrush,
+                radius = innerRadius + 7.dp.toPx(),
+                style = Stroke(width = if (mode == WatchDashboardLayoutMode.METRIC) 4.dp.toPx() else 2.dp.toPx()),
+                alpha = ringAlpha
             )
             drawCircle(
-                color = SurfaceRaised.copy(alpha = 0.96f),
-                radius = innerRadius + 6.dp.toPx()
+                color = SurfaceRaised.copy(alpha = 0.92f),
+                radius = innerRadius + 2.dp.toPx()
             )
             drawCircle(
                 color = SurfaceBase,
-                radius = innerRadius
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.04f),
-                        Color.Transparent
-                    ),
-                    radius = innerRadius
-                ),
-                radius = innerRadius
+                radius = innerRadius - 2.dp.toPx()
             )
         }
 
@@ -248,18 +375,14 @@ private fun HeartHero(
                 text = uiState.value,
                 color = TextPrimary,
                 fontWeight = FontWeight.ExtraBold,
-                style = if (compact) {
-                    TextStyle(fontSize = 52.sp, lineHeight = 50.sp)
-                } else {
-                    TextStyle(fontSize = 60.sp, lineHeight = 58.sp)
-                }
+                style = valueStyle
             )
             uiState.unit?.let { unit ->
                 Text(
                     text = unit,
-                    color = TextSecondary,
+                    color = palette.accent,
                     style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -269,27 +392,43 @@ private fun HeartHero(
 @Composable
 private fun StatusDock(
     metrics: List<WatchDashboardMetricUi>,
-    compact: Boolean
+    compact: Boolean,
+    subtle: Boolean
 ) {
     if (metrics.isEmpty()) return
 
+    val valueStyle = if (compact || subtle) {
+        MaterialTheme.typography.bodySmall
+    } else {
+        MaterialTheme.typography.labelLarge
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceSoft.copy(alpha = 0.7f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
+        shape = RoundedCornerShape(if (subtle) 22.dp else 26.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (subtle) {
+                SurfaceSoft.copy(alpha = 0.48f)
+            } else {
+                SurfaceSoft.copy(alpha = 0.76f)
+            }
+        ),
+        border = BorderStroke(
+            1.dp,
+            Color.White.copy(alpha = if (subtle) 0.05f else 0.08f)
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = if (compact) 10.dp else 14.dp, vertical = if (compact) 7.dp else 9.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(horizontal = if (compact) 12.dp else 14.dp, vertical = if (compact) 8.dp else 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)
         ) {
             metrics.forEach { metric ->
                 Column(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
                     Text(
                         text = metric.label,
@@ -301,7 +440,7 @@ private fun StatusDock(
                         text = metric.value,
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
-                        style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.labelLarge,
+                        style = valueStyle,
                         maxLines = 1
                     )
                 }
@@ -311,32 +450,54 @@ private fun StatusDock(
 }
 
 @Composable
-private fun HeadlineBlock(
-    headline: String,
-    body: String,
+private fun ActionStatusCard(
+    title: String,
+    value: String,
+    palette: WatchDashboardPalette,
     compact: Boolean
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+    Card(
+        modifier = Modifier.fillMaxWidth(if (compact) 0.72f else 0.66f),
+        shape = RoundedCornerShape(32.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceRaised.copy(alpha = 0.94f)),
+        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.18f))
     ) {
-        Text(
-            text = headline,
-            color = TextPrimary,
-            textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Bold,
-            style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = body,
-            color = TextSecondary,
-            textAlign = TextAlign.Center,
-            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column(
+            modifier = Modifier
+                .padding(horizontal = if (compact) 18.dp else 22.dp, vertical = if (compact) 16.dp else 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(palette.accent.copy(alpha = 0.14f))
+                    .border(
+                        width = 1.dp,
+                        color = palette.accent.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(999.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = title,
+                    color = palette.accent,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                text = value,
+                color = TextPrimary,
+                fontWeight = FontWeight.ExtraBold,
+                style = if (compact) {
+                    TextStyle(fontSize = 32.sp, lineHeight = 32.sp)
+                } else {
+                    TextStyle(fontSize = 38.sp, lineHeight = 38.sp)
+                },
+                maxLines = 1
+            )
+        }
     }
 }
 
@@ -346,60 +507,129 @@ private fun ActionArea(
     secondaryAction: WatchDashboardActionUi?,
     compact: Boolean,
     accentBrush: Brush,
+    accent: Color,
     onAction: (WatchDashboardActionKind) -> Unit
 ) {
     if (primaryAction == null && secondaryAction == null) return
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
+    if (primaryAction != null && secondaryAction != null) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PrimaryActionButton(
+                modifier = Modifier.weight(1f),
+                label = primaryAction.label,
+                compact = compact,
+                accentBrush = accentBrush,
+                onClick = { onAction(primaryAction.kind) }
+            )
+            SecondaryActionButton(
+                modifier = Modifier.weight(1f),
+                label = secondaryAction.label,
+                compact = compact,
+                accent = accent,
+                onClick = { onAction(secondaryAction.kind) }
+            )
+        }
+    } else {
         primaryAction?.let { action ->
-            Button(
-                onClick = { onAction(action.kind) },
+            PrimaryActionButton(
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = ButtonDefaults.ContentPadding
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(accentBrush)
-                        .padding(vertical = if (compact) 8.dp else 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = action.label,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
+                label = action.label,
+                compact = compact,
+                accentBrush = accentBrush,
+                onClick = { onAction(action.kind) }
+            )
         }
-
         secondaryAction?.let { action ->
-            OutlinedButton(
-                onClick = { onAction(action.kind) },
+            SecondaryActionButton(
                 modifier = Modifier.fillMaxWidth(),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
-            ) {
-                Text(
-                    text = action.label,
-                    color = TextPrimary,
-                    style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
-                )
-            }
+                label = action.label,
+                compact = compact,
+                accent = accent,
+                onClick = { onAction(action.kind) }
+            )
         }
+    }
+}
+
+@Composable
+private fun PrimaryActionButton(
+    modifier: Modifier,
+    label: String,
+    compact: Boolean,
+    accentBrush: Brush,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(if (compact) 42.dp else 46.dp),
+        shape = RoundedCornerShape(999.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+        contentPadding = ButtonDefaults.ContentPadding
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(999.dp))
+                .background(accentBrush),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun SecondaryActionButton(
+    modifier: Modifier,
+    label: String,
+    compact: Boolean,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(if (compact) 42.dp else 46.dp),
+        shape = RoundedCornerShape(999.dp),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = SurfaceRaised.copy(alpha = 0.4f),
+            contentColor = TextPrimary
+        )
+    ) {
+        Text(
+            text = label,
+            color = TextPrimary,
+            style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
+        )
     }
 }
 
 private data class WatchDashboardPalette(
     val primaryBrush: Brush,
-    val glow: Color
+    val glow: Color,
+    val accent: Color
 )
+
+private fun layoutModeFor(visualState: WatchDashboardVisualState): WatchDashboardLayoutMode {
+    return when (visualState) {
+        WatchDashboardVisualState.PERMISSION_REQUIRED,
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> WatchDashboardLayoutMode.ACTION
+
+        WatchDashboardVisualState.IDLE,
+        WatchDashboardVisualState.RECOVERING -> WatchDashboardLayoutMode.PASSIVE
+
+        WatchDashboardVisualState.MEASURING,
+        WatchDashboardVisualState.ALERTING -> WatchDashboardLayoutMode.METRIC
+    }
+}
 
 private fun paletteFor(visualState: WatchDashboardVisualState): WatchDashboardPalette {
     val colors = when (visualState) {
@@ -407,13 +637,41 @@ private fun paletteFor(visualState: WatchDashboardVisualState): WatchDashboardPa
         WatchDashboardVisualState.RECOVERING -> listOf(DdigoBlue, DdigoGradientEnd)
         WatchDashboardVisualState.ALERTING -> listOf(DdigoAlert, DdigoGradientEnd)
         WatchDashboardVisualState.PERMISSION_REQUIRED -> listOf(DdigoGradientStart, DdigoGradientEnd)
-        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> listOf(DdigoBlue, DdigoGradientEnd)
-        else -> listOf(DdigoGradientStart, DdigoGradientEnd)
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> listOf(DdigoSensor, DdigoBlue)
+        WatchDashboardVisualState.MEASURING -> listOf(DdigoGradientStart, DdigoGradientEnd)
     }
 
     return WatchDashboardPalette(
         primaryBrush = Brush.linearGradient(colors),
-        glow = colors.last()
+        glow = colors.last(),
+        accent = colors.first()
+    )
+}
+
+@Preview(
+    name = "워치 대기",
+    device = Devices.WEAR_OS_SMALL_ROUND,
+    showSystemUi = true
+)
+@Composable
+private fun WatchDashboardIdlePreview() {
+    WatchDashboardScreen(
+        uiState = WatchDashboardUiState(
+            visualState = WatchDashboardVisualState.IDLE,
+            recordingChip = WatchDashboardChipUi("대기", WatchDashboardChipTone.NEUTRAL),
+            connectionChip = WatchDashboardChipUi("연결", WatchDashboardChipTone.PRIMARY),
+            title = "심박수",
+            value = "--",
+            unit = null,
+            headline = "녹화 대기",
+            body = "휴대폰에서 녹화를 시작해주세요",
+            metrics = listOf(
+                WatchDashboardMetricUi("측정", "대기"),
+                WatchDashboardMetricUi("연결", "정상")
+            ),
+            footer = null
+        ),
+        onAction = {}
     )
 }
 
@@ -432,8 +690,8 @@ private fun WatchDashboardMeasuringPreview() {
             title = "심박수",
             value = "104",
             unit = "bpm",
-            headline = "심박 측정 중",
-            body = "손목에 밀착되도록 착용해주세요",
+            headline = "심박 측정",
+            body = "녹화 중 · 연결 정상",
             metrics = listOf(
                 WatchDashboardMetricUi("측정", "정상"),
                 WatchDashboardMetricUi("경고", "안전"),
@@ -460,12 +718,37 @@ private fun WatchDashboardPermissionPreview() {
             title = "상태",
             value = "권한",
             unit = null,
-            headline = "권한이 필요해요",
-            body = "심박수와 활동 인식 권한을 허용해주세요",
+            headline = "권한 필요",
+            body = "심박과 활동 인식을 허용해주세요",
             metrics = emptyList(),
             footer = null,
             primaryAction = WatchDashboardActionUi("허용하기", WatchDashboardActionKind.REQUEST_PERMISSION),
             secondaryAction = WatchDashboardActionUi("설정", WatchDashboardActionKind.OPEN_SETTINGS)
+        ),
+        onAction = {}
+    )
+}
+
+@Preview(
+    name = "워치 센서 오류",
+    device = Devices.WEAR_OS_SMALL_ROUND,
+    showSystemUi = true
+)
+@Composable
+private fun WatchDashboardSensorPreview() {
+    WatchDashboardScreen(
+        uiState = WatchDashboardUiState(
+            visualState = WatchDashboardVisualState.SENSOR_UNAVAILABLE,
+            recordingChip = WatchDashboardChipUi("녹화", WatchDashboardChipTone.PRIMARY),
+            connectionChip = WatchDashboardChipUi("연결", WatchDashboardChipTone.PRIMARY),
+            title = "상태",
+            value = "센서",
+            unit = null,
+            headline = "센서 오류",
+            body = "착용 상태를 확인한 뒤 다시 시도하세요",
+            metrics = emptyList(),
+            footer = null,
+            primaryAction = WatchDashboardActionUi("다시 시도", WatchDashboardActionKind.RETRY_SESSION)
         ),
         onAction = {}
     )
