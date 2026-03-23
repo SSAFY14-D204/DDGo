@@ -15,13 +15,43 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+
 val kakaoRestApiKey = localProperties.getProperty("kakao.rest.api.key") ?: ""
 val kakaoNativeAppKey = localProperties.getProperty("kakao.native.app.key") ?: ""
 val googleWebClientId = localProperties.getProperty("google.web.client.id") ?: ""
+val releaseStoreFile = keystoreProperties.getProperty("storeFile")
+    ?.takeIf { it.isNotBlank() }
+    ?.let { rootProject.file(it) }
+val releaseStorePassword = keystoreProperties.getProperty("storePassword")
+    ?.takeIf { it.isNotBlank() }
+val releaseKeyAlias = keystoreProperties.getProperty("keyAlias")
+    ?.takeIf { it.isNotBlank() }
+val releaseKeyPassword = keystoreProperties.getProperty("keyPassword")
+    ?.takeIf { it.isNotBlank() }
+val hasReleaseSigning = releaseStoreFile?.exists() == true &&
+    releaseStorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null
 
 android {
     namespace = "com.ddgo.app"
     compileSdk = 35
+
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.ddgo.app"
@@ -73,6 +103,9 @@ android {
 
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
