@@ -53,7 +53,6 @@ import com.ddgo.app.domain.repository.LivePoseFrameInput
 import com.ddgo.app.feature.climbing.record.presentation.RecordThumbnailFrame
 import com.ddgo.app.feature.climbing.record.presentation.RecordViewModel
 import com.ddgo.app.feature.climbing.record.presentation.RecordedAttemptDraft
-import com.ddgo.app.feature.climbing.upload.RealtimeAttemptActionState
 import com.ddgo.app.feature.climbing.upload.UploadRealtimeOverlayUiState
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
@@ -71,7 +70,6 @@ fun RecordRoute(
     onNavigateBack: () -> Unit,
     onRecordedDraftReady: (RecordedAttemptDraft) -> Unit = {},
     realtimeOverlayUiState: UploadRealtimeOverlayUiState? = null,
-    realtimeAttemptActionState: RealtimeAttemptActionState = RealtimeAttemptActionState.Idle,
     onOpenGymList: () -> Unit = {},
     onSearchNearbyGyms: (Double, Double, String, Boolean) -> Unit = { _, _, _, _ -> },
     onSearchQueryChange: (String) -> Unit = {},
@@ -79,8 +77,6 @@ fun RecordRoute(
     onSelectDifficulty: (GymGrade) -> Unit = {},
     onSelectHoldColor: (String) -> Unit = {},
     onSetHoldColorSheetVisible: (Boolean) -> Unit = {},
-    onTapFinish: () -> Unit = {},
-    onTapRetake: () -> Unit = {},
     onTorchToggle: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -272,7 +268,13 @@ fun RecordRoute(
         if (currentRecording != null) {
             return
         }
-        if (realtimeOverlayUiState != null && !realtimeOverlayUiState.isChallengeReady) {
+        val canCaptureRealtimeAttempt =
+            realtimeOverlayUiState == null ||
+                (
+                    realtimeOverlayUiState.setupStep == com.ddgo.app.feature.climbing.upload.RealtimeSetupStep.Ready &&
+                        !realtimeOverlayUiState.isSetupVisible
+                    )
+        if (!canCaptureRealtimeAttempt) {
             return
         }
 
@@ -332,7 +334,6 @@ fun RecordRoute(
             isTorchAvailable = camera?.cameraInfo?.hasFlashUnit() == true,
             locationMessage = locationMessage,
             isResolvingLocation = isResolvingLocation,
-            attemptStatusLabel = realtimeAttemptActionState.toLabel(),
             previewContent = previewContent,
             overlayContent = overlayContent,
             onNavigateBack = onNavigateBack,
@@ -364,14 +365,13 @@ fun RecordRoute(
                 }
             },
             onLongPressShutter = {
-                if (!uiState.isRecording && realtimeOverlayUiState.isChallengeReady) {
+                if (
+                    !uiState.isRecording &&
+                    realtimeOverlayUiState.setupStep == com.ddgo.app.feature.climbing.upload.RealtimeSetupStep.Ready &&
+                    !realtimeOverlayUiState.isSetupVisible
+                ) {
                     onSetHoldColorSheetVisible(true)
                 }
-            },
-            onTapFinish = onTapFinish,
-            onTapRetake = {
-                resetDraftState()
-                onTapRetake()
             },
             onTapFlash = {
                 if (camera?.cameraInfo?.hasFlashUnit() == true) {
@@ -403,15 +403,6 @@ fun RecordRoute(
             onRetryLivePose = viewModel::retryLivePoseAnalysis,
             onClearDraft = ::resetDraftState
         )
-    }
-}
-
-private fun RealtimeAttemptActionState.toLabel(): String? {
-    return when (this) {
-        RealtimeAttemptActionState.Idle -> null
-        RealtimeAttemptActionState.ShowingOptions -> "실시간 분석 준비"
-        RealtimeAttemptActionState.RetakeRequested -> "재촬영 준비 완료"
-        RealtimeAttemptActionState.FinalAnalysisRequested -> "최종 분석 준비"
     }
 }
 

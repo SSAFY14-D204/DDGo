@@ -43,11 +43,9 @@ fun NavGraphBuilder.recordGraph(
             RecordRoute(
                 onNavigateBack = { navController.popBackStack() },
                 realtimeOverlayUiState = realtimeOverlayUiState,
-                realtimeAttemptActionState = uploadViewModel.realtimeAttemptActionState,
                 onRecordedDraftReady = { draft ->
                     navController.navigateToRealtimeRecordedAttempt(
-                        recordedVideoUri = draft.videoUri,
-                        realtimeSessionId = draft.realtimeSessionId
+                        recordedVideoUri = draft.videoUri
                     )
                 },
                 onOpenGymList = uploadViewModel::openRealtimeGymList,
@@ -57,18 +55,20 @@ fun NavGraphBuilder.recordGraph(
                 onSelectDifficulty = uploadViewModel::onRealtimeGymGradeSelected,
                 onSelectHoldColor = uploadViewModel::onRealtimeHoldColorSelected,
                 onSetHoldColorSheetVisible = uploadViewModel::updateRealtimeHoldColorSheetVisible,
-                onTapFinish = {
-                    uploadViewModel.prepareFinalAnalysisLoading()
-                    navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) {
-                        launchSingleTop = true
-                    }
-                },
-                onTapRetake = uploadViewModel::prepareRealtimeRetake
             )
         }
     }
 }
 
-fun NavController.navigateToRecord() {
-    navigate(ScreenRoutes.Climbing.Record.route)
+fun NavController.navigateToRecord(clearRealtimeAttemptStack: Boolean = false) {
+    if (clearRealtimeAttemptStack) {
+        navigate(ScreenRoutes.Climbing.Record.RECORD_MAIN) {
+            popUpTo(ScreenRoutes.Climbing.Record.RECORD_MAIN) {
+                inclusive = true
+            }
+            launchSingleTop = true
+        }
+    } else {
+        navigate(ScreenRoutes.Climbing.Record.route)
+    }
 }

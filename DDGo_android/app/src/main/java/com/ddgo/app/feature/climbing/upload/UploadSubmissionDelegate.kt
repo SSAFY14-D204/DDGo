@@ -7,24 +7,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ddgo.app.data.mapper.toPoseSequenceDto
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
-import com.ddgo.app.domain.model.AiAnalysisFallbackReason
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AttemptCompletionPayload
-import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.model.UploadedAttemptVideo
-import com.ddgo.app.domain.repository.AiRealtimeSessionContextRequest
-import com.ddgo.app.domain.repository.AiRealtimeSessionHandle
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
-import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
-import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
@@ -64,8 +58,6 @@ internal data class UploadSubmissionRequest(
     val numberedHolds: List<HoldNumbered>,
     val bestFrameBitmap: Bitmap?,
     val aiMode: AiAnalysisMode,
-    val primaryRealtimeSessionId: String?,
-    val primaryRealtimePlaybackUri: String?,
     val holdCoordinates: List<ChallengeHoldCoordinate>
 )
 
@@ -97,9 +89,7 @@ internal class UploadSubmissionDelegate(
     private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase,
     private val endAttemptUseCase: EndAttemptUseCase,
     private val getMyInfoUseCase: GetMyInfoUseCase,
-    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase,
-    private val attachAiRealtimeContextUseCase: AttachAiRealtimeContextUseCase,
-    private val finalizeAiRealtimeSessionUseCase: FinalizeAiRealtimeSessionUseCase
+    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase
 ) {
 
     private val _uploadSubmissionUiState =
@@ -737,8 +727,6 @@ internal class UploadSubmissionDelegate(
                 alignedHoldSets = alignedHoldSets,
                 referenceFrameBitmap = bitmapForAi,
                 mode = request.aiMode,
-                primaryRealtimeSessionId = request.primaryRealtimeSessionId,
-                primaryRealtimePlaybackUri = request.primaryRealtimePlaybackUri,
                 profile = profileForAi,
                 terminalSnapshot = terminalSnapshot,
                 callbacks = callbacks
@@ -1347,8 +1335,6 @@ internal class UploadSubmissionDelegate(
             alignedHoldSets = alignedHoldSets,
             referenceFrameBitmap = bitmapForAi,
             mode = request.aiMode,
-            primaryRealtimeSessionId = request.primaryRealtimeSessionId,
-            primaryRealtimePlaybackUri = request.primaryRealtimePlaybackUri,
             profile = profileForAi,
             terminalSnapshot = terminalSnapshot,
             callbacks = callbacks
@@ -1413,8 +1399,6 @@ internal class UploadSubmissionDelegate(
             alignedHoldSets = alignedHoldSets,
             referenceFrameBitmap = currentBitmap,
             mode = request.aiMode,
-            primaryRealtimeSessionId = request.primaryRealtimeSessionId,
-            primaryRealtimePlaybackUri = request.primaryRealtimePlaybackUri,
             profile = aiProfile,
             terminalSnapshot = terminalSnapshot,
             seedAiResults = attemptAiAnalysisResults,
@@ -1499,8 +1483,6 @@ internal class UploadSubmissionDelegate(
             attemptUrisSignature = request.attemptUris.joinToString("|"),
             numberedHoldsFingerprint = alignedHoldsFingerprint,
             aiMode = request.aiMode,
-            primaryRealtimeSessionId = request.primaryRealtimeSessionId,
-            primaryRealtimePlaybackUri = request.primaryRealtimePlaybackUri,
             frameWidthPx = request.bestFrameBitmap.width,
             frameHeightPx = request.bestFrameBitmap.height
         )
@@ -1963,8 +1945,6 @@ internal class UploadSubmissionDelegate(
         alignedHoldSets: List<AttemptAlignedHoldSet>,
         referenceFrameBitmap: Bitmap,
         mode: AiAnalysisMode,
-        primaryRealtimeSessionId: String?,
-        primaryRealtimePlaybackUri: String?,
         profile: ResolvedAiProfile,
         terminalSnapshot: TerminalPrePoseSnapshot,
         seedAiResults: List<AiAnalysisResult?> = emptyList(),
@@ -2005,35 +1985,19 @@ internal class UploadSubmissionDelegate(
                 return@forEachIndexed
             }
 
-            val shouldFinalizeRealtime = primaryRealtimeSessionId != null && (
-                primaryRealtimePlaybackUri?.let { it == uri } ?: index == 0
+            val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
+                ?: return Result.failure(
+                    IllegalStateException("Missing cached pre-pose AI sequence for $uri")
+                )
+            val result = analyzeAttemptWithBatchAi(
+                mode = mode,
+                videoUri = uri,
+                holds = analysisHolds,
+                frameWidthPx = frameWidthPx,
+                frameHeightPx = frameHeightPx,
+                profile = profile,
+                cachedPoseSequence = cachedPoseSequence
             )
-            val result = if (shouldFinalizeRealtime) {
-                finalizeRealtimeAttemptOrFallback(
-                    sessionId = primaryRealtimeSessionId,
-                    requestedMode = mode,
-                    videoUri = uri,
-                    holds = analysisHolds,
-                    frameWidthPx = frameWidthPx,
-                    frameHeightPx = frameHeightPx,
-                    profile = profile,
-                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
-                )
-            } else {
-                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
-                    ?: return Result.failure(
-                        IllegalStateException("Missing cached pre-pose AI sequence for $uri")
-                    )
-                analyzeAttemptWithBatchAi(
-                    mode = mode,
-                    videoUri = uri,
-                    holds = analysisHolds,
-                    frameWidthPx = frameWidthPx,
-                    frameHeightPx = frameHeightPx,
-                    profile = profile,
-                    cachedPoseSequence = cachedPoseSequence
-                )
-            }
 
             if (result.isFailure) {
                 return Result.failure(
@@ -2063,8 +2027,6 @@ internal class UploadSubmissionDelegate(
         alignedHoldSets: List<AttemptAlignedHoldSet>,
         referenceFrameBitmap: Bitmap,
         mode: AiAnalysisMode,
-        primaryRealtimeSessionId: String?,
-        primaryRealtimePlaybackUri: String?,
         profile: ResolvedAiProfile,
         terminalSnapshot: TerminalPrePoseSnapshot,
         callbacks: UploadSubmissionCallbacks
@@ -2081,42 +2043,25 @@ internal class UploadSubmissionDelegate(
                 "AI ${mode.pathSegment} 분석 중입니다. (${index + 1}/${alignedHoldSets.size})"
             )
 
-            val shouldFinalizeRealtime = primaryRealtimeSessionId != null && (
-                primaryRealtimePlaybackUri?.let { it == alignedHoldSet.playbackUri } ?: index == 0
-            )
             val analysisHolds = alignedHoldSet.alignedHolds.toHolds()
             val frameWidthPx = alignedHoldSet.frameWidthPx.takeIf { it > 0 } ?: referenceFrameBitmap.width
             val frameHeightPx = alignedHoldSet.frameHeightPx.takeIf { it > 0 } ?: referenceFrameBitmap.height
-            val result = if (shouldFinalizeRealtime) {
-                finalizeRealtimeAttemptOrFallback(
-                    sessionId = primaryRealtimeSessionId,
-                    requestedMode = mode,
-                    videoUri = alignedHoldSet.playbackUri,
-                    holds = analysisHolds,
-                    frameWidthPx = frameWidthPx,
-                    frameHeightPx = frameHeightPx,
-                    profile = profile,
-                    cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
-                        .preferredAiPoseSequence()
-                )
-            } else {
-                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
-                    .preferredAiPoseSequence()
-                    ?: return Result.failure(
-                        IllegalStateException(
-                            "Missing cached pre-pose AI sequence for ${alignedHoldSet.playbackUri}"
-                        )
+            val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
+                .preferredAiPoseSequence()
+                ?: return Result.failure(
+                    IllegalStateException(
+                        "Missing cached pre-pose AI sequence for ${alignedHoldSet.playbackUri}"
                     )
-                analyzeAttemptWithBatchAi(
-                    mode = mode,
-                    videoUri = alignedHoldSet.playbackUri,
-                    holds = analysisHolds,
-                    frameWidthPx = frameWidthPx,
-                    frameHeightPx = frameHeightPx,
-                    profile = profile,
-                    cachedPoseSequence = cachedPoseSequence
                 )
-            }
+            val result = analyzeAttemptWithBatchAi(
+                mode = mode,
+                videoUri = alignedHoldSet.playbackUri,
+                holds = analysisHolds,
+                frameWidthPx = frameWidthPx,
+                frameHeightPx = frameHeightPx,
+                profile = profile,
+                cachedPoseSequence = cachedPoseSequence
+            )
 
             if (result.isFailure) {
                 return Result.failure(
@@ -2133,82 +2078,6 @@ internal class UploadSubmissionDelegate(
         attemptAiAnalysisResults = results
         callbacks.syncDisplayedAnalysisPoints()
         return Result.success(results)
-    }
-
-    private suspend fun finalizeRealtimeAttemptOrFallback(
-        sessionId: String,
-        requestedMode: AiAnalysisMode,
-        videoUri: String,
-        holds: List<Hold>,
-        frameWidthPx: Int,
-        frameHeightPx: Int,
-        profile: ResolvedAiProfile,
-        cachedPoseSequence: AiPoseSequence?
-    ): Result<AiAnalysisResult> {
-        val sessionHandle = buildRealtimeSessionHandle(
-            sessionId = sessionId,
-            requestedMode = requestedMode,
-            profile = profile
-        )
-
-        val attachResult = attachAiRealtimeContextUseCase(
-            session = sessionHandle,
-            request = AiRealtimeSessionContextRequest(
-                holds = holds,
-                videoMetadata = buildRealtimeVideoMetadata(
-                    frameWidthPx = frameWidthPx,
-                    frameHeightPx = frameHeightPx
-                )
-            )
-        )
-
-        if (attachResult.isSuccess) {
-            val finalizeResult = finalizeAiRealtimeSessionUseCase(sessionHandle)
-                .map { result ->
-                    val fallbackReason = when {
-                        requestedMode == AiAnalysisMode.PHYSICS &&
-                            sessionHandle.effectiveMode != AiAnalysisMode.PHYSICS -> {
-                            AiAnalysisFallbackReason.MISSING_WEIGHT
-                        }
-
-                        else -> result.fallbackReason
-                    }
-
-                    result.copy(
-                        requestedMode = requestedMode,
-                        fallbackReason = fallbackReason
-                    )
-                }
-
-            if (finalizeResult.isSuccess) {
-                return finalizeResult
-            }
-
-            Log.w(
-                SUBMISSION_TAG,
-                "Realtime finalize failed. Falling back to local batch analysis.",
-                finalizeResult.exceptionOrNull()
-            )
-        } else {
-            Log.w(
-                SUBMISSION_TAG,
-                "Realtime context attach failed. Falling back to local batch analysis.",
-                attachResult.exceptionOrNull()
-            )
-        }
-
-        return analyzeAttemptWithBatchAi(
-            mode = requestedMode,
-            videoUri = videoUri,
-            holds = holds,
-            frameWidthPx = frameWidthPx,
-            frameHeightPx = frameHeightPx,
-            profile = profile,
-            cachedPoseSequence = cachedPoseSequence
-                ?: return Result.failure(
-                    IllegalStateException("Missing cached pre-pose AI sequence for $videoUri")
-                )
-        )
     }
 
     private suspend fun analyzeAttemptWithBatchAi(
@@ -2231,46 +2100,6 @@ internal class UploadSubmissionDelegate(
             wingspanCm = profile.wingspanCm,
             analysisFpsLimit = UPLOAD_PREPOSE_ANALYSIS_FPS,
             cachedPoseSequence = cachedPoseSequence,
-            frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
-        )
-    }
-
-    private fun buildRealtimeSessionHandle(
-        sessionId: String,
-        requestedMode: AiAnalysisMode,
-        profile: ResolvedAiProfile
-    ): AiRealtimeSessionHandle {
-        val effectiveMode = if (
-            requestedMode == AiAnalysisMode.PHYSICS &&
-            (profile.weightKg == null || profile.weightKg <= 0f)
-        ) {
-            AiAnalysisMode.FAST
-        } else {
-            requestedMode
-        }
-
-        return AiRealtimeSessionHandle(
-            sessionId = sessionId,
-            requestedMode = requestedMode,
-            effectiveMode = effectiveMode
-        )
-    }
-
-    private fun buildRealtimeVideoMetadata(frameBitmap: Bitmap): AiVideoMetadata {
-        return AiVideoMetadata(
-            frameWidth = frameBitmap.width,
-            frameHeight = frameBitmap.height,
-            frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
-        )
-    }
-
-    private fun buildRealtimeVideoMetadata(
-        frameWidthPx: Int,
-        frameHeightPx: Int
-    ): AiVideoMetadata {
-        return AiVideoMetadata(
-            frameWidth = frameWidthPx,
-            frameHeight = frameHeightPx,
             frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
         )
     }
@@ -2525,8 +2354,6 @@ private data class SubmissionAnalysisPrewarmKey(
     val attemptUrisSignature: String,
     val numberedHoldsFingerprint: String,
     val aiMode: AiAnalysisMode,
-    val primaryRealtimeSessionId: String?,
-    val primaryRealtimePlaybackUri: String?,
     val frameWidthPx: Int,
     val frameHeightPx: Int
 )

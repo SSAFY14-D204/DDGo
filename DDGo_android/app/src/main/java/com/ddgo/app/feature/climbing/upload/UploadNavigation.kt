@@ -86,11 +86,6 @@ fun NavGraphBuilder.uploadGraph(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
-                },
-                navArgument(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
                 }
             )
         ) { backStackEntry ->
@@ -98,14 +93,10 @@ fun NavGraphBuilder.uploadGraph(
             val initialRecordedVideoUri = backStackEntry.arguments
                 ?.getString(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
                 ?.let(Uri::decode)
-            val initialRealtimeSessionId = backStackEntry.arguments
-                ?.getString(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID)
-                ?.takeIf { it.isNotBlank() }
 
             AttemptUploadScreen(
                 viewModel = viewModel,
                 initialRecordedVideoUri = initialRecordedVideoUri,
-                initialRealtimeSessionId = initialRealtimeSessionId,
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE)
                 }
@@ -119,11 +110,6 @@ fun NavGraphBuilder.uploadGraph(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
-                },
-                navArgument(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
                 }
             )
         ) { backStackEntry ->
@@ -131,20 +117,14 @@ fun NavGraphBuilder.uploadGraph(
             val initialRecordedVideoUri = backStackEntry.arguments
                 ?.getString(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
                 ?.let(Uri::decode)
-            val initialRealtimeSessionId = backStackEntry.arguments
-                ?.getString(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID)
-                ?.takeIf { it.isNotBlank() }
 
-            LaunchedEffect(initialRecordedVideoUri, initialRealtimeSessionId) {
+            LaunchedEffect(initialRecordedVideoUri) {
                 val recordedUri = initialRecordedVideoUri?.takeIf { it.isNotBlank() }
                 if (recordedUri == null) {
                     navController.popBackStack()
                     return@LaunchedEffect
                 }
-                viewModel.updateRealtimeVideoUri(
-                    uri = recordedUri,
-                    realtimeSessionId = initialRealtimeSessionId
-                )
+                viewModel.updateRealtimeVideoUri(uri = recordedUri)
                 val nextRoute = if (viewModel.needsRealtimeHoldSelection()) {
                     ScreenRoutes.Climbing.Upload.REALTIME_HOLD
                 } else {
@@ -343,7 +323,7 @@ fun NavGraphBuilder.uploadGraph(
                 },
                 onNavigateToAddAttempt = {
                     viewModel.prepareRealtimeRetake()
-                    navController.navigateToRecord()
+                    navController.navigateToRecord(clearRealtimeAttemptStack = true)
                 }
             )
         }
@@ -409,40 +389,30 @@ fun NavGraphBuilder.uploadGraph(
 }
 
 fun NavController.navigateToUpload(
-    recordedVideoUri: String? = null,
-    realtimeSessionId: String? = null
+    recordedVideoUri: String? = null
 ) {
     val route = buildString {
         append(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD)
-        if (!recordedVideoUri.isNullOrBlank() || !realtimeSessionId.isNullOrBlank()) {
+        if (!recordedVideoUri.isNullOrBlank()) {
             append("?")
             append(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
             append("=")
             append(Uri.encode(recordedVideoUri.orEmpty()))
-            append("&")
-            append(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID)
-            append("=")
-            append(Uri.encode(realtimeSessionId.orEmpty()))
         }
     }
     navigate(route)
 }
 
 fun NavController.navigateToRealtimeRecordedAttempt(
-    recordedVideoUri: String? = null,
-    realtimeSessionId: String? = null
+    recordedVideoUri: String? = null
 ) {
     val route = buildString {
         append(ScreenRoutes.Climbing.Upload.REALTIME_RECORDED_ATTEMPT)
-        if (!recordedVideoUri.isNullOrBlank() || !realtimeSessionId.isNullOrBlank()) {
+        if (!recordedVideoUri.isNullOrBlank()) {
             append("?")
             append(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
             append("=")
             append(Uri.encode(recordedVideoUri.orEmpty()))
-            append("&")
-            append(ScreenRoutes.Climbing.Upload.ARG_REALTIME_SESSION_ID)
-            append("=")
-            append(Uri.encode(realtimeSessionId.orEmpty()))
         }
     }
     navigate(route)

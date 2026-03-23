@@ -32,12 +32,10 @@ import com.ddgo.app.domain.repository.PoseEstimator
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
-import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
 import com.ddgo.app.domain.usecase.CloseChallengeUseCase
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
-import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.HoldRole
@@ -1665,7 +1663,11 @@ class UploadViewModelTest {
         setPrivateField(viewModel, "detectedHolds", listOf(detectedStart, detectedEnd))
         setPrivateField(viewModel, "numberedHolds", listOf(endNumbered, startNumbered, middleNumbered))
 
-        val request = invokePrivateMethodWithResult(viewModel, "buildCurrentSubmissionRequestOrNull")!!
+        val request = invokePrivateMethodWithResult(
+            viewModel,
+            "buildCurrentSubmissionRequestOrNull",
+            false
+        )!!
         val holdCoordinates = readField<List<com.ddgo.app.domain.model.ChallengeHoldCoordinate>>(
             target = request,
             fieldName = "holdCoordinates"
@@ -1950,6 +1952,151 @@ class UploadViewModelTest {
         assertEquals(null, viewModel.selectedHoldColorKey)
     }
 
+    @Test
+    fun `realtime recorded attempt without session id uses cached batch ai path`() = runTest {
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>()
+        val cachedAiPoseSequence = aiPoseSequence(
+            videoUri = "file:///realtime_without_session.mp4",
+            processedFrames = listOf(
+                processedFrame(0L, true),
+                processedFrame(100L, true),
+                processedFrame(200L, true)
+            )
+        )
+        coEvery { prePoseVideoAnalysisProvider.analyze(any(), any()) } returns prePoseAnalysisResult(
+            poses = listOf(poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f))),
+            processedFrames = listOf(
+                processedFrame(0L, true),
+                processedFrame(100L, true),
+                processedFrame(200L, true)
+            ),
+            aiPoseSequence = cachedAiPoseSequence
+        )
+
+        val cachedSequenceSlot = slot<AiPoseSequence>()
+        val analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>()
+        coEvery {
+            analyzeAttemptWithAiUseCase.invoke(
+                mode = any(),
+                videoUri = any(),
+                holds = any(),
+                frameWidthPx = any(),
+                frameHeightPx = any(),
+                heightCm = any(),
+                weightKg = any(),
+                wingspanCm = any(),
+                analysisFpsLimit = any(),
+                cachedPoseSequence = capture(cachedSequenceSlot),
+                topKCrux = any(),
+                frameStep = any()
+            )
+        } returns Result.success(
+            AiAnalysisResult(
+                mode = AiAnalysisMode.FAST,
+                schemaVersion = "test",
+                videoMetadata = null,
+                timingsSeconds = emptyMap(),
+                correctionSummary = null,
+                cruxResult = AiCruxResult(
+                    candidateCount = 0,
+                    topCandidates = emptyList(),
+                    allCandidates = emptyList()
+                ),
+                rawResponse = JsonObject(emptyMap())
+            )
+        )
+
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+            stubAnalyzeAttemptWithAiUseCase = false
+        )
+        val videoUri = "file:///realtime_without_session.mp4"
+
+        viewModel.beginRealtimeChallengeUploadFlow()
+        viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
+        setPrivateField(viewModel, "videoUri", videoUri)
+        invokePrivateMethod(
+            target = viewModel,
+            methodName = "refreshCurrentSelectionPrePoseTargets",
+            viewModel.selectionGeneration
+        )
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.prePoseBatchState.readyCount == 1
+        }
+
+        setPrivateField(viewModel, "bestFrameBitmap", mockk<Bitmap>(relaxed = true) {
+            every { width } returns 1080
+            every { height } returns 1920
+        })
+        setPrivateField(viewModel, "detectedHolds", listOf(hold(centerX = 0.20f, centerY = 0.82f, holdNo = 1)))
+        setPrivateField(
+            viewModel,
+            "numberedHolds",
+            listOf(numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f, role = HoldRole.START))
+        )
+
+        viewModel.submitUpload()
+
+        waitUntil {
+            mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+            viewModel.uploadSubmissionUiState.value is UploadSubmissionUiState.Success
+        }
+
+        assertTrue(viewModel.isRealtimeEntryMode)
+        assertEquals(RealtimeAttemptActionState.ShowingOptions, viewModel.realtimeAttemptActionState)
+        assertEquals(cachedAiPoseSequence, cachedSequenceSlot.captured)
+    }
+
+    @Test
+    fun `prepareRealtimeRetake keeps realtime mode and marks retake requested`() = runTest {
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
+
+        viewModel.beginRealtimeChallengeUploadFlow()
+        viewModel.prepareRealtimeRetake()
+
+        assertTrue(viewModel.isRealtimeEntryMode)
+        assertEquals(
+            AnalysisLoadingPhase.AttemptResultPreparation,
+            viewModel.analysisLoadingPhase
+        )
+        assertEquals(
+            RealtimeAttemptActionState.RetakeRequested,
+            viewModel.realtimeAttemptActionState
+        )
+        assertEquals(
+            RealtimeSetupStep.Ready,
+            viewModel.realtimeOverlayUiState.setupStep
+        )
+    }
+
+    @Test
+    fun `prepareFinalAnalysisLoading keeps realtime options and marks final analysis requested`() = runTest {
+        val viewModel = createViewModel(
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true)
+        )
+
+        viewModel.beginRealtimeChallengeUploadFlow()
+        viewModel.prepareFinalAnalysisLoading()
+
+        assertTrue(viewModel.isRealtimeEntryMode)
+        assertEquals(
+            AnalysisLoadingPhase.FinalAnalysisPreparation,
+            viewModel.analysisLoadingPhase
+        )
+        assertEquals(
+            RealtimeAttemptActionState.FinalAnalysisRequested,
+            viewModel.realtimeAttemptActionState
+        )
+    }
+
     private fun createViewModel(
         context: Context = mockContext(),
         poseEstimator: PoseEstimator,
@@ -1965,9 +2112,6 @@ class UploadViewModelTest {
         val challengeRepository = mockk<ChallengeRepository>(relaxed = true)
         val gymRepository = mockk<GymRepository>(relaxed = true)
         val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
-        val attachAiRealtimeContextUseCase = mockk<AttachAiRealtimeContextUseCase>()
-        val finalizeAiRealtimeSessionUseCase = mockk<FinalizeAiRealtimeSessionUseCase>()
-
         coEvery {
             challengeRepository.saveChallengeHolds(any(), any())
         } answers {
@@ -2023,16 +2167,6 @@ class UploadViewModelTest {
                 )
             )
         }
-        coEvery {
-            attachAiRealtimeContextUseCase.invoke(
-                session = any(),
-                request = any()
-            )
-        } returns Result.failure(IllegalStateException("unused in baseline upload tests"))
-        coEvery {
-            finalizeAiRealtimeSessionUseCase.invoke(any())
-        } returns Result.failure(IllegalStateException("unused in baseline upload tests"))
-
         return UploadViewModel(
             context = context,
             personDetector = personDetector,
@@ -2050,9 +2184,7 @@ class UploadViewModelTest {
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
             detectStablePersonObservationUseCase = DetectStablePersonObservationUseCase(),
             getMyInfoUseCase = getMyInfoUseCase,
-            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
-            attachAiRealtimeContextUseCase = attachAiRealtimeContextUseCase,
-            finalizeAiRealtimeSessionUseCase = finalizeAiRealtimeSessionUseCase
+            analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase
         )
     }
 
