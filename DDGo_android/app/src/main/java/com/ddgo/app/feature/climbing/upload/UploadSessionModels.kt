@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
+import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.Pose
@@ -114,6 +115,7 @@ internal data class PublishedAttemptResultSession(
     val currentAttemptIndex: Int,
     val attemptAlignedHoldSets: List<AttemptAlignedHoldSet>,
     val holdReachResults: List<AttemptHoldReachResult>,
+    val attemptAiAnalysisResults: List<AiAnalysisResult?>,
     val attemptPoseDtos: List<PoseSequenceDto>,
     val attemptAnalyzedPoses: List<List<Pose>>,
     val attemptPolygonHoldContactDebugResults: List<PolygonHoldContactDebugResult>,
@@ -123,4 +125,9 @@ internal data class PublishedAttemptResultSession(
 internal enum class UploadFlowMode {
     FullChallenge,
     AttemptOnly
+}
+
+internal enum class UploadEntryMode {
+    Gallery,
+    Realtime
 }

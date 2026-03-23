@@ -47,6 +47,10 @@ internal class UploadChallengeDelegate(
     var resolvedGymGrades by mutableStateOf<List<GymGrade>>(emptyList())
     var lastSearchLatitude by mutableStateOf<Double?>(null)
     var lastSearchLongitude by mutableStateOf<Double?>(null)
+    var nearbyPlaceSortMode by mutableStateOf(NearbyPlaceSortMode.DistanceAscending)
+
+    val sortedNearbyPlaces: List<NearbyPlace>
+        get() = nearbyPlaces.sortedWith(nearbyPlaceComparator(nearbyPlaceSortMode))
 
     fun updateGymInfo(
         id: Int,
@@ -297,6 +301,7 @@ internal class UploadChallengeDelegate(
         gymName = ""
         lastSearchLatitude = null
         lastSearchLongitude = null
+        nearbyPlaceSortMode = NearbyPlaceSortMode.DistanceAscending
         _gymSearchUiState.value = GymSearchUiState.Idle
         _gymResolveUiState.value = GymResolveUiState.Idle
     }
@@ -305,6 +310,10 @@ internal class UploadChallengeDelegate(
         resetSearchState()
         clearSelectionState()
         clearCreatedChallengeState()
+    }
+
+    fun updateNearbyPlaceSortMode(sortMode: NearbyPlaceSortMode) {
+        nearbyPlaceSortMode = sortMode
     }
 
     fun applyExistingChallenge(
@@ -325,5 +334,20 @@ internal class UploadChallengeDelegate(
 
     companion object {
         private const val TAG = "UploadChallengeDelegate"
+
+        private fun nearbyPlaceComparator(sortMode: NearbyPlaceSortMode) =
+            when (sortMode) {
+                NearbyPlaceSortMode.DistanceAscending -> compareBy<NearbyPlace> {
+                    it.distanceMeters ?: Int.MAX_VALUE
+                }.thenBy {
+                    it.placeName.lowercase()
+                }
+
+                NearbyPlaceSortMode.NameAscending -> compareBy<NearbyPlace> {
+                    it.placeName.lowercase()
+                }.thenBy {
+                    it.distanceMeters ?: Int.MAX_VALUE
+                }
+            }
     }
 }

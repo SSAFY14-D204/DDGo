@@ -1,44 +1,115 @@
 package com.ddgo.app.feature.climbing.upload
 
+import androidx.annotation.ColorInt
 import com.ddgo.app.domain.model.ChallengeSession
+import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.ResolvedGym
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 
 sealed class UploadUiState {
-    object Idle : UploadUiState()
-    object Loading : UploadUiState()
-    object Success : UploadUiState()
+    data object Idle : UploadUiState()
+    data object Loading : UploadUiState()
+    data object Success : UploadUiState()
     data class Error(val message: String) : UploadUiState()
 }
 
 sealed class GymSearchUiState {
-    object Idle : GymSearchUiState()
-    object Loading : GymSearchUiState()
+    data object Idle : GymSearchUiState()
+    data object Loading : GymSearchUiState()
     data class Success(val places: List<NearbyPlace>) : GymSearchUiState()
     data class Error(val message: String) : GymSearchUiState()
 }
 
 sealed class GymResolveUiState {
-    object Idle : GymResolveUiState()
-    object Loading : GymResolveUiState()
+    data object Idle : GymResolveUiState()
+    data object Loading : GymResolveUiState()
     data class Success(val resolvedGym: ResolvedGym) : GymResolveUiState()
     data class Error(val message: String) : GymResolveUiState()
 }
 
 sealed class ChallengeCreationUiState {
-    object Idle : ChallengeCreationUiState()
-    object Loading : ChallengeCreationUiState()
+    data object Idle : ChallengeCreationUiState()
+    data object Loading : ChallengeCreationUiState()
     data class Success(val challenge: ChallengeSession) : ChallengeCreationUiState()
     data class Error(val message: String) : ChallengeCreationUiState()
 }
 
 sealed class UploadSubmissionUiState {
-    object Idle : UploadSubmissionUiState()
+    data object Idle : UploadSubmissionUiState()
     data class Loading(val message: String) : UploadSubmissionUiState()
     data class Success(val uploadedAttempts: List<UploadedAttemptVideo>) : UploadSubmissionUiState()
     data class Error(val message: String) : UploadSubmissionUiState()
 }
+
+sealed class RealtimeAttemptActionState {
+    data object Idle : RealtimeAttemptActionState()
+    data object ShowingOptions : RealtimeAttemptActionState()
+    data object RetakeRequested : RealtimeAttemptActionState()
+    data object FinalAnalysisRequested : RealtimeAttemptActionState()
+}
+
+enum class RealtimeSetupStep {
+    GymPrompt,
+    GymList,
+    Difficulty,
+    Ready
+}
+
+enum class NearbyPlaceSortMode {
+    DistanceAscending,
+    NameAscending
+}
+
+data class RealtimeHoldColorOption(
+    val key: String,
+    val label: String,
+    @ColorInt val colorInt: Int,
+    @ColorInt val borderColorInt: Int? = null
+)
+
+data class UploadRealtimeOverlayUiState(
+    val setupStep: RealtimeSetupStep = RealtimeSetupStep.GymPrompt,
+    val gymId: Int? = null,
+    val gymName: String = "",
+    val searchQuery: String = "",
+    val nearbyPlaces: List<NearbyPlace> = emptyList(),
+    val selectedNearbyPlace: NearbyPlace? = null,
+    val nearbyPlaceSortMode: NearbyPlaceSortMode = NearbyPlaceSortMode.DistanceAscending,
+    val gymSearchUiState: GymSearchUiState = GymSearchUiState.Idle,
+    val gymResolveUiState: GymResolveUiState = GymResolveUiState.Idle,
+    val resolvedGym: ResolvedGym? = null,
+    val resolvedGymGrades: List<GymGrade> = emptyList(),
+    val selectedLevelSortOrder: Int? = null,
+    val selectedGymGrade: GymGrade? = null,
+    val selectedHoldColorKey: String? = null,
+    val holdColor: String = "",
+    val holdColorOptions: List<RealtimeHoldColorOption> = emptyList(),
+    val challengeCreationUiState: ChallengeCreationUiState = ChallengeCreationUiState.Idle,
+    val isHoldColorSheetVisible: Boolean = false,
+    val isSetupVisible: Boolean = true,
+    val isChallengeReady: Boolean = false,
+    val isRetakePrepared: Boolean = false,
+    val canFinishChallenge: Boolean = false,
+    val canRetakeAttempt: Boolean = false,
+    val lastSearchLatitude: Double? = null,
+    val lastSearchLongitude: Double? = null
+)
+
+internal val realtimeHoldColorOptions = listOf(
+    RealtimeHoldColorOption("red", "Red", 0xFFFF1208.toInt()),
+    RealtimeHoldColorOption("orange", "Orange", 0xFFFF7A00.toInt()),
+    RealtimeHoldColorOption("yellow", "Yellow", 0xFFFFCB12.toInt()),
+    RealtimeHoldColorOption("green", "Green", 0xFF48BE5C.toInt()),
+    RealtimeHoldColorOption("skyblue", "Sky", 0xFF1FC4E2.toInt()),
+    RealtimeHoldColorOption("navy", "Navy", 0xFF3F43DB.toInt()),
+    RealtimeHoldColorOption("purple", "Purple", 0xFF8265EE.toInt()),
+    RealtimeHoldColorOption("brown", "Brown", 0xFF8A4B16.toInt()),
+    RealtimeHoldColorOption("pink", "Pink", 0xFFFF43AC.toInt()),
+    RealtimeHoldColorOption("white", "White", 0xFFF5F1F1.toInt(), 0xFFE0D9D9.toInt()),
+    RealtimeHoldColorOption("gray", "Gray", 0xFF5C5C5C.toInt()),
+    RealtimeHoldColorOption("black", "Black", 0xFF0A0A12.toInt())
+)
 
 enum class AnalysisLoadingPhase {
     AttemptResultPreparation,
@@ -46,9 +117,9 @@ enum class AnalysisLoadingPhase {
 }
 
 sealed class FinalAnalysisPreparationUiState {
-    object Idle : FinalAnalysisPreparationUiState()
-    object Loading : FinalAnalysisPreparationUiState()
-    object Success : FinalAnalysisPreparationUiState()
+    data object Idle : FinalAnalysisPreparationUiState()
+    data object Loading : FinalAnalysisPreparationUiState()
+    data object Success : FinalAnalysisPreparationUiState()
     data class Error(val message: String) : FinalAnalysisPreparationUiState()
 }
 

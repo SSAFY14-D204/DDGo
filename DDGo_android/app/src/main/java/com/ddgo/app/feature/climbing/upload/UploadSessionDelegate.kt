@@ -71,6 +71,7 @@ internal class UploadSessionDelegate(
     var additionalVideoUris by mutableStateOf<List<String>>(emptyList())
     var attemptOnlyVideoUris by mutableStateOf<List<String>>(emptyList())
     var uploadFlowMode by mutableStateOf(UploadFlowMode.FullChallenge)
+    var entryMode by mutableStateOf(UploadEntryMode.Gallery)
     var resultPlaybackUris by mutableStateOf<List<String>>(emptyList())
     var thumbnail by mutableStateOf<Bitmap?>(null)
     var videoFileName by mutableStateOf<String?>(null)
@@ -185,6 +186,53 @@ internal class UploadSessionDelegate(
     ) {
         val generation = beginSelectionUpdate(callbacks = callbacks)
         uploadFlowMode = UploadFlowMode.FullChallenge
+        entryMode = UploadEntryMode.Gallery
+        attemptOnlyVideoUris = emptyList()
+        attemptOnlyManagedVideos = emptyList()
+        additionalManagedVideos = emptyList()
+        additionalVideoUris = emptyList()
+
+        primarySelectionJob?.cancel()
+        primarySelectionJob = scope.launch(Dispatchers.IO) {
+            val managedVideo = normalizeToManagedVideo(
+                uri = Uri.parse(uri),
+                filePrefix = "primary",
+                realtimeSessionId = realtimeSessionId
+            )
+
+            withContext(Dispatchers.Main) {
+                if (generation != selectionGeneration) {
+                    deleteManagedVideo(managedVideo)
+                    return@withContext
+                }
+
+                registerManagedVideo(managedVideo)
+                primaryManagedVideo = managedVideo
+                videoUri = managedVideo.playbackUri
+                callbacks.onPrimaryVideoPrepared(
+                    generation = generation,
+                    playbackUri = managedVideo.playbackUri
+                )
+                cleanupUnusedManagedTempFiles()
+            }
+
+            if (generation == selectionGeneration) {
+                extractVideoMetadata(Uri.parse(managedVideo.playbackUri))
+            }
+        }
+    }
+
+    fun updateRealtimeVideoUri(
+        uri: String,
+        realtimeSessionId: String?,
+        callbacks: UploadSessionCallbacks
+    ) {
+        val generation = beginSelectionUpdate(
+            callbacks = callbacks,
+            preservePublishedResult = true
+        )
+        uploadFlowMode = UploadFlowMode.FullChallenge
+        entryMode = UploadEntryMode.Realtime
         attemptOnlyVideoUris = emptyList()
         attemptOnlyManagedVideos = emptyList()
         additionalManagedVideos = emptyList()
