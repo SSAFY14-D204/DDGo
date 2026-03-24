@@ -114,10 +114,10 @@ class GymRepositoryImpl @Inject constructor(
         }.lowercase()
 
         val climbingKeywords = listOf(
-            "\uD074\uB77C\uC774\uBC0D",
-            "\uC554\uBCBD",
-            "\uC554\uC7A5",
-            "\uBCFC\uB354\uB9C1",
+            "클라이밍",
+            "암벽",
+            "암장",
+            "볼더링",
             "climbing",
             "bouldering"
         )

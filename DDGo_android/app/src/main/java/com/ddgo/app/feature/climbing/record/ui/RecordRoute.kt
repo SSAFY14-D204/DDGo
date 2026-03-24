@@ -47,7 +47,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.util.Consumer
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.repository.LivePoseFrameInput
 import com.ddgo.app.feature.climbing.record.presentation.RecordThumbnailFrame
@@ -74,9 +73,9 @@ fun RecordRoute(
     onSearchNearbyGyms: (Double, Double, String, Boolean) -> Unit = { _, _, _, _ -> },
     onSearchQueryChange: (String) -> Unit = {},
     onSelectGym: (NearbyPlace) -> Unit = {},
-    onSelectDifficulty: (GymGrade) -> Unit = {},
     onSelectHoldColor: (String) -> Unit = {},
     onSetHoldColorSheetVisible: (Boolean) -> Unit = {},
+    challengeCreateCardContent: @Composable () -> Unit = {},
     onTorchToggle: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -357,7 +356,6 @@ fun RecordRoute(
                 locationMessage = null
                 onSelectGym(it)
             },
-            onSelectDifficulty = onSelectDifficulty,
             onTapShutter = {
                 if (uiState.isRecording) {
                     currentRecording?.stop()
@@ -387,7 +385,8 @@ fun RecordRoute(
             onSelectHoldColor = onSelectHoldColor,
             onDismissHoldColorSheet = {
                 onSetHoldColorSheetVisible(false)
-            }
+            },
+            challengeCreateCardContent = challengeCreateCardContent
         )
     } else {
         RecordPage(

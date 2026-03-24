@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-private const val NICKNAME_KEYWORD = "\uB2C9\uB124\uC784"
+private const val NICKNAME_KEYWORD = "닉네임"
 private const val TAG = "AuthViewModel"
 
 @HiltViewModel

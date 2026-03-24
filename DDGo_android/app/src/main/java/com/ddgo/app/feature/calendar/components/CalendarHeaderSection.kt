@@ -37,7 +37,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val MonthFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy\uB144 M\uC6D4", Locale.KOREAN)
+    DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)
 
 // 상단 카드는 월 이동과 월간 요약 정보를 한 번에 보여준다.
 @Composable
@@ -49,9 +49,9 @@ internal fun CalendarHeroSection(
 ) {
     val onHeroColor = CalendarPalette.OnAccent
     val subtitle = if (summary.totalSessions == 0) {
-        "\uC774 \uB2EC\uC5D0 \uAE30\uB85D\uB41C \uD65C\uB3D9\uC774\n\uC544\uC9C1 \uC5C6\uC5B4\uC694."
+        "이 달에 기록된 활동이\n아직 없어요."
     } else {
-        "\uC774 \uB2EC\uC5D0 ${summary.totalSessions}\uD68C \uAE30\uB85D, \uCD5C\uB300 ${summary.longestStreak}\uC77C \uC5F0\uC18D \uD65C\uB3D9\uC744 \uB2EC\uC131\uD588\uC5B4\uC694."
+        "이 달에 ${summary.totalSessions}회 기록, 최대 ${summary.longestStreak}일 연속 활동을 달성했어요."
     }
 
     Surface(
@@ -85,7 +85,7 @@ internal fun CalendarHeroSection(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "\uCE98\uB9B0\uB354",
+                            text = "캘린더",
                             style = MaterialTheme.typography.headlineMedium,
                             color = onHeroColor
                         )
@@ -109,7 +109,7 @@ internal fun CalendarHeroSection(
                             IconButton(onClick = onPreviousMonth, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     imageVector = Icons.Rounded.KeyboardArrowLeft,
-                                    contentDescription = "\uC774\uC804 \uB2EC",
+                                    contentDescription = "이전 달",
                                     tint = onHeroColor
                                 )
                             }
@@ -123,7 +123,7 @@ internal fun CalendarHeroSection(
                             IconButton(onClick = onNextMonth, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     imageVector = Icons.Rounded.KeyboardArrowRight,
-                                    contentDescription = "\uB2E4\uC74C \uB2EC",
+                                    contentDescription = "다음 달",
                                     tint = onHeroColor
                                 )
                             }
@@ -137,20 +137,20 @@ internal fun CalendarHeroSection(
                 ) {
                     SummaryChip(
                         icon = Icons.Rounded.Today,
-                        title = "\uD65C\uB3D9 \uC77C\uC218",
-                        value = "${summary.activeDays}\uC77C",
+                        title = "활동 일수",
+                        value = "${summary.activeDays}일",
                         tint = onHeroColor
                     )
                     SummaryChip(
                         icon = Icons.Rounded.CalendarMonth,
-                        title = "\uAE30\uB85D",
-                        value = "${summary.totalSessions}\uD68C",
+                        title = "기록",
+                        value = "${summary.totalSessions}회",
                         tint = onHeroColor
                     )
                     SummaryChip(
                         icon = Icons.Rounded.LocalFireDepartment,
-                        title = "\uC5F0\uC18D",
-                        value = "${summary.longestStreak}\uC77C",
+                        title = "연속",
+                        value = "${summary.longestStreak}일",
                         tint = onHeroColor
                     )
                 }

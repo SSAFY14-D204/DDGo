@@ -60,7 +60,7 @@ fun LoginPasswordScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
+                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -75,7 +75,7 @@ fun LoginPasswordScreen(
                 Spacer(modifier = Modifier.height(60.dp))
 
                 Text(
-                    text = "\uBE44\uBC00\uBC88\uD638",
+                    text = "비밀번호",
                     style = TextStyle(
                         fontFamily = PretendardFamily,
                         fontSize = 16.sp,
@@ -89,7 +89,7 @@ fun LoginPasswordScreen(
                 TextField(
                     value = viewModel.password,
                     onValueChange = viewModel::updatePassword,
-                    placeholder = { Text("\uBE44\uBC00\uBC88\uD638", color = Color(0xFF8391A1)) },
+                    placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
                     colors = TextFieldDefaults.colors(
@@ -143,7 +143,7 @@ fun LoginPasswordScreen(
                         )
                     } else {
                         Text(
-                            "\uB85C\uADF8\uC778",
+                            "로그인",
                             color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,

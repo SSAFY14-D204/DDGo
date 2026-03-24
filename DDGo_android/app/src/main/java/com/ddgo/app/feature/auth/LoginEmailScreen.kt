@@ -37,12 +37,12 @@ import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 import kotlinx.coroutines.launch
 
-private const val TAGLINE_TEXT = "\uCD94\uB77D\uC758 \uB370\uC774\uD130\uB97C \uBC14\uAFB8\uB294"
-private const val EMAIL_LABEL = "\uC774\uBA54\uC77C"
-private const val NEXT_LABEL = "\uB2E4\uC74C"
-private const val KAKAO_LOGIN_LABEL = "\uCE74\uCE74\uC624\uB85C 3\uCD08\uB9CC\uC5D0 \uB85C\uADF8\uC778"
-private const val GOOGLE_LOGIN_LABEL = "Google\uB85C \uB85C\uADF8\uC778"
-private const val REGISTER_LABEL = "\uD68C\uC6D0\uAC00\uC785"
+private const val TAGLINE_TEXT = "추락의 데이터를 바꾸는"
+private const val EMAIL_LABEL = "이메일"
+private const val NEXT_LABEL = "다음"
+private const val KAKAO_LOGIN_LABEL = "카카오로 3초만에 로그인"
+private const val GOOGLE_LOGIN_LABEL = "Google로 로그인"
+private const val REGISTER_LABEL = "회원가입"
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

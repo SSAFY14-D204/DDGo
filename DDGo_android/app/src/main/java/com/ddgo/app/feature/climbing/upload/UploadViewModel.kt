@@ -218,6 +218,9 @@ class UploadViewModel @Inject constructor(
             resolvedGymGrades = resolvedGymGrades,
             selectedLevelSortOrder = selectedLevelSortOrder,
             selectedGymGrade = selectedGymGrade,
+            difficultyLabel = difficultyLevel.ifBlank {
+                selectedGymGrade?.let(::formatSelectedLevelLabel).orEmpty()
+            },
             selectedHoldColorKey = selectedHoldColorKey,
             holdColor = holdColor,
             holdColorOptions = realtimeHoldColorOptions,
@@ -1050,7 +1053,7 @@ class UploadViewModel @Inject constructor(
                 onChallengeFlowCleared = onChallengeFlowCleared
             )
             if (isRealtimeEntryMode && resolvedGym != null) {
-                realtimeSetupStep = RealtimeSetupStep.Difficulty
+                realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
             }
         }
     }
@@ -1101,12 +1104,15 @@ class UploadViewModel @Inject constructor(
 
     fun onRealtimeDifficultySelected(sortOrder: Int) {
         selectGymLevel(sortOrder)
-        resolvedGymGrades.firstOrNull { it.sortOrder == sortOrder }
-            ?.let(::createRealtimeChallengeFromGrade)
+        realtimeHoldColorSheetVisible = false
+        realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
     }
 
     fun onRealtimeGymGradeSelected(grade: GymGrade) {
-        createRealtimeChallengeFromGrade(grade)
+        entryMode = UploadEntryMode.Realtime
+        selectGymGrade(grade)
+        realtimeHoldColorSheetVisible = false
+        realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
     }
 
     fun updateRealtimeHoldColorSheetVisible(visible: Boolean) {
@@ -1122,7 +1128,23 @@ class UploadViewModel @Inject constructor(
 
     fun onRealtimeHoldColorSelected(colorKey: String) {
         updateHoldColor(colorKey)
-        realtimeHoldColorSheetVisible = false
+        if (realtimeSetupStep == RealtimeSetupStep.Ready) {
+            realtimeHoldColorSheetVisible = false
+        }
+    }
+
+    fun completeRealtimeChallengeSetup() {
+        if (!isRealtimeEntryMode || realtimeSetupStep != RealtimeSetupStep.ChallengeCreate) {
+            return
+        }
+
+        finalizeHoldDetectionColorSelection()
+        delegateCreateChallengeFromSelection(
+            onSuccess = {
+                realtimeSetupStep = RealtimeSetupStep.Ready
+                realtimeHoldColorSheetVisible = false
+            }
+        )
     }
 
     fun ensureRealtimeDefaultHoldColorSetup() {
@@ -1225,17 +1247,6 @@ class UploadViewModel @Inject constructor(
             onCreatedChallengeCleared = onCreatedChallengeCleared
         )
         ensureRealtimeDefaultHoldColorSetup()
-    }
-
-    private fun createRealtimeChallengeFromGrade(grade: GymGrade) {
-        entryMode = UploadEntryMode.Realtime
-        selectGymGrade(grade)
-        delegateCreateChallengeFromSelection(
-            onSuccess = {
-                realtimeSetupStep = RealtimeSetupStep.Ready
-                realtimeHoldColorSheetVisible = false
-            }
-        )
     }
 
     fun createChallengeFromSelection() {

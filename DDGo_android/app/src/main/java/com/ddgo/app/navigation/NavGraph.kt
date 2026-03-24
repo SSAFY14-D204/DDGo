@@ -127,10 +127,10 @@ fun NavGraph(
             AlertDialog(
                 onDismissRequest = {},
                 title = {
-                    Text(text = "\uC138\uC158 \uB9CC\uB8CC")
+                    Text(text = "세션 만료")
                 },
                 text = {
-                    Text(text = "\uC138\uC158\uC774 \uB9CC\uB8CC\uB418\uC5C8\uC5B4\uC694. \uB2E4\uC2DC \uB85C\uADF8\uC778\uD574 \uC8FC\uC138\uC694.")
+                    Text(text = "세션이 만료되었어요. 다시 로그인해 주세요.")
                 },
                 confirmButton = {
                     TextButton(
@@ -142,7 +142,7 @@ fun NavGraph(
                             }
                         }
                     ) {
-                        Text(text = "\uD655\uC778")
+                        Text(text = "확인")
                     }
                 }
             )

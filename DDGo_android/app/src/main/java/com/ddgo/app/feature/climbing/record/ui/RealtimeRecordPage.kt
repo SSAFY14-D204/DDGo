@@ -1,4 +1,4 @@
-﻿package com.ddgo.app.feature.climbing.record.ui
+package com.ddgo.app.feature.climbing.record.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,10 +37,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -52,13 +55,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ddgo.app.core.ui.theme.NeutralBackground
-import com.ddgo.app.core.ui.theme.NeutralSurface
-import com.ddgo.app.core.ui.theme.Primary80
-import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.feature.climbing.record.presentation.RecordUiState
-import com.ddgo.app.feature.climbing.upload.ChallengeCreationUiState
 import com.ddgo.app.feature.climbing.upload.GymResolveUiState
 import com.ddgo.app.feature.climbing.upload.GymSearchUiState
 import com.ddgo.app.feature.climbing.upload.RealtimeSetupStep
@@ -81,12 +79,12 @@ fun RealtimeRecordPage(
     onSearchQueryChange: (String) -> Unit,
     onSearchSubmit: (String) -> Unit,
     onSelectGym: (NearbyPlace) -> Unit,
-    onSelectDifficulty: (GymGrade) -> Unit,
     onTapShutter: () -> Unit,
     onLongPressShutter: () -> Unit,
     onTapFlash: () -> Unit,
     onSelectHoldColor: (String) -> Unit,
-    onDismissHoldColorSheet: () -> Unit
+    onDismissHoldColorSheet: () -> Unit,
+    challengeCreateCardContent: @Composable () -> Unit
 ) {
     val shouldShowSetupOverlay =
         realtimeOverlayUiState.setupStep != RealtimeSetupStep.Ready ||
@@ -95,7 +93,15 @@ fun RealtimeRecordPage(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        RecordBackgroundTop,
+                        RecordBackgroundBottom,
+                        RecordBackgroundTop
+                    )
+                )
+            )
     ) {
         previewContent()
         overlayContent()
@@ -106,9 +112,9 @@ fun RealtimeRecordPage(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.55f),
+                            RecordScrim.copy(alpha = 0.46f),
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.76f)
+                            RecordScrim.copy(alpha = 0.78f)
                         )
                     )
                 )
@@ -129,8 +135,8 @@ fun RealtimeRecordPage(
                     Spacer(modifier = Modifier.height(14.dp))
                     ReadySummaryCard(
                         gymName = realtimeOverlayUiState.gymName,
-                        grade = realtimeOverlayUiState.selectedGymGrade,
-                        holdColor = realtimeOverlayUiState.holdColor
+                        difficultyLabel = realtimeOverlayUiState.difficultyLabel,
+                        selectedHoldColorKey = realtimeOverlayUiState.selectedHoldColorKey
                     )
                 }
             }
@@ -156,72 +162,72 @@ fun RealtimeRecordPage(
             onSearchQueryChange = onSearchQueryChange,
             onSearchSubmit = onSearchSubmit,
             onSelectGym = onSelectGym,
-            onSelectDifficulty = onSelectDifficulty,
             onSelectHoldColor = onSelectHoldColor,
-            onDismissHoldColorSheet = onDismissHoldColorSheet
+            onDismissHoldColorSheet = onDismissHoldColorSheet,
+            challengeCreateCardContent = challengeCreateCardContent
         )
     }
 }
 
 @Composable
 private fun TopChrome(onNavigateBack: () -> Unit) {
-    Column {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Surface(
-                modifier = Modifier.align(Alignment.CenterStart),
-                shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.42f)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            modifier = Modifier.align(Alignment.CenterStart),
+            shape = CircleShape,
+            color = RecordBackdrop.copy(alpha = 0.78f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .clickable(onClick = onNavigateBack)
+                    .padding(12.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .clickable(onClick = onNavigateBack)
-                        .padding(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = "닫기",
-                        tint = Color.White
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                HeaderChip(text = "9:16")
-                HeaderChip(text = "720p")
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "닫기",
+                    tint = RecordTextPrimary
+                )
             }
         }
+
     }
 }
 
 @Composable
 private fun ReadySummaryCard(
     gymName: String,
-    grade: GymGrade?,
-    holdColor: String
+    difficultyLabel: String,
+    selectedHoldColorKey: String?
 ) {
     Surface(
         shape = RoundedCornerShape(24.dp),
-        color = Color.Black.copy(alpha = 0.42f)
+        color = RecordBackdrop.copy(alpha = 0.92f)
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Text(
-                text = gymName.ifBlank { "암장 선택 중" },
-                color = Color.White,
+                text = gymName.ifBlank { "?붿옣 ?좏깮 以?" },
+                color = RecordTextPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PillTag(text = grade?.gradeLabel ?: "난이도 선택")
-                PillTag(text = holdColor.ifBlank { "홀드 색 선택" })
+                PillTag(text = difficultyLabel.ifBlank { "?쒖씠???좏깮" })
+                PillTag(text = resolveHoldColorTagLabel(selectedHoldColorKey))
             }
         }
     }
+}
+
+private fun resolveHoldColorTagLabel(selectedHoldColorKey: String?): String {
+    if (selectedHoldColorKey.isNullOrBlank()) {
+        return "??????좏깮"
+    }
+
+    return resolveHoldColorDisplayName(selectedHoldColorKey, null)
+        .ifBlank { selectedHoldColorKey }
 }
 
 @Composable
@@ -248,15 +254,14 @@ private fun BottomControlRow(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             ShutterButton(
                 isRecording = uiState.isRecording,
-                enabled = (uiState.canStartRecording || uiState.isRecording) &&
-                    canCaptureAttempt,
+                enabled = (uiState.canStartRecording || uiState.isRecording) && canCaptureAttempt,
                 onClick = onTapShutter,
                 onLongClick = onLongPressShutter
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = if (uiState.isRecording) "탭해서 종료" else "길게 눌러 녹화 시작",
-                color = Color.White.copy(alpha = 0.82f),
+                text = if (uiState.isRecording) "촬영 종료" else "촬영 시작",
+                color = RecordTextSecondary,
                 fontSize = 12.sp
             )
         }
@@ -265,8 +270,8 @@ private fun BottomControlRow(
             label = if (isTorchEnabled) "켜짐" else "꺼짐",
             subLabel = "플래시",
             icon = if (isTorchEnabled) Icons.Rounded.FlashOn else Icons.Rounded.FlashOff,
-            containerColor = Color.Black.copy(alpha = 0.56f),
-            contentColor = Color.White,
+            containerColor = if (isTorchEnabled) RecordAccentSoft else RecordBackdrop.copy(alpha = 0.82f),
+            contentColor = if (isTorchEnabled) RecordAccent else RecordTextPrimary,
             enabled = isTorchAvailable && !uiState.isRecording,
             onClick = onTapFlash
         )
@@ -284,9 +289,9 @@ private fun SetupAndSheetOverlays(
     onSearchQueryChange: (String) -> Unit,
     onSearchSubmit: (String) -> Unit,
     onSelectGym: (NearbyPlace) -> Unit,
-    onSelectDifficulty: (GymGrade) -> Unit,
     onSelectHoldColor: (String) -> Unit,
-    onDismissHoldColorSheet: () -> Unit
+    onDismissHoldColorSheet: () -> Unit,
+    challengeCreateCardContent: @Composable () -> Unit
 ) {
     val shouldShowSetupOverlay =
         realtimeOverlayUiState.setupStep != RealtimeSetupStep.Ready ||
@@ -297,7 +302,7 @@ private fun SetupAndSheetOverlays(
             Scrim()
             CenterCard(
                 title = "카메라 권한이 필요해요",
-                body = "실시간 분석을 시작하려면 카메라 접근을 허용해주세요.",
+                body = "실시간 촬영을 시작하려면 카메라 접근을 허용해주세요.",
                 actionLabel = "권한 허용",
                 onAction = onRequestCameraPermission
             )
@@ -331,9 +336,8 @@ private fun SetupAndSheetOverlays(
                     onSelectGym = onSelectGym
                 )
 
-                RealtimeSetupStep.Difficulty -> DifficultySheet(
-                    uiState = realtimeOverlayUiState,
-                    onSelectDifficulty = onSelectDifficulty
+                RealtimeSetupStep.ChallengeCreate -> ChallengeCreateSheet(
+                    content = challengeCreateCardContent
                 )
 
                 RealtimeSetupStep.Ready -> Unit
@@ -357,9 +361,9 @@ private fun GymPromptCard(
     onOpenGymSelector: () -> Unit
 ) {
     CenterCard(
-        title = "오늘은 여기서 클라이밍 고!",
+        title = "오늘은 어디서 클라이밍할까요?",
         body = if (selectedGymName.isBlank()) {
-            "가까운 암장을 먼저 보여드릴게요."
+            "실시간 기록을 시작하기 전에 먼저 암장을 선택해주세요."
         } else {
             selectedGymName
         },
@@ -381,7 +385,7 @@ private fun GymListSheet(
     BottomSheet {
         Text(
             text = "가까운 암장을 골라볼까요?",
-            color = Color.White,
+            color = RecordTextPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
@@ -395,23 +399,36 @@ private fun GymListSheet(
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Rounded.Search,
-                    contentDescription = null
+                    contentDescription = null,
+                    tint = RecordTextSecondary
                 )
             },
             trailingIcon = {
                 Icon(
                     imageVector = Icons.Rounded.LocationOn,
-                    contentDescription = "근처 재검색",
+                    contentDescription = "근처 암장 다시 검색",
+                    tint = RecordAccent,
                     modifier = Modifier.clickable { onSearchSubmit("") }
                 )
-            }
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = RecordAccent,
+                unfocusedBorderColor = RecordBorder,
+                focusedLabelColor = RecordAccent,
+                unfocusedLabelColor = RecordTextSecondary,
+                focusedTextColor = RecordTextPrimary,
+                unfocusedTextColor = RecordTextPrimary,
+                cursorColor = RecordAccent,
+                focusedContainerColor = RecordSurfaceMuted,
+                unfocusedContainerColor = RecordSurfaceMuted
+            )
         )
         Spacer(modifier = Modifier.height(10.dp))
         Button(
             onClick = { onSearchSubmit(uiState.searchQuery.trim()) },
             colors = ButtonDefaults.buttonColors(
-                containerColor = Primary80,
-                contentColor = NeutralBackground
+                containerColor = RecordAccent,
+                contentColor = RecordOnAccent
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -422,7 +439,7 @@ private fun GymListSheet(
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = locationMessage,
-                color = Color.White.copy(alpha = 0.76f),
+                color = RecordTextSecondary,
                 fontSize = 13.sp
             )
         }
@@ -437,22 +454,23 @@ private fun GymListSheet(
                         .height(180.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = Primary80)
+                    CircularProgressIndicator(color = RecordAccent)
                 }
             }
 
             uiState.gymSearchUiState is GymSearchUiState.Error -> {
                 Text(
                     text = (uiState.gymSearchUiState as GymSearchUiState.Error).message,
-                    color = Color(0xFFFFB2B2),
-                    fontSize = 14.sp
+                    color = RecordError,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
                 )
             }
 
             uiState.nearbyPlaces.isEmpty() -> {
                 Text(
                     text = "표시할 암장이 없어요. 위치를 다시 확인하거나 검색어를 바꿔보세요.",
-                    color = Color.White.copy(alpha = 0.76f),
+                    color = RecordTextSecondary,
                     fontSize = 14.sp,
                     lineHeight = 20.sp
                 )
@@ -481,57 +499,25 @@ private fun GymListSheet(
 }
 
 @Composable
-private fun DifficultySheet(
-    uiState: UploadRealtimeOverlayUiState,
-    onSelectDifficulty: (GymGrade) -> Unit
+private fun ChallengeCreateSheet(
+    content: @Composable () -> Unit
 ) {
-    BottomSheet {
-        Text(
-            text = uiState.gymName.ifBlank { "난이도 선택" },
-            color = Color.White,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = "선택한 난이도 색으로 기본 홀드 색도 맞춰드릴게요.",
-            color = Color.White.copy(alpha = 0.74f),
-            fontSize = 14.sp
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (uiState.challengeCreationUiState is ChallengeCreationUiState.Error) {
-            Text(
-                text = uiState.challengeCreationUiState.message,
-                color = Color(0xFFFFB2B2),
-                fontSize = 14.sp
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        if (uiState.challengeCreationUiState is ChallengeCreationUiState.Loading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Primary80)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 320.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(uiState.resolvedGymGrades, key = { it.gymGradeId }) { grade ->
-                    DifficultyItem(
-                        grade = grade,
-                        selected = uiState.selectedGymGrade?.gymGradeId == grade.gymGradeId,
-                        onClick = { onSelectDifficulty(grade) }
-                    )
-                }
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        val sheetMaxHeight = maxHeight * 0.86f
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = sheetMaxHeight)
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = Color(0xFF0B0B0E)
+        ) {
+            key("embedded-challenge-create") {
+                content()
             }
         }
     }
@@ -546,28 +532,24 @@ private fun HoldColorSheet(
         modifier = Modifier.padding(bottom = 12.dp)
     ) {
         Text(
-            text = "홀드 색상 선택",
-            color = Color.White,
+            text = "홀드 색 선택",
+            color = RecordTextPrimary,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.height(14.dp))
-        uiState.holdColorOptions.chunked(4).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                row.forEach { option ->
-                    HoldColorItem(
-                        label = option.label,
-                        color = Color(option.colorInt),
-                        selected = option.key == uiState.selectedHoldColorKey,
-                        onClick = { onSelectHoldColor(option.key) }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(14.dp))
-        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = "실시간 분석 중에도 셔터를 길게 눌러 홀드 색을 다시 선택할 수 있어요.",
+            color = RecordTextSecondary,
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        HoldColorPaletteGrid(
+            options = uiState.holdColorOptions,
+            selectedHoldColorKey = uiState.selectedHoldColorKey,
+            onSelectHoldColor = onSelectHoldColor
+        )
     }
 }
 
@@ -585,7 +567,7 @@ private fun CenterCard(
     ) {
         Surface(
             shape = RoundedCornerShape(30.dp),
-            color = NeutralSurface.copy(alpha = 0.98f)
+            color = RecordSurface.copy(alpha = 0.98f)
         ) {
             Column(
                 modifier = Modifier
@@ -595,7 +577,7 @@ private fun CenterCard(
             ) {
                 Text(
                     text = title,
-                    color = Color.White,
+                    color = RecordTextPrimary,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
@@ -603,7 +585,7 @@ private fun CenterCard(
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(
                     text = body,
-                    color = Color.White.copy(alpha = 0.78f),
+                    color = RecordTextSecondary,
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
                     textAlign = TextAlign.Center
@@ -612,7 +594,7 @@ private fun CenterCard(
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = footer,
-                        color = Color.White.copy(alpha = 0.72f),
+                        color = RecordTextHint,
                         fontSize = 13.sp,
                         textAlign = TextAlign.Center
                     )
@@ -621,8 +603,8 @@ private fun CenterCard(
                 Button(
                     onClick = onAction,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = NeutralBackground
+                        containerColor = RecordAccent,
+                        contentColor = RecordOnAccent
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -648,7 +630,7 @@ private fun BottomSheet(
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp),
             shape = RoundedCornerShape(28.dp),
-            color = NeutralSurface.copy(alpha = 0.98f)
+            color = RecordSurface.copy(alpha = 0.98f)
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
@@ -668,7 +650,7 @@ private fun NearbyGymItem(
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = if (isSelected) Primary80.copy(alpha = 0.18f) else NeutralBackground.copy(alpha = 0.82f)
+        color = if (isSelected) RecordAccentSoft else RecordSurfaceMuted
     ) {
         Row(
             modifier = Modifier
@@ -682,14 +664,14 @@ private fun NearbyGymItem(
             ) {
                 Text(
                     text = place.placeName,
-                    color = Color.White,
+                    color = RecordTextPrimary,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = place.roadAddressName ?: place.addressName.orEmpty(),
-                    color = Color.White.copy(alpha = 0.68f),
+                    color = RecordTextSecondary,
                     fontSize = 13.sp
                 )
             }
@@ -697,14 +679,14 @@ private fun NearbyGymItem(
             if (isResolving) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
-                    color = Primary80,
+                    color = RecordAccent,
                     strokeWidth = 2.dp
                 )
             } else {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = place.distanceMeters.formatDistance(),
-                        color = Primary80,
+                        color = RecordAccent,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -712,84 +694,13 @@ private fun NearbyGymItem(
                         Icon(
                             imageVector = Icons.Rounded.Check,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = RecordAccent,
                             modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun DifficultyItem(
-    grade: GymGrade,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = if (selected) Primary80.copy(alpha = 0.18f) else NeutralBackground.copy(alpha = 0.82f)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = grade.gradeLabel ?: "V${grade.sortOrder}",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = grade.colorName.replaceFirstChar { it.uppercase() },
-                color = Color.White.copy(alpha = 0.72f),
-                fontSize = 13.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun HoldColorItem(
-    label: String,
-    color: Color,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier.width(64.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(50.dp)
-                .clip(CircleShape)
-                .background(color)
-                .alpha(if (selected) 1f else 0.9f)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
-        ) {
-            if (selected) {
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.88f))
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = label,
-            color = Color.White.copy(alpha = if (selected) 1f else 0.72f),
-            fontSize = 12.sp
-        )
     }
 }
 
@@ -862,7 +773,7 @@ private fun ShutterButton(
             .size(118.dp)
             .scale(scale.value)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = if (enabled) 0.16f else 0.08f))
+            .background(RecordAccent.copy(alpha = if (enabled) 0.24f else 0.10f))
             .alpha(if (enabled) 1f else 0.42f)
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -877,7 +788,7 @@ private fun ShutterButton(
             modifier = Modifier
                 .size(88.dp)
                 .clip(CircleShape)
-                .background(if (isRecording) Color.White else NeutralBackground),
+                .background(if (isRecording) Color.White else RecordSurfaceMuted),
             contentAlignment = Alignment.Center
         ) {
             if (isRecording) {
@@ -889,8 +800,8 @@ private fun ShutterButton(
                 )
             } else {
                 Text(
-                    text = "탭 촬영",
-                    color = Color.White,
+                    text = "촬영 시작",
+                    color = RecordOnAccent,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -903,12 +814,12 @@ private fun ShutterButton(
 private fun HeaderChip(text: String) {
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = Color.Black.copy(alpha = 0.42f)
+        color = RecordBackdrop.copy(alpha = 0.82f)
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
-            color = Color.White,
+            color = RecordTextPrimary,
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold
         )
@@ -919,12 +830,12 @@ private fun HeaderChip(text: String) {
 private fun PillTag(text: String) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = NeutralSurface.copy(alpha = 0.92f)
+        color = RecordSurface.copy(alpha = 0.96f)
     ) {
         Text(
             text = text,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            color = Color.White,
+            color = RecordTextPrimary,
             fontSize = 12.sp
         )
     }
@@ -938,7 +849,7 @@ private fun Scrim(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = alpha))
+            .background(RecordScrim.copy(alpha = alpha))
             .then(
                 if (onClick != null) {
                     Modifier.clickable(onClick = onClick)

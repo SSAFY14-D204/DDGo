@@ -1,4 +1,4 @@
-﻿package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
+package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -126,7 +126,7 @@ internal fun StabilityPanel(
                         Spacer(modifier = Modifier.height(6.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
-                                text = "\uC65C \uBC84\uAC70\uC6E0\uB098\uC694?",
+                                text = "왜 버거웠나요?",
                                 color = AnalysisText,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold

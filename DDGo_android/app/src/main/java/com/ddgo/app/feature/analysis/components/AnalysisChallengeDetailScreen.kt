@@ -205,7 +205,7 @@ private fun ChallengeFlowRow(
     Column(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        AnalysisSectionTitle(title = "\uC2DC\uB3C4 \uD750\uB984")
+        AnalysisSectionTitle(title = "시도 흐름")
 
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -229,13 +229,13 @@ private fun ChallengeFlowRow(
                                 )
                         )
                         Text(
-                            text = "${item.attemptNo}\uCC28",
+                            text = "${item.attemptNo}차",
                             style = MaterialTheme.typography.labelLarge,
                             color = AnalysisPalette.TextPrimary
                         )
                         if (item.isLatest) {
                             Text(
-                                text = "\uCD5C\uC2E0",
+                                text = "최신",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = AnalysisPalette.TextHint
                             )
@@ -267,7 +267,7 @@ private fun ChallengeGrowthCard(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            AnalysisSectionTitle(title = "\uC2DC\uB3C4\uBCC4 \uC131\uC7A5")
+            AnalysisSectionTitle(title = "시도별 성장")
 
             Surface(
                 shape = RoundedCornerShape(22.dp),
@@ -431,13 +431,13 @@ private fun ChallengeGrowthSnapshots(
         items(points) { point ->
             val primaryValue = when (selectedMetric) {
                 ChallengeGrowthMetric.Stability -> "${(point.stabilityScore * 100f).toInt()}%"
-                ChallengeGrowthMetric.MaxHold -> "${point.maxHoldNo}\uD640\uB4DC"
-                ChallengeGrowthMetric.RiskEvents -> "${point.riskEventCount}\uD68C"
+                ChallengeGrowthMetric.MaxHold -> "${point.maxHoldNo}홀드"
+                ChallengeGrowthMetric.RiskEvents -> "${point.riskEventCount}회"
             }
             val secondaryValue = when (selectedMetric) {
-                ChallengeGrowthMetric.Stability -> "\uCD5C\uB300 ${point.maxHoldNo}\uD640\uB4DC"
-                ChallengeGrowthMetric.MaxHold -> "\uC548\uC815 ${(point.stabilityScore * 100f).toInt()}%"
-                ChallengeGrowthMetric.RiskEvents -> "\uC548\uC815 ${(point.stabilityScore * 100f).toInt()}%"
+                ChallengeGrowthMetric.Stability -> "최대 ${point.maxHoldNo}홀드"
+                ChallengeGrowthMetric.MaxHold -> "안정 ${(point.stabilityScore * 100f).toInt()}%"
+                ChallengeGrowthMetric.RiskEvents -> "안정 ${(point.stabilityScore * 100f).toInt()}%"
             }
 
             Surface(
@@ -449,7 +449,7 @@ private fun ChallengeGrowthSnapshots(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "${point.label}\uCC28",
+                        text = "${point.label}차",
                         style = MaterialTheme.typography.labelLarge,
                         color = AnalysisPalette.TextPrimary
                     )
@@ -479,9 +479,9 @@ private fun ChallengeGrowthSnapshots(
  * - 화면 문구와 실제 데이터 전환 로직이 어긋나지 않게 유지합니다.
  */
 private enum class ChallengeGrowthMetric(val label: String) {
-    Stability("\uC548\uC815\uB960"),
-    MaxHold("\uCD5C\uB300 \uD640\uB4DC"),
-    RiskEvents("\uC704\uD5D8 \uC774\uBCA4\uD2B8")
+    Stability("안정률"),
+    MaxHold("최대 홀드"),
+    RiskEvents("위험 이벤트")
 }
 
 /** 상세 화면 상단에서 쓰는 간결한 뒤로가기 칩입니다. */

@@ -53,12 +53,12 @@ class CalendarRepositoryImpl @Inject constructor(
 
     private fun ChallengeListResponseDto.buildNote(): String {
         return when (challengeResult?.uppercase()) {
-            "SUCCESS" -> "\uC644\uB4F1"
-            "FAIL" -> "\uBBF8\uC644\uB4F1"
+            "SUCCESS" -> "완등"
+            "FAIL" -> "미완등"
             else -> if (challengeStatus.equals("ACTIVE", ignoreCase = true)) {
-                "\uC9C4\uD589 \uC911"
+                "진행 중"
             } else {
-                "\uACB0\uACFC \uB300\uAE30"
+                "결과 대기"
             }
         }
     }

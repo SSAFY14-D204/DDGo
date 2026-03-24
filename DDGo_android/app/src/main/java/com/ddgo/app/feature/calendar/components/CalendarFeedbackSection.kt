@@ -31,7 +31,7 @@ internal fun CalendarErrorSection(message: String) {
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = "\uAE30\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC5B4\uC694",
+                text = "기록을 불러오지 못했어요",
                 style = MaterialTheme.typography.titleSmall,
                 color = CalendarPalette.TextPrimary
             )

@@ -19,7 +19,7 @@ internal fun DdgoKoreanWordmark(
     color: Color = DdgoWordmarkBlack
 ) {
     Text(
-        text = "\uB514\uB514\uACE0",
+        text = "디디고",
         modifier = modifier,
         style = TextStyle(
             fontFamily = PretendardFamily,

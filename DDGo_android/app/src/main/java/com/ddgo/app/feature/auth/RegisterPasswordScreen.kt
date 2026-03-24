@@ -50,13 +50,13 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "\uBE44\uBC00\uBC88\uD638\uB97C \uC815\uD655\uD558\uAC8C \uC785\uB825\uD574\uC8FC\uC138\uC694",
+                text = "비밀번호를 정확하게 입력해주세요",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 24.sp,
@@ -68,7 +68,7 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "\uBE44\uBC00\uBC88\uD638",
+                text = "비밀번호",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 16.sp,
@@ -82,7 +82,7 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
             TextField(
                 value = viewModel.password,
                 onValueChange = viewModel::updatePassword,
-                placeholder = { Text("\uBE44\uBC00\uBC88\uD638", color = Color(0xFF8391A1)) },
+                placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
@@ -131,7 +131,7 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
                 )
             } else {
                 Text(
-                    "\uB2E4\uC74C",
+                    "다음",
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,

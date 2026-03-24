@@ -52,7 +52,7 @@ sealed class RealtimeAttemptActionState {
 enum class RealtimeSetupStep {
     GymPrompt,
     GymList,
-    Difficulty,
+    ChallengeCreate,
     Ready
 }
 
@@ -82,6 +82,7 @@ data class UploadRealtimeOverlayUiState(
     val resolvedGymGrades: List<GymGrade> = emptyList(),
     val selectedLevelSortOrder: Int? = null,
     val selectedGymGrade: GymGrade? = null,
+    val difficultyLabel: String = "",
     val selectedHoldColorKey: String? = null,
     val holdColor: String = "",
     val holdColorOptions: List<RealtimeHoldColorOption> = emptyList(),
