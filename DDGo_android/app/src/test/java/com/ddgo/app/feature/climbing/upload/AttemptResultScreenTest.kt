@@ -2,13 +2,229 @@ package com.ddgo.app.feature.climbing.upload
 
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.AnalysisPointKind
+import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.poseanalysis.HandPeakAnnotation
+import com.ddgo.app.domain.usecase.HoldNumbered
+import com.ddgo.app.domain.usecase.HoldRole
 import com.ddgo.app.domain.usecase.StallSegmentAnnotation
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AttemptResultScreenTest {
+
+    @Test
+    fun `portrait video crop spec returns expected fractions`() {
+        val cropSpec = calculateVerticalVideoViewportCropSpec(
+            holds = listOf(
+                holdNumbered(top = 0.20f, bottom = 0.35f),
+                holdNumbered(top = 0.45f, bottom = 0.80f)
+            ),
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 50f
+        )
+
+        assertTrue(cropSpec.isActive)
+        assertEquals(0.15f, cropSpec.topCropFraction, 0.0001f)
+        assertEquals(0.15f, cropSpec.bottomCropFraction, 0.0001f)
+        assertEquals(0.70f, cropSpec.visibleHeightFraction, 0.0001f)
+        assertEquals((9f / 16f) / 0.70f, cropSpec.viewportAspectRatio, 0.0001f)
+    }
+
+    @Test
+    fun `crop spec stays inactive when holds are missing`() {
+        val cropSpec = calculateVerticalVideoViewportCropSpec(
+            holds = emptyList(),
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 50f
+        )
+
+        assertFalse(cropSpec.isActive)
+        assertEquals(1f, cropSpec.visibleHeightFraction, 0f)
+        assertEquals(9f / 16f, cropSpec.viewportAspectRatio, 0f)
+    }
+
+    @Test
+    fun `crop spec stays inactive for landscape video`() {
+        val cropSpec = calculateVerticalVideoViewportCropSpec(
+            holds = listOf(holdNumbered(top = 0.10f, bottom = 0.90f)),
+            videoAspectRatio = 16f / 9f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 50f
+        )
+
+        assertFalse(cropSpec.isActive)
+        assertEquals(1f, cropSpec.visibleHeightFraction, 0f)
+        assertEquals(16f / 9f, cropSpec.viewportAspectRatio, 0f)
+    }
+
+    @Test
+    fun `larger safe inset expands crop boundaries predictably`() {
+        val smallInset = calculateVerticalVideoViewportCropSpec(
+            holds = listOf(
+                holdNumbered(top = 0.25f, bottom = 0.35f),
+                holdNumbered(top = 0.55f, bottom = 0.70f)
+            ),
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 20f
+        )
+        val largeInset = calculateVerticalVideoViewportCropSpec(
+            holds = listOf(
+                holdNumbered(top = 0.25f, bottom = 0.35f),
+                holdNumbered(top = 0.55f, bottom = 0.70f)
+            ),
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 80f
+        )
+
+        assertTrue(largeInset.topCropFraction < smallInset.topCropFraction)
+        assertTrue(largeInset.bottomCropFraction < smallInset.bottomCropFraction)
+        assertTrue(largeInset.visibleHeightFraction > smallInset.visibleHeightFraction)
+    }
+
+    @Test
+    fun `viewport aspect ratio matches visible height fraction`() {
+        val cropSpec = calculateVerticalVideoViewportCropSpec(
+            holds = listOf(
+                holdNumbered(top = 0.10f, bottom = 0.22f),
+                holdNumbered(top = 0.50f, bottom = 0.68f)
+            ),
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 800f,
+            safeInsetPx = 40f
+        )
+
+        assertEquals(
+            (9f / 16f) / cropSpec.visibleHeightFraction,
+            cropSpec.viewportAspectRatio,
+            0.0001f
+        )
+    }
+
+    @Test
+    fun `raw bounds crop spec uses all detected hold extremes`() {
+        val cropSpec = calculateVerticalVideoViewportCropSpecFromBounds(
+            topFraction = 0.10f,
+            bottomFraction = 0.90f,
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 24f
+        )
+
+        assertTrue(cropSpec.isActive)
+        assertEquals(0.076f, cropSpec.topCropFraction, 0.0001f)
+        assertEquals(0.076f, cropSpec.bottomCropFraction, 0.0001f)
+        assertEquals(0.848f, cropSpec.visibleHeightFraction, 0.0001f)
+        assertEquals((9f / 16f) / 0.848f, cropSpec.viewportAspectRatio, 0.0001f)
+    }
+
+    @Test
+    fun `raw bounds crop spec falls back when bounds are invalid`() {
+        val cropSpec = calculateVerticalVideoViewportCropSpecFromBounds(
+            topFraction = 0.65f,
+            bottomFraction = 0.60f,
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 24f
+        )
+
+        assertFalse(cropSpec.isActive)
+        assertEquals(1f, cropSpec.visibleHeightFraction, 0f)
+        assertEquals(9f / 16f, cropSpec.viewportAspectRatio, 0f)
+    }
+
+    @Test
+    fun `raw bounds crop spec stays inactive for landscape video`() {
+        val cropSpec = calculateVerticalVideoViewportCropSpecFromBounds(
+            topFraction = 0.10f,
+            bottomFraction = 0.90f,
+            videoAspectRatio = 16f / 9f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 24f
+        )
+
+        assertFalse(cropSpec.isActive)
+        assertEquals(1f, cropSpec.visibleHeightFraction, 0f)
+        assertEquals(16f / 9f, cropSpec.viewportAspectRatio, 0f)
+    }
+
+    @Test
+    fun `raw bounds crop spec allows larger bottom inset`() {
+        val symmetricInset = calculateVerticalVideoViewportCropSpecFromBounds(
+            topFraction = 0.20f,
+            bottomFraction = 0.70f,
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            safeInsetPx = 24f
+        )
+        val largerBottomInset = calculateVerticalVideoViewportCropSpecFromBounds(
+            topFraction = 0.20f,
+            bottomFraction = 0.70f,
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            topSafeInsetPx = 24f,
+            bottomSafeInsetPx = 56f
+        )
+
+        assertEquals(symmetricInset.topCropFraction, largerBottomInset.topCropFraction, 0.0001f)
+        assertTrue(largerBottomInset.bottomCropFraction < symmetricInset.bottomCropFraction)
+        assertTrue(largerBottomInset.visibleHeightFraction > symmetricInset.visibleHeightFraction)
+    }
+
+    @Test
+    fun `raw bounds crop spec keeps fractions clamped when bottom inset is large`() {
+        val cropSpec = calculateVerticalVideoViewportCropSpecFromBounds(
+            topFraction = 0.25f,
+            bottomFraction = 0.98f,
+            videoAspectRatio = 9f / 16f,
+            fullVideoHeightPx = 1_000f,
+            topSafeInsetPx = 24f,
+            bottomSafeInsetPx = 80f
+        )
+
+        assertTrue(cropSpec.isActive)
+        assertTrue(cropSpec.topCropFraction in 0f..1f)
+        assertTrue(cropSpec.bottomCropFraction in 0f..1f)
+        assertTrue(cropSpec.visibleHeightFraction in 0f..1f)
+        assertEquals(0f, cropSpec.bottomCropFraction, 0.0001f)
+    }
+
+    @Test
+    fun `cropped viewport placement uses the intended middle segment`() {
+        val placement = calculateCroppedVideoViewportPlacement(
+            fullVideoHeightPx = 10,
+            cropSpec = VideoViewportCropSpec(
+                topCropFraction = 0.4f,
+                bottomCropFraction = 0.2f,
+                visibleHeightFraction = 0.4f,
+                viewportAspectRatio = 1f,
+                isActive = true
+            ),
+            topCropPx = 4f
+        )
+
+        assertEquals(10, placement.fullVideoHeightPx)
+        assertEquals(4, placement.viewportHeightPx)
+        assertEquals(-4, placement.transformedLayerOffsetYPx)
+    }
+
+    @Test
+    fun `cropped viewport placement keeps full height when crop is inactive`() {
+        val placement = calculateCroppedVideoViewportPlacement(
+            fullVideoHeightPx = 10,
+            cropSpec = uncroppedVideoViewportCropSpec(videoAspectRatio = 9f / 16f),
+            topCropPx = 0f
+        )
+
+        assertEquals(10, placement.fullVideoHeightPx)
+        assertEquals(10, placement.viewportHeightPx)
+        assertEquals(0, placement.transformedLayerOffsetYPx)
+    }
 
     @Test
     fun `analysis points use raw hand end timestamp`() {
@@ -255,4 +471,23 @@ class AttemptResultScreenTest {
             )
         )
     }
+
+    private fun holdNumbered(
+        top: Float,
+        bottom: Float
+    ): HoldNumbered = HoldNumbered(
+        hold = Hold(
+            holdNo = 1,
+            boundingBox = Hold.BoundingBox(
+                left = 0.20f,
+                top = top,
+                right = 0.80f,
+                bottom = bottom
+            ),
+            confidence = 1f
+        ),
+        progress = 0f,
+        axisDistance = 0f,
+        role = HoldRole.NORMAL
+    )
 }

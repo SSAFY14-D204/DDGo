@@ -544,6 +544,7 @@ internal class UploadSubmissionDelegate(
                 matchedHoldCount = 0,
                 warpOnlyHoldCount = request.numberedHolds.size,
                 alignedHolds = request.numberedHolds,
+                rawCropBounds = null,
                 debugSummary = "reference fallback"
             )
         }
@@ -1500,6 +1501,7 @@ internal class UploadSubmissionDelegate(
                 matchedHoldCount = 0,
                 warpOnlyHoldCount = request.numberedHolds.size,
                 alignedHolds = request.numberedHolds,
+                rawCropBounds = null,
                 debugSummary = "reference fallback"
             )
         }

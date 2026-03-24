@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,19 +23,25 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.Dp
+import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.usecase.HoldNumbered
 import androidx.media3.common.VideoSize
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 internal data class VideoContentRect(
     val left: Float,
@@ -50,6 +57,20 @@ internal data class VideoFrameMask(
     val isVisible: Boolean
         get() = topHeightPx > 0f || bottomHeightPx > 0f
 }
+
+internal data class VideoViewportCropSpec(
+    val topCropFraction: Float,
+    val bottomCropFraction: Float,
+    val visibleHeightFraction: Float,
+    val viewportAspectRatio: Float,
+    val isActive: Boolean
+)
+
+internal data class CroppedVideoViewportPlacement(
+    val fullVideoHeightPx: Int,
+    val viewportHeightPx: Int,
+    val transformedLayerOffsetYPx: Int
+)
 
 internal data class PoseScrubberColors(
     val trackColor: Color,
@@ -201,28 +222,289 @@ internal fun calculateVerticalVideoFrameMask(
     videoAspectRatio: Float,
     safeInsetPx: Float
 ): VideoFrameMask {
-    if (videoAspectRatio >= 1f) {
+    if (contentRect.width <= 0f || contentRect.height <= 0f) {
         return VideoFrameMask(topHeightPx = 0f, bottomHeightPx = 0f)
     }
-    if (holds.isEmpty() || contentRect.width <= 0f || contentRect.height <= 0f) {
+    val cropSpec = calculateVerticalVideoViewportCropSpec(
+        holds = holds,
+        videoAspectRatio = videoAspectRatio,
+        fullVideoHeightPx = contentRect.height,
+        safeInsetPx = safeInsetPx
+    )
+    if (!cropSpec.isActive) {
         return VideoFrameMask(topHeightPx = 0f, bottomHeightPx = 0f)
     }
-
-    val topmostHoldTopPx = holds.minOf { hold ->
-        contentRect.top + (hold.hold.boundingBox.top.coerceIn(0f, 1f) * contentRect.height)
-    }
-    val bottommostHoldBottomPx = holds.maxOf { hold ->
-        contentRect.top + (hold.hold.boundingBox.bottom.coerceIn(0f, 1f) * contentRect.height)
-    }
-
-    val videoBottomPx = contentRect.top + contentRect.height
-    val visibleTopPx = (topmostHoldTopPx - safeInsetPx).coerceIn(contentRect.top, videoBottomPx)
-    val visibleBottomPx = (bottommostHoldBottomPx + safeInsetPx).coerceIn(contentRect.top, videoBottomPx)
 
     return VideoFrameMask(
-        topHeightPx = (visibleTopPx - contentRect.top).coerceAtLeast(0f),
-        bottomHeightPx = (videoBottomPx - visibleBottomPx).coerceAtLeast(0f)
+        topHeightPx = cropSpec.topCropFraction * contentRect.height,
+        bottomHeightPx = cropSpec.bottomCropFraction * contentRect.height
     )
+}
+
+internal fun uncroppedVideoViewportCropSpec(
+    videoAspectRatio: Float
+): VideoViewportCropSpec {
+    val safeAspectRatio = if (videoAspectRatio > 0f) {
+        videoAspectRatio
+    } else {
+        DEFAULT_VIDEO_ASPECT_RATIO
+    }
+
+    return VideoViewportCropSpec(
+        topCropFraction = 0f,
+        bottomCropFraction = 0f,
+        visibleHeightFraction = 1f,
+        viewportAspectRatio = safeAspectRatio,
+        isActive = false
+    )
+}
+
+internal fun calculateVerticalVideoViewportCropSpecFromBounds(
+    topFraction: Float,
+    bottomFraction: Float,
+    videoAspectRatio: Float,
+    fullVideoHeightPx: Float,
+    safeInsetPx: Float
+): VideoViewportCropSpec = calculateVerticalVideoViewportCropSpecFromBounds(
+    topFraction = topFraction,
+    bottomFraction = bottomFraction,
+    videoAspectRatio = videoAspectRatio,
+    fullVideoHeightPx = fullVideoHeightPx,
+    topSafeInsetPx = safeInsetPx,
+    bottomSafeInsetPx = safeInsetPx
+)
+
+internal fun calculateVerticalVideoViewportCropSpecFromBounds(
+    topFraction: Float,
+    bottomFraction: Float,
+    videoAspectRatio: Float,
+    fullVideoHeightPx: Float,
+    topSafeInsetPx: Float,
+    bottomSafeInsetPx: Float
+): VideoViewportCropSpec {
+    val uncroppedSpec = uncroppedVideoViewportCropSpec(videoAspectRatio)
+    if (videoAspectRatio >= 1f || fullVideoHeightPx <= 0f) {
+        return uncroppedSpec
+    }
+
+    val clampedTopFraction = topFraction.coerceIn(0f, 1f)
+    val clampedBottomFraction = bottomFraction.coerceIn(clampedTopFraction, 1f)
+    if (clampedBottomFraction <= clampedTopFraction) {
+        return uncroppedSpec
+    }
+
+    val topSafeInsetFraction = (topSafeInsetPx / fullVideoHeightPx)
+        .coerceAtLeast(0f)
+    val bottomSafeInsetFraction = (bottomSafeInsetPx / fullVideoHeightPx)
+        .coerceAtLeast(0f)
+    val visibleTopFraction = (clampedTopFraction - topSafeInsetFraction).coerceIn(0f, 1f)
+    val visibleBottomFraction = (clampedBottomFraction + bottomSafeInsetFraction)
+        .coerceIn(visibleTopFraction, 1f)
+    val visibleHeightFraction = (visibleBottomFraction - visibleTopFraction)
+        .coerceIn(0f, 1f)
+    val isActive = visibleHeightFraction < FULL_VIDEO_VISIBLE_HEIGHT_EPSILON &&
+        (visibleTopFraction > 0f || visibleBottomFraction < 1f)
+
+    if (!isActive || visibleHeightFraction <= 0f) {
+        return uncroppedSpec
+    }
+
+    return VideoViewportCropSpec(
+        topCropFraction = visibleTopFraction,
+        bottomCropFraction = (1f - visibleBottomFraction).coerceAtLeast(0f),
+        visibleHeightFraction = visibleHeightFraction,
+        viewportAspectRatio = videoAspectRatio / visibleHeightFraction,
+        isActive = true
+    )
+}
+
+internal fun calculateVerticalVideoViewportCropSpec(
+    holds: List<HoldNumbered>,
+    videoAspectRatio: Float,
+    fullVideoHeightPx: Float,
+    safeInsetPx: Float
+): VideoViewportCropSpec = calculateVerticalVideoViewportCropSpec(
+    holds = holds,
+    videoAspectRatio = videoAspectRatio,
+    fullVideoHeightPx = fullVideoHeightPx,
+    topSafeInsetPx = safeInsetPx,
+    bottomSafeInsetPx = safeInsetPx
+)
+
+internal fun calculateVerticalVideoViewportCropSpec(
+    holds: List<HoldNumbered>,
+    videoAspectRatio: Float,
+    fullVideoHeightPx: Float,
+    topSafeInsetPx: Float,
+    bottomSafeInsetPx: Float
+): VideoViewportCropSpec {
+    val uncroppedSpec = uncroppedVideoViewportCropSpec(videoAspectRatio)
+    if (videoAspectRatio >= 1f || holds.isEmpty() || fullVideoHeightPx <= 0f) {
+        return uncroppedSpec
+    }
+
+    val topmostHoldTopFraction = holds.minOf { hold ->
+        hold.hold.boundingBox.top.coerceIn(0f, 1f)
+    }
+    val bottommostHoldBottomFraction = holds.maxOf { hold ->
+        hold.hold.boundingBox.bottom.coerceIn(0f, 1f)
+    }
+    return calculateVerticalVideoViewportCropSpecFromBounds(
+        topFraction = topmostHoldTopFraction,
+        bottomFraction = bottommostHoldBottomFraction,
+        videoAspectRatio = videoAspectRatio,
+        fullVideoHeightPx = fullVideoHeightPx,
+        topSafeInsetPx = topSafeInsetPx,
+        bottomSafeInsetPx = bottomSafeInsetPx
+    )
+}
+
+internal fun calculateVerticalVideoViewportCropSpecFromRawHolds(
+    holds: List<Hold>,
+    videoAspectRatio: Float,
+    fullVideoHeightPx: Float,
+    safeInsetPx: Float
+): VideoViewportCropSpec = calculateVerticalVideoViewportCropSpecFromRawHolds(
+    holds = holds,
+    videoAspectRatio = videoAspectRatio,
+    fullVideoHeightPx = fullVideoHeightPx,
+    topSafeInsetPx = safeInsetPx,
+    bottomSafeInsetPx = safeInsetPx
+)
+
+internal fun calculateVerticalVideoViewportCropSpecFromRawHolds(
+    holds: List<Hold>,
+    videoAspectRatio: Float,
+    fullVideoHeightPx: Float,
+    topSafeInsetPx: Float,
+    bottomSafeInsetPx: Float
+): VideoViewportCropSpec {
+    val uncroppedSpec = uncroppedVideoViewportCropSpec(videoAspectRatio)
+    if (videoAspectRatio >= 1f || holds.isEmpty() || fullVideoHeightPx <= 0f) {
+        return uncroppedSpec
+    }
+
+    val topmostHoldTopFraction = holds.minOf { hold ->
+        hold.boundingBox.top.coerceIn(0f, 1f)
+    }
+    val bottommostHoldBottomFraction = holds.maxOf { hold ->
+        hold.boundingBox.bottom.coerceIn(0f, 1f)
+    }
+    return calculateVerticalVideoViewportCropSpecFromBounds(
+        topFraction = topmostHoldTopFraction,
+        bottomFraction = bottommostHoldBottomFraction,
+        videoAspectRatio = videoAspectRatio,
+        fullVideoHeightPx = fullVideoHeightPx,
+        topSafeInsetPx = topSafeInsetPx,
+        bottomSafeInsetPx = bottomSafeInsetPx
+    )
+}
+
+internal fun calculateCroppedVideoViewportPlacement(
+    fullVideoHeightPx: Int,
+    cropSpec: VideoViewportCropSpec,
+    topCropPx: Float
+): CroppedVideoViewportPlacement {
+    val safeFullVideoHeightPx = fullVideoHeightPx.coerceAtLeast(1)
+    if (!cropSpec.isActive) {
+        return CroppedVideoViewportPlacement(
+            fullVideoHeightPx = safeFullVideoHeightPx,
+            viewportHeightPx = safeFullVideoHeightPx,
+            transformedLayerOffsetYPx = 0
+        )
+    }
+
+    val viewportHeightPx = (safeFullVideoHeightPx * cropSpec.visibleHeightFraction)
+        .roundToInt()
+        .coerceIn(1, safeFullVideoHeightPx)
+    val derivedTopCropPx = (safeFullVideoHeightPx * cropSpec.topCropFraction)
+        .roundToInt()
+    val resolvedTopCropPx = topCropPx
+        .roundToInt()
+        .takeIf { it > 0 }
+        ?: derivedTopCropPx
+    val maxTopCropPx = (safeFullVideoHeightPx - viewportHeightPx).coerceAtLeast(0)
+    val clampedTopCropPx = resolvedTopCropPx.coerceIn(0, maxTopCropPx)
+
+    return CroppedVideoViewportPlacement(
+        fullVideoHeightPx = safeFullVideoHeightPx,
+        viewportHeightPx = viewportHeightPx,
+        transformedLayerOffsetYPx = -clampedTopCropPx
+    )
+}
+
+@Composable
+internal fun CroppedVideoViewport(
+    cropSpec: VideoViewportCropSpec,
+    fullVideoAspectRatio: Float,
+    topCropPx: Float,
+    modifier: Modifier = Modifier,
+    onFullVideoSizeChanged: (IntSize) -> Unit = {},
+    transformedLayer: @Composable BoxScope.() -> Unit,
+    overlayLayer: @Composable BoxScope.() -> Unit = {}
+) {
+    Layout(
+        modifier = modifier.clipToBounds(),
+        content = {
+            Box(
+                modifier = Modifier
+                    .layoutId(CROPPED_VIDEO_VIEWPORT_TRANSFORMED_LAYER_ID)
+                    .onSizeChanged(onFullVideoSizeChanged),
+                content = transformedLayer
+            )
+            Box(
+                modifier = Modifier.layoutId(CROPPED_VIDEO_VIEWPORT_OVERLAY_LAYER_ID),
+                content = overlayLayer
+            )
+        }
+    ) { measurables, constraints ->
+        val viewportWidthPx = constraints.maxWidth
+            .takeIf { it != Constraints.Infinity && it > 0 }
+            ?: constraints.minWidth
+        if (viewportWidthPx <= 0) {
+            return@Layout layout(0, 0) {}
+        }
+
+        val safeFullVideoAspectRatio = fullVideoAspectRatio.coerceAtLeast(MIN_VIDEO_ASPECT_RATIO)
+        val fullVideoHeightPx = (viewportWidthPx / safeFullVideoAspectRatio)
+            .roundToInt()
+            .coerceAtLeast(1)
+        val placement = calculateCroppedVideoViewportPlacement(
+            fullVideoHeightPx = fullVideoHeightPx,
+            cropSpec = cropSpec,
+            topCropPx = topCropPx
+        )
+
+        val transformedMeasurable = measurables.first { measurable ->
+            measurable.layoutId == CROPPED_VIDEO_VIEWPORT_TRANSFORMED_LAYER_ID
+        }
+        val overlayMeasurable = measurables.first { measurable ->
+            measurable.layoutId == CROPPED_VIDEO_VIEWPORT_OVERLAY_LAYER_ID
+        }
+        val transformedPlaceable = transformedMeasurable.measure(
+            Constraints.fixed(
+                width = viewportWidthPx,
+                height = placement.fullVideoHeightPx
+            )
+        )
+        val overlayPlaceable = overlayMeasurable.measure(
+            Constraints.fixed(
+                width = viewportWidthPx,
+                height = placement.viewportHeightPx
+            )
+        )
+
+        layout(
+            width = viewportWidthPx,
+            height = placement.viewportHeightPx
+        ) {
+            transformedPlaceable.placeRelative(
+                x = 0,
+                y = placement.transformedLayerOffsetYPx
+            )
+            overlayPlaceable.placeRelative(x = 0, y = 0)
+        }
+    }
 }
 
 @Composable
@@ -364,6 +646,7 @@ internal fun PoseVideoScrubber(
     enabled: Boolean,
     markers: List<PoseScrubberMarker>,
     colors: PoseScrubberColors,
+    trackAnchoredToBottom: Boolean = false,
     modifier: Modifier = Modifier,
     onTapSeek: (Long) -> Unit,
     onScrubStart: () -> Unit,
@@ -376,14 +659,14 @@ internal fun PoseVideoScrubber(
         0f
     }
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
+    val trackCanvasHeight = if (trackAnchoredToBottom) 44.dp else 32.dp
+
+    @Composable
+    fun ScrubberTrackCanvas() {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(32.dp)
+                .height(trackCanvasHeight)
                 .pointerInput(enabled, durationMs) {
                     if (!enabled) return@pointerInput
                     detectTapGestures { offset ->
@@ -413,9 +696,13 @@ internal fun PoseVideoScrubber(
                     )
                 }
         ) {
-            val centerY = size.height / 2f
             val trackHeight = 4.dp.toPx()
             val thumbRadius = 7.dp.toPx()
+            val centerY = if (trackAnchoredToBottom) {
+                size.height - thumbRadius - 2.dp.toPx()
+            } else {
+                size.height / 2f
+            }
 
             drawLine(
                 color = colors.trackColor,
@@ -481,25 +768,56 @@ internal fun PoseVideoScrubber(
                 center = Offset(size.width * progress, centerY)
             )
         }
+    }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = currentPositionMs.toVideoTimeString(),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = colors.textColor
-            )
-            Text(
-                text = durationMs.toVideoTimeString(),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = colors.textColor.copy(alpha = 0.8f)
-            )
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        if (trackAnchoredToBottom) {
+            ScrubberTrackCanvas()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = currentPositionMs.toVideoTimeString(),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textColor
+                )
+                Text(
+                    text = durationMs.toVideoTimeString(),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textColor.copy(alpha = 0.8f)
+                )
+            }
+        } else {
+            ScrubberTrackCanvas()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = currentPositionMs.toVideoTimeString(),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textColor
+                )
+                Text(
+                    text = durationMs.toVideoTimeString(),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textColor.copy(alpha = 0.8f)
+                )
+            }
         }
     }
 }
 
 private const val DEFAULT_VIDEO_ASPECT_RATIO = 9f / 16f
+private const val FULL_VIDEO_VISIBLE_HEIGHT_EPSILON = 0.999f
+private const val MIN_VIDEO_ASPECT_RATIO = 0.0001f
+private const val CROPPED_VIDEO_VIEWPORT_TRANSFORMED_LAYER_ID = "cropped_video_viewport_transformed"
+private const val CROPPED_VIDEO_VIEWPORT_OVERLAY_LAYER_ID = "cropped_video_viewport_overlay"

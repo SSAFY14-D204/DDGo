@@ -840,6 +840,18 @@ internal class UploadHoldDetectionDelegate(
         val rawHolds = holdDetector.detectFromFrame(bitmap)
         Log.d(TAG, "detectHoldsFromBestFrame: raw hold count=${rawHolds.size}")
         UploadAiTraceLogger.log(
+            event = "attempt_upload_raw_holds_detected",
+            generation = holdDetectionPrecomputeEntry?.selectionGeneration,
+            playbackUri = holdDetectionPrecomputeEntry?.sourceVideoUri ?: holdDetectionPrecomputeEntry?.debugBestFrameImageUri,
+            details = mapOf(
+                "bestTimeUs" to bestFrameTimeUs,
+                "rawHoldCount" to rawHolds.size,
+                "rawBBoxes" to UploadAiTraceLogger.formatBoundingBoxes(
+                    rawHolds.map { hold -> hold.boundingBox }
+                )
+            )
+        )
+        UploadAiTraceLogger.log(
             event = "HOLD_YOLO_DONE",
             generation = holdDetectionPrecomputeEntry?.selectionGeneration,
             playbackUri = holdDetectionPrecomputeEntry?.sourceVideoUri ?: holdDetectionPrecomputeEntry?.debugBestFrameImageUri,

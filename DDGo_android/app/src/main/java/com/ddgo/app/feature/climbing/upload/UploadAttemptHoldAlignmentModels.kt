@@ -18,6 +18,11 @@ internal enum class AttemptHoldAlignmentMode {
     ReferenceFallback
 }
 
+internal data class RawVerticalCropBounds(
+    val topFraction: Float,
+    val bottomFraction: Float
+)
+
 internal data class AttemptAlignedHoldSet(
     val playbackUri: String,
     val frameWidthPx: Int,
@@ -27,6 +32,7 @@ internal data class AttemptAlignedHoldSet(
     val matchedHoldCount: Int,
     val warpOnlyHoldCount: Int,
     val alignedHolds: List<HoldNumbered>,
+    val rawCropBounds: RawVerticalCropBounds? = null,
     val debugSummary: String
 )
 
@@ -61,6 +67,7 @@ internal data class AttemptHoldAlignmentEntry(
     val frameHeightPx: Int? = null,
     val bestFrameTimeUs: Long? = null,
     val candidateHolds: List<Hold> = emptyList(),
+    val rawCropBounds: RawVerticalCropBounds? = null,
     val alignedHoldSet: AttemptAlignedHoldSet? = null,
     val errorMessage: String? = null,
     val taskId: Long? = null

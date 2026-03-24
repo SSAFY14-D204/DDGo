@@ -780,6 +780,8 @@ class UploadViewModel @Inject constructor(
                 attemptAlignedHoldSets.firstOrNull { it.playbackUri == playbackUri }
                     ?: attemptHoldAlignmentDelegate.alignedHoldSetFor(playbackUri)
             }
+    internal val currentAttemptCropBounds: RawVerticalCropBounds?
+        get() = currentAttemptAlignedSelection?.rawCropBounds
     val currentAttemptDisplayHolds: List<HoldNumbered>
         get() = currentAttemptAlignedSelection?.alignedHolds.orEmpty()
             .ifEmpty { numberedHolds }

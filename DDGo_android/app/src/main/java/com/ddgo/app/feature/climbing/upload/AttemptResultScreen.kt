@@ -49,7 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -91,15 +90,15 @@ private val C_ACCENT = Color(0xFF2979FF)
 private val C_ACCENT_GLOW = Color(0xFF82B1FF)
 private val C_BONE = Color(0xFF00E5FF).copy(alpha = 0.85f)
 private val C_JOINT = Color.White
-private val C_STALL = Color(0xFFFFB300)
 private val C_TIMESTAMP_CARD = Color(0xFF1294FF)
 private val C_TIMESTAMP_TEXT = Color(0xFF626262)
 private val C_TIMESTAMP_BORDER = Color(0xFF121212)
 private val HIDDEN_FACE_LANDMARK_INDICES = (1..10).toSet()
 private val ANALYSIS_CARD_WIDTH = 160.dp
 private val ANALYSIS_CARD_HEIGHT = 104.dp
-private val VIDEO_FRAME_MASK_SAFE_INSET = 24.dp
-private val VIDEO_FRAME_MASK_EDGE_FADE = 18.dp
+private val VIDEO_FRAME_TOP_SAFE_INSET = 24.dp
+private val VIDEO_FRAME_BOTTOM_SAFE_INSET = 64.dp
+private val VIDEO_CONTROL_AREA_HEIGHT = 132.dp
 
 @UnstableApi
 @Composable
@@ -138,9 +137,10 @@ fun AttemptResultScreen(
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
     val wallArrivalTimeMs = currentAttemptPrePoseEntry?.wallArrivalTimeMs
     val personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs
-    val stallSegment = currentAttemptPrePoseEntry?.stallSegment
     val usesPoseDetectorTimeline = currentAttemptPrePoseEntry != null
     val numberedHolds = viewModel.currentAttemptDisplayHolds
+    val allRawHolds = viewModel.allRawHolds
+    val currentAttemptCropBounds = viewModel.currentAttemptCropBounds
     val endpointStatusMessage = remember(currentAttemptPrePoseEntry, currentAnalysisPoints) {
         when {
             currentAttemptPrePoseEntry == null -> null
@@ -162,7 +162,7 @@ fun AttemptResultScreen(
     }
 
     var playerVideoSize by remember(currentVideoUri) { mutableStateOf(VideoSize.UNKNOWN) }
-    var videoContainerSize by remember { mutableStateOf(IntSize.Zero) }
+    var fullVideoLayerSize by remember(currentVideoUri) { mutableStateOf(IntSize.Zero) }
     var currentPositionMs by remember(currentVideoUri) { mutableLongStateOf(0L) }
     var durationMs by remember(currentVideoUri) { mutableLongStateOf(0L) }
     var isPlaying by remember(currentVideoUri) { mutableStateOf(false) }
@@ -185,21 +185,111 @@ fun AttemptResultScreen(
     val videoAspectRatio = remember(playerVideoSize) {
         resolveDisplayedVideoAspectRatio(playerVideoSize)
     }
-    val videoContentRect = remember(videoContainerSize, playerVideoSize) {
+    val videoContentRect = remember(fullVideoLayerSize, playerVideoSize) {
         calculateVideoContentRect(
-            containerSize = videoContainerSize,
+            containerSize = fullVideoLayerSize,
             videoSize = playerVideoSize
         )
     }
-    val verticalVideoFrameMask = remember(numberedHolds, videoContentRect, videoAspectRatio, density) {
-        calculateVerticalVideoFrameMask(
-            holds = numberedHolds,
+    val holdDrawArea = remember(videoContentRect, fullVideoLayerSize) {
+        resolveHoldDrawArea(
             contentRect = videoContentRect,
-            videoAspectRatio = videoAspectRatio,
-            safeInsetPx = with(density) { VIDEO_FRAME_MASK_SAFE_INSET.toPx() }
+            fallbackSize = fullVideoLayerSize
         )
     }
+    val videoViewportCropSpec = remember(
+        numberedHolds,
+        allRawHolds,
+        fullVideoLayerSize,
+        videoAspectRatio,
+        playerVideoSize,
+        density
+    ) {
+        if (
+            playerVideoSize.width <= 0 ||
+            playerVideoSize.height <= 0 ||
+            fullVideoLayerSize.width <= 0 ||
+            fullVideoLayerSize.height <= 0
+        ) {
+            uncroppedVideoViewportCropSpec(videoAspectRatio)
+        } else {
+            calculateVerticalVideoViewportCropSpecFromRawHolds(
+                holds = allRawHolds,
+                videoAspectRatio = videoAspectRatio,
+                fullVideoHeightPx = fullVideoLayerSize.height.toFloat(),
+                topSafeInsetPx = with(density) { VIDEO_FRAME_TOP_SAFE_INSET.toPx() },
+                bottomSafeInsetPx = with(density) { VIDEO_FRAME_BOTTOM_SAFE_INSET.toPx() }
+            )
+        }
+    }
+    val topCropOffsetPx = remember(videoViewportCropSpec, fullVideoLayerSize) {
+        if (videoViewportCropSpec.isActive) {
+            fullVideoLayerSize.height * videoViewportCropSpec.topCropFraction
+        } else {
+            0f
+        }
+    }
+    LaunchedEffect(
+        currentVideoUri,
+        numberedHolds,
+        allRawHolds,
+        holdDrawArea,
+        fullVideoLayerSize,
+        videoViewportCropSpec
+    ) {
+        if (currentVideoUri.isNullOrBlank()) return@LaunchedEffect
+        if (fullVideoLayerSize.width <= 0 || fullVideoLayerSize.height <= 0) return@LaunchedEffect
 
+        val holdScreenRects = calculateHoldNumberScreenRects(
+            holds = numberedHolds,
+            drawArea = holdDrawArea
+        )
+        val normalizedBoxes = if (numberedHolds.isEmpty()) {
+            "[]"
+        } else {
+            numberedHolds.joinToString(prefix = "[", postfix = "]") { numbered ->
+                "#${numbered.holdNo}=${UploadAiTraceLogger.formatBoundingBox(numbered.hold.boundingBox)}"
+            }
+        }
+        val rawHoldBounds = if (allRawHolds.isEmpty()) {
+            "[]"
+        } else {
+            allRawHolds.joinToString(prefix = "[", postfix = "]") { hold ->
+                UploadAiTraceLogger.formatBoundingBox(hold.boundingBox)
+            }
+        }
+        val screenRectLogs = if (holdScreenRects.isEmpty()) {
+            "[]"
+        } else {
+            holdScreenRects.joinToString(prefix = "[", postfix = "]") { (numbered, rect) ->
+                "#${numbered.holdNo}=${UploadAiTraceLogger.formatRect(rect.l, rect.t, rect.r, rect.b)}"
+            }
+        }
+
+        UploadAiTraceLogger.log(
+            event = "attempt_result_screen_rects_resolved",
+            playbackUri = currentVideoUri,
+            details = mapOf(
+                "cropSource" to "allRawHolds",
+                "rawCropBounds" to UploadAiTraceLogger.formatCropBounds(currentAttemptCropBounds),
+                "cropHoldCount" to allRawHolds.size,
+                "displayHoldCount" to numberedHolds.size,
+                "topSafeInsetDp" to VIDEO_FRAME_TOP_SAFE_INSET.value,
+                "bottomSafeInsetDp" to VIDEO_FRAME_BOTTOM_SAFE_INSET.value,
+                "fullVideoLayerSize" to "${fullVideoLayerSize.width}x${fullVideoLayerSize.height}",
+                "videoContentRect" to UploadAiTraceLogger.formatRect(
+                    holdDrawArea.left,
+                    holdDrawArea.top,
+                    holdDrawArea.left + holdDrawArea.width,
+                    holdDrawArea.top + holdDrawArea.height
+                ),
+                "cropSpec" to "top=${videoViewportCropSpec.topCropFraction},bottom=${videoViewportCropSpec.bottomCropFraction},visible=${videoViewportCropSpec.visibleHeightFraction},aspect=${videoViewportCropSpec.viewportAspectRatio},active=${videoViewportCropSpec.isActive}",
+                "rawHoldBounds" to rawHoldBounds,
+                "normalizedBBoxes" to normalizedBoxes,
+                "screenRects" to screenRectLogs
+            )
+        )
+    }
     val currentOverlayFrame = remember(currentAttemptOverlayCache, displayedPositionMs) {
         currentAttemptOverlayCache?.let { overlayCache ->
             findNearestOverlayFrameForPlayback(
@@ -207,11 +297,6 @@ fun AttemptResultScreen(
                 positionMs = displayedPositionMs
             )
         }
-    }
-    val isStallSegmentActive = remember(stallSegment, displayedPositionMs) {
-        stallSegment?.let { segment ->
-            displayedPositionMs in segment.startTimeMs..segment.endTimeMs
-        } == true
     }
 
     val activeIdx by remember(currentAnalysisPoints, displayedPositionMs, tappedCardOverrideIdx) {
@@ -371,13 +456,13 @@ fun AttemptResultScreen(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(videoAspectRatio)
-                    .onSizeChanged { videoContainerSize = it }
-            ) {
-                Box(modifier = Modifier.matchParentSize()) {
+            CroppedVideoViewport(
+                cropSpec = videoViewportCropSpec,
+                fullVideoAspectRatio = videoAspectRatio,
+                topCropPx = topCropOffsetPx,
+                modifier = Modifier.fillMaxWidth(),
+                onFullVideoSizeChanged = { fullVideoLayerSize = it },
+                transformedLayer = {
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { viewContext ->
@@ -412,150 +497,116 @@ fun AttemptResultScreen(
                             )
                         }
                     }
-
-                    VerticalVideoFrameMaskOverlay(
-                        frameMask = verticalVideoFrameMask,
-                        contentRect = videoContentRect,
-                        backgroundColor = C_BG,
-                        edgeFade = VIDEO_FRAME_MASK_EDGE_FADE,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    if (isStallSegmentActive) {
+                },
+                overlayLayer = {
+                    if (currentAttemptPrePoseEntry?.status == PrePoseStatus.Failed) {
                         Box(
                             modifier = Modifier
-                                .align(Alignment.TopEnd)
+                                .align(Alignment.TopStart)
                                 .padding(12.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color.Black.copy(alpha = 0.72f))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .background(Color.Black.copy(alpha = 0.7f))
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                text = "정체 구간",
-                                color = C_STALL,
+                                text = "pre-pose를 불러오지 못했습니다",
+                                color = Color.White,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
-
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            if (videoContentRect.width <= 0f || videoContentRect.height <= 0f) {
-                                return@Canvas
-                            }
-
-                            val horizontalInset = 16.dp.toPx()
-                            val barHeight = 4.dp.toPx()
-                            val barWidth = (videoContentRect.width - (horizontalInset * 2f)).coerceAtLeast(0f)
-                            if (barWidth <= 0f) return@Canvas
-
-                            drawRoundRect(
-                                color = C_STALL.copy(alpha = 0.95f),
-                                topLeft = Offset(
-                                    x = videoContentRect.left + horizontalInset,
-                                    y = videoContentRect.top + videoContentRect.height - barHeight - 10.dp.toPx()
-                                ),
-                                size = Size(width = barWidth, height = barHeight),
-                                cornerRadius = CornerRadius(barHeight / 2f, barHeight / 2f)
-                            )
-                        }
                     }
-                }
 
-                if (currentAttemptPrePoseEntry?.status == PrePoseStatus.Failed) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(12.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.Black.copy(alpha = 0.7f))
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .matchParentSize()
+                            .clickable {
+                                if (playbackState == Player.STATE_ENDED) {
+                                    exoPlayer.seekTo(0L)
+                                }
+                                if (exoPlayer.isPlaying) {
+                                    exoPlayer.pause()
+                                } else {
+                                    exoPlayer.play()
+                                }
+                            }
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(VIDEO_CONTROL_AREA_HEIGHT)
+                            .background(
+                                Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.0f to Color.Transparent,
+                                        0.22f to C_BG.copy(alpha = 0.08f),
+                                        0.55f to C_BG.copy(alpha = 0.46f),
+                                        0.82f to C_BG.copy(alpha = 0.84f),
+                                        1.0f to C_BG
+                                    )
+                                )
+                            )
                     ) {
-                        Text(
-                            text = "pre-pose를 불러오지 못했습니다",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clickable {
-                            if (playbackState == Player.STATE_ENDED) {
-                                exoPlayer.seekTo(0L)
-                            }
-                            if (exoPlayer.isPlaying) {
+                        PoseVideoScrubber(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp),
+                            currentPositionMs = displayedPositionMs,
+                            durationMs = durationMs,
+                            enabled = canScrub,
+                            markers = scrubberMarkers,
+                            colors = PoseScrubberColors(
+                                trackColor = Color.White.copy(alpha = if (canScrub) 0.18f else 0.08f),
+                                progressColor = C_ACCENT_GLOW,
+                                thumbColor = Color.White,
+                                textColor = Color.White.copy(alpha = 0.82f)
+                            ),
+                            trackAnchoredToBottom = true,
+                            onTapSeek = { requestedTimeMs ->
+                                tappedCardOverrideIdx = -1
+                                val wasPlaying = exoPlayer.isPlaying
+                                seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
+                                    currentPositionMs = snappedTimeMs
+                                    scrubPositionMs = snappedTimeMs
+                                    if (wasPlaying) {
+                                        exoPlayer.play()
+                                    } else {
+                                        exoPlayer.pause()
+                                    }
+                                }
+                            },
+                            onScrubStart = {
+                                if (!canScrub) return@PoseVideoScrubber
+                                tappedCardOverrideIdx = -1
+                                wasPlayingBeforeScrub = exoPlayer.isPlaying
+                                scrubPositionMs = poseTimestamps.findNearestTimestamp(displayedPositionMs)
+                                    ?: displayedPositionMs
+                                isScrubbing = true
                                 exoPlayer.pause()
-                            } else {
-                                exoPlayer.play()
+                            },
+                            onScrubMove = { requestedTimeMs ->
+                                if (!canScrub) return@PoseVideoScrubber
+                                seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
+                                    scrubPositionMs = snappedTimeMs
+                                    currentPositionMs = snappedTimeMs
+                                }
+                            },
+                            onScrubStop = {
+                                if (!isScrubbing) return@PoseVideoScrubber
+                                val finalTimeMs = poseTimestamps.findNearestTimestamp(scrubPositionMs)
+                                    ?: scrubPositionMs
+                                exoPlayer.seekTo(finalTimeMs)
+                                currentPositionMs = finalTimeMs
+                                scrubPositionMs = finalTimeMs
+                                isScrubbing = false
+                                if (wasPlayingBeforeScrub) {
+                                    exoPlayer.play()
+                                }
                             }
-                        }
-                )
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(72.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(Brush.verticalGradient(listOf(Color.Transparent, C_BG)))
-                )
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            PoseVideoScrubber(
-                currentPositionMs = displayedPositionMs,
-                durationMs = durationMs,
-                enabled = canScrub,
-                markers = scrubberMarkers,
-                colors = PoseScrubberColors(
-                    trackColor = Color.White.copy(alpha = if (canScrub) 0.18f else 0.08f),
-                    progressColor = C_ACCENT_GLOW,
-                    thumbColor = Color.White,
-                    textColor = Color.White.copy(alpha = 0.65f)
-                ),
-                modifier = Modifier.padding(horizontal = 20.dp),
-                onTapSeek = { requestedTimeMs ->
-                    tappedCardOverrideIdx = -1
-                    val wasPlaying = exoPlayer.isPlaying
-                    seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
-                        currentPositionMs = snappedTimeMs
-                        scrubPositionMs = snappedTimeMs
-                        if (wasPlaying) {
-                            exoPlayer.play()
-                        } else {
-                            exoPlayer.pause()
-                        }
-                    }
-                },
-                onScrubStart = {
-                    if (!canScrub) return@PoseVideoScrubber
-                    tappedCardOverrideIdx = -1
-                    wasPlayingBeforeScrub = exoPlayer.isPlaying
-                    scrubPositionMs = poseTimestamps.findNearestTimestamp(displayedPositionMs)
-                        ?: displayedPositionMs
-                    isScrubbing = true
-                    exoPlayer.pause()
-                },
-                onScrubMove = { requestedTimeMs ->
-                    if (!canScrub) return@PoseVideoScrubber
-                    seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
-                        scrubPositionMs = snappedTimeMs
-                        currentPositionMs = snappedTimeMs
-                    }
-                },
-                onScrubStop = {
-                    if (!isScrubbing) return@PoseVideoScrubber
-                    val finalTimeMs = poseTimestamps.findNearestTimestamp(scrubPositionMs)
-                        ?: scrubPositionMs
-                    exoPlayer.seekTo(finalTimeMs)
-                    currentPositionMs = finalTimeMs
-                    scrubPositionMs = finalTimeMs
-                    isScrubbing = false
-                    if (wasPlayingBeforeScrub) {
-                        exoPlayer.play()
+                        )
                     }
                 }
             )
@@ -843,24 +894,15 @@ private fun DrawScope.drawHoldNumbers(
     holds: List<HoldNumbered>,
     contentRect: VideoContentRect
 ) {
-    val drawArea = if (contentRect.width > 0f && contentRect.height > 0f) {
-        contentRect
-    } else {
-        VideoContentRect(
-            left = 0f,
-            top = 0f,
-            width = size.width,
-            height = size.height
-        )
-    }
+    val drawArea = resolveHoldDrawArea(
+        contentRect = contentRect,
+        fallbackSize = IntSize(size.width.toInt(), size.height.toInt())
+    )
 
-    holds.forEach { numbered ->
-        val rect = numbered.hold.toScreenRect(
-            offX = drawArea.left,
-            offY = drawArea.top,
-            scaledW = drawArea.width,
-            scaledH = drawArea.height
-        )
+    calculateHoldNumberScreenRects(
+        holds = holds,
+        drawArea = drawArea
+    ).forEach { (numbered, rect) ->
         val center = Offset(
             x = (rect.l + rect.r) / 2f,
             y = (rect.t + rect.b) / 2f
@@ -909,6 +951,36 @@ private fun DrawScope.drawHoldNumbers(
                 paint
             )
         }
+    }
+}
+
+private fun resolveHoldDrawArea(
+    contentRect: VideoContentRect,
+    fallbackSize: IntSize
+): VideoContentRect {
+    if (contentRect.width > 0f && contentRect.height > 0f) {
+        return contentRect
+    }
+
+    return VideoContentRect(
+        left = 0f,
+        top = 0f,
+        width = fallbackSize.width.toFloat(),
+        height = fallbackSize.height.toFloat()
+    )
+}
+
+private fun calculateHoldNumberScreenRects(
+    holds: List<HoldNumbered>,
+    drawArea: VideoContentRect
+): List<Pair<HoldNumbered, ScreenRect>> {
+    return holds.map { numbered ->
+        numbered to numbered.hold.toScreenRect(
+            offX = drawArea.left,
+            offY = drawArea.top,
+            scaledW = drawArea.width,
+            scaledH = drawArea.height
+        )
     }
 }
 

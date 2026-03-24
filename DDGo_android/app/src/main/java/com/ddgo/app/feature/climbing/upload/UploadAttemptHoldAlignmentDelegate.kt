@@ -103,6 +103,7 @@ internal class UploadAttemptHoldAlignmentDelegate(
                 frameHeightPx = existing?.frameHeightPx.takeIf { canReuseCandidates },
                 bestFrameTimeUs = existing?.bestFrameTimeUs.takeIf { canReuseCandidates },
                 candidateHolds = existing?.candidateHolds.takeIf { canReuseCandidates }.orEmpty(),
+                rawCropBounds = existing?.rawCropBounds.takeIf { canReuseCandidates },
                 alignedHoldSet = null,
                 errorMessage = null,
                 taskId = nextTaskId()
@@ -217,6 +218,7 @@ internal class UploadAttemptHoldAlignmentDelegate(
                             frameHeightPx = precomputed.frameHeightPx,
                             bestFrameTimeUs = precomputed.bestFrameTimeUs,
                             candidateHolds = precomputed.candidateHolds,
+                            rawCropBounds = precomputed.rawCropBounds,
                             errorMessage = null
                         )
                     } ?: return@launch
@@ -261,6 +263,7 @@ internal class UploadAttemptHoldAlignmentDelegate(
                     frameWidthPx = workingEntry.frameWidthPx ?: 1000,
                     frameHeightPx = workingEntry.frameHeightPx ?: 1000,
                     referenceHolds = referenceHolds,
+                    rawCropBounds = workingEntry.rawCropBounds,
                     alignmentResult = alignmentResult
                 )
 
@@ -333,6 +336,29 @@ internal class UploadAttemptHoldAlignmentDelegate(
 
         try {
             val rawHolds = holdDetector.detectFromFrame(bitmap)
+            UploadAiTraceLogger.log(
+                event = "attempt_result_raw_holds_detected",
+                playbackUri = playbackUri,
+                details = mapOf(
+                    "targetColor" to normalizedColor.ifBlank { "<all>" },
+                    "bestFrameTimeUs" to bestFrameTimeUs,
+                    "rawHoldCount" to rawHolds.size,
+                    "rawBBoxes" to UploadAiTraceLogger.formatBoundingBoxes(
+                        rawHolds.map { hold -> hold.boundingBox }
+                    )
+                )
+            )
+            val rawCropBounds = calculateRawVerticalCropBounds(rawHolds)
+            UploadAiTraceLogger.log(
+                event = "attempt_result_crop_bounds_resolved",
+                playbackUri = playbackUri,
+                details = mapOf(
+                    "targetColor" to normalizedColor.ifBlank { "<all>" },
+                    "bestFrameTimeUs" to bestFrameTimeUs,
+                    "rawHoldCount" to rawHolds.size,
+                    "rawCropBounds" to UploadAiTraceLogger.formatCropBounds(rawCropBounds)
+                )
+            )
             val classified = holdColorClassifier.classifyAllRich(
                 bitmap = bitmap,
                 holds = rawHolds,
@@ -357,7 +383,8 @@ internal class UploadAttemptHoldAlignmentDelegate(
                 bestFrameTimeUs = bestFrameTimeUs,
                 frameWidthPx = bitmap.width,
                 frameHeightPx = bitmap.height,
-                candidateHolds = candidateHolds
+                candidateHolds = candidateHolds,
+                rawCropBounds = rawCropBounds
             )
         } finally {
             if (!bitmap.isRecycled) {
@@ -371,6 +398,7 @@ internal class UploadAttemptHoldAlignmentDelegate(
         frameWidthPx: Int,
         frameHeightPx: Int,
         referenceHolds: List<HoldNumbered>,
+        rawCropBounds: RawVerticalCropBounds?,
         alignmentResult: com.ddgo.app.domain.usecase.AttemptHoldAlignmentResult
     ): AttemptAlignedHoldSet {
         if (alignmentResult.status == UseCaseAlignmentStatus.Failed) {
@@ -383,6 +411,7 @@ internal class UploadAttemptHoldAlignmentDelegate(
                 matchedHoldCount = 0,
                 warpOnlyHoldCount = referenceHolds.size,
                 alignedHolds = referenceHolds,
+                rawCropBounds = rawCropBounds,
                 debugSummary = alignmentResult.debugSummary
             )
         }
@@ -404,7 +433,27 @@ internal class UploadAttemptHoldAlignmentDelegate(
             matchedHoldCount = alignmentResult.matchedCount,
             warpOnlyHoldCount = alignmentResult.warpedCount,
             alignedHolds = alignmentResult.alignedHolds,
+            rawCropBounds = rawCropBounds,
             debugSummary = alignmentResult.debugSummary
+        )
+    }
+
+    private fun calculateRawVerticalCropBounds(rawHolds: List<Hold>): RawVerticalCropBounds? {
+        if (rawHolds.isEmpty()) return null
+
+        val topFraction = rawHolds.minOf { hold ->
+            hold.boundingBox.top.coerceIn(0f, 1f)
+        }
+        val bottomFraction = rawHolds.maxOf { hold ->
+            hold.boundingBox.bottom.coerceIn(0f, 1f)
+        }
+        if (bottomFraction <= topFraction) {
+            return null
+        }
+
+        return RawVerticalCropBounds(
+            topFraction = topFraction,
+            bottomFraction = bottomFraction
         )
     }
 
@@ -524,7 +573,8 @@ internal class UploadAttemptHoldAlignmentDelegate(
         val bestFrameTimeUs: Long,
         val frameWidthPx: Int,
         val frameHeightPx: Int,
-        val candidateHolds: List<Hold>
+        val candidateHolds: List<Hold>,
+        val rawCropBounds: RawVerticalCropBounds?
     )
 
     companion object {
