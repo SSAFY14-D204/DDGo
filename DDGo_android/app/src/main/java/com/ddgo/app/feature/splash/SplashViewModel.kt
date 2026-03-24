@@ -2,11 +2,15 @@ package com.ddgo.app.feature.splash
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.core.datastore.OnboardingPreferenceDataStore
 import com.ddgo.app.core.datastore.TokenDataStore
 import com.ddgo.app.core.network.JwtTokenParser
 import com.ddgo.app.data.remote.auth.AuthApi
+import com.ddgo.app.data.remote.auth.UserResponseDto
 import com.ddgo.app.data.remote.common.ApiErrorResponse
 import com.ddgo.app.domain.repository.AuthRepository
+import com.ddgo.app.feature.onboarding.OnboardingMode
+import com.ddgo.app.navigation.ScreenRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import javax.inject.Named
@@ -29,6 +33,7 @@ private val invalidSessionErrorCodes = setOf("A001", "A002", "A003", "U001")
 @HiltViewModel
 class SplashViewModel @Inject constructor(
     private val tokenDataStore: TokenDataStore,
+    private val onboardingPreferenceDataStore: OnboardingPreferenceDataStore,
     private val authRepository: AuthRepository,
     @Named("AuthOkHttpClient") private val splashAuthApi: AuthApi,
     private val json: Json
@@ -45,39 +50,86 @@ class SplashViewModel @Inject constructor(
         viewModelScope.launch {
             delay(SPLASH_DELAY_MS)
 
-            val accessToken = tokenDataStore.accessToken.first()
-            if (!accessToken.isNullOrEmpty() && !JwtTokenParser.isExpired(accessToken)) {
-                validateSessionAndNavigate(accessToken)
-                return@launch
-            }
+            val hasCompletedOnboarding = onboardingPreferenceDataStore.hasCompletedOnboarding.first()
+            val resolvedDestination = resolveAuthenticatedDestination()
 
-            val refreshToken = tokenDataStore.refreshToken.first()
-            if (!refreshToken.isNullOrEmpty()) {
-                val refreshSuccess = tryRefreshToken(refreshToken, maxRetries = 2)
-                if (refreshSuccess) {
-                    val refreshedAccessToken = tokenDataStore.accessToken.first()
-                    if (!refreshedAccessToken.isNullOrEmpty()) {
-                        validateSessionAndNavigate(refreshedAccessToken)
-                        return@launch
+            val navigationEvent = when (resolvedDestination) {
+                ResolvedDestination.Auth -> {
+                    if (hasCompletedOnboarding) {
+                        SplashNavigationEvent.NavigateToAuth
+                    } else {
+                        SplashNavigationEvent.NavigateToOnboarding(
+                            nextRoute = ScreenRoutes.Auth.route,
+                            mode = OnboardingMode.INTRO
+                        )
                     }
+                }
+
+                is ResolvedDestination.Main -> when {
+                    !hasCompletedOnboarding && resolvedDestination.requiresProfileOnboarding -> {
+                        SplashNavigationEvent.NavigateToOnboarding(
+                            nextRoute = ScreenRoutes.MainGraph.route,
+                            mode = OnboardingMode.INTRO_AND_PROFILE
+                        )
+                    }
+
+                    !hasCompletedOnboarding -> {
+                        SplashNavigationEvent.NavigateToOnboarding(
+                            nextRoute = ScreenRoutes.MainGraph.route,
+                            mode = OnboardingMode.INTRO
+                        )
+                    }
+
+                    resolvedDestination.requiresProfileOnboarding -> {
+                        SplashNavigationEvent.NavigateToOnboarding(
+                            nextRoute = ScreenRoutes.MainGraph.route,
+                            mode = OnboardingMode.PROFILE
+                        )
+                    }
+
+                    else -> SplashNavigationEvent.NavigateToMain
                 }
             }
 
-            tokenDataStore.clearTokens()
-            _navigationEvent.emit(SplashNavigationEvent.NavigateToAuth)
+            _navigationEvent.emit(navigationEvent)
         }
     }
 
-    private suspend fun validateSessionAndNavigate(accessToken: String) {
-        when (validateServerSession(accessToken)) {
-            ServerSessionValidation.Valid,
-            ServerSessionValidation.UnknownFailure -> {
-                _navigationEvent.emit(SplashNavigationEvent.NavigateToMain)
+    private suspend fun resolveAuthenticatedDestination(): ResolvedDestination {
+        val accessToken = tokenDataStore.accessToken.first()
+        if (!accessToken.isNullOrEmpty() && !JwtTokenParser.isExpired(accessToken)) {
+            return resolveServerValidatedDestination(accessToken)
+        }
+
+        val refreshToken = tokenDataStore.refreshToken.first()
+        if (!refreshToken.isNullOrEmpty()) {
+            val refreshSuccess = tryRefreshToken(refreshToken, maxRetries = 2)
+            if (refreshSuccess) {
+                val refreshedAccessToken = tokenDataStore.accessToken.first()
+                if (!refreshedAccessToken.isNullOrEmpty()) {
+                    return resolveServerValidatedDestination(refreshedAccessToken)
+                }
             }
+        }
+
+        tokenDataStore.clearTokens()
+        return ResolvedDestination.Auth
+    }
+
+    private suspend fun resolveServerValidatedDestination(accessToken: String): ResolvedDestination {
+        return when (val validation = validateServerSession(accessToken)) {
+            is ServerSessionValidation.Valid -> ResolvedDestination.Main(
+                requiresProfileOnboarding = validationUserRequiresProfileOnboarding(
+                    user = validation.user
+                )
+            )
+            ServerSessionValidation.UnknownFailure -> ResolvedDestination.Main(
+                requiresProfileOnboarding = false
+            )
 
             ServerSessionValidation.InvalidSession -> {
                 tokenDataStore.clearTokens()
-                _navigationEvent.emit(SplashNavigationEvent.NavigateToAuth)
+                ResolvedDestination.Auth
             }
         }
     }
@@ -88,7 +140,7 @@ class SplashViewModel @Inject constructor(
                 authorization = AUTHORIZATION_PREFIX + accessToken
             )
             if (response.success && response.data != null) {
-                ServerSessionValidation.Valid
+                ServerSessionValidation.Valid(response.data)
             } else {
                 ServerSessionValidation.UnknownFailure
             }
@@ -101,10 +153,6 @@ class SplashViewModel @Inject constructor(
         }
     }
 
-    /**
-     * refreshToken으로 토큰 재발급을 시도합니다. 최대 [maxRetries]번 재시도합니다.
-     * @return 성공 시 true, 모두 실패 시 false
-     */
     private suspend fun tryRefreshToken(refreshToken: String, maxRetries: Int): Boolean {
         repeat(maxRetries) { attempt ->
             val result = authRepository.refreshToken(refreshToken)
@@ -145,13 +193,32 @@ internal fun Throwable.findHttpException(): HttpException? {
     return null
 }
 
-private enum class ServerSessionValidation {
-    Valid,
-    InvalidSession,
-    UnknownFailure
+private sealed interface ServerSessionValidation {
+    data class Valid(val user: UserResponseDto) : ServerSessionValidation
+    data object InvalidSession : ServerSessionValidation
+    data object UnknownFailure : ServerSessionValidation
+}
+
+private sealed interface ResolvedDestination {
+    data object Auth : ResolvedDestination
+    data class Main(val requiresProfileOnboarding: Boolean) : ResolvedDestination
+}
+
+private fun validationUserRequiresProfileOnboarding(user: UserResponseDto): Boolean {
+    return user.sex.isNullOrBlank() ||
+        user.heightCm == null ||
+        user.heightCm <= 0f ||
+        user.weightKg == null ||
+        user.weightKg <= 0f ||
+        user.wingspanCm == null ||
+        user.wingspanCm <= 0f
 }
 
 sealed class SplashNavigationEvent {
-    object NavigateToAuth : SplashNavigationEvent()
-    object NavigateToMain : SplashNavigationEvent()
+    data object NavigateToAuth : SplashNavigationEvent()
+    data object NavigateToMain : SplashNavigationEvent()
+    data class NavigateToOnboarding(
+        val nextRoute: String,
+        val mode: OnboardingMode
+    ) : SplashNavigationEvent()
 }

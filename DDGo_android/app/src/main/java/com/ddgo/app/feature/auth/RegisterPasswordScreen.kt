@@ -1,24 +1,10 @@
 package com.ddgo.app.feature.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -28,9 +14,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.atom.DdgoFieldState
+import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
+import com.ddgo.app.core.ui.atom.DdgoTextField
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
@@ -38,25 +29,21 @@ import com.ddgo.app.core.ui.theme.PretendardFamily
 @Composable
 fun RegisterPasswordScreen(
     viewModel: AuthViewModel,
-    onRegComplete: () -> Unit,
+    onRegComplete: (AuthSuccessDestination) -> Unit,
     onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val passwordFeedback = viewModel.registerPasswordFeedback
-
-    LaunchedEffect(Unit) {
-        viewModel.clearErrorState()
-        viewModel.refreshRegisterPasswordFeedback()
-    }
+    val errorMessage = viewModel.errorMessage
 
     LaunchedEffect(uiState) {
         when (uiState) {
             is AuthUiState.Success -> {
+                val destination = (uiState as AuthUiState.Success).destination
                 viewModel.resetUiState()
-                onRegComplete()
+                onRegComplete(destination)
             }
 
-            else -> Unit
+            else -> {}
         }
     }
 
@@ -72,16 +59,13 @@ fun RegisterPasswordScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "뒤로가기"
-                )
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "비밀번호를 설정해 주세요",
+                text = "\uBE44\uBC00\uBC88\uD638\uB97C \uC815\uD655\uD558\uAC8C \uC785\uB825\uD574\uC8FC\uC138\uC694",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 24.sp,
@@ -90,21 +74,10 @@ fun RegisterPasswordScreen(
                 )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "입력하는 동안 바로 조건을 확인해드릴게요.",
-                style = TextStyle(
-                    fontFamily = PretendardFamily,
-                    fontSize = 14.sp,
-                    color = Color(0xFF64788D)
-                )
-            )
-
-            Spacer(modifier = Modifier.height(44.dp))
-
-            Text(
-                text = "비밀번호",
+                text = "\uBE44\uBC00\uBC88\uD638",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 16.sp,
@@ -115,67 +88,41 @@ fun RegisterPasswordScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            TextField(
+            DdgoTextField(
                 value = viewModel.password,
-                onValueChange = viewModel::updateRegisterPassword,
-                placeholder = {
-                    Text("비밀번호", color = Color(0xFF8391A1))
-                },
+                onValueChange = viewModel::updatePassword,
+                placeholder = "\uBE44\uBC00\uBC88\uD638",
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
-                isError = passwordFeedback?.tone == AuthFieldFeedbackTone.Error,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color(0xFF1DA1F2),
-                    unfocusedIndicatorColor = Color(0xFF1DA1F2),
-                    errorIndicatorColor = Color(0xFFD92D20)
-                )
+                state = if (errorMessage != null) DdgoFieldState.Error else DdgoFieldState.Default,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
             )
 
-            passwordFeedback?.let { feedback ->
-                Spacer(modifier = Modifier.height(8.dp))
-                AuthInlineFeedbackMessage(feedback = feedback)
-            }
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.height(10.dp))
+            errorMessage?.let { message ->
+                AuthInlineErrorMessage(message = message)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             Text(
                 text = AuthStrings.RegisterPasswordRule,
                 style = TextStyle(
-                    color = Color(0xFF64788D),
+                    color = Color(0xFFFF3B30),
                     fontSize = 12.sp,
-                    lineHeight = 18.sp,
                     fontFamily = PretendardFamily
                 )
             )
         }
 
-        Button(
-            onClick = viewModel::register,
+        DdgoPrimaryButton(
+            text = "\uB2E4\uC74C",
+            onClick = { viewModel.register() },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00A3FF)),
-            enabled = uiState != AuthUiState.Loading && viewModel.canSubmitRegistration()
-        ) {
-            if (uiState == AuthUiState.Loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = Color.White,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Text(
-                    text = AuthStrings.StartNowAction,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = PretendardFamily
-                )
-            }
-        }
+                .fillMaxWidth(),
+            enabled = uiState != AuthUiState.Loading && viewModel.password.isNotBlank(),
+            isLoading = uiState == AuthUiState.Loading
+        )
     }
 }

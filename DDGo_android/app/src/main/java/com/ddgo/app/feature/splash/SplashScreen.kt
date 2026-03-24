@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.R
 import com.ddgo.app.core.ui.theme.PretendardFamily
+import com.ddgo.app.feature.onboarding.OnboardingMode
 import kotlin.math.sqrt
 
 private const val SplashIntroDurationMs = 1830
@@ -66,6 +67,7 @@ private val SplashWordmarkBlack = Color(0xFF111319)
 fun SplashScreen(
     onNavigateToAuth: () -> Unit,
     onNavigateToMain: () -> Unit,
+    onNavigateToOnboarding: (String, OnboardingMode) -> Unit,
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     val introProgress = remember { Animatable(0f) }
@@ -101,15 +103,18 @@ fun SplashScreen(
     }
 
     LaunchedEffect(animationFinished, pendingNavigation, hasNavigated) {
-        if (!animationFinished || pendingNavigation == null || hasNavigated) {
+        val destination = pendingNavigation
+        if (!animationFinished || destination == null || hasNavigated) {
             return@LaunchedEffect
         }
 
         hasNavigated = true
-        when (pendingNavigation) {
+        when (destination) {
             is SplashNavigationEvent.NavigateToAuth -> onNavigateToAuth()
             is SplashNavigationEvent.NavigateToMain -> onNavigateToMain()
-            null -> Unit
+            is SplashNavigationEvent.NavigateToOnboarding -> {
+                onNavigateToOnboarding(destination.nextRoute, destination.mode)
+            }
         }
     }
 

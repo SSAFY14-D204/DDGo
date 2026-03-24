@@ -1,7 +1,20 @@
 package com.ddgo.app.navigation
 
+import android.net.Uri
+
 sealed class ScreenRoutes(val route: String) {
     object Splash : ScreenRoutes("splash")
+
+    object Onboarding : ScreenRoutes("onboarding") {
+        const val ARG_NEXT_ROUTE = "nextRoute"
+        const val ARG_MODE = "mode"
+        const val ROUTE_WITH_ARG =
+            "onboarding?$ARG_NEXT_ROUTE={$ARG_NEXT_ROUTE}&$ARG_MODE={$ARG_MODE}"
+
+        fun createRoute(nextRoute: String, mode: String): String {
+            return "$route?$ARG_NEXT_ROUTE=${Uri.encode(nextRoute)}&$ARG_MODE=${Uri.encode(mode)}"
+        }
+    }
 
     object Auth : ScreenRoutes("auth_graph") {
         const val WELCOME = "welcome"

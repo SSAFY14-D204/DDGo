@@ -1,22 +1,10 @@
 package com.ddgo.app.feature.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -24,23 +12,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.atom.DdgoFieldState
+import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
+import com.ddgo.app.core.ui.atom.DdgoTextField
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
-fun RegisterEmailScreen(
-    viewModel: AuthViewModel,
-    onNext: () -> Unit,
-    onBack: () -> Unit = {}
-) {
-    val usernameFeedback = viewModel.registerUsernameFeedback
+fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: () -> Unit = {}) {
+    val errorMessage = viewModel.errorMessage
 
     LaunchedEffect(Unit) {
         viewModel.clearErrorState()
-        viewModel.refreshRegisterUsernameFeedback()
     }
 
     SafeAreaScreen(
@@ -55,16 +43,13 @@ fun RegisterEmailScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "뒤로가기"
-                )
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "쉽게 가입하고\n간편하게 로그인하세요.",
+                text = "\uC27D\uAC8C \uAC00\uC785\uD558\uACE0\n\uAC04\uD3B8\uD558\uAC8C \uB85C\uADF8\uC778\uD558\uC138\uC694.",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 24.sp,
@@ -76,7 +61,7 @@ fun RegisterEmailScreen(
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "이메일",
+                text = "\uC774\uBA54\uC77C",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 16.sp,
@@ -87,50 +72,31 @@ fun RegisterEmailScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            TextField(
+            DdgoTextField(
                 value = viewModel.username,
-                onValueChange = viewModel::updateRegisterUsername,
-                placeholder = {
-                    Text("이메일", color = Color(0xFF8391A1))
-                },
+                onValueChange = viewModel::updateUsername,
+                placeholder = "\uC774\uBA54\uC77C",
                 modifier = Modifier.fillMaxWidth(),
-                isError = usernameFeedback?.tone == AuthFieldFeedbackTone.Error,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color(0xFF1DA1F2),
-                    unfocusedIndicatorColor = Color(0xFF1DA1F2),
-                    errorIndicatorColor = Color(0xFFD92D20)
-                )
+                state = if (errorMessage != null) DdgoFieldState.Error else DdgoFieldState.Default,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
             )
 
-            usernameFeedback?.let { feedback ->
+            errorMessage?.let { message ->
                 Spacer(modifier = Modifier.height(8.dp))
-                AuthInlineFeedbackMessage(feedback = feedback)
+                AuthInlineErrorMessage(message = message)
             }
         }
 
-        Button(
+        DdgoPrimaryButton(
+            text = "\uB2E4\uC74C",
             onClick = {
-                if (viewModel.validateRegisterUsernameStep() == null) {
+                if (viewModel.validateUsernameStep() == null) {
                     onNext()
                 }
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(12.dp),
-            enabled = viewModel.canProceedWithRegisterUsername(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00A3FF))
-        ) {
-            Text(
-                text = "다음",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = PretendardFamily
-            )
-        }
+        )
     }
 }

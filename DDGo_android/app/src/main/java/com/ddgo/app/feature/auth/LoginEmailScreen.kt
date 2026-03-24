@@ -10,15 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,46 +22,51 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.atom.DdgoFieldState
+import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
+import com.ddgo.app.core.ui.atom.DdgoTextButton
+import com.ddgo.app.core.ui.atom.DdgoTextButtonTone
+import com.ddgo.app.core.ui.atom.DdgoTextField
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 import kotlinx.coroutines.launch
 
-private const val TAGLINE_TEXT = "추락의 데이터를 바꾸는"
-private const val EMAIL_LABEL = "이메일"
-private const val NEXT_LABEL = "다음"
-private const val KAKAO_LOGIN_LABEL = "카카오로 3초만에 로그인"
-private const val GOOGLE_LOGIN_LABEL = "Google로 로그인"
-private const val REGISTER_LABEL = "회원가입"
+private const val TAGLINE_TEXT = "\uCD94\uB77D\uC758 \uB370\uC774\uD130\uB97C \uBC14\uAFB8\uB294"
+private const val EMAIL_LABEL = "\uC774\uBA54\uC77C"
+private const val NEXT_LABEL = "\uB2E4\uC74C"
+private const val KAKAO_LOGIN_LABEL = "\uCE74\uCE74\uC624\uB85C 3\uCD08\uB9CC\uC5D0 \uB85C\uADF8\uC778"
+private const val GOOGLE_LOGIN_LABEL = "Google\uB85C \uB85C\uADF8\uC778"
+private const val REGISTER_LABEL = "\uD68C\uC6D0\uAC00\uC785"
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LoginEmailScreen(
     viewModel: AuthViewModel,
     onNext: () -> Unit,
-    onLoginComplete: () -> Unit,
+    onLoginComplete: (AuthSuccessDestination) -> Unit,
     onRegisterClick: () -> Unit = {}
 ) {
     val isImeVisible = WindowInsets.isImeVisible
     val uiState by viewModel.uiState.collectAsState()
-    val usernameFeedback = viewModel.loginUsernameFeedback
-    val isCheckingLoginUsername = viewModel.isCheckingLoginUsername
-    val globalError = viewModel.errorMessage
+    val errorMessage = viewModel.errorMessage
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.clearErrorState()
-        viewModel.refreshLoginUsernameFeedback()
     }
 
     LaunchedEffect(uiState) {
         when (uiState) {
             is AuthUiState.Success -> {
+                val destination = (uiState as AuthUiState.Success).destination
                 viewModel.resetUiState()
-                onLoginComplete()
+                onLoginComplete(destination)
             }
 
             else -> Unit
@@ -117,26 +114,18 @@ fun LoginEmailScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            TextField(
+            DdgoTextField(
                 value = viewModel.username,
-                onValueChange = viewModel::updateLoginUsername,
-                placeholder = {
-                    Text(EMAIL_LABEL, color = Color(0xFF8391A1))
-                },
+                onValueChange = viewModel::updateUsername,
+                placeholder = EMAIL_LABEL,
                 modifier = Modifier.fillMaxWidth(),
-                isError = usernameFeedback?.tone == AuthFieldFeedbackTone.Error,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color(0xFF1DA1F2),
-                    unfocusedIndicatorColor = Color(0xFF1DA1F2),
-                    errorIndicatorColor = Color(0xFFD92D20)
-                )
+                state = if (errorMessage != null) DdgoFieldState.Error else DdgoFieldState.Default,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
             )
 
-            usernameFeedback?.let { feedback ->
+            errorMessage?.let { message ->
                 Spacer(modifier = Modifier.height(8.dp))
-                AuthInlineFeedbackMessage(feedback = feedback)
+                AuthInlineErrorMessage(message = message)
             }
         }
 
@@ -147,40 +136,19 @@ fun LoginEmailScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            globalError?.let { message ->
-                AuthInlineErrorMessage(message = message)
-            }
-
             if (isImeVisible) {
-                Button(
+                DdgoPrimaryButton(
+                    text = NEXT_LABEL,
                     onClick = {
-                        viewModel.submitLoginUsername(onVerified = onNext)
+                        if (viewModel.validateUsernameStep() == null) {
+                            onNext()
+                        }
                     },
-                    enabled = viewModel.canProceedWithLoginUsername() && !isCheckingLoginUsername,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DA1F2))
-                ) {
-                    if (isCheckingLoginUsername) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            text = NEXT_LABEL,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = PretendardFamily,
-                            fontSize = 16.sp
-                        )
-                    }
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
-                Button(
+                AuthActionButton(
+                    text = KAKAO_LOGIN_LABEL,
                     onClick = {
                         startKakaoLogin(
                             context = context,
@@ -189,29 +157,13 @@ fun LoginEmailScreen(
                         )
                     },
                     enabled = uiState !is AuthUiState.Loading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFE812))
-                ) {
-                    if (uiState is AuthUiState.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.Black,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            text = KAKAO_LOGIN_LABEL,
-                            color = Color.Black,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = PretendardFamily
-                        )
-                    }
-                }
+                    isLoading = uiState is AuthUiState.Loading,
+                    containerColor = Color(0xFFFFE812),
+                    contentColor = Color.Black
+                )
 
-                Button(
+                AuthActionButton(
+                    text = GOOGLE_LOGIN_LABEL,
                     onClick = {
                         coroutineScope.launch {
                             startGoogleLogin(context)
@@ -225,42 +177,22 @@ fun LoginEmailScreen(
                                     viewModel.reportExternalLoginError(
                                         throwable.message ?: AuthStrings.GoogleLoginFailed
                                     )
-                                }
+                            }
                         }
                     },
                     enabled = uiState !is AuthUiState.Loading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF121212))
-                ) {
-                    if (uiState is AuthUiState.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            text = GOOGLE_LOGIN_LABEL,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = PretendardFamily
-                        )
-                    }
-                }
+                    isLoading = uiState is AuthUiState.Loading,
+                    containerColor = Color(0xFF121212),
+                    contentColor = Color.White
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                TextButton(onClick = onRegisterClick) {
-                    Text(
-                        text = REGISTER_LABEL,
-                        color = Color(0xFF1DA1F2),
-                        fontFamily = PretendardFamily,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                DdgoTextButton(
+                    text = REGISTER_LABEL,
+                    onClick = onRegisterClick,
+                    tone = DdgoTextButtonTone.Primary
+                )
             }
         }
     }
