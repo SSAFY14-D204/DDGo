@@ -1,23 +1,38 @@
 package com.ddgo.wear
 
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.ddgo.wear.ui.dashboard.WatchDashboardDevModeScreen
+import com.ddgo.wear.ui.dashboard.WatchDashboardDevPreset
 import com.ddgo.wear.data.ExerciseRuntimeStore
 import com.ddgo.wear.data.RecordingStateStore
 import com.ddgo.wear.data.RecordingStateSyncProcessor
 import com.ddgo.wear.runtime.SessionRecoveryCoordinator
+import com.ddgo.wear.runtime.WatchHaptics
 import com.ddgo.wear.runtime.WearPermissionHelper
 import com.ddgo.wear.ui.dashboard.ExercisePermissionUiState
 import com.ddgo.wear.ui.dashboard.WatchDashboardActionKind
 import com.ddgo.wear.ui.dashboard.WatchDashboardScreen
+import com.ddgo.wear.ui.dashboard.WatchDashboardVisualState
+import com.ddgo.wear.ui.dashboard.buildWatchDashboardDevUiState
 import com.ddgo.wear.ui.dashboard.buildWatchDashboardUiState
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.MessageClient
@@ -25,6 +40,9 @@ import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+private const val DEV_MODE_TAP_WINDOW_MILLIS = 1200L
+private const val DEV_MODE_TAP_COUNT = 3
 
 class MainActivity : ComponentActivity() {
     private lateinit var recordingStateStore: RecordingStateStore
@@ -68,6 +86,7 @@ class MainActivity : ComponentActivity() {
                 recordingStateStore = recordingStateStore,
                 exerciseRuntimeStore = exerciseRuntimeStore,
                 permissionStateFlow = permissionUiState.asStateFlow(),
+                debugEnabled = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
                 onRequestPermissions = ::requestExercisePermissions,
                 onOpenSettings = ::openAppSettings,
                 onRetryRuntime = ::retryRuntime
@@ -150,6 +169,7 @@ private fun WearApp(
     recordingStateStore: RecordingStateStore,
     exerciseRuntimeStore: ExerciseRuntimeStore,
     permissionStateFlow: StateFlow<ExercisePermissionUiState>,
+    debugEnabled: Boolean,
     onRequestPermissions: () -> Unit,
     onOpenSettings: () -> Unit,
     onRetryRuntime: () -> Unit
@@ -157,19 +177,92 @@ private fun WearApp(
     val syncSnapshot by recordingStateStore.snapshot.collectAsState()
     val runtimeSnapshot by exerciseRuntimeStore.snapshot.collectAsState()
     val permissionState by permissionStateFlow.collectAsState()
-
-    WatchDashboardScreen(
-        uiState = buildWatchDashboardUiState(
+    val liveUiState = remember(syncSnapshot, runtimeSnapshot, permissionState) {
+        buildWatchDashboardUiState(
             syncSnapshot = syncSnapshot,
             runtimeSnapshot = runtimeSnapshot,
             permissionState = permissionState
-        ),
-        onAction = { action ->
-            when (action) {
-                WatchDashboardActionKind.REQUEST_PERMISSION -> onRequestPermissions()
-                WatchDashboardActionKind.OPEN_SETTINGS -> onOpenSettings()
-                WatchDashboardActionKind.RETRY_SESSION -> onRetryRuntime()
-            }
+        )
+    }
+    var devMenuVisible by rememberSaveable { mutableStateOf(false) }
+    var selectedDevPresetName by rememberSaveable { mutableStateOf(WatchDashboardDevPreset.LIVE.name) }
+    var tapCount by remember { mutableIntStateOf(0) }
+    var lastTapAt by remember { mutableLongStateOf(0L) }
+    val appContext = LocalContext.current.applicationContext
+    val haptics = remember(appContext) {
+        WatchHaptics(appContext)
+    }
+
+    val selectedDevPreset = WatchDashboardDevPreset.valueOf(selectedDevPresetName)
+    val displayedUiState = if (debugEnabled && selectedDevPreset != WatchDashboardDevPreset.LIVE) {
+        buildWatchDashboardDevUiState(selectedDevPreset)
+    } else {
+        liveUiState
+    }
+
+    LaunchedEffect(selectedDevPreset, displayedUiState.visualState, debugEnabled) {
+        if (
+            debugEnabled &&
+            selectedDevPreset != WatchDashboardDevPreset.LIVE &&
+            displayedUiState.visualState == WatchDashboardVisualState.ALERTING
+        ) {
+            haptics.triggerAlert()
         }
-    )
+    }
+
+    fun openDevMenu() {
+        devMenuVisible = true
+        tapCount = 0
+        lastTapAt = 0L
+    }
+
+    fun handleHeaderTap() {
+        if (!debugEnabled) return
+        val now = SystemClock.elapsedRealtime()
+        tapCount = if (now - lastTapAt <= DEV_MODE_TAP_WINDOW_MILLIS) {
+            tapCount + 1
+        } else {
+            1
+        }
+        lastTapAt = now
+        if (tapCount >= DEV_MODE_TAP_COUNT) {
+            openDevMenu()
+        }
+    }
+
+    if (debugEnabled && devMenuVisible) {
+        WatchDashboardDevModeScreen(
+            selectedPreset = selectedDevPreset,
+            onSelectPreset = { preset ->
+                selectedDevPresetName = preset.name
+                devMenuVisible = false
+            },
+            onReturnToLive = {
+                selectedDevPresetName = WatchDashboardDevPreset.LIVE.name
+                devMenuVisible = false
+            },
+            onClose = {
+                devMenuVisible = false
+            }
+        )
+    } else {
+        WatchDashboardScreen(
+            uiState = displayedUiState,
+            onAction = { action ->
+                if (debugEnabled && selectedDevPreset != WatchDashboardDevPreset.LIVE) {
+                    return@WatchDashboardScreen
+                }
+                when (action) {
+                    WatchDashboardActionKind.REQUEST_PERMISSION -> onRequestPermissions()
+                    WatchDashboardActionKind.OPEN_SETTINGS -> onOpenSettings()
+                    WatchDashboardActionKind.RETRY_SESSION -> onRetryRuntime()
+                }
+            },
+            onHeaderTap = if (debugEnabled) {
+                ::handleHeaderTap
+            } else {
+                null
+            }
+        )
+    }
 }

@@ -1,13 +1,21 @@
 package com.ddgo.wear.ui.dashboard
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,18 +25,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -36,6 +52,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -46,7 +63,8 @@ private val DdigoBlue = Color(0xFF4396FB)
 private val DdigoGray = Color(0xFF505050)
 private val DdigoGradientStart = Color(0xFF8458FF)
 private val DdigoGradientEnd = Color(0xFF42A7FF)
-private val DdigoAlert = Color(0xFFFF6F8D)
+private val DdigoAlert = Color(0xFFFF5A6B)
+private val DdigoAlertEnd = Color(0xFFFF8A5B)
 private val DdigoIdleStart = Color(0xFF505769)
 private val DdigoIdleEnd = Color(0xFF6A7490)
 private val DdigoSensor = Color(0xFF8DA4C7)
@@ -65,7 +83,8 @@ private enum class WatchDashboardLayoutMode {
 @Composable
 internal fun WatchDashboardScreen(
     uiState: WatchDashboardUiState,
-    onAction: (WatchDashboardActionKind) -> Unit
+    onAction: (WatchDashboardActionKind) -> Unit,
+    onHeaderTap: (() -> Unit)? = null
 ) {
     val palette = paletteFor(uiState.visualState)
     val layoutMode = layoutModeFor(uiState.visualState)
@@ -88,11 +107,13 @@ internal fun WatchDashboardScreen(
             val heroSize = when (layoutMode) {
                 WatchDashboardLayoutMode.METRIC -> if (compact) 118.dp else 154.dp
                 WatchDashboardLayoutMode.PASSIVE -> if (compact) 106.dp else 138.dp
-                WatchDashboardLayoutMode.ACTION -> if (compact) 94.dp else 108.dp
+                WatchDashboardLayoutMode.ACTION -> if (compact) 100.dp else 118.dp
             }
-            val headerBody = if (layoutMode == WatchDashboardLayoutMode.ACTION) null else uiState.body
+            val headerBody = uiState.body
             val headerBodyMaxLines = when (uiState.visualState) {
                 WatchDashboardVisualState.ALERTING -> 2
+                WatchDashboardVisualState.PERMISSION_REQUIRED,
+                WatchDashboardVisualState.SENSOR_UNAVAILABLE -> if (compact) 3 else 2
                 WatchDashboardVisualState.RECOVERING -> 1
                 else -> 1
             }
@@ -105,11 +126,13 @@ internal fun WatchDashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)
             ) {
                 ContextHeader(
+                    visualState = uiState.visualState,
                     headline = uiState.headline,
                     body = headerBody,
                     bodyMaxLines = headerBodyMaxLines,
                     compact = compact,
-                    accent = palette.accent
+                    accent = palette.accent,
+                    onTap = onHeaderTap
                 )
 
                 when (layoutMode) {
@@ -134,7 +157,6 @@ internal fun WatchDashboardScreen(
                         uiState = uiState,
                         palette = palette,
                         compact = compact,
-                        heroSize = heroSize,
                         onAction = onAction
                     )
                 }
@@ -145,14 +167,26 @@ internal fun WatchDashboardScreen(
 
 @Composable
 private fun ContextHeader(
+    visualState: WatchDashboardVisualState,
     headline: String,
     body: String?,
     bodyMaxLines: Int,
     compact: Boolean,
-    accent: Color
+    accent: Color,
+    onTap: (() -> Unit)?
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth(if (compact) 0.9f else 0.84f)
+            .then(
+                if (onTap != null) {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(onTap = { onTap() })
+                    }
+                } else {
+                    Modifier
+                }
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -160,11 +194,10 @@ private fun ContextHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(if (compact) 7.dp else 8.dp)
-                    .clip(CircleShape)
-                    .background(accent)
+            HeaderMarker(
+                visualState = visualState,
+                accent = accent,
+                compact = compact
             )
             Text(
                 text = headline,
@@ -179,8 +212,13 @@ private fun ContextHeader(
         body?.let {
             Text(
                 text = it,
+                modifier = Modifier.fillMaxWidth(),
                 color = TextSecondary,
-                style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
+                style = if (compact) {
+                    MaterialTheme.typography.labelSmall.copy(lineHeight = 16.sp)
+                } else {
+                    MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
+                },
                 maxLines = bodyMaxLines,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
@@ -253,30 +291,21 @@ private fun ActionStateContent(
     uiState: WatchDashboardUiState,
     palette: WatchDashboardPalette,
     compact: Boolean,
-    heroSize: Dp,
     onAction: (WatchDashboardActionKind) -> Unit
 ) {
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(top = if (compact) 4.dp else 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.weight(0.12f))
-        ActionStatusCard(
-            title = uiState.title,
-            value = uiState.value,
+        ActionGuideCard(
+            uiState = uiState,
             palette = palette,
-            compact = compact
+            compact = compact,
+            modifier = Modifier.fillMaxWidth(if (compact) 0.9f else 0.86f)
         )
-        Spacer(modifier = Modifier.height(if (compact) 10.dp else 14.dp))
-        Text(
-            text = uiState.body,
-            color = TextSecondary,
-            textAlign = TextAlign.Center,
-            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.weight(0.18f))
+        Spacer(modifier = Modifier.weight(1f))
         ActionArea(
             primaryAction = uiState.primaryAction,
             secondaryAction = uiState.secondaryAction,
@@ -285,6 +314,7 @@ private fun ActionStateContent(
             accent = palette.accent,
             onAction = onAction
         )
+        Spacer(modifier = Modifier.height(if (compact) 6.dp else 8.dp))
     }
 }
 
@@ -296,13 +326,76 @@ private fun HeartHero(
     heroSize: Dp,
     mode: WatchDashboardLayoutMode
 ) {
+    val isMetricHero = mode == WatchDashboardLayoutMode.METRIC
+    val isAlertingHero =
+        mode == WatchDashboardLayoutMode.METRIC &&
+            uiState.visualState == WatchDashboardVisualState.ALERTING
+    val isMeasuringHero =
+        isMetricHero && uiState.visualState == WatchDashboardVisualState.MEASURING
+    val pulseTransition = rememberInfiniteTransition(label = "alertPulse")
+    val pulseScale = if (isMetricHero) {
+        pulseTransition.animateFloat(
+            initialValue = if (isAlertingHero) 0.9f else 0.96f,
+            targetValue = if (isAlertingHero) 1.08f else 1.03f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = if (isAlertingHero) 1700 else 2200,
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "alertPulseScale"
+        ).value
+    } else {
+        1f
+    }
+    val pulseAlpha = if (isMetricHero) {
+        pulseTransition.animateFloat(
+            initialValue = if (isAlertingHero) 0.16f else 0.08f,
+            targetValue = if (isAlertingHero) 0.34f else 0.18f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = if (isAlertingHero) 1700 else 2200,
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "alertPulseAlpha"
+        ).value
+    } else {
+        0f
+    }
+    val haloScale = if (isMetricHero) {
+        pulseTransition.animateFloat(
+            initialValue = if (isAlertingHero) 0.98f else 1f,
+            targetValue = if (isAlertingHero) 1.12f else 1.06f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = if (isAlertingHero) 2100 else 2600,
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "alertHaloScale"
+        ).value
+    } else {
+        1f
+    }
     val glowAlpha = when (mode) {
-        WatchDashboardLayoutMode.METRIC -> if (uiState.visualState == WatchDashboardVisualState.ALERTING) 0.22f else 0.16f
+        WatchDashboardLayoutMode.METRIC -> when {
+            isAlertingHero -> 0.1f
+            isMeasuringHero -> 0.12f
+            else -> 0.16f
+        }
         WatchDashboardLayoutMode.PASSIVE -> 0.07f
         WatchDashboardLayoutMode.ACTION -> 0.12f
     }
     val ringAlpha = when (mode) {
-        WatchDashboardLayoutMode.METRIC -> 0.95f
+        WatchDashboardLayoutMode.METRIC -> when {
+            isAlertingHero -> 0.88f
+            isMeasuringHero -> 0.92f
+            else -> 0.95f
+        }
         WatchDashboardLayoutMode.PASSIVE -> 0.28f
         WatchDashboardLayoutMode.ACTION -> 0.6f
     }
@@ -320,9 +413,9 @@ private fun HeartHero(
         }
 
         WatchDashboardLayoutMode.ACTION -> if (compact) {
-            TextStyle(fontSize = 36.sp, lineHeight = 34.sp)
+            TextStyle(fontSize = 46.sp, lineHeight = 44.sp)
         } else {
-            TextStyle(fontSize = 42.sp, lineHeight = 40.sp)
+            TextStyle(fontSize = 52.sp, lineHeight = 50.sp)
         }
     }
 
@@ -333,6 +426,38 @@ private fun HeartHero(
         Canvas(modifier = Modifier.fillMaxSize()) {
             val outerRadius = size.minDimension / 2f - 10.dp.toPx()
             val innerRadius = heroSize.toPx() / 2f
+            val ringInset = if (isAlertingHero) 5.dp.toPx() else 7.dp.toPx()
+            val ringStroke = if (mode == WatchDashboardLayoutMode.METRIC) {
+                if (isAlertingHero) 3.dp.toPx() else 4.dp.toPx()
+            } else {
+                2.dp.toPx()
+            }
+
+            if (isMetricHero) {
+                val leadingGlow = if (isAlertingHero) DdigoAlert else DdigoGradientStart
+                val trailingGlow = if (isAlertingHero) DdigoAlertEnd else palette.glow
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            leadingGlow.copy(alpha = pulseAlpha),
+                            trailingGlow.copy(alpha = pulseAlpha * 0.72f),
+                            Color.Transparent
+                        ),
+                        radius = innerRadius * 1.55f * pulseScale
+                    ),
+                    radius = innerRadius * 1.28f * pulseScale
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            trailingGlow.copy(alpha = pulseAlpha * if (isAlertingHero) 0.56f else 0.42f),
+                            Color.Transparent
+                        ),
+                        radius = innerRadius * 1.78f * haloScale
+                    ),
+                    radius = innerRadius * 1.42f * haloScale
+                )
+            }
 
             drawCircle(
                 brush = Brush.radialGradient(
@@ -347,8 +472,8 @@ private fun HeartHero(
             )
             drawCircle(
                 brush = palette.primaryBrush,
-                radius = innerRadius + 7.dp.toPx(),
-                style = Stroke(width = if (mode == WatchDashboardLayoutMode.METRIC) 4.dp.toPx() else 2.dp.toPx()),
+                radius = innerRadius + ringInset,
+                style = Stroke(width = ringStroke),
                 alpha = ringAlpha
             )
             drawCircle(
@@ -398,7 +523,7 @@ private fun StatusDock(
     if (metrics.isEmpty()) return
 
     val valueStyle = if (compact || subtle) {
-        MaterialTheme.typography.bodySmall
+        MaterialTheme.typography.labelMedium
     } else {
         MaterialTheme.typography.labelLarge
     }
@@ -434,6 +559,7 @@ private fun StatusDock(
                         text = metric.label,
                         color = TextSecondary,
                         style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
                         maxLines = 1
                     )
                     Text(
@@ -441,62 +567,12 @@ private fun StatusDock(
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
                         style = valueStyle,
-                        maxLines = 1
+                        textAlign = TextAlign.Center,
+                        maxLines = if (compact) 2 else 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ActionStatusCard(
-    title: String,
-    value: String,
-    palette: WatchDashboardPalette,
-    compact: Boolean
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(if (compact) 0.72f else 0.66f),
-        shape = RoundedCornerShape(32.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceRaised.copy(alpha = 0.94f)),
-        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.18f))
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = if (compact) 18.dp else 22.dp, vertical = if (compact) 16.dp else 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(palette.accent.copy(alpha = 0.14f))
-                    .border(
-                        width = 1.dp,
-                        color = palette.accent.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(999.dp)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = title,
-                    color = palette.accent,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Text(
-                text = value,
-                color = TextPrimary,
-                fontWeight = FontWeight.ExtraBold,
-                style = if (compact) {
-                    TextStyle(fontSize = 32.sp, lineHeight = 32.sp)
-                } else {
-                    TextStyle(fontSize = 38.sp, lineHeight = 38.sp)
-                },
-                maxLines = 1
-            )
         }
     }
 }
@@ -512,42 +588,27 @@ private fun ActionArea(
 ) {
     if (primaryAction == null && secondaryAction == null) return
 
-    if (primaryAction != null && secondaryAction != null) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            PrimaryActionButton(
-                modifier = Modifier.weight(1f),
-                label = primaryAction.label,
-                compact = compact,
-                accentBrush = accentBrush,
-                onClick = { onAction(primaryAction.kind) }
-            )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp)
+    ) {
+        secondaryAction?.let { action ->
             SecondaryActionButton(
-                modifier = Modifier.weight(1f),
-                label = secondaryAction.label,
-                compact = compact,
-                accent = accent,
-                onClick = { onAction(secondaryAction.kind) }
-            )
-        }
-    } else {
-        primaryAction?.let { action ->
-            PrimaryActionButton(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier,
                 label = action.label,
                 compact = compact,
-                accentBrush = accentBrush,
+                accent = accent,
                 onClick = { onAction(action.kind) }
             )
         }
-        secondaryAction?.let { action ->
-            SecondaryActionButton(
-                modifier = Modifier.fillMaxWidth(),
+        primaryAction?.let { action ->
+            PrimaryActionButton(
+                modifier = Modifier.fillMaxWidth(if (compact) 0.74f else 0.76f),
                 label = action.label,
+                icon = action.kind.icon(),
                 compact = compact,
-                accent = accent,
+                accentBrush = accentBrush,
                 onClick = { onAction(action.kind) }
             )
         }
@@ -555,34 +616,151 @@ private fun ActionArea(
 }
 
 @Composable
+private fun ActionGuideCard(
+    modifier: Modifier = Modifier,
+    uiState: WatchDashboardUiState,
+    palette: WatchDashboardPalette,
+    compact: Boolean
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(if (compact) 24.dp else 28.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = SurfaceSoft.copy(alpha = 0.72f)
+        ),
+        border = BorderStroke(
+            1.dp,
+            palette.accent.copy(alpha = 0.14f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = if (compact) 12.dp else 14.dp, vertical = if (compact) 12.dp else 14.dp),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)
+        ) {
+            uiState.actionHighlights.forEach { item ->
+                ActionGuideRow(
+                    label = item,
+                    accent = palette.accent,
+                    compact = compact
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActionGuideRow(
+    label: String,
+    accent: Color,
+    compact: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.CheckCircle,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(if (compact) 15.dp else 16.dp)
+        )
+        Text(
+            text = label,
+            color = TextPrimary,
+            style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun HeaderMarker(
+    visualState: WatchDashboardVisualState,
+    accent: Color,
+    compact: Boolean
+) {
+    val size = if (compact) 16.dp else 18.dp
+    when (visualState) {
+        WatchDashboardVisualState.PERMISSION_REQUIRED,
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> {
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = when (visualState) {
+                        WatchDashboardVisualState.PERMISSION_REQUIRED -> Icons.Filled.Lock
+                        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> Icons.Filled.Warning
+                        else -> Icons.Filled.Lock
+                    },
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(if (compact) 9.dp else 10.dp)
+                )
+            }
+        }
+
+        else -> Box(
+            modifier = Modifier
+                .size(if (compact) 7.dp else 8.dp)
+                .clip(CircleShape)
+                .background(accent)
+        )
+    }
+}
+
+@Composable
 private fun PrimaryActionButton(
     modifier: Modifier,
     label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     compact: Boolean,
     accentBrush: Brush,
     onClick: () -> Unit
 ) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(if (compact) 42.dp else 46.dp),
-        shape = RoundedCornerShape(999.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-        contentPadding = ButtonDefaults.ContentPadding
+    Box(
+        modifier = modifier
+            .height(if (compact) 50.dp else 52.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(accentBrush)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(999.dp))
-                .background(accentBrush),
-            contentAlignment = Alignment.Center
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = TextPrimary,
+                modifier = Modifier.size(if (compact) 18.dp else 20.dp)
+            )
             Text(
                 text = label,
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold,
-                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
+                style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+private fun WatchDashboardActionKind.icon(): androidx.compose.ui.graphics.vector.ImageVector {
+    return when (this) {
+        WatchDashboardActionKind.REQUEST_PERMISSION -> Icons.Filled.Lock
+        WatchDashboardActionKind.OPEN_SETTINGS -> Icons.Filled.Settings
+        WatchDashboardActionKind.RETRY_SESSION -> Icons.Filled.Refresh
     }
 }
 
@@ -594,21 +772,29 @@ private fun SecondaryActionButton(
     accent: Color,
     onClick: () -> Unit
 ) {
-    OutlinedButton(
+    TextButton(
         onClick = onClick,
-        modifier = modifier.height(if (compact) 42.dp else 46.dp),
-        shape = RoundedCornerShape(999.dp),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = SurfaceRaised.copy(alpha = 0.4f),
-            contentColor = TextPrimary
-        )
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
     ) {
-        Text(
-            text = label,
-            color = TextPrimary,
-            style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = null,
+                tint = accent.copy(alpha = 0.92f),
+                modifier = Modifier.size(if (compact) 14.dp else 16.dp)
+            )
+            Text(
+                text = label,
+                color = accent.copy(alpha = 0.92f),
+                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -635,9 +821,9 @@ private fun paletteFor(visualState: WatchDashboardVisualState): WatchDashboardPa
     val colors = when (visualState) {
         WatchDashboardVisualState.IDLE -> listOf(DdigoIdleStart, DdigoIdleEnd)
         WatchDashboardVisualState.RECOVERING -> listOf(DdigoBlue, DdigoGradientEnd)
-        WatchDashboardVisualState.ALERTING -> listOf(DdigoAlert, DdigoGradientEnd)
+        WatchDashboardVisualState.ALERTING -> listOf(DdigoAlert, DdigoAlertEnd)
         WatchDashboardVisualState.PERMISSION_REQUIRED -> listOf(DdigoGradientStart, DdigoGradientEnd)
-        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> listOf(DdigoSensor, DdigoBlue)
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> listOf(DdigoBlue, DdigoGradientEnd)
         WatchDashboardVisualState.MEASURING -> listOf(DdigoGradientStart, DdigoGradientEnd)
     }
 
@@ -669,6 +855,7 @@ private fun WatchDashboardIdlePreview() {
                 WatchDashboardMetricUi("측정", "대기"),
                 WatchDashboardMetricUi("연결", "정상")
             ),
+            actionHighlights = emptyList(),
             footer = null
         ),
         onAction = {}
@@ -697,6 +884,7 @@ private fun WatchDashboardMeasuringPreview() {
                 WatchDashboardMetricUi("경고", "안전"),
                 WatchDashboardMetricUi("연결", "정상")
             ),
+            actionHighlights = emptyList(),
             footer = null
         ),
         onAction = {}
@@ -719,11 +907,14 @@ private fun WatchDashboardPermissionPreview() {
             value = "권한",
             unit = null,
             headline = "권한 필요",
-            body = "심박과 활동 인식을 허용해주세요",
+            body = "심박 측정을 위해 권한을 허용해주세요",
             metrics = emptyList(),
+            actionHighlights = listOf(
+                "심박수 측정",
+                "활동 인식 · 백그라운드"
+            ),
             footer = null,
-            primaryAction = WatchDashboardActionUi("허용하기", WatchDashboardActionKind.REQUEST_PERMISSION),
-            secondaryAction = WatchDashboardActionUi("설정", WatchDashboardActionKind.OPEN_SETTINGS)
+            primaryAction = WatchDashboardActionUi("권한 허용", WatchDashboardActionKind.REQUEST_PERMISSION)
         ),
         onAction = {}
     )
@@ -745,8 +936,12 @@ private fun WatchDashboardSensorPreview() {
             value = "센서",
             unit = null,
             headline = "센서 오류",
-            body = "착용 상태를 확인한 뒤 다시 시도하세요",
+            body = "심박 신호를 다시 읽을 준비가 필요해요",
             metrics = emptyList(),
+            actionHighlights = listOf(
+                "손목에 밀착해서 착용",
+                "움직임을 줄이고 잠시 대기"
+            ),
             footer = null,
             primaryAction = WatchDashboardActionUi("다시 시도", WatchDashboardActionKind.RETRY_SESSION)
         ),

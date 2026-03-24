@@ -1,10 +1,12 @@
 package com.ddgo.wear.data
 
+import android.content.Intent
 import android.content.Context
 import android.util.Log
 import com.ddgo.shared.contract.DlKeys
 import com.ddgo.shared.contract.DlPaths
 import com.ddgo.shared.model.RecordingState
+import com.ddgo.wear.MainActivity
 import com.ddgo.wear.runtime.SessionRecoveryCoordinator
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
@@ -75,6 +77,11 @@ object RecordingStateSyncProcessor {
         path: String,
         payload: ByteArray
     ) {
+        if (path == DlPaths.MSG_OPEN_APP) {
+            openWatchApp(context)
+            return
+        }
+
         if (path != DlPaths.MSG_RECORDING_START && path != DlPaths.MSG_RECORDING_STOP) {
             return
         }
@@ -93,6 +100,23 @@ object RecordingStateSyncProcessor {
         )
         if (applied) {
             SessionRecoveryCoordinator.syncDesiredState(appContext)
+        }
+    }
+
+    private fun openWatchApp(context: Context) {
+        val appContext = context.applicationContext
+        val intent = Intent(appContext, MainActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
+        }
+        runCatching {
+            appContext.startActivity(intent)
+            Log.d(TAG, "Watch app open request handled.")
+        }.onFailure { throwable ->
+            Log.w(TAG, "Failed to open watch app from message.", throwable)
         }
     }
 
