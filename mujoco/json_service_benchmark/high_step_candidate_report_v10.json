@@ -1,0 +1,442 @@
+{
+  "inputs": {
+    "report_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\json_service_benchmark_report_audit_final_10fps_corrected_v10_qpos.json",
+    "pose_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\audit_final_10fps\\pose3d_sequence.json",
+    "user_body_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\audit_final_10fps\\user_body.json",
+    "personalized_xml": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\cache\\corrected\\personalized_cf46ed3183bc73ed.xml"
+  },
+  "thresholds": {
+    "min_high_step_score": 0.7,
+    "min_knee_flex_gap_deg": 30.0
+  },
+  "summary": {
+    "candidate_frame_count": 2,
+    "candidate_segment_count": 2,
+    "worst_frame": {
+      "frame_index": 148,
+      "timestamp_ms": 14800,
+      "side": "right",
+      "metrics": {
+        "side": "right",
+        "state": "STEP",
+        "active_hold_id": 2,
+        "contact_presence_confidence": "high",
+        "hold_identity_confidence": "medium",
+        "high_step_score": 0.8413341998299616,
+        "target_knee_flex_deg": 81.52967478207368,
+        "fitted_knee_flex_deg": 50.30300550290318,
+        "knee_flex_gap_deg": 31.2266692791705,
+        "hip_to_ankle_drop_m": 0.540572336119661,
+        "pelvis_to_foot_drop_m": 0.6261904485485132,
+        "knee_foot_yaw_deg": -41.142722192323255,
+        "shin_foot_yaw_deg": -41.142722192323255,
+        "thigh_shin_yaw_deg": 35.689276856276784,
+        "joints": {
+          "hip_x_right": {
+            "deg": -55.0,
+            "range_deg": [
+              -55.0,
+              45.0
+            ],
+            "near_limit": "low"
+          },
+          "hip_y_right": {
+            "deg": -65.74463008312934,
+            "range_deg": [
+              -170.0,
+              45.0
+            ],
+            "near_limit": null
+          },
+          "hip_z_right": {
+            "deg": 5.8544835917275435,
+            "range_deg": [
+              0.0,
+              40.0
+            ],
+            "near_limit": null
+          },
+          "knee_right": {
+            "deg": -50.30300550290318,
+            "range_deg": [
+              -170.0,
+              0.0
+            ],
+            "near_limit": null
+          },
+          "ankle_x_right": {
+            "deg": 34.91919222702905,
+            "range_deg": [
+              -35.0,
+              35.0
+            ],
+            "near_limit": "high"
+          },
+          "ankle_y_right": {
+            "deg": 79.94151748231539,
+            "range_deg": [
+              -75.0,
+              80.0
+            ],
+            "near_limit": "high"
+          }
+        },
+        "saturated_joints": [
+          "hip_x_right:low",
+          "ankle_x_right:high",
+          "ankle_y_right:high"
+        ]
+      },
+      "reason_tags": [
+        "hip_x(고관절 벌림/모음)가 상한 근처라 다리 벌림 보상이 큼",
+        "ankle_x(발목 기울기)가 상한 근처라 발목 옆기울기 보상이 큼",
+        "ankle_y(발목 앞뒤 회전)가 상한 근처라 발목 회전 보상이 큼",
+        "무릎 정면과 발 정면이 크게 어긋남"
+      ]
+    }
+  },
+  "segments": [
+    {
+      "side": "right",
+      "start_frame": 148,
+      "end_frame": 148,
+      "frame_count": 1,
+      "representative_frame": {
+        "frame_index": 148,
+        "timestamp_ms": 14800,
+        "side": "right",
+        "metrics": {
+          "side": "right",
+          "state": "STEP",
+          "active_hold_id": 2,
+          "contact_presence_confidence": "high",
+          "hold_identity_confidence": "medium",
+          "high_step_score": 0.8413341998299616,
+          "target_knee_flex_deg": 81.52967478207368,
+          "fitted_knee_flex_deg": 50.30300550290318,
+          "knee_flex_gap_deg": 31.2266692791705,
+          "hip_to_ankle_drop_m": 0.540572336119661,
+          "pelvis_to_foot_drop_m": 0.6261904485485132,
+          "knee_foot_yaw_deg": -41.142722192323255,
+          "shin_foot_yaw_deg": -41.142722192323255,
+          "thigh_shin_yaw_deg": 35.689276856276784,
+          "joints": {
+            "hip_x_right": {
+              "deg": -55.0,
+              "range_deg": [
+                -55.0,
+                45.0
+              ],
+              "near_limit": "low"
+            },
+            "hip_y_right": {
+              "deg": -65.74463008312934,
+              "range_deg": [
+                -170.0,
+                45.0
+              ],
+              "near_limit": null
+            },
+            "hip_z_right": {
+              "deg": 5.8544835917275435,
+              "range_deg": [
+                0.0,
+                40.0
+              ],
+              "near_limit": null
+            },
+            "knee_right": {
+              "deg": -50.30300550290318,
+              "range_deg": [
+                -170.0,
+                0.0
+              ],
+              "near_limit": null
+            },
+            "ankle_x_right": {
+              "deg": 34.91919222702905,
+              "range_deg": [
+                -35.0,
+                35.0
+              ],
+              "near_limit": "high"
+            },
+            "ankle_y_right": {
+              "deg": 79.94151748231539,
+              "range_deg": [
+                -75.0,
+                80.0
+              ],
+              "near_limit": "high"
+            }
+          },
+          "saturated_joints": [
+            "hip_x_right:low",
+            "ankle_x_right:high",
+            "ankle_y_right:high"
+          ]
+        },
+        "reason_tags": [
+          "hip_x(고관절 벌림/모음)가 상한 근처라 다리 벌림 보상이 큼",
+          "ankle_x(발목 기울기)가 상한 근처라 발목 옆기울기 보상이 큼",
+          "ankle_y(발목 앞뒤 회전)가 상한 근처라 발목 회전 보상이 큼",
+          "무릎 정면과 발 정면이 크게 어긋남"
+        ]
+      },
+      "viewer_command": "C:/Users/SSAFY/miniforge3/envs/mujoco_env/python.exe visualize_corrected_benchmark_live.py --start-frame 146 --max-frames 18 --pause-at-start"
+    },
+    {
+      "side": "right",
+      "start_frame": 107,
+      "end_frame": 107,
+      "frame_count": 1,
+      "representative_frame": {
+        "frame_index": 107,
+        "timestamp_ms": 10700,
+        "side": "right",
+        "metrics": {
+          "side": "right",
+          "state": "STEP",
+          "active_hold_id": 2,
+          "contact_presence_confidence": "high",
+          "hold_identity_confidence": "medium",
+          "high_step_score": 1.0,
+          "target_knee_flex_deg": 102.2277912869964,
+          "fitted_knee_flex_deg": 71.65804022922937,
+          "knee_flex_gap_deg": 30.569751057767036,
+          "hip_to_ankle_drop_m": 0.37493609803132577,
+          "pelvis_to_foot_drop_m": 0.32203217813582297,
+          "knee_foot_yaw_deg": -66.84084873356069,
+          "shin_foot_yaw_deg": -66.84084873356068,
+          "thigh_shin_yaw_deg": 62.059657039658845,
+          "joints": {
+            "hip_x_right": {
+              "deg": -55.0,
+              "range_deg": [
+                -55.0,
+                45.0
+              ],
+              "near_limit": "low"
+            },
+            "hip_y_right": {
+              "deg": -59.599066649653466,
+              "range_deg": [
+                -170.0,
+                45.0
+              ],
+              "near_limit": null
+            },
+            "hip_z_right": {
+              "deg": 0.0,
+              "range_deg": [
+                0.0,
+                40.0
+              ],
+              "near_limit": "low"
+            },
+            "knee_right": {
+              "deg": -71.65804022922937,
+              "range_deg": [
+                -170.0,
+                0.0
+              ],
+              "near_limit": null
+            },
+            "ankle_x_right": {
+              "deg": 15.74040093899831,
+              "range_deg": [
+                -35.0,
+                35.0
+              ],
+              "near_limit": null
+            },
+            "ankle_y_right": {
+              "deg": 80.0,
+              "range_deg": [
+                -75.0,
+                80.0
+              ],
+              "near_limit": "high"
+            }
+          },
+          "saturated_joints": [
+            "hip_x_right:low",
+            "hip_z_right:low",
+            "ankle_y_right:high"
+          ]
+        },
+        "reason_tags": [
+          "hip_x(고관절 벌림/모음)가 상한 근처라 다리 벌림 보상이 큼",
+          "ankle_y(발목 앞뒤 회전)가 상한 근처라 발목 회전 보상이 큼",
+          "무릎 정면과 발 정면이 크게 어긋남"
+        ]
+      },
+      "viewer_command": "C:/Users/SSAFY/miniforge3/envs/mujoco_env/python.exe visualize_corrected_benchmark_live.py --start-frame 105 --max-frames 18 --pause-at-start"
+    }
+  ],
+  "all_candidates": [
+    {
+      "frame_index": 107,
+      "timestamp_ms": 10700,
+      "side": "right",
+      "metrics": {
+        "side": "right",
+        "state": "STEP",
+        "active_hold_id": 2,
+        "contact_presence_confidence": "high",
+        "hold_identity_confidence": "medium",
+        "high_step_score": 1.0,
+        "target_knee_flex_deg": 102.2277912869964,
+        "fitted_knee_flex_deg": 71.65804022922937,
+        "knee_flex_gap_deg": 30.569751057767036,
+        "hip_to_ankle_drop_m": 0.37493609803132577,
+        "pelvis_to_foot_drop_m": 0.32203217813582297,
+        "knee_foot_yaw_deg": -66.84084873356069,
+        "shin_foot_yaw_deg": -66.84084873356068,
+        "thigh_shin_yaw_deg": 62.059657039658845,
+        "joints": {
+          "hip_x_right": {
+            "deg": -55.0,
+            "range_deg": [
+              -55.0,
+              45.0
+            ],
+            "near_limit": "low"
+          },
+          "hip_y_right": {
+            "deg": -59.599066649653466,
+            "range_deg": [
+              -170.0,
+              45.0
+            ],
+            "near_limit": null
+          },
+          "hip_z_right": {
+            "deg": 0.0,
+            "range_deg": [
+              0.0,
+              40.0
+            ],
+            "near_limit": "low"
+          },
+          "knee_right": {
+            "deg": -71.65804022922937,
+            "range_deg": [
+              -170.0,
+              0.0
+            ],
+            "near_limit": null
+          },
+          "ankle_x_right": {
+            "deg": 15.74040093899831,
+            "range_deg": [
+              -35.0,
+              35.0
+            ],
+            "near_limit": null
+          },
+          "ankle_y_right": {
+            "deg": 80.0,
+            "range_deg": [
+              -75.0,
+              80.0
+            ],
+            "near_limit": "high"
+          }
+        },
+        "saturated_joints": [
+          "hip_x_right:low",
+          "hip_z_right:low",
+          "ankle_y_right:high"
+        ]
+      },
+      "reason_tags": [
+        "hip_x(고관절 벌림/모음)가 상한 근처라 다리 벌림 보상이 큼",
+        "ankle_y(발목 앞뒤 회전)가 상한 근처라 발목 회전 보상이 큼",
+        "무릎 정면과 발 정면이 크게 어긋남"
+      ]
+    },
+    {
+      "frame_index": 148,
+      "timestamp_ms": 14800,
+      "side": "right",
+      "metrics": {
+        "side": "right",
+        "state": "STEP",
+        "active_hold_id": 2,
+        "contact_presence_confidence": "high",
+        "hold_identity_confidence": "medium",
+        "high_step_score": 0.8413341998299616,
+        "target_knee_flex_deg": 81.52967478207368,
+        "fitted_knee_flex_deg": 50.30300550290318,
+        "knee_flex_gap_deg": 31.2266692791705,
+        "hip_to_ankle_drop_m": 0.540572336119661,
+        "pelvis_to_foot_drop_m": 0.6261904485485132,
+        "knee_foot_yaw_deg": -41.142722192323255,
+        "shin_foot_yaw_deg": -41.142722192323255,
+        "thigh_shin_yaw_deg": 35.689276856276784,
+        "joints": {
+          "hip_x_right": {
+            "deg": -55.0,
+            "range_deg": [
+              -55.0,
+              45.0
+            ],
+            "near_limit": "low"
+          },
+          "hip_y_right": {
+            "deg": -65.74463008312934,
+            "range_deg": [
+              -170.0,
+              45.0
+            ],
+            "near_limit": null
+          },
+          "hip_z_right": {
+            "deg": 5.8544835917275435,
+            "range_deg": [
+              0.0,
+              40.0
+            ],
+            "near_limit": null
+          },
+          "knee_right": {
+            "deg": -50.30300550290318,
+            "range_deg": [
+              -170.0,
+              0.0
+            ],
+            "near_limit": null
+          },
+          "ankle_x_right": {
+            "deg": 34.91919222702905,
+            "range_deg": [
+              -35.0,
+              35.0
+            ],
+            "near_limit": "high"
+          },
+          "ankle_y_right": {
+            "deg": 79.94151748231539,
+            "range_deg": [
+              -75.0,
+              80.0
+            ],
+            "near_limit": "high"
+          }
+        },
+        "saturated_joints": [
+          "hip_x_right:low",
+          "ankle_x_right:high",
+          "ankle_y_right:high"
+        ]
+      },
+      "reason_tags": [
+        "hip_x(고관절 벌림/모음)가 상한 근처라 다리 벌림 보상이 큼",
+        "ankle_x(발목 기울기)가 상한 근처라 발목 옆기울기 보상이 큼",
+        "ankle_y(발목 앞뒤 회전)가 상한 근처라 발목 회전 보상이 큼",
+        "무릎 정면과 발 정면이 크게 어긋남"
+      ]
+    }
+  ]
+}

@@ -45,6 +45,7 @@ from physics_worker import (  # noqa: E402
     infer_forefoot_contact,
     infer_palm_contact,
     load_calibration_json,
+    map_landmarks_mp_to_mj,
     mp_to_mj,
     segment_lengths_local_from_calibration,
 )
@@ -304,7 +305,7 @@ def apply_pole_consistency(
 
 def build_pose_points(world_landmarks: list, calibration: dict[str, float] | None, prev_local: dict[str, np.ndarray] | None) -> dict[str, np.ndarray]:
     raw_mp = np.array([[float(p.x), float(p.y), float(p.z)] for p in world_landmarks], dtype=np.float64)
-    mapped = np.array([mp_to_mj(point) for point in raw_mp], dtype=np.float64)
+    mapped = map_landmarks_mp_to_mj(raw_mp)
 
     shoulder_width_local = float(np.linalg.norm(mapped[LEFT_SHOULDER] - mapped[RIGHT_SHOULDER]))
     segment_lengths_local = segment_lengths_local_from_calibration(calibration, shoulder_width_local)

@@ -336,6 +336,79 @@ def build_user_body_payload(
     }
 
 
+def build_user_body_payload_from_profile(
+    height_m: float,
+    weight_kg: float,
+    wingspan_m: float,
+) -> dict[str, Any]:
+    # Lightweight anthropometric estimate for service-like inputs without a T-pose image.
+    shoulder_width_m = 0.228 * float(height_m)
+    hip_width_m = 0.191 * float(height_m)
+    torso_length_m = 0.300 * float(height_m)
+    thigh_m = 0.245 * float(height_m)
+    shin_m = 0.246 * float(height_m)
+    hand_length_m = 0.108 * float(height_m)
+
+    half_arm_reach_m = max((float(wingspan_m) - shoulder_width_m) * 0.5, 0.34 * float(height_m))
+    arm_bone_reach_m = max(half_arm_reach_m - hand_length_m, 0.26 * float(height_m))
+    upper_arm_m = 0.53 * arm_bone_reach_m
+    forearm_m = 0.47 * arm_bone_reach_m
+
+    calibration_compat = {
+        "body_mass_kg": float(weight_kg),
+        "left_upper_arm_m": float(upper_arm_m),
+        "right_upper_arm_m": float(upper_arm_m),
+        "upper_arm_m": float(upper_arm_m),
+        "left_forearm_m": float(forearm_m),
+        "right_forearm_m": float(forearm_m),
+        "forearm_m": float(forearm_m),
+        "left_thigh_m": float(thigh_m),
+        "right_thigh_m": float(thigh_m),
+        "thigh_m": float(thigh_m),
+        "left_shin_m": float(shin_m),
+        "right_shin_m": float(shin_m),
+        "shin_m": float(shin_m),
+        "shoulder_width_m": float(shoulder_width_m),
+        "hip_width_m": float(hip_width_m),
+        "torso_length_m": float(torso_length_m),
+        "wingspan_m": float(wingspan_m),
+    }
+
+    return {
+        "schema_version": "1.1.0",
+        "source": {
+            "type": "anthropometric_profile_estimation",
+            "note": "height/weight/wingspan only; no T-pose image used",
+        },
+        "user_profile": {
+            "height_m": float(height_m),
+            "height_cm": float(height_m) * 100.0,
+            "weight_kg": float(weight_kg),
+            "wingspan_m": float(wingspan_m),
+            "wingspan_cm": float(wingspan_m) * 100.0,
+        },
+        "static_biometrics": {
+            "left_upper_arm_m": float(upper_arm_m),
+            "right_upper_arm_m": float(upper_arm_m),
+            "left_forearm_m": float(forearm_m),
+            "right_forearm_m": float(forearm_m),
+            "left_thigh_m": float(thigh_m),
+            "right_thigh_m": float(thigh_m),
+            "left_shin_m": float(shin_m),
+            "right_shin_m": float(shin_m),
+            "shoulder_width_m": float(shoulder_width_m),
+            "hip_width_m": float(hip_width_m),
+            "torso_length_m": float(torso_length_m),
+            "wingspan_raw_m": float(wingspan_m),
+            "wingspan_extra_m": 0.0,
+            "wingspan_m": float(wingspan_m),
+            "hand_length_m": float(hand_length_m),
+            "estimation_mode": "profile_only",
+        },
+        "calibration_compat": calibration_compat,
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare JSON-only benchmark inputs for the MuJoCo service pipeline.")
     parser.add_argument("--input-video", type=Path, default=DEFAULT_VIDEO)

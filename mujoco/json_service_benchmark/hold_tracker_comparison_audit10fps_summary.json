@@ -1,0 +1,71 @@
+{
+  "video": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\audit_10fps.mp4",
+  "bbox_holds_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\audit_final_10fps\\holds_polygon.json",
+  "polygon_holds_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\audit_final_10fps\\holds_polygon.json",
+  "pose_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\audit_final_10fps\\pose3d_sequence.json",
+  "state_counts": {
+    "bbox": {
+      "left_hand": {
+        "FREE": 417,
+        "REACH": 120,
+        "GRIP": 105
+      },
+      "right_hand": {
+        "FREE": 332,
+        "REACH": 170,
+        "GRIP": 140
+      },
+      "left_foot": {
+        "FREE": 219,
+        "REACH": 140,
+        "STEP": 283
+      },
+      "right_foot": {
+        "FREE": 425,
+        "REACH": 211,
+        "STEP": 6
+      }
+    },
+    "polygon": {
+      "left_hand": {
+        "FREE": 319,
+        "REACH": 115,
+        "GRIP": 208
+      },
+      "right_hand": {
+        "FREE": 245,
+        "REACH": 95,
+        "GRIP": 302
+      },
+      "left_foot": {
+        "FREE": 170,
+        "REACH": 54,
+        "STEP": 418
+      },
+      "right_foot": {
+        "FREE": 219,
+        "REACH": 139,
+        "STEP": 284
+      }
+    }
+  },
+  "difference_counts": {
+    "left_hand": {
+      "same": 460,
+      "different": 182
+    },
+    "right_hand": {
+      "same": 397,
+      "different": 245
+    },
+    "left_foot": {
+      "same": 488,
+      "different": 154
+    },
+    "right_foot": {
+      "same": 244,
+      "different": 398
+    }
+  },
+  "output_video": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\hold_tracker_comparison_audit10fps.mp4"
+}

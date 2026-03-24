@@ -25,6 +25,11 @@ ENTER_MARGIN_SCALE = 0.20
 EXIT_MARGIN_SCALE = 0.34
 MIN_ENTER_MARGIN_PX = 10.0
 MIN_EXIT_MARGIN_PX = 18.0
+START_ROLE_BIAS_MS = 2500
+ROUTE_ROLE_TIE_GAP_PX = 10.0
+ACTIVE_IDENTITY_STICKY_SCALE = 1.35
+CANDIDATE_IDENTITY_STICKY_SCALE = 1.15
+IDENTITY_STICKY_GAP_PX = 8.0
 
 LIMB_LABELS = {
     "left_hand": "GRIP",
@@ -139,6 +144,10 @@ class PolygonHoldDetection:
     y2: float
     confidence: float
     polygon_px: np.ndarray
+    original_hold_no: int | None = None
+    route_role: str | None = None
+    is_start: bool = False
+    is_end: bool = False
 
 
 @dataclass
@@ -152,6 +161,8 @@ class LimbTrackerState:
     last_transition: str | None = None
     last_distance_px: float | None = None
     last_speed_px_s: float = 0.0
+    last_route_bias: str | None = None
+    last_hysteresis: str | None = None
 
 
 def _polygon_array(points: list[dict[str, Any]]) -> np.ndarray:
@@ -224,7 +235,49 @@ def _hold_from_prepared(payload: dict[str, Any]) -> PolygonHoldDetection:
         y2=y2,
         confidence=float(payload.get("confidence", 0.0)),
         polygon_px=polygon,
+        original_hold_no=int(payload.get("original_hold_no")) if payload.get("original_hold_no") is not None else None,
+        route_role=str(payload.get("route_role")) if payload.get("route_role") is not None else None,
+        is_start=bool(payload.get("is_start", False)),
+        is_end=bool(payload.get("is_end", False)),
     )
+
+
+def classify_contact_presence_confidence(
+    inside_polygon: bool,
+    distance_px: float,
+    enter_margin: float,
+    exit_margin: float,
+) -> str:
+    if inside_polygon:
+        return "high"
+    if distance_px <= 0.5 * enter_margin:
+        return "high"
+    if distance_px <= enter_margin:
+        return "medium"
+    if distance_px <= exit_margin:
+        return "low"
+    return "none"
+
+
+def classify_hold_identity_confidence(
+    inside_polygon: bool,
+    distance_px: float,
+    alternative_distance_px: float | None,
+    enter_margin: float,
+    exit_margin: float,
+) -> str:
+    gap_px = float("inf") if alternative_distance_px is None else float(alternative_distance_px - distance_px)
+    if inside_polygon:
+        if gap_px >= max(6.0, 0.35 * enter_margin):
+            return "high"
+        return "medium"
+    if distance_px <= enter_margin:
+        if gap_px >= max(4.0, 0.20 * enter_margin):
+            return "medium"
+        return "low"
+    if distance_px <= exit_margin:
+        return "low"
+    return "none"
 
 
 def load_polygon_service_holds(detections_json: Path) -> dict[str, Any]:
@@ -270,9 +323,16 @@ class PolygonHoldContactTracker:
         }
     )
     _holds_by_id: dict[int, PolygonHoldDetection] = field(init=False, repr=False)
+    _end_zone_y: float = field(init=False, repr=False, default=float("-inf"))
 
     def __post_init__(self) -> None:
         self._holds_by_id = {hold.hold_id: hold for hold in self.holds}
+        end_holds = [hold for hold in self.holds if hold.is_end]
+        if end_holds:
+            self._end_zone_y = max(
+                hold.cy_px + max(MIN_EXIT_MARGIN_PX, hold.radius_px * REACH_RADIUS_SCALE)
+                for hold in end_holds
+            )
 
     def update_frame(
         self,
@@ -316,6 +376,12 @@ class PolygonHoldContactTracker:
                 "hold_center_px": None,
                 "hold_radius_px": None,
                 "inside_polygon": None,
+                "contact_presence_confidence": "none",
+                "hold_identity_confidence": "none",
+                "hold_identity_gap_px": None,
+                "route_role": None,
+                "is_start": False,
+                "is_end": False,
             }
 
         point_px = np.asarray(point_px, dtype=np.float64)
@@ -326,8 +392,27 @@ class PolygonHoldContactTracker:
         state.last_point_px = point_px.copy()
         state.last_timestamp_ms = timestamp_ms
         state.last_speed_px_s = speed_px_s
+        state.last_route_bias = None
+        state.last_hysteresis = None
 
-        hold, inside_polygon, distance_px = self._nearest_hold(point_px)
+        ranked_holds = self._rank_candidate_holds(point_px)
+        hold, inside_polygon, distance_px = ranked_holds[0]
+        route_bias_applied = self._select_route_role_bias(ranked_holds, point_px, timestamp_ms)
+        if route_bias_applied is not None:
+            hold, inside_polygon, distance_px = route_bias_applied
+            state.last_route_bias = hold.route_role
+
+        hold, inside_polygon, distance_px, hysteresis_applied = self._apply_identity_hysteresis(
+            limb_name=limb_name,
+            state=state,
+            point_px=point_px,
+            timestamp_ms=timestamp_ms,
+            ranked_holds=ranked_holds,
+            selected_hold=hold,
+            selected_inside=inside_polygon,
+            selected_distance_px=distance_px,
+        )
+        state.last_hysteresis = hysteresis_applied
         state.last_distance_px = distance_px
         enter_margin = max(MIN_ENTER_MARGIN_PX, hold.radius_px * ENTER_MARGIN_SCALE)
         exit_margin = max(MIN_EXIT_MARGIN_PX, hold.radius_px * EXIT_MARGIN_SCALE)
@@ -373,6 +458,27 @@ class PolygonHoldContactTracker:
         else:
             state.state = engaged_label
 
+        alternative_distance_px = self._alternative_distance_for_hold(ranked_holds, hold.hold_id)
+        contact_presence_confidence = classify_contact_presence_confidence(
+            inside_polygon=bool(inside_polygon),
+            distance_px=float(distance_px),
+            enter_margin=float(enter_margin),
+            exit_margin=float(exit_margin),
+        )
+        hold_identity_confidence = classify_hold_identity_confidence(
+            inside_polygon=bool(inside_polygon),
+            distance_px=float(distance_px),
+            alternative_distance_px=alternative_distance_px,
+            enter_margin=float(enter_margin),
+            exit_margin=float(exit_margin),
+        )
+        if state.state not in ("GRIP", "STEP"):
+            if state.state == "REACH":
+                hold_identity_confidence = "low"
+            else:
+                contact_presence_confidence = "none"
+                hold_identity_confidence = "none"
+
         state.last_transition = transition
         return {
             "state": state.state,
@@ -384,34 +490,153 @@ class PolygonHoldContactTracker:
             "hold_center_px": [float(hold.cx_px), float(hold.cy_px)],
             "hold_radius_px": float(hold.radius_px),
             "inside_polygon": bool(inside_polygon),
+            "contact_presence_confidence": contact_presence_confidence,
+            "hold_identity_confidence": hold_identity_confidence,
+            "hold_identity_gap_px": alternative_distance_px,
+            "route_role": hold.route_role,
+            "is_start": bool(hold.is_start),
+            "is_end": bool(hold.is_end),
+            "route_bias_applied": state.last_route_bias,
+            "identity_hysteresis_applied": state.last_hysteresis,
         }
 
-    def _nearest_hold(self, point_px: np.ndarray) -> tuple[PolygonHoldDetection, bool, float]:
+    def _select_route_role_bias(
+        self,
+        ranked_holds: list[tuple[PolygonHoldDetection, bool, float]],
+        point_px: np.ndarray,
+        timestamp_ms: int,
+    ) -> tuple[PolygonHoldDetection, bool, float] | None:
+        if not ranked_holds:
+            return None
+        top_hold, _, top_distance_px = ranked_holds[0]
+        tie_gap_px = max(ROUTE_ROLE_TIE_GAP_PX, 0.25 * max(1.0, top_hold.radius_px))
+
+        if timestamp_ms <= START_ROLE_BIAS_MS:
+            start_candidates = [
+                item
+                for item in ranked_holds
+                if item[0].is_start and float(item[2]) <= float(top_distance_px) + tie_gap_px
+            ]
+            if start_candidates:
+                start_candidates.sort(key=lambda item: (0 if item[1] else 1, float(item[2]), int(item[0].hold_id)))
+                if int(start_candidates[0][0].hold_id) != int(top_hold.hold_id):
+                    return start_candidates[0]
+
+        if point_px[1] <= self._end_zone_y:
+            end_candidates = [
+                item
+                for item in ranked_holds
+                if item[0].is_end and float(item[2]) <= float(top_distance_px) + tie_gap_px
+            ]
+            if end_candidates:
+                end_candidates.sort(key=lambda item: (0 if item[1] else 1, float(item[2]), int(item[0].hold_id)))
+                if int(end_candidates[0][0].hold_id) != int(top_hold.hold_id):
+                    return end_candidates[0]
+        return None
+
+    def _alternative_distance_for_hold(
+        self,
+        ranked_holds: list[tuple[PolygonHoldDetection, bool, float]],
+        hold_id: int,
+    ) -> float | None:
+        for alt_hold, _, alt_distance in ranked_holds:
+            if int(alt_hold.hold_id) != int(hold_id):
+                return float(alt_distance)
+        return None
+
+    def _hold_distance(self, hold: PolygonHoldDetection, point_px: np.ndarray) -> tuple[bool, float]:
+        inside, distance_px = polygon_proximity(point_px, hold.polygon_px)
+        return bool(inside), float(distance_px)
+
+    def _apply_identity_hysteresis(
+        self,
+        limb_name: str,
+        state: LimbTrackerState,
+        point_px: np.ndarray,
+        timestamp_ms: int,
+        ranked_holds: list[tuple[PolygonHoldDetection, bool, float]],
+        selected_hold: PolygonHoldDetection,
+        selected_inside: bool,
+        selected_distance_px: float,
+    ) -> tuple[PolygonHoldDetection, bool, float, str | None]:
+        engaged_label = LIMB_LABELS[limb_name]
+        enter_margin = max(MIN_ENTER_MARGIN_PX, selected_hold.radius_px * ENTER_MARGIN_SCALE)
+        exit_margin = max(MIN_EXIT_MARGIN_PX, selected_hold.radius_px * EXIT_MARGIN_SCALE)
+        selected_alternative_distance = self._alternative_distance_for_hold(ranked_holds, selected_hold.hold_id)
+        selected_presence_confidence = classify_contact_presence_confidence(
+            inside_polygon=selected_inside,
+            distance_px=selected_distance_px,
+            enter_margin=enter_margin,
+            exit_margin=exit_margin,
+        )
+        selected_identity_confidence = classify_hold_identity_confidence(
+            inside_polygon=selected_inside,
+            distance_px=selected_distance_px,
+            alternative_distance_px=selected_alternative_distance,
+            enter_margin=enter_margin,
+            exit_margin=exit_margin,
+        )
+
+        if state.active_hold_id is not None and state.active_hold_id != selected_hold.hold_id:
+            active_hold = self._hold_by_id(state.active_hold_id)
+            if active_hold is not None:
+                active_inside, active_distance_px = self._hold_distance(active_hold, point_px)
+                sticky_margin_px = max(
+                    MIN_EXIT_MARGIN_PX,
+                    active_hold.radius_px * ACTIVE_IDENTITY_STICKY_SCALE,
+                )
+                if (
+                    active_inside or active_distance_px <= sticky_margin_px
+                ) and selected_identity_confidence in ("low", "none"):
+                    return active_hold, active_inside, active_distance_px, "active_low_identity_keep"
+
+        if state.active_hold_id is None and state.candidate_hold_id is not None and state.candidate_hold_id != selected_hold.hold_id:
+            candidate_hold = self._hold_by_id(state.candidate_hold_id)
+            if candidate_hold is not None:
+                candidate_inside, candidate_distance_px = self._hold_distance(candidate_hold, point_px)
+                candidate_enter_margin = max(MIN_ENTER_MARGIN_PX, candidate_hold.radius_px * ENTER_MARGIN_SCALE)
+                sticky_margin_px = max(
+                    candidate_enter_margin,
+                    candidate_hold.radius_px * CANDIDATE_IDENTITY_STICKY_SCALE,
+                )
+                if (
+                    candidate_inside or candidate_distance_px <= sticky_margin_px
+                ) and (
+                    selected_identity_confidence in ("low", "none")
+                    or candidate_distance_px <= selected_distance_px + IDENTITY_STICKY_GAP_PX
+                ):
+                    return candidate_hold, candidate_inside, candidate_distance_px, "candidate_low_identity_keep"
+
+        if (
+            state.state == engaged_label
+            and state.active_hold_id is not None
+            and state.active_hold_id != selected_hold.hold_id
+            and selected_identity_confidence in ("low", "none")
+        ):
+            if state.active_hold_id is not None:
+                active_hold = self._hold_by_id(state.active_hold_id)
+                if active_hold is not None:
+                    active_inside, active_distance_px = self._hold_distance(active_hold, point_px)
+                    sticky_margin_px = max(
+                        MIN_EXIT_MARGIN_PX,
+                        active_hold.radius_px * ACTIVE_IDENTITY_STICKY_SCALE,
+                    )
+                    if active_inside or active_distance_px <= sticky_margin_px:
+                        return active_hold, active_inside, active_distance_px, "engaged_low_identity_keep"
+
+        return selected_hold, selected_inside, selected_distance_px, None
+
+    def _rank_candidate_holds(self, point_px: np.ndarray) -> list[tuple[PolygonHoldDetection, bool, float]]:
         candidate_holds = self._candidate_holds(point_px)
         if not candidate_holds:
             candidate_holds = self.holds
 
-        best_hold: PolygonHoldDetection | None = None
-        best_inside = False
-        best_distance = float("inf")
+        ranked: list[tuple[PolygonHoldDetection, bool, float]] = []
         for hold in candidate_holds:
             inside, distance_px = polygon_proximity(point_px, hold.polygon_px)
-            if best_hold is None:
-                best_hold = hold
-                best_inside = inside
-                best_distance = distance_px
-                continue
-            if inside and not best_inside:
-                best_hold = hold
-                best_inside = True
-                best_distance = distance_px
-                continue
-            if inside == best_inside and distance_px < best_distance:
-                best_hold = hold
-                best_inside = inside
-                best_distance = distance_px
-        assert best_hold is not None
-        return best_hold, best_inside, float(best_distance)
+            ranked.append((hold, bool(inside), float(distance_px)))
+        ranked.sort(key=lambda item: (0 if item[1] else 1, float(item[2]), int(item[0].hold_id)))
+        return ranked
 
     def _hold_by_id(self, hold_id: int) -> PolygonHoldDetection | None:
         return self._holds_by_id.get(int(hold_id))

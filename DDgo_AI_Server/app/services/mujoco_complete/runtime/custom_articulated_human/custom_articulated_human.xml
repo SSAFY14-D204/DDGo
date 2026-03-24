@@ -133,7 +133,7 @@
 
       <body name="left_hip_mount" pos="0 0.10 -0.02">
         <joint name="hip_x_left" class="hip_joint" type="hinge" axis="1 0 0" range="-55 45"/>
-        <joint name="hip_z_left" class="hip_joint" type="hinge" axis="0 0 1" range="-45 45"/>
+        <joint name="hip_z_left" class="hip_joint" type="hinge" axis="0 0 1" range="0 40"/>
         <joint name="hip_y_left" class="hip_joint" type="hinge" axis="0 1 0" range="-170 45"/>
         <inertial pos="0 0 0" mass="0.100000" diaginertia="0.000060 0.000083 0.000083"/>
         <geom name="left_hip_marker" type="sphere" size="0.03" rgba="0.28 0.82 1 0.9"/>
@@ -151,7 +151,7 @@
               <site name="left_knee_forward_site" pos="0.040 0 0" size="0.007" rgba="1 0.98 0.62 0.72"/>
               <geom name="left_shin_geom" type="capsule" fromto="0 0 0 0 0 -0.38" size="0.04" rgba="0.40 1 0.54 0.85"/>
             <body name="left_ankle" pos="0 0 -0.38">
-              <joint name="ankle_y_left" class="ankle_joint" type="hinge" axis="0 1 0" range="-90 120"/>
+              <joint name="ankle_y_left" class="ankle_joint" type="hinge" axis="0 1 0" range="-75 80"/>
               <joint name="ankle_x_left" class="ankle_joint" type="hinge" axis="-1 0 -0.5" range="-35 35"/>
               <inertial pos="0 0 0" mass="0.000001" diaginertia="0.000001 0.000001 0.000001"/>
               <geom name="left_ankle_marker" type="sphere" size="0.026" rgba="0.40 1 0.54 0.9"/>
@@ -170,7 +170,7 @@
 
       <body name="right_hip_mount" pos="0 -0.10 -0.02">
         <joint name="hip_x_right" class="hip_joint" type="hinge" axis="1 0 0" range="-55 45"/>
-        <joint name="hip_z_right" class="hip_joint" type="hinge" axis="0 0 1" range="-45 45"/>
+        <joint name="hip_z_right" class="hip_joint" type="hinge" axis="0 0 1" range="0 40"/>
         <joint name="hip_y_right" class="hip_joint" type="hinge" axis="0 1 0" range="-170 45"/>
         <inertial pos="0 0 0" mass="0.100000" diaginertia="0.000060 0.000083 0.000083"/>
         <geom name="right_hip_marker" type="sphere" size="0.03" rgba="0.82 0.46 1 0.9"/>
@@ -188,7 +188,7 @@
               <site name="right_knee_forward_site" pos="0.040 0 0" size="0.007" rgba="0.82 0.88 1 0.72"/>
               <geom name="right_shin_geom" type="capsule" fromto="0 0 0 0 0 -0.38" size="0.04" rgba="1 0.58 0.26 0.85"/>
             <body name="right_ankle" pos="0 0 -0.38">
-              <joint name="ankle_y_right" class="ankle_joint" type="hinge" axis="0 1 0" range="-90 120"/>
+              <joint name="ankle_y_right" class="ankle_joint" type="hinge" axis="0 1 0" range="-75 80"/>
               <joint name="ankle_x_right" class="ankle_joint" type="hinge" axis="1 0 0.5" range="-35 35"/>
               <inertial pos="0 0 0" mass="0.000001" diaginertia="0.000001 0.000001 0.000001"/>
               <geom name="right_ankle_marker" type="sphere" size="0.026" rgba="1 0.58 0.26 0.9"/>
@@ -228,17 +228,17 @@
     <motor name="elbow_right_motor" joint="elbow_right" ctrlrange="-3.054 0.175" gear="120"/>
 
     <motor name="hip_x_left_motor" joint="hip_x_left" ctrlrange="-0.960 0.785" gear="320"/>
-    <motor name="hip_z_left_motor" joint="hip_z_left" ctrlrange="-1.920 1.396" gear="320"/>
+    <motor name="hip_z_left_motor" joint="hip_z_left" ctrlrange="0 0.698" gear="320"/>
     <motor name="hip_y_left_motor" joint="hip_y_left" ctrlrange="-2.967 0.785" gear="420"/>
     <motor name="knee_left_motor" joint="knee_left" ctrlrange="-2.967 0.087" gear="360"/>
-    <motor name="ankle_y_left_motor" joint="ankle_y_left" ctrlrange="-1.571 2.094" gear="180"/>
+    <motor name="ankle_y_left_motor" joint="ankle_y_left" ctrlrange="-1.309 1.396" gear="180"/>
     <motor name="ankle_x_left_motor" joint="ankle_x_left" ctrlrange="-1.047 1.047" gear="160"/>
 
     <motor name="hip_x_right_motor" joint="hip_x_right" ctrlrange="-0.960 0.785" gear="320"/>
-    <motor name="hip_z_right_motor" joint="hip_z_right" ctrlrange="-1.920 1.396" gear="320"/>
+    <motor name="hip_z_right_motor" joint="hip_z_right" ctrlrange="0 0.698" gear="320"/>
     <motor name="hip_y_right_motor" joint="hip_y_right" ctrlrange="-2.967 0.785" gear="420"/>
     <motor name="knee_right_motor" joint="knee_right" ctrlrange="-2.967 0.087" gear="360"/>
-    <motor name="ankle_y_right_motor" joint="ankle_y_right" ctrlrange="-1.571 2.094" gear="180"/>
+    <motor name="ankle_y_right_motor" joint="ankle_y_right" ctrlrange="-1.309 1.396" gear="180"/>
     <motor name="ankle_x_right_motor" joint="ankle_x_right" ctrlrange="-1.047 1.047" gear="160"/>
   </actuator>
 </mujoco>
