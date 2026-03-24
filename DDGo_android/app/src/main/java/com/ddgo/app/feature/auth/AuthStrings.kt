@@ -2,11 +2,10 @@ package com.ddgo.app.feature.auth
 
 internal object AuthStrings {
 
-    const val WelcomeEyebrow = "클라이밍 기록을 더 선명하게"
-    const val WelcomeTitle = "디디고와 함께\n도전의 흐름을 남겨보세요"
-    const val WelcomeDescription =
-        "시도한 영상과 피드백을 한곳에 모아 두고, 어제보다 나은 움직임을 차근차근 확인해 보세요."
-    const val WelcomeRegister = "회원가입"
+    const val WelcomeEyebrow = ""
+    const val WelcomeTitle = "디디고"
+    const val WelcomeDescription = "클라이밍을 데이터로 즐기다"
+    const val WelcomeRegister = "시작하기"
     const val WelcomeLoginQuestion = "이미 계정이 있나요?"
     const val WelcomeLoginAction = "로그인"
     const val LoginToRegisterPrefix = "처음 오셨나요?"
