@@ -21,6 +21,7 @@ import com.ssafy.DDGo.users.domain.UserProfile;
 import com.ssafy.DDGo.users.domain.UserSocialAccount;
 import com.ssafy.DDGo.users.dto.request.SocialLoginRequest;
 import com.ssafy.DDGo.users.dto.request.TokenRefreshRequest;
+import com.ssafy.DDGo.users.dto.response.DuplicateCheckResponse;
 import com.ssafy.DDGo.users.dto.response.TokenRefreshResponse;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
 import java.util.Optional;
@@ -80,6 +81,47 @@ class UserServiceTest {
     @BeforeEach
     void setUp() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    }
+
+    @Test
+    @DisplayName("아이디로 사용할 이메일이 비어 있지 않고 중복되지 않으면 사용 가능으로 응답한다")
+    void checkUsernameAvailability_whenAvailable_returnsTrue() {
+        when(userRepository.countByEmailIncludingDeleted("user@example.com")).thenReturn(0L);
+        when(userRepository.countByUsernameIncludingDeleted("user@example.com")).thenReturn(0L);
+
+        DuplicateCheckResponse response = userService.checkUsernameAvailability("user@example.com");
+
+        assertThat(response.isAvailable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("이미 사용 중이거나 탈퇴 이력이 있는 아이디는 사용 불가로 응답한다")
+    void checkUsernameAvailability_whenDuplicated_returnsFalse() {
+        when(userRepository.countByEmailIncludingDeleted("user@example.com")).thenReturn(1L);
+
+        DuplicateCheckResponse response = userService.checkUsernameAvailability("user@example.com");
+
+        assertThat(response.isAvailable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("닉네임이 비어 있지 않고 중복되지 않으면 사용 가능으로 응답한다")
+    void checkNicknameAvailability_whenAvailable_returnsTrue() {
+        when(userRepository.countByNicknameIncludingDeleted("DDGoUser")).thenReturn(0L);
+
+        DuplicateCheckResponse response = userService.checkNicknameAvailability("DDGoUser");
+
+        assertThat(response.isAvailable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("이미 사용 중이거나 탈퇴 이력이 있는 닉네임은 사용 불가로 응답한다")
+    void checkNicknameAvailability_whenDuplicated_returnsFalse() {
+        when(userRepository.countByNicknameIncludingDeleted("DDGoUser")).thenReturn(1L);
+
+        DuplicateCheckResponse response = userService.checkNicknameAvailability("DDGoUser");
+
+        assertThat(response.isAvailable()).isFalse();
     }
 
     @Test

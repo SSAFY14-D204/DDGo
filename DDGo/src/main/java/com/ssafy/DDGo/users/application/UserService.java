@@ -19,6 +19,7 @@ import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserPasswordUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserProfileUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
+import com.ssafy.DDGo.users.dto.response.DuplicateCheckResponse;
 import com.ssafy.DDGo.users.dto.response.TokenRefreshResponse;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
@@ -67,6 +68,24 @@ public class UserService {
                 .build();
 
         userRepository.save(user);
+    }
+
+    public DuplicateCheckResponse checkUsernameAvailability(String username) {
+        String normalizedEmail = normalizeEmail(username);
+        boolean available = userRepository.countByEmailIncludingDeleted(normalizedEmail) == 0
+                && userRepository.countByUsernameIncludingDeleted(normalizedEmail) == 0;
+
+        return DuplicateCheckResponse.builder()
+                .available(available)
+                .build();
+    }
+
+    public DuplicateCheckResponse checkNicknameAvailability(String nickname) {
+        boolean available = userRepository.countByNicknameIncludingDeleted(nickname) == 0;
+
+        return DuplicateCheckResponse.builder()
+                .available(available)
+                .build();
     }
 
     @Transactional

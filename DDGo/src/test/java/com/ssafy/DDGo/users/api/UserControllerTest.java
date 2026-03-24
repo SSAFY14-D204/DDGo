@@ -6,6 +6,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -22,6 +23,7 @@ import com.ssafy.DDGo.users.dto.request.PasswordResetConfirmRequest;
 import com.ssafy.DDGo.users.dto.request.PasswordResetMailRequest;
 import com.ssafy.DDGo.users.domain.SocialProvider;
 import com.ssafy.DDGo.users.dto.request.SocialLoginRequest;
+import com.ssafy.DDGo.users.dto.response.DuplicateCheckResponse;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +61,38 @@ class UserControllerTest {
 
     @MockBean
     private JpaMetamodelMappingContext jpaMetamodelMappingContext;
+
+    @Test
+    @DisplayName("아이디 중복 확인 성공 시 사용 가능 여부를 응답한다")
+    void checkUsernameAvailability_returnsAvailability() throws Exception {
+        when(userService.checkUsernameAvailability("user@example.com"))
+                .thenReturn(DuplicateCheckResponse.builder().available(true).build());
+
+        mockMvc.perform(get("/v1/users/check-username")
+                        .param("username", "user@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.data.available").value(true));
+
+        verify(userService).checkUsernameAvailability("user@example.com");
+    }
+
+    @Test
+    @DisplayName("닉네임 중복 확인 성공 시 사용 가능 여부를 응답한다")
+    void checkNicknameAvailability_returnsAvailability() throws Exception {
+        when(userService.checkNicknameAvailability("DDGoUser"))
+                .thenReturn(DuplicateCheckResponse.builder().available(true).build());
+
+        mockMvc.perform(get("/v1/users/check-nickname")
+                        .param("nickname", "DDGoUser"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.data.available").value(true));
+
+        verify(userService).checkNicknameAvailability("DDGoUser");
+    }
 
     @Test
     @DisplayName("소셜 로그인 요청 시 DDGo 토큰을 반환한다")
