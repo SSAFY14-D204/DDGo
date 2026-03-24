@@ -129,7 +129,7 @@ fun AttemptResultScreen(
     val currentAttemptHoldReachResult = viewModel.currentAttemptHoldReachResult
     val totalSelectedHoldCount = viewModel.totalSelectedHoldCount
     val isSuccess = currentAttemptHoldReachResult?.let { result ->
-        totalSelectedHoldCount > 0 && result.highestReachedHoldNo >= totalSelectedHoldCount
+        totalSelectedHoldCount > 0 && result.completedWithBothHandsOnEndHold
     } ?: currentAttemptResult.first
     val currentAnalysisPoints = currentAttemptResult.second
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence

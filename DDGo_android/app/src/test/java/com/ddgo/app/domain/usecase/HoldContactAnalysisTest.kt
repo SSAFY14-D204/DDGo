@@ -4,6 +4,7 @@ import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -42,6 +43,39 @@ class HoldContactAnalysisTest {
         assertEquals(1_000L, result.highestReachedFrameTimeMs)
         assertEquals(setOf(1, 2, 3), result.contactedHoldNos)
         assertEquals(1.0f, result.reachedRatio, 0.0001f)
+        assertFalse(result.completedWithBothHandsOnEndHold)
+    }
+
+    @Test
+    fun `종료 홀드는 양손이 같은 프레임에서 함께 닿아야 성공으로 판단한다`() {
+        val start = numberedHold(holdNo = 1, centerX = 0.20f, centerY = 0.82f)
+        val middle = numberedHold(holdNo = 2, centerX = 0.42f, centerY = 0.56f)
+        val end = numberedHold(holdNo = 3, centerX = 0.64f, centerY = 0.28f)
+
+        val failedResult = analyzeAttemptHoldReach(
+            poses = listOf(
+                poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)),
+                poseAt(500L, handLandmark(index = 20, x = 0.42f, y = 0.56f)),
+                poseAt(1_000L, handLandmark(index = 19, x = 0.64f, y = 0.28f))
+            ),
+            holds = listOf(start, middle, end)
+        )
+        val successResult = analyzeAttemptHoldReach(
+            poses = listOf(
+                poseAt(0L, handLandmark(index = 19, x = 0.20f, y = 0.82f)),
+                poseAt(
+                    1_000L,
+                    handLandmark(index = 19, x = 0.64f, y = 0.28f),
+                    handLandmark(index = 20, x = 0.64f, y = 0.28f)
+                )
+            ),
+            holds = listOf(start, middle, end)
+        )
+
+        assertEquals(3, failedResult.highestReachedHoldNo)
+        assertFalse(failedResult.completedWithBothHandsOnEndHold)
+        assertEquals(3, successResult.highestReachedHoldNo)
+        assertTrue(successResult.completedWithBothHandsOnEndHold)
     }
 
     @Test
@@ -104,7 +138,8 @@ class HoldContactAnalysisTest {
             highestReachedFrameTimeMs = 1_000L,
             totalHoldCount = holdCount,
             contactedHoldNos = setOf(1, 2, 3, 4),
-            reachedRatio = 4f / holdCount
+            reachedRatio = 4f / holdCount,
+            completedWithBothHandsOnEndHold = true
         )
 
         val summary = summarizeHoldReachResults(

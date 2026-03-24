@@ -1820,12 +1820,10 @@ internal class UploadSubmissionDelegate(
         fallback: Boolean,
         totalHoldCount: Int
     ): Boolean {
-        val highestReachedHoldNo = attemptHoldReachResults
-            .getOrNull(index)
-            ?.highestReachedHoldNo
+        val holdReachResult = attemptHoldReachResults.getOrNull(index)
 
-        return if (totalHoldCount > 0 && highestReachedHoldNo != null) {
-            highestReachedHoldNo >= totalHoldCount
+        return if (totalHoldCount > 0 && holdReachResult != null) {
+            holdReachResult.completedWithBothHandsOnEndHold
         } else {
             fallback
         }
@@ -2154,7 +2152,8 @@ internal class UploadSubmissionDelegate(
         val aiSummaries = buildFinalAnalysisAttemptSummaries(
             attemptCount = playbackUris.size,
             totalHolds = totalHoldCount,
-            aiResults = attemptAiAnalysisResults
+            aiResults = attemptAiAnalysisResults,
+            holdReachResults = attemptHoldReachResults
         )
 
         uploadedVideos.forEachIndexed { index, uploadedVideo ->
@@ -2226,11 +2225,11 @@ internal class UploadSubmissionDelegate(
         )
         val durationMs = terminalSnapshot?.resolveDurationMs(playbackUri)
         val maxHoldNo = holdReachResult?.highestReachedHoldNo ?: aiSummary.reachedHolds
-        val failureReason = aiSummary.feedbackLine.takeIf { it.isNotBlank() }
+        val failureReason = aiSummary.feedbackLine.takeIf { aiSummary.hasAiResult && it.isNotBlank() }
             ?: defaultFailureReason(attemptResult)
-        val riskAlert = aiSummary.failureNarrative.takeIf { it.isNotBlank() }
+        val riskAlert = aiSummary.failureNarrative.takeIf { aiSummary.hasAiResult && it.isNotBlank() }
             ?: defaultRiskAlert(attemptResult)
-        val nextMission = aiSummary.coachingLine.takeIf { it.isNotBlank() }
+        val nextMission = aiSummary.coachingLine.takeIf { aiSummary.hasAiResult && it.isNotBlank() }
             ?: defaultNextMission(attemptResult)
 
         return AttemptCompletionPayload(
@@ -2253,7 +2252,7 @@ internal class UploadSubmissionDelegate(
         totalHoldCount: Int
     ): String {
         if (totalHoldCount > 0 && holdReachResult != null) {
-            return if (holdReachResult.highestReachedHoldNo >= totalHoldCount) {
+            return if (holdReachResult.completedWithBothHandsOnEndHold) {
                 "SUCCESS"
             } else {
                 "FAIL"

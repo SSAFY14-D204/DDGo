@@ -124,6 +124,20 @@ fun PolygonHoldContactDebugResult.toAttemptHoldReachResult(
     val normalizedContactedHoldNos = contactedHoldNos
         .filter { it in 1..totalHoldCount }
         .toSet()
+    val endHoldNo = holds.resolveEndHoldNo()
+    val completedWithBothHandsOnEndHold = endHoldNo != null && frames.any { frame ->
+        val engagedHands = frame.activeContacts
+            .filter { it.holdNo == endHoldNo }
+            .map(PolygonHoldContact::limb)
+            .filter(PolygonTrackedLimb::isHand)
+            .toSet()
+        engagedHands.containsAll(
+            setOf(
+                PolygonTrackedLimb.LEFT_HAND,
+                PolygonTrackedLimb.RIGHT_HAND
+            )
+        )
+    }
 
     return AttemptHoldReachResult(
         highestReachedHold = highestHold,
@@ -135,7 +149,8 @@ fun PolygonHoldContactDebugResult.toAttemptHoldReachResult(
             normalizedHighestHoldNo.toFloat() / totalHoldCount.toFloat()
         } else {
             0f
-        }
+        },
+        completedWithBothHandsOnEndHold = completedWithBothHandsOnEndHold
     )
 }
 

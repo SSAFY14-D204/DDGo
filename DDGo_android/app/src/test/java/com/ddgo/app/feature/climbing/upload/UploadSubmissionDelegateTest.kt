@@ -11,6 +11,7 @@ import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
+import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
@@ -28,6 +29,41 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UploadSubmissionDelegateTest {
+
+    @Test
+    fun `attempt success resolution requires both hands on end hold`() {
+        val delegate = UploadSubmissionDelegate(
+            saveChallengeHoldsUseCase = mockk<SaveChallengeHoldsUseCase>(relaxed = true),
+            uploadAttemptVideoUseCase = mockk<UploadAttemptVideoUseCase>(relaxed = true),
+            endAttemptUseCase = mockk<EndAttemptUseCase>(relaxed = true),
+            getMyInfoUseCase = mockk<GetMyInfoUseCase>(relaxed = true),
+            analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>(relaxed = true)
+        )
+
+        delegate.attemptHoldReachResults = listOf(
+            AttemptHoldReachResult(
+                highestReachedHold = null,
+                highestReachedHoldNo = 2,
+                highestReachedFrameTimeMs = 500L,
+                totalHoldCount = 2,
+                contactedHoldNos = setOf(1, 2),
+                reachedRatio = 1f,
+                completedWithBothHandsOnEndHold = false
+            ),
+            AttemptHoldReachResult(
+                highestReachedHold = null,
+                highestReachedHoldNo = 2,
+                highestReachedFrameTimeMs = 700L,
+                totalHoldCount = 2,
+                contactedHoldNos = setOf(1, 2),
+                reachedRatio = 1f,
+                completedWithBothHandsOnEndHold = true
+            )
+        )
+
+        assertEquals(false, delegate.resolveAttemptSuccess(index = 0, fallback = true, totalHoldCount = 2))
+        assertTrue(delegate.resolveAttemptSuccess(index = 1, fallback = false, totalHoldCount = 2))
+    }
 
     @Test
     fun `attempt result preparation proceeds even when loading message already exists from hold alignment`() = runTest {

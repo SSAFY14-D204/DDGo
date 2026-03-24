@@ -5,6 +5,7 @@ import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AiAnalysisVideoMetadata
 import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -59,28 +60,44 @@ internal val DefaultFinalAnalysisTimeline = List(StabilityTimelineSampleCount) {
 internal fun buildFinalAnalysisAttemptSummaries(
     attemptCount: Int,
     totalHolds: Int = 0,
-    aiResults: List<AiAnalysisResult?> = emptyList()
+    aiResults: List<AiAnalysisResult?> = emptyList(),
+    holdReachResults: List<AttemptHoldReachResult> = emptyList()
 ): List<FinalAnalysisAttemptSummary> {
-    val resolvedAttemptCount = max(attemptCount, aiResults.size).coerceAtLeast(1)
+    val resolvedAttemptCount = max(
+        max(attemptCount, aiResults.size),
+        holdReachResults.size
+    ).coerceAtLeast(1)
     return List(resolvedAttemptCount) { index ->
+        val holdReachResult = holdReachResults.getOrNull(index)
         aiResults.getOrNull(index)?.toFinalAnalysisAttemptSummary(
             attemptNo = index + 1,
-            totalHolds = totalHolds
+            totalHolds = totalHolds,
+            holdReachResult = holdReachResult
         )
-            ?: emptyFinalAnalysisAttemptSummary(attemptNo = index + 1)
+            ?: emptyFinalAnalysisAttemptSummary(
+                attemptNo = index + 1,
+                totalHolds = totalHolds,
+                holdReachResult = holdReachResult
+            )
     }
 }
 
 private fun emptyFinalAnalysisAttemptSummary(
-    attemptNo: Int
+    attemptNo: Int,
+    totalHolds: Int = 0,
+    holdReachResult: AttemptHoldReachResult? = null
 ): FinalAnalysisAttemptSummary {
+    val reachedHolds = holdReachResult
+        ?.highestReachedHoldNo
+        ?.takeIf { it > 0 }
+    val isSuccess = holdReachResult?.completedWithBothHandsOnEndHold == true
     return FinalAnalysisAttemptSummary(
         attemptNo = attemptNo,
         hasAiResult = false,
-        isSuccess = false,
+        isSuccess = isSuccess,
         analysisPoints = emptyList(),
-        reachedHolds = null,
-        reachedHoldsText = FinalAnalysisUnknownMetricText,
+        reachedHolds = reachedHolds,
+        reachedHoldsText = reachedHolds?.toString() ?: FinalAnalysisUnknownMetricText,
         processedFrames = null,
         processedFramesText = FinalAnalysisUnknownMetricText,
         highConfidenceRatio = null,
@@ -103,8 +120,16 @@ private fun emptyFinalAnalysisAttemptSummary(
         dangerEventCount = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
-        feedbackLine = "AI 분석 결과가 아직 충분하지 않아 종합 피드백을 만들지 못했습니다.",
-        coachingLine = "영상과 홀드 정보가 충분해지면 더 구체적인 코칭을 제공할 수 있습니다.",
+        feedbackLine = buildFallbackFeedbackLine(
+            isSuccess = isSuccess,
+            reachedHolds = reachedHolds,
+            totalHolds = totalHolds,
+            hasHoldReachResult = holdReachResult != null
+        ),
+        coachingLine = buildFallbackCoachingLine(
+            isSuccess = isSuccess,
+            hasHoldReachResult = holdReachResult != null
+        ),
         effectiveModeLabel = "",
         fallbackLabel = null
     )
@@ -112,10 +137,11 @@ private fun emptyFinalAnalysisAttemptSummary(
 
 private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
     attemptNo: Int,
-    totalHolds: Int
+    totalHolds: Int,
+    holdReachResult: AttemptHoldReachResult? = null
 ): FinalAnalysisAttemptSummary {
     val analysisPoints = toFinalAnalysisPoints()
-    val reachedHolds = extractReachedHoldNo()
+    val reachedHolds = holdReachResult?.highestReachedHoldNo ?: extractReachedHoldNo()
     val processedFrames = extractProcessedFrames()
     val highConfidenceRatio = extractHighConfidenceRatioPercent(processedFrames = processedFrames)
     val insideSupportRatio = extractInsideSupportRatioPercent()
@@ -133,7 +159,8 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
     val primaryCruxDurationMs = extractPrimaryCruxDurationMs()
     val primaryReasonLabel = extractPrimaryReasonLabel()
     val failureHighlights = buildFailureHighlights()
-    val isSuccess = totalHolds > 0 && (reachedHolds ?: 0) >= totalHolds
+    val isSuccess = holdReachResult?.completedWithBothHandsOnEndHold
+        ?: (totalHolds > 0 && (reachedHolds ?: 0) >= totalHolds)
     val loadFocusLabel = extractPeakBodyLoadGroupLabel()
     val feedbackTypes = buildFeedbackTypes(
         insideSupportRatio = insideSupportRatio,
@@ -186,6 +213,43 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         effectiveModeLabel = mode.toDisplayLabel(),
         fallbackLabel = if (requestedMode != mode) "${mode.toDisplayLabel()} 대체" else null
     )
+}
+
+private fun buildFallbackFeedbackLine(
+    isSuccess: Boolean,
+    reachedHolds: Int?,
+    totalHolds: Int,
+    hasHoldReachResult: Boolean
+): String {
+    return when {
+        isSuccess ->
+            "양손으로 종료 홀드를 잡아 완등에 성공했습니다."
+
+        reachedHolds != null && totalHolds > 0 ->
+            "${reachedHolds}번 홀드까지는 도달했지만 종료 홀드를 양손으로 안정적으로 잡지는 못했습니다."
+
+        hasHoldReachResult ->
+            "종료 홀드까지 이어지지 않아 시도를 마무리하지 못했습니다."
+
+        else ->
+            "AI 분석 결과가 아직 충분하지 않아 종합 피드백을 만들지 못했습니다."
+    }
+}
+
+private fun buildFallbackCoachingLine(
+    isSuccess: Boolean,
+    hasHoldReachResult: Boolean
+): String {
+    return when {
+        isSuccess ->
+            "마지막 종료 홀드에서도 양손 안착을 유지한 흐름을 다음 시도 기준으로 삼아보세요."
+
+        hasHoldReachResult ->
+            "종료 홀드에서는 한 손 리치 뒤 바로 반대 손까지 연결해 양손 안착을 만드는 연습이 도움이 됩니다."
+
+        else ->
+            "영상과 홀드 정보가 충분해지면 더 구체적인 코칭을 제공할 수 있습니다."
+    }
 }
 
 private fun AiAnalysisResult.toFinalAnalysisPoints(): List<AnalysisPoint> {

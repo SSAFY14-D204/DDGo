@@ -7,6 +7,7 @@ import com.ddgo.app.domain.model.AiAnalysisVideoMetadata
 import com.ddgo.app.domain.model.AiCruxCandidate
 import com.ddgo.app.domain.model.AiCruxResult
 import com.ddgo.app.domain.model.AiCruxSegment
+import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -64,6 +65,31 @@ class FinalAnalysisSummaryTest {
         assertEquals("정보 없음", summaries[0].insideSupportRatioText)
         assertEquals("정보 없음", summaries[0].stableContactFrameCountText)
         assertEquals(28, summaries[0].stabilityTimeline.size)
+    }
+
+    @Test
+    fun `hold reach result overrides final report success and reached hold`() {
+        val summaries = buildFinalAnalysisAttemptSummaries(
+            attemptCount = 1,
+            totalHolds = 9,
+            aiResults = listOf(samplePhysicsResult()),
+            holdReachResults = listOf(
+                AttemptHoldReachResult(
+                    highestReachedHold = null,
+                    highestReachedHoldNo = 7,
+                    highestReachedFrameTimeMs = 1_200L,
+                    totalHoldCount = 9,
+                    contactedHoldNos = (1..7).toSet(),
+                    reachedRatio = 7f / 9f,
+                    completedWithBothHandsOnEndHold = false
+                )
+            )
+        )
+
+        val summary = summaries.single()
+        assertEquals(7, summary.reachedHolds)
+        assertEquals("7", summary.reachedHoldsText)
+        assertEquals(false, summary.isSuccess)
     }
 }
 
