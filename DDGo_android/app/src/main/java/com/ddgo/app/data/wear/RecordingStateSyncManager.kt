@@ -31,6 +31,23 @@ class RecordingStateSyncManager @Inject constructor(
         syncMessage(recordingState)
     }
 
+    fun launchWatchApp() {
+        capabilityClient.getCapability(
+            DlPaths.CAPABILITY_WATCH,
+            CapabilityClient.FILTER_REACHABLE
+        ).addOnSuccessListener { capabilityInfo ->
+            val nodes = capabilityInfo.nodes
+            if (nodes.isNotEmpty()) {
+                nodes.forEach(::sendOpenAppMessage)
+            } else {
+                fallbackToConnectedNodes(::sendOpenAppMessage)
+            }
+        }.addOnFailureListener { throwable ->
+            Log.w(TAG, "Failed to resolve watch capability nodes for app launch. Falling back to connected nodes.", throwable)
+            fallbackToConnectedNodes(::sendOpenAppMessage)
+        }
+    }
+
     private fun syncDataItem(recordingState: RecordingState) {
         val request = PutDataMapRequest.create(DlPaths.DATA_RECORDING_STATE).apply {
             dataMap.putString(DlKeys.SESSION_ID, recordingState.sessionId)
@@ -78,6 +95,16 @@ class RecordingStateSyncManager @Inject constructor(
             }
     }
 
+    private fun fallbackToConnectedNodes(onNodeResolved: (Node) -> Unit) {
+        nodeClient.connectedNodes
+            .addOnSuccessListener { nodes ->
+                nodes.forEach(onNodeResolved)
+            }
+            .addOnFailureListener { throwable ->
+                Log.w(TAG, "Failed to resolve connected wearable nodes.", throwable)
+            }
+    }
+
     private fun sendMessage(
         node: Node,
         recordingState: RecordingState
@@ -95,6 +122,16 @@ class RecordingStateSyncManager @Inject constructor(
             }
             .addOnFailureListener { throwable ->
                 Log.w(TAG, "Failed to send recording state message to node=${node.id}", throwable)
+            }
+    }
+
+    private fun sendOpenAppMessage(node: Node) {
+        messageClient.sendMessage(node.id, DlPaths.MSG_OPEN_APP, ByteArray(0))
+            .addOnSuccessListener {
+                Log.d(TAG, "Requested watch app open on node=${node.id}")
+            }
+            .addOnFailureListener { throwable ->
+                Log.w(TAG, "Failed to request watch app open on node=${node.id}", throwable)
             }
     }
 

@@ -171,6 +171,7 @@ fun RecordRoute(
     }
 
     LaunchedEffect(Unit) {
+        viewModel.onRecordScreenEntered()
         val granted = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.CAMERA

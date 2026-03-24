@@ -93,6 +93,10 @@ class RecordViewModel @Inject constructor(
         }
     }
 
+    fun onRecordScreenEntered() {
+        recordingStateSyncManager.launchWatchApp()
+    }
+
     fun onPermissionChanged(granted: Boolean) {
         _uiState.update { current ->
             current.copy(

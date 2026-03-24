@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -18,16 +19,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import com.ddgo.wear.ui.dashboard.WatchDashboardDevModeScreen
 import com.ddgo.wear.ui.dashboard.WatchDashboardDevPreset
 import com.ddgo.wear.data.ExerciseRuntimeStore
 import com.ddgo.wear.data.RecordingStateStore
 import com.ddgo.wear.data.RecordingStateSyncProcessor
 import com.ddgo.wear.runtime.SessionRecoveryCoordinator
+import com.ddgo.wear.runtime.WatchHaptics
 import com.ddgo.wear.runtime.WearPermissionHelper
 import com.ddgo.wear.ui.dashboard.ExercisePermissionUiState
 import com.ddgo.wear.ui.dashboard.WatchDashboardActionKind
 import com.ddgo.wear.ui.dashboard.WatchDashboardScreen
+import com.ddgo.wear.ui.dashboard.WatchDashboardVisualState
 import com.ddgo.wear.ui.dashboard.buildWatchDashboardDevUiState
 import com.ddgo.wear.ui.dashboard.buildWatchDashboardUiState
 import com.google.android.gms.wearable.DataClient
@@ -184,12 +188,26 @@ private fun WearApp(
     var selectedDevPresetName by rememberSaveable { mutableStateOf(WatchDashboardDevPreset.LIVE.name) }
     var tapCount by remember { mutableIntStateOf(0) }
     var lastTapAt by remember { mutableLongStateOf(0L) }
+    val appContext = LocalContext.current.applicationContext
+    val haptics = remember(appContext) {
+        WatchHaptics(appContext)
+    }
 
     val selectedDevPreset = WatchDashboardDevPreset.valueOf(selectedDevPresetName)
     val displayedUiState = if (debugEnabled && selectedDevPreset != WatchDashboardDevPreset.LIVE) {
         buildWatchDashboardDevUiState(selectedDevPreset)
     } else {
         liveUiState
+    }
+
+    LaunchedEffect(selectedDevPreset, displayedUiState.visualState, debugEnabled) {
+        if (
+            debugEnabled &&
+            selectedDevPreset != WatchDashboardDevPreset.LIVE &&
+            displayedUiState.visualState == WatchDashboardVisualState.ALERTING
+        ) {
+            haptics.triggerAlert()
+        }
     }
 
     fun openDevMenu() {

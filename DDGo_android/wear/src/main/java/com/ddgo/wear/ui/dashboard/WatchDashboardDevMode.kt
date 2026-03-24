@@ -205,6 +205,7 @@ internal fun buildWatchDashboardDevUiState(
                 WatchDashboardMetricUi("측정", "대기"),
                 WatchDashboardMetricUi("연결", "정상")
             ),
+            actionHighlights = emptyList(),
             footer = null
         )
 
@@ -221,6 +222,7 @@ internal fun buildWatchDashboardDevUiState(
                 WatchDashboardMetricUi("세션", "복구"),
                 WatchDashboardMetricUi("연결", "정상")
             ),
+            actionHighlights = emptyList(),
             footer = null
         )
 
@@ -238,6 +240,7 @@ internal fun buildWatchDashboardDevUiState(
                 WatchDashboardMetricUi("경고", "안전"),
                 WatchDashboardMetricUi("연결", "정상")
             ),
+            actionHighlights = emptyList(),
             footer = null
         )
 
@@ -255,6 +258,7 @@ internal fun buildWatchDashboardDevUiState(
                 WatchDashboardMetricUi("경고", "주의"),
                 WatchDashboardMetricUi("연결", "정상")
             ),
+            actionHighlights = emptyList(),
             footer = null
         )
 
@@ -266,11 +270,14 @@ internal fun buildWatchDashboardDevUiState(
             value = "권한",
             unit = null,
             headline = "권한 필요",
-            body = "심박수와 활동 인식 권한을 허용해주세요",
+            body = "심박 측정을 위해 권한을 허용해주세요",
             metrics = emptyList(),
+            actionHighlights = listOf(
+                "심박수 측정",
+                "활동 인식 · 백그라운드"
+            ),
             footer = null,
-            primaryAction = WatchDashboardActionUi("허용하기", WatchDashboardActionKind.REQUEST_PERMISSION),
-            secondaryAction = WatchDashboardActionUi("설정", WatchDashboardActionKind.OPEN_SETTINGS)
+            primaryAction = WatchDashboardActionUi("권한 허용", WatchDashboardActionKind.REQUEST_PERMISSION)
         )
 
         WatchDashboardDevPreset.SENSOR -> WatchDashboardUiState(
@@ -281,8 +288,12 @@ internal fun buildWatchDashboardDevUiState(
             value = "센서",
             unit = null,
             headline = "센서 오류",
-            body = "착용 상태를 확인하고 다시 시도해주세요",
+            body = "심박 신호를 다시 읽을 준비가 필요해요",
             metrics = emptyList(),
+            actionHighlights = listOf(
+                "손목에 밀착해서 착용",
+                "움직임을 줄이고 잠시 대기"
+            ),
             footer = null,
             primaryAction = WatchDashboardActionUi("다시 시도", WatchDashboardActionKind.RETRY_SESSION)
         )

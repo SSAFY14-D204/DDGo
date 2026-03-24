@@ -16,29 +16,18 @@ internal data class ExercisePermissionUiState(
     val summary: String
         get() {
             return when {
-                missingForegroundPermissions.isNotEmpty() && needsBackgroundPermission -> {
-                    if (Build.VERSION.SDK_INT >= 36) {
-                        "심박·활동 인식과 백그라운드 접근을 허용해주세요"
-                    } else {
-                        "센서·활동 인식과 백그라운드 접근을 허용해주세요"
-                    }
-                }
+                missingForegroundPermissions.isNotEmpty() && needsBackgroundPermission ->
+                    "심박 측정을 위해 권한을 허용해주세요"
 
-                missingForegroundPermissions.isNotEmpty() -> {
-                    if (Build.VERSION.SDK_INT >= 36) {
-                        "심박과 활동 인식을 허용해주세요"
-                    } else {
-                        "센서와 활동 인식을 허용해주세요"
-                    }
-                }
+                missingForegroundPermissions.isNotEmpty() ->
+                    "필요한 권한을 허용해주세요"
 
-                needsBackgroundPermission -> {
+                needsBackgroundPermission ->
                     if (Build.VERSION.SDK_INT >= 36) {
-                        "백그라운드 건강 데이터를 허용해주세요"
+                        "백그라운드 측정을 위해 추가 권한이 필요해요"
                     } else {
-                        "백그라운드 센서를 허용해주세요"
+                        "백그라운드 센서 권한을 허용해주세요"
                     }
-                }
 
                 else -> ""
             }
@@ -91,6 +80,7 @@ internal data class WatchDashboardUiState(
     val headline: String,
     val body: String,
     val metrics: List<WatchDashboardMetricUi>,
+    val actionHighlights: List<String>,
     val footer: String?,
     val primaryAction: WatchDashboardActionUi? = null,
     val secondaryAction: WatchDashboardActionUi? = null
@@ -145,7 +135,7 @@ internal fun buildWatchDashboardUiState(
         WatchDashboardVisualState.MEASURING -> "녹화 중 · 연결 정상"
         WatchDashboardVisualState.ALERTING -> "강도를 낮추고 호흡을 고르세요"
         WatchDashboardVisualState.PERMISSION_REQUIRED -> permissionState.summary
-        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "착용 상태를 확인하고 다시 시도하세요"
+        WatchDashboardVisualState.SENSOR_UNAVAILABLE -> "심박 신호를 다시 읽을 준비가 필요해요"
     }
 
     val metrics = if (visualState == WatchDashboardVisualState.PERMISSION_REQUIRED ||
@@ -195,7 +185,7 @@ internal fun buildWatchDashboardUiState(
 
     val primaryAction = when (visualState) {
         WatchDashboardVisualState.PERMISSION_REQUIRED -> WatchDashboardActionUi(
-            label = "허용하기",
+            label = "권한 허용",
             kind = WatchDashboardActionKind.REQUEST_PERMISSION
         )
 
@@ -207,14 +197,7 @@ internal fun buildWatchDashboardUiState(
         else -> null
     }
 
-    val secondaryAction = when (visualState) {
-        WatchDashboardVisualState.PERMISSION_REQUIRED -> WatchDashboardActionUi(
-            label = "설정",
-            kind = WatchDashboardActionKind.OPEN_SETTINGS
-        )
-
-        else -> null
-    }
+    val secondaryAction = null
 
     return WatchDashboardUiState(
         visualState = visualState,
@@ -240,6 +223,15 @@ internal fun buildWatchDashboardUiState(
         headline = headline,
         body = body,
         metrics = metrics,
+        actionHighlights = when (visualState) {
+            WatchDashboardVisualState.PERMISSION_REQUIRED -> buildPermissionHighlights(permissionState)
+            WatchDashboardVisualState.SENSOR_UNAVAILABLE -> listOf(
+                "손목에 밀착해서 착용",
+                "움직임을 줄이고 잠시 대기"
+            )
+
+            else -> emptyList()
+        },
         footer = runtimeSnapshot.sessionId?.take(8)?.let { "세션 $it" },
         primaryAction = primaryAction,
         secondaryAction = secondaryAction
@@ -284,5 +276,31 @@ private fun MeasurementStatus.toMetricLabel(isRecording: Boolean): String {
         MeasurementStatus.RECOVERING -> "복구"
         MeasurementStatus.PERMISSION_BLOCKED -> "권한"
         MeasurementStatus.UNAVAILABLE -> if (isRecording) "오류" else "대기"
+    }
+}
+
+private fun buildPermissionHighlights(permissionState: ExercisePermissionUiState): List<String> {
+    val missing = permissionState.missingForegroundPermissions.toSet()
+    val items = buildList {
+        if (
+            missing.contains("android.permission.health.READ_HEART_RATE") ||
+            missing.contains(android.Manifest.permission.BODY_SENSORS)
+        ) {
+            add("심박수 측정")
+        }
+        if (missing.contains(android.Manifest.permission.ACTIVITY_RECOGNITION) && permissionState.needsBackgroundPermission) {
+            add("활동 인식 · 백그라운드")
+        } else {
+            if (missing.contains(android.Manifest.permission.ACTIVITY_RECOGNITION)) {
+                add("활동 인식")
+            }
+            if (permissionState.needsBackgroundPermission) {
+                add("백그라운드 접근")
+            }
+        }
+    }
+
+    return items.take(2).ifEmpty {
+        listOf("심박수 측정", "활동 인식")
     }
 }
