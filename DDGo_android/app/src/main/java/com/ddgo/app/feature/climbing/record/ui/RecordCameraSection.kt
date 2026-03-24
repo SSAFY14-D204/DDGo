@@ -19,13 +19,15 @@ fun RecordCameraSection(
     previewContent: @Composable BoxScope.() -> Unit,
     overlayContent: @Composable BoxScope.() -> Unit
 ) {
+    val frameShape = RoundedCornerShape(28.dp)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(3f / 4f)
-            .clip(RoundedCornerShape(28.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
-            .background(Color.Black)
+            .clip(frameShape)
+            .border(1.dp, RecordBorder.copy(alpha = 0.72f), frameShape)
+            .background(RecordBackdrop)
             .padding(1.dp)
     ) {
         previewContent()

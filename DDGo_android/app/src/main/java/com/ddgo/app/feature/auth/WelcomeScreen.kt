@@ -56,7 +56,7 @@ fun AuthLandingScreen(onRegisterClick: () -> Unit, onLoginClick: () -> Unit) {
             Spacer(modifier = Modifier.height(28.dp))
 
             Text(
-                text = "\uCD94\uB77D\uC758 \uB370\uC774\uD130\uB97C \uBC14\uAFB8\uB294",
+                text = "추락의 데이터를 바꾸는",
                 fontSize = 16.sp,
                 fontFamily = PretendardFamily
             )
@@ -80,7 +80,7 @@ fun AuthLandingScreen(onRegisterClick: () -> Unit, onLoginClick: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00A3FF))
             ) {
                 Text(
-                    text = "\uC2DC\uC791\uD558\uAE30",
+                    text = "시작하기",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontFamily = PretendardFamily
@@ -89,12 +89,12 @@ fun AuthLandingScreen(onRegisterClick: () -> Unit, onLoginClick: () -> Unit) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "\uC774\uBBF8 \uACC4\uC815\uC774 \uC788\uB098\uC694? ",
+                    text = "이미 계정이 있나요? ",
                     color = Color.Gray,
                     fontFamily = PretendardFamily
                 )
                 Text(
-                    text = "\uB85C\uADF8\uC778",
+                    text = "로그인",
                     color = Color(0xFF00A3FF),
                     modifier = Modifier.clickable { onLoginClick() },
                     textDecoration = TextDecoration.Underline,
@@ -126,7 +126,7 @@ private fun DdgoMascotBadge(size: Dp = 132.dp) {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_ddgo_mascot),
-                contentDescription = "\uB514\uB514 \uCE90\uB9AD\uD130",
+                contentDescription = "디디 캐릭터",
                 modifier = Modifier.size(size * 0.6f)
             )
         }

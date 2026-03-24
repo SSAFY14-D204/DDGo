@@ -190,9 +190,9 @@ fun FinalAnalysisRoute(
             focusReasonText = focusReasonText,
             statsFocusFraction = statsFocusFraction,
             actionText = if (attemptCount > 1 && safeSelectedAttempt < attemptCount) {
-                "\uB2E4\uC74C \uC2DC\uB3C4"
+                "다음 시도"
             } else {
-                "\uCC4C\uB9B0\uC9C0 \uC885\uD569 \uBD84\uC11D \uBCF4\uAE30"
+                "챌린지 종합 분석 보기"
             }
         )
     }
@@ -257,10 +257,10 @@ private fun buildFocusReasonText(
         .map(::toFocusReasonKeyword)
     val causeSentence = when {
         causeKeywords.size >= 2 ->
-            "${causeKeywords.joinToString("\uACFC ")}\uC774 \uD568\uAED8 \uB098\uD0C0\uB09C \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+            "${causeKeywords.joinToString("과 ")}이 함께 나타난 구간입니다."
 
         causeKeywords.size == 1 ->
-            "${causeKeywords.first()}\uC774 \uB450\uB4DC\uB7EC\uC9C4 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+            "${causeKeywords.first()}이 두드러진 구간입니다."
 
         else ->
             null
@@ -268,13 +268,13 @@ private fun buildFocusReasonText(
 
     return when {
         causeSentence != null && loadFocusLabel != null ->
-            "$causeSentence \uD2B9\uD788 ${loadFocusLabel}\uC5D0 \uBD80\uB2F4\uC774 \uD06C\uAC8C \uC2E4\uB9B0 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+            "$causeSentence 특히 ${loadFocusLabel}에 부담이 크게 실린 구간입니다."
 
         causeSentence != null ->
             causeSentence
 
         loadFocusLabel != null ->
-            "${loadFocusLabel}\uC5D0 \uBD80\uB2F4\uC774 \uD06C\uAC8C \uC2E4\uB9B0 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+            "${loadFocusLabel}에 부담이 크게 실린 구간입니다."
 
         else ->
             null
@@ -283,10 +283,10 @@ private fun buildFocusReasonText(
 
 private fun toFocusReasonKeyword(type: String): String {
     return when (type) {
-        "\uBC1C \uC0AC\uC6A9 \uBD80\uC871" -> "\uBC1C \uD65C\uC6A9 \uBD80\uC871"
-        "\uC911\uC2EC \uD754\uB4E4\uB9BC" -> "\uC911\uC2EC \uD754\uB4E4\uB9BC"
-        "\uD314 \uC0AC\uC6A9 \uACFC\uB2E4" -> "\uD314 \uD798 \uC758\uC874"
-        "\uACFC\uD55C \uBC84\uD2F0\uAE30" -> "\uC624\uB798 \uBC84\uD2F0\uAE30"
+        "발 사용 부족" -> "발 활용 부족"
+        "중심 흔들림" -> "중심 흔들림"
+        "팔 사용 과다" -> "팔 힘 의존"
+        "과한 버티기" -> "오래 버티기"
         else -> type
     }
 }

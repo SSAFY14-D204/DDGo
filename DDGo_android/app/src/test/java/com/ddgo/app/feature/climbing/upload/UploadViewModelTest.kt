@@ -15,11 +15,16 @@ import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.model.AnalysisPointKind
+import com.ddgo.app.domain.model.ChallengeSession
+import com.ddgo.app.domain.model.GymGrade
+import com.ddgo.app.domain.model.GymSummary
 import com.ddgo.app.domain.model.Hold
+import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
 import com.ddgo.app.domain.model.PrePoseVideoAnalysisResult
 import com.ddgo.app.domain.model.ProcessedPoseDetectionFrame
+import com.ddgo.app.domain.model.ResolvedGym
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.domain.model.User
 import com.ddgo.app.domain.poseanalysis.HandPeakAnnotation
@@ -2266,6 +2271,110 @@ class UploadViewModelTest {
         )
     }
 
+    @Test
+    fun `realtime challenge create flow keeps selection local until explicit completion and preserves ready sheet behavior`() = runTest {
+        val poseEstimator = mockk<PoseEstimator>(relaxed = true)
+        val prePoseVideoAnalysisProvider = mockk<PrePoseVideoAnalysisProvider>(relaxed = true)
+        val gymRepository = mockk<GymRepository>(relaxed = true)
+        val challengeRepository = mockk<ChallengeRepository>(relaxed = true)
+        val place = NearbyPlace(
+            externalPlaceId = "place-1",
+            placeName = "DDGo Climbing",
+            addressName = "Seoul",
+            roadAddressName = "Seoul Road 1",
+            latitude = 37.0,
+            longitude = 127.0,
+            distanceMeters = 120
+        )
+        val grade = GymGrade(
+            gymGradeId = 101,
+            colorName = "skyblue",
+            sortOrder = 3,
+            colorHex = "#4396FB",
+            gradeLabel = ""
+        )
+        val resolvedGym = ResolvedGym(
+            matched = true,
+            gymId = 88,
+            gradeSource = "ddgo",
+            matchStatus = "matched",
+            needsReview = false,
+            gym = GymSummary(
+                id = 88,
+                displayName = "DDGo Climbing",
+                region = "Seoul",
+                logoBucket = null,
+                logoObjectKey = null,
+                brandLogoBucket = null,
+                brandLogoObjectKey = null
+            ),
+            grades = listOf(grade)
+        )
+        val challengeSession = ChallengeSession(
+            challengeId = 501L,
+            gymId = 88L,
+            gymGradeId = 101L,
+            gymName = "DDGo Climbing",
+            problemColor = "skyblue",
+            gradeLabel = "V3",
+            challengeStatus = "CREATED",
+            startedAt = "2026-03-24T10:00:00",
+            createdAt = "2026-03-24T10:00:01"
+        )
+
+        coEvery { gymRepository.resolveGym(any()) } returns Result.success(resolvedGym)
+        coEvery { challengeRepository.createChallenge(any(), any(), any()) } returns Result.success(challengeSession)
+
+        val viewModel = createViewModel(
+            poseEstimator = poseEstimator,
+            prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            gymRepository = gymRepository,
+            challengeRepository = challengeRepository
+        )
+
+        viewModel.beginRealtimeChallengeUploadFlow()
+        viewModel.resolveSelectedPlace(place)
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(RealtimeSetupStep.ChallengeCreate, viewModel.realtimeOverlayUiState.setupStep)
+
+        viewModel.onRealtimeGymGradeSelected(grade)
+
+        assertEquals(RealtimeSetupStep.ChallengeCreate, viewModel.realtimeOverlayUiState.setupStep)
+        assertEquals(grade.gymGradeId, viewModel.realtimeOverlayUiState.selectedGymGrade?.gymGradeId)
+        assertEquals("V3", viewModel.realtimeOverlayUiState.difficultyLabel)
+        assertEquals("skyblue", viewModel.selectedHoldColorKey)
+        assertFalse(viewModel.realtimeOverlayUiState.isChallengeReady)
+        coVerify(exactly = 0) { challengeRepository.createChallenge(any(), any(), any()) }
+
+        viewModel.updateRealtimeHoldColorSheetVisible(true)
+        assertFalse(viewModel.realtimeOverlayUiState.isHoldColorSheetVisible)
+
+        viewModel.onRealtimeHoldColorSelected("navy")
+        assertEquals(RealtimeSetupStep.ChallengeCreate, viewModel.realtimeOverlayUiState.setupStep)
+        assertEquals("navy", viewModel.selectedHoldColorKey)
+        assertFalse(viewModel.realtimeOverlayUiState.isChallengeReady)
+        coVerify(exactly = 0) { challengeRepository.createChallenge(any(), any(), any()) }
+
+        viewModel.completeRealtimeChallengeSetup()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(RealtimeSetupStep.Ready, viewModel.realtimeOverlayUiState.setupStep)
+        assertEquals("navy", viewModel.selectedHoldColorKey)
+        assertEquals("V3", viewModel.realtimeOverlayUiState.difficultyLabel)
+        assertTrue(viewModel.realtimeOverlayUiState.isChallengeReady)
+        coVerify(exactly = 1) { challengeRepository.createChallenge(any(), any(), any()) }
+
+        viewModel.updateRealtimeHoldColorSheetVisible(true)
+        assertTrue(viewModel.realtimeOverlayUiState.isHoldColorSheetVisible)
+
+        viewModel.onRealtimeHoldColorSelected("red")
+
+        assertEquals("red", viewModel.selectedHoldColorKey)
+        assertFalse(viewModel.realtimeOverlayUiState.isHoldColorSheetVisible)
+        coVerify(exactly = 1) { challengeRepository.createChallenge(any(), any(), any()) }
+    }
+
     private fun createViewModel(
         context: Context = mockContext(),
         poseEstimator: PoseEstimator,
@@ -2276,12 +2385,12 @@ class UploadViewModelTest {
         analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase = mockk(),
         stubAnalyzeAttemptWithAiUseCase: Boolean = true,
         attemptRepository: AttemptRepository = mockk(relaxed = true),
+        challengeRepository: ChallengeRepository = mockk(relaxed = true),
+        gymRepository: GymRepository = mockk(relaxed = true),
         personDetector: PersonDetector = mockk(relaxed = true),
         holdDetector: HoldDetector = mockk(relaxed = true),
         holdColorClassifier: HoldColorClassifier = HoldColorClassifier()
     ): UploadViewModel {
-        val challengeRepository = mockk<ChallengeRepository>(relaxed = true)
-        val gymRepository = mockk<GymRepository>(relaxed = true)
         val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
         coEvery {
             challengeRepository.saveChallengeHolds(any(), any())

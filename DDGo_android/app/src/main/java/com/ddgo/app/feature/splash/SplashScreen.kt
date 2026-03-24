@@ -190,7 +190,7 @@ private fun DdgoWordmark(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         SplashSyllable(
-            text = "\uB514",
+            text = "디",
             color = color,
             alpha = windowProgress(introProgress, 0.27f, 0.39f),
             offsetX = lerpDp((-18).dp, 0.dp, windowProgress(introProgress, 0.27f, 0.52f)),
@@ -199,7 +199,7 @@ private fun DdgoWordmark(
             scale = lerpFloat(0.92f, 1f, windowProgress(introProgress, 0.27f, 0.52f))
         )
         SplashSyllable(
-            text = "\uB514",
+            text = "디",
             color = color,
             alpha = windowProgress(introProgress, 0.35f, 0.47f),
             offsetX = 0.dp,
@@ -208,7 +208,7 @@ private fun DdgoWordmark(
             scale = lerpFloat(0.94f, 1f, windowProgress(introProgress, 0.35f, 0.55f))
         )
         SplashSyllable(
-            text = "\uACE0",
+            text = "고",
             color = color,
             alpha = windowProgress(introProgress, 0.43f, 0.55f),
             offsetX = lerpDp(18.dp, 0.dp, windowProgress(introProgress, 0.43f, 0.61f)),

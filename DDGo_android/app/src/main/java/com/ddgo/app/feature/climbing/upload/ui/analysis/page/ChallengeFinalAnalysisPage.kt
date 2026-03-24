@@ -55,9 +55,9 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.ChallengeCruxDi
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.ChallengeMetricOverviewPanel
 
 internal enum class ChallengeFinalAnalysisTab(val label: String) {
-    Overview("\uC885\uD569"),
-    Comparison("\uC2DC\uB3C4 \uBE44\uAD50"),
-    Pattern("\uD575\uC2EC \uD328\uD134")
+    Overview("종합"),
+    Comparison("시도 비교"),
+    Pattern("핵심 패턴")
 }
 
 internal data class ChallengePreviewHeroState(
@@ -130,7 +130,7 @@ internal fun ChallengeFinalAnalysisPage(
         Spacer(modifier = Modifier.height(22.dp))
 
         AnalysisGradientButton(
-            text = "\uD648\uC73C\uB85C",
+            text = "홈으로",
             onClick = onPrimaryAction,
             modifier = Modifier
                 .fillMaxWidth()
@@ -168,13 +168,13 @@ private fun ChallengeFinalAnalysisTopBar(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "\uB4A4\uB85C \uAC00\uAE30",
+                contentDescription = "뒤로 가기",
                 tint = Color.White
             )
         }
 
         Text(
-            text = "\uCC4C\uB9B0\uC9C0 \uBD84\uC11D \uACB0\uACFC",
+            text = "챌린지 분석 결과",
             modifier = Modifier.align(Alignment.Center),
             color = AnalysisText,
             fontSize = 18.sp,
@@ -205,7 +205,7 @@ private fun ChallengePreviewHero(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = state.gymName.ifBlank { "\uD074\uB77C\uC774\uBC0D \uCC4C\uB9B0\uC9C0" },
+                    text = state.gymName.ifBlank { "클라이밍 챌린지" },
                     color = AnalysisText,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
@@ -234,15 +234,15 @@ private fun ChallengePreviewHero(
                         )
                     }
                     HeaderChip(
-                        text = "\uCD1D ${state.attemptCount}\uD68C \uC2DC\uB3C4",
+                        text = "총 ${state.attemptCount}회 시도",
                         background = Color(0xFF2B3138),
                         contentColor = Color.White
                     )
                     HeaderChip(
                         text = if (state.overallSuccess) {
-                            "\uC644\uB4F1 \uC131\uACF5"
+                            "완등 성공"
                         } else {
-                            "\uC644\uB4F1 \uBBF8\uB2EC"
+                            "완등 미달"
                         },
                         background = if (state.overallSuccess) {
                             AnalysisSuccess.copy(alpha = 0.24f)
@@ -283,16 +283,16 @@ private fun ChallengePreviewHero(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "\uCC4C\uB9B0\uC9C0 \uC885\uD569 \uBD84\uC11D",
+                    text = "챌린지 종합 분석",
                     color = Color.White,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = if (state.overallSuccess) {
-                        "\uCD1D ${state.attemptCount}\uD68C \uC2DC\uB3C4 \u00B7 ${state.successAttemptCount}\uD68C \uC644\uB4F1"
+                        "총 ${state.attemptCount}회 시도 · ${state.successAttemptCount}회 완등"
                     } else {
-                        "\uCD1D ${state.attemptCount}\uD68C \uC2DC\uB3C4 \u00B7 \uC644\uB4F1 \uBBF8\uB2EC"
+                        "총 ${state.attemptCount}회 시도 · 완등 미달"
                     },
                     color = Color.White.copy(alpha = 0.86f),
                     fontSize = 13.sp
@@ -308,9 +308,9 @@ private fun ChallengeSummaryCard(
     modifier: Modifier = Modifier
 ) {
     val chipLabels = buildList {
-        summary.repeatedCruxHoldLabel?.let { add("\uBC18\uBCF5 \uB09C\uAD6C\uAC04 $it") }
+        summary.repeatedCruxHoldLabel?.let { add("반복 난구간 $it") }
         addAll(summary.repeatedPatternLabels)
-        summary.repeatedLoadFocusLabel?.let { add("$it \uBD80\uB2F4") }
+        summary.repeatedLoadFocusLabel?.let { add("$it 부담") }
     }
 
     Box(
@@ -322,7 +322,7 @@ private fun ChallengeSummaryCard(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                text = "\uBB38\uC81C \uC694\uC57D",
+                text = "문제 요약",
                 color = AnalysisMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
@@ -370,7 +370,7 @@ private fun ChallengeOverviewTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         AnalysisInsightCard(
-            title = "\uC2DC\uB3C4 \uD750\uB984",
+            title = "시도 흐름",
             highlights = summary.trendHighlights,
             modifier = Modifier.padding(horizontal = 22.dp)
         )
@@ -378,7 +378,7 @@ private fun ChallengeOverviewTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         AnalysisInsightCard(
-            title = "\uBB38\uC81C \uD574\uC124",
+            title = "문제 해설",
             highlights = listOf(summary.completionLine, summary.challengeNatureLine),
             modifier = Modifier.padding(horizontal = 22.dp)
         )
@@ -397,7 +397,7 @@ private fun ChallengeComparisonTab(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
-            text = "\uC2DC\uB3C4\uBCC4 \uBE44\uAD50",
+            text = "시도별 비교",
             color = AnalysisText,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold
@@ -425,14 +425,14 @@ private fun ChallengePatternTab(
             modifier = Modifier.padding(bottom = 2.dp)
         )
         PatternKeyCard(
-            title = "\uBC18\uBCF5\uB41C \uB09C\uAD6C\uAC04",
-            caption = "\uAC00\uC7A5 \uC790\uC8FC \uBC84\uAC70\uC6E0\uB358 \uAD6C\uAC04",
+            title = "반복된 난구간",
+            caption = "가장 자주 버거웠던 구간",
             value = summary.repeatedCruxHoldLabel ?: FinalAnalysisUnknownMetricText,
             modifier = Modifier.padding(horizontal = 22.dp)
         )
         PatternKeyCard(
-            title = "\uBC18\uBCF5\uB41C \uC6D0\uC778",
-            caption = "\uC2DC\uB3C4 \uC804\uBC18\uC5D0\uC11C \uC790\uC8FC \uBCF4\uC778 \uC2E0\uD638",
+            title = "반복된 원인",
+            caption = "시도 전반에서 자주 보인 신호",
             value = summary.repeatedPatternLabels
                 .takeIf { it.isNotEmpty() }
                 ?.joinToString(", ")
@@ -440,14 +440,14 @@ private fun ChallengePatternTab(
             modifier = Modifier.padding(horizontal = 22.dp)
         )
         PatternKeyCard(
-            title = "\uBD80\uB2F4 \uC9D1\uC911 \uBD80\uC704",
-            caption = "\uD798\uC774 \uC790\uC8FC \uB9CE\uC774 \uB4E4\uC5B4\uAC04 \uBD80\uC704",
+            title = "부담 집중 부위",
+            caption = "힘이 자주 많이 들어간 부위",
             value = summary.repeatedLoadFocusLabel ?: FinalAnalysisUnknownMetricText,
             modifier = Modifier.padding(horizontal = 22.dp)
         )
 
         AnalysisInsightCard(
-            title = "\uBC18\uBCF5\uB41C \uD328\uD134 \uD574\uC124",
+            title = "반복된 패턴 해설",
             highlights = summary.patternHighlights,
             modifier = Modifier.padding(horizontal = 22.dp)
         )
@@ -461,7 +461,7 @@ private fun AttemptComparisonCard(
 ) {
     val tagLabels = buildList {
         addAll(item.tagLabels)
-        item.loadFocusLabel?.let { add("$it \uBD80\uB2F4") }
+        item.loadFocusLabel?.let { add("$it 부담") }
     }
 
     Box(
@@ -478,13 +478,13 @@ private fun AttemptComparisonCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${item.attemptNo}\uBC88\uC9F8 \uC2DC\uB3C4",
+                    text = "${item.attemptNo}번째 시도",
                     color = AnalysisText,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 StatusChip(
-                    text = if (item.isSuccess) "\uC131\uACF5" else "\uC2E4\uD328",
+                    text = if (item.isSuccess) "성공" else "실패",
                     background = if (item.isSuccess) {
                         AnalysisSuccess.copy(alpha = 0.22f)
                     } else {
@@ -498,17 +498,17 @@ private fun AttemptComparisonCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 AttemptMetricItem(
-                    title = "\uB3C4\uB2EC \uD640\uB4DC",
+                    title = "도달 홀드",
                     value = formatAttemptReachedMetric(item),
                     modifier = Modifier.weight(1f)
                 )
                 AttemptMetricItem(
-                    title = "\uADE0\uD615 \uC720\uC9C0",
+                    title = "균형 유지",
                     value = item.insideSupportRatioText,
                     modifier = Modifier.weight(1f)
                 )
                 AttemptMetricItem(
-                    title = "\uC190\uBC1C \uC9C0\uC9C0",
+                    title = "손발 지지",
                     value = item.stableContactRatioText,
                     modifier = Modifier.weight(1f)
                 )

@@ -8,11 +8,11 @@ import com.ddgo.app.domain.usecase.StallSegmentAnnotation
 internal const val POSE_END_PREVIEW_LOOKBACK_MS = 3_000L
 
 private const val WALL_ARRIVAL_DESCRIPTION =
-    "\uB4F1\uBC18 \uC900\uBE44 \uC2DC\uC810"
+    "등반 준비 시점"
 private const val STALL_DESCRIPTION =
-    "\uBAB8\uC774 \uC815\uCCB4\uB41C \uAD6C\uAC04"
+    "몸이 정체된 구간"
 private const val CLIMB_END_DESCRIPTION =
-    "\uB4F1\uBC18 \uC885\uB8CC \uC9C0\uC810"
+    "등반 종료 지점"
 
 internal fun buildAttemptTimelinePoints(
     wallArrivalTimeMs: Long?,

@@ -1,13 +1,18 @@
 package com.ddgo.app.feature.climbing.record
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import com.ddgo.app.feature.climbing.record.ui.RecordRoute
+import com.ddgo.app.feature.climbing.upload.ChallengeCreateEntryStep
+import com.ddgo.app.feature.climbing.upload.ChallengeCreatePresentationMode
 import com.ddgo.app.feature.climbing.upload.ChallengeCreationUiState
+import com.ddgo.app.feature.climbing.upload.ChallengeCreateScreen
 import com.ddgo.app.feature.climbing.upload.GymResolveUiState
 import com.ddgo.app.feature.climbing.upload.GymSearchUiState
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
@@ -39,6 +44,17 @@ fun NavGraphBuilder.recordGraph(
                 gymResolveUiState = gymResolveUiState,
                 challengeCreationUiState = challengeCreationUiState
             )
+            val challengeCreateCardContent: @Composable () -> Unit = remember(uploadViewModel) {
+                @Composable {
+                    ChallengeCreateScreen(
+                        viewModel = uploadViewModel,
+                        initialStep = ChallengeCreateEntryStep.LEVEL,
+                        minimumStep = ChallengeCreateEntryStep.LEVEL,
+                        presentationMode = ChallengeCreatePresentationMode.RealtimeEmbedded,
+                        onNavigateBack = uploadViewModel::openRealtimeGymList
+                    )
+                }
+            }
 
             RecordRoute(
                 onNavigateBack = { navController.popBackStack() },
@@ -52,9 +68,9 @@ fun NavGraphBuilder.recordGraph(
                 onSearchNearbyGyms = uploadViewModel::searchNearbyPlaces,
                 onSearchQueryChange = uploadViewModel::onRealtimeGymSearchQueryChanged,
                 onSelectGym = uploadViewModel::onRealtimeNearbyPlaceSelected,
-                onSelectDifficulty = uploadViewModel::onRealtimeGymGradeSelected,
                 onSelectHoldColor = uploadViewModel::onRealtimeHoldColorSelected,
                 onSetHoldColorSheetVisible = uploadViewModel::updateRealtimeHoldColorSheetVisible,
+                challengeCreateCardContent = challengeCreateCardContent
             )
         }
     }

@@ -76,18 +76,18 @@ class SearchNearbyClimbingGymsUseCase @Inject constructor(
 
         if (trimmedQuery.isBlank()) {
             return listOf(
-                SearchQueryCandidate("\uD074\uB77C\uC774\uBC0D\uC7A5"),
-                SearchQueryCandidate("\uC554\uC7A5"),
-                SearchQueryCandidate("\uBCFC\uB354\uB9C1")
+                SearchQueryCandidate("클라이밍장"),
+                SearchQueryCandidate("암장"),
+                SearchQueryCandidate("볼더링")
             )
         }
 
         val normalized = trimmedQuery.lowercase()
         val climbingKeywords = listOf(
-            "\uD074\uB77C\uC774\uBC0D",
-            "\uD074\uB77C\uC774\uBC0D\uC7A5",
-            "\uC554\uC7A5",
-            "\uBCFC\uB354\uB9C1",
+            "클라이밍",
+            "클라이밍장",
+            "암장",
+            "볼더링",
             "climbing",
             "bouldering",
             "gym"
@@ -98,10 +98,10 @@ class SearchNearbyClimbingGymsUseCase @Inject constructor(
         }
 
         return buildList {
-            add(SearchQueryCandidate("$trimmedQuery \uD074\uB77C\uC774\uBC0D"))
-            add(SearchQueryCandidate("$trimmedQuery \uD074\uB77C\uC774\uBC0D\uC7A5"))
-            add(SearchQueryCandidate("$trimmedQuery \uC554\uC7A5"))
-            add(SearchQueryCandidate("$trimmedQuery \uBCFC\uB354\uB9C1"))
+            add(SearchQueryCandidate("$trimmedQuery 클라이밍"))
+            add(SearchQueryCandidate("$trimmedQuery 클라이밍장"))
+            add(SearchQueryCandidate("$trimmedQuery 암장"))
+            add(SearchQueryCandidate("$trimmedQuery 볼더링"))
             add(SearchQueryCandidate("$trimmedQuery climbing"))
             add(SearchQueryCandidate("$trimmedQuery bouldering"))
             add(SearchQueryCandidate(trimmedQuery, allowGlobalFallback = false))

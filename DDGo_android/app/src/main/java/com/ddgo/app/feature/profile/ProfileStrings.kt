@@ -10,113 +10,113 @@ package com.ddgo.app.feature.profile
  */
 internal object ProfileStrings {
 
-    const val ScreenTitle = "\uD504\uB85C\uD544"
-    const val Loading = "\uBD88\uB7EC\uC624\uB294 \uC911"
-    const val LoadingAccount = "\uACC4\uC815 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uB294 \uC911"
-    const val DefaultNickname = "\uC0AC\uC6A9\uC790"
+    const val ScreenTitle = "프로필"
+    const val Loading = "불러오는 중"
+    const val LoadingAccount = "계정 정보를 불러오는 중"
+    const val DefaultNickname = "사용자"
     const val Dash = "-"
 
-    const val AccountSectionTitle = "\uACC4\uC815"
-    const val AccountIdRowTitle = "\uACC4\uC815"
-    const val UsernameRowTitle = "\uC544\uC774\uB514"
-    const val NicknameRowTitle = "\uB2C9\uB124\uC784"
-    const val NicknameEmpty = "\uBBF8\uC124\uC815"
-    const val KakaoAccountLabel = "\uCE74\uCE74\uC624 \uB85C\uADF8\uC778 \uACC4\uC815"
-    const val GoogleAccountLabel = "\uAD6C\uAE00 \uB85C\uADF8\uC778 \uACC4\uC815"
-    const val KakaoDefaultNickname = "\uCE74\uCE74\uC624 \uC0AC\uC6A9\uC790"
-    const val GoogleDefaultNickname = "\uAD6C\uAE00 \uC0AC\uC6A9\uC790"
+    const val AccountSectionTitle = "계정"
+    const val AccountIdRowTitle = "계정"
+    const val UsernameRowTitle = "아이디"
+    const val NicknameRowTitle = "닉네임"
+    const val NicknameEmpty = "미설정"
+    const val KakaoAccountLabel = "카카오 로그인 계정"
+    const val GoogleAccountLabel = "구글 로그인 계정"
+    const val KakaoDefaultNickname = "카카오 사용자"
+    const val GoogleDefaultNickname = "구글 사용자"
 
-    const val ActionRegister = "\uB4F1\uB85D"
-    const val ActionEdit = "\uC218\uC815"
-    const val ActionSave = "\uC800\uC7A5"
-    const val ActionInput = "\uC785\uB825"
-    const val ActionCancel = "\uCDE8\uC18C"
+    const val ActionRegister = "등록"
+    const val ActionEdit = "수정"
+    const val ActionSave = "저장"
+    const val ActionInput = "입력"
+    const val ActionCancel = "취소"
 
-    const val NicknameCreateTitle = "\uB2C9\uB124\uC784 \uB4F1\uB85D"
-    const val NicknameUpdateTitle = "\uB2C9\uB124\uC784 \uBCC0\uACBD"
+    const val NicknameCreateTitle = "닉네임 등록"
+    const val NicknameUpdateTitle = "닉네임 변경"
     const val NicknameCreateDescription =
-        "\uD45C\uC2DC\uD560 \uC774\uB984\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694. \uB2C9\uB124\uC784\uC740 20\uC790 \uC774\uD558\uB85C \uC124\uC815\uD560 \uC218 \uC788\uC5B4\uC694."
+        "표시할 이름을 입력해 주세요. 닉네임은 20자 이하로 설정할 수 있어요."
     const val NicknameUpdateDescription =
-        "\uBC14\uAFC0 \uB2C9\uB124\uC784\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694. \uB2C9\uB124\uC784\uC740 20\uC790 \uC774\uD558\uB85C \uC124\uC815\uD560 \uC218 \uC788\uC5B4\uC694."
-    const val NicknameFieldLabel = "\uB2C9\uB124\uC784"
+        "바꿀 닉네임을 입력해 주세요. 닉네임은 20자 이하로 설정할 수 있어요."
+    const val NicknameFieldLabel = "닉네임"
 
-    const val BodyProfileSectionTitle = "\uC2E0\uCCB4 \uC815\uBCF4"
-    const val SexRowTitle = "\uC131\uBCC4"
-    const val HeightRowTitle = "\uD0A4"
-    const val WeightRowTitle = "\uBAB8\uBB34\uAC8C"
-    const val WingspanRowTitle = "\uD314 \uAE38\uC774"
-    const val BodyProfileEditRowTitle = "\uC2E0\uCCB4 \uC815\uBCF4"
-    const val BodyProfileMissing = "\uBBF8\uC785\uB825"
+    const val BodyProfileSectionTitle = "신체 정보"
+    const val SexRowTitle = "성별"
+    const val HeightRowTitle = "키"
+    const val WeightRowTitle = "몸무게"
+    const val WingspanRowTitle = "팔 길이"
+    const val BodyProfileEditRowTitle = "신체 정보"
+    const val BodyProfileMissing = "미입력"
 
-    const val BodyProfileCreateTitle = "\uC2E0\uCCB4 \uC815\uBCF4 \uC785\uB825"
-    const val BodyProfileUpdateTitle = "\uC2E0\uCCB4 \uC815\uBCF4 \uC218\uC815"
+    const val BodyProfileCreateTitle = "신체 정보 입력"
+    const val BodyProfileUpdateTitle = "신체 정보 수정"
     const val BodyProfileCreateDescription =
-        "\uAE30\uBCF8 \uC2E0\uCCB4 \uC815\uBCF4\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+        "기본 신체 정보를 입력해 주세요."
     const val BodyProfileUpdateDescription =
-        "\uBC14\uAFC0 \uC815\uBCF4\uB9CC \uC218\uC815\uD574 \uC8FC\uC138\uC694."
+        "바꿀 정보만 수정해 주세요."
     const val BodyProfileFieldDescriptionLoading =
-        "\uBD88\uB7EC\uC624\uB294 \uC911"
-    const val BodyProfileFieldLabelHeight = "\uD0A4"
-    const val BodyProfileFieldLabelWeight = "\uBAB8\uBB34\uAC8C"
-    const val BodyProfileFieldLabelWingspan = "\uD314 \uAE38\uC774"
-    const val BodyProfileSubmitCreate = "\uC785\uB825"
-    const val BodyProfileSubmitUpdate = "\uC800\uC7A5"
-    const val SexLabel = "\uC131\uBCC4"
-    const val SexMale = "\uB0A8\uC131"
-    const val SexFemale = "\uC5EC\uC131"
+        "불러오는 중"
+    const val BodyProfileFieldLabelHeight = "키"
+    const val BodyProfileFieldLabelWeight = "몸무게"
+    const val BodyProfileFieldLabelWingspan = "팔 길이"
+    const val BodyProfileSubmitCreate = "입력"
+    const val BodyProfileSubmitUpdate = "저장"
+    const val SexLabel = "성별"
+    const val SexMale = "남성"
+    const val SexFemale = "여성"
 
-    const val SecuritySectionTitle = "\uBCF4\uC548"
-    const val ChangePasswordRowTitle = "\uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD"
-    const val ChangePasswordDialogTitle = "\uBE44\uBC00\uBC88\uD638 \uBCC0\uACBD"
+    const val SecuritySectionTitle = "보안"
+    const val ChangePasswordRowTitle = "비밀번호 변경"
+    const val ChangePasswordDialogTitle = "비밀번호 변경"
     const val ChangePasswordDialogDescription =
-        "\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uB97C \uD655\uC778\uD55C \uB4A4 \uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694. \uC0C8 \uBE44\uBC00\uBC88\uD638\uB294 8~64\uC790, 2\uC885 \uC870\uD569\uC73C\uB85C \uC124\uC815\uD574\uC57C \uD574\uC694."
-    const val CurrentPasswordFieldLabel = "\uD604\uC7AC \uBE44\uBC00\uBC88\uD638"
-    const val NewPasswordFieldLabel = "\uC0C8 \uBE44\uBC00\uBC88\uD638"
-    const val ConfirmPasswordFieldLabel = "\uC0C8 \uBE44\uBC00\uBC88\uD638 \uD655\uC778"
-    const val LogoutRowTitle = "\uB85C\uADF8\uC544\uC6C3"
-    const val LogoutAction = "\uB85C\uADF8\uC544\uC6C3"
+        "현재 비밀번호를 확인한 뒤 새 비밀번호를 입력해 주세요. 새 비밀번호는 8~64자, 2종 조합으로 설정해야 해요."
+    const val CurrentPasswordFieldLabel = "현재 비밀번호"
+    const val NewPasswordFieldLabel = "새 비밀번호"
+    const val ConfirmPasswordFieldLabel = "새 비밀번호 확인"
+    const val LogoutRowTitle = "로그아웃"
+    const val LogoutAction = "로그아웃"
 
-    const val DangerZoneSectionTitle = "\uD68C\uC6D0 \uD0C8\uD1F4"
-    const val DangerZoneCardTitle = "\uACC4\uC815 \uC0AD\uC81C"
+    const val DangerZoneSectionTitle = "회원 탈퇴"
+    const val DangerZoneCardTitle = "계정 삭제"
     const val DangerZoneCardSubtitle = ""
-    const val DangerZoneAction = "\uD0C8\uD1F4\uD558\uAE30"
+    const val DangerZoneAction = "탈퇴하기"
 
-    const val LogoutDialogTitle = "\uB85C\uADF8\uC544\uC6C3"
-    const val LogoutDialogMessage = "\uC774 \uAE30\uAE30\uC5D0\uC11C \uB85C\uADF8\uC544\uC6C3\uD560\uAE4C\uC694?"
-    const val DeleteAccountDialogTitle = "\uD68C\uC6D0 \uD0C8\uD1F4"
+    const val LogoutDialogTitle = "로그아웃"
+    const val LogoutDialogMessage = "이 기기에서 로그아웃할까요?"
+    const val DeleteAccountDialogTitle = "회원 탈퇴"
     const val DeleteAccountDialogMessage =
-        "\uD0C8\uD1F4 \uD6C4\uC5D0\uB294 \uACC4\uC815\uACFC \uAE30\uB85D\uC744 \uBCF5\uAD6C\uD560 \uC218 \uC5C6\uC5B4\uC694. \uACC4\uC18D\uD560\uAE4C\uC694?"
+        "탈퇴 후에는 계정과 기록을 복구할 수 없어요. 계속할까요?"
 
-    const val ComingSoon = "\uC774 \uAE30\uB2A5\uC740 \uACE7 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC5B4\uC694."
+    const val ComingSoon = "이 기능은 곧 사용할 수 있어요."
     const val LogoutFailed =
-        "\uB85C\uADF8\uC544\uC6C3\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
+        "로그아웃하지 못했어요. 잠시 후 다시 시도해 주세요."
     const val DeleteAccountFailed =
-        "\uD68C\uC6D0 \uD0C8\uD1F4\uB97C \uC644\uB8CC\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
+        "회원 탈퇴를 완료하지 못했어요. 잠시 후 다시 시도해 주세요."
     const val LoadProfileFailed =
-        "\uD504\uB85C\uD544 \uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
-    const val NicknameCreated = "\uB2C9\uB124\uC784\uC744 \uB4F1\uB85D\uD588\uC5B4\uC694."
-    const val NicknameUpdated = "\uB2C9\uB124\uC784\uC744 \uBCC0\uACBD\uD588\uC5B4\uC694."
+        "프로필 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
+    const val NicknameCreated = "닉네임을 등록했어요."
+    const val NicknameUpdated = "닉네임을 변경했어요."
     const val NicknameSaveFailed =
-        "\uB2C9\uB124\uC784\uC744 \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
-    const val BodyProfileSaved = "\uC2E0\uCCB4 \uC815\uBCF4\uB97C \uC800\uC7A5\uD588\uC5B4\uC694."
+        "닉네임을 저장하지 못했어요. 잠시 후 다시 시도해 주세요."
+    const val BodyProfileSaved = "신체 정보를 저장했어요."
     const val BodyProfileSaveFailed =
-        "\uC2E0\uCCB4 \uC815\uBCF4\uB97C \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
-    const val PasswordChanged = "\uBE44\uBC00\uBC88\uD638\uB97C \uBCC0\uACBD\uD588\uC5B4\uC694."
+        "신체 정보를 저장하지 못했어요. 잠시 후 다시 시도해 주세요."
+    const val PasswordChanged = "비밀번호를 변경했어요."
     const val PasswordChangeFailed =
-        "\uBE44\uBC00\uBC88\uD638\uB97C \uBCC0\uACBD\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC7A0\uC2DC \uD6C4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."
+        "비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요."
 
-    const val NicknameRequired = "\uB2C9\uB124\uC784\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694."
-    const val NicknameTooLong = "\uB2C9\uB124\uC784\uC740 20\uC790 \uC774\uD558\uB85C \uC785\uB825\uD574 \uC8FC\uC138\uC694."
-    const val NicknameSameAsCurrent = "\uD604\uC7AC \uB2C9\uB124\uC784\uACFC \uAC19\uC544\uC694."
-    const val SexRequired = "\uC131\uBCC4\uC744 \uC120\uD0DD\uD574 \uC8FC\uC138\uC694."
-    const val CurrentPasswordRequired = "\uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694."
-    const val NewPasswordRequired = "\uC0C8 \uBE44\uBC00\uBC88\uD638\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+    const val NicknameRequired = "닉네임을 입력해 주세요."
+    const val NicknameTooLong = "닉네임은 20자 이하로 입력해 주세요."
+    const val NicknameSameAsCurrent = "현재 닉네임과 같아요."
+    const val SexRequired = "성별을 선택해 주세요."
+    const val CurrentPasswordRequired = "현재 비밀번호를 입력해 주세요."
+    const val NewPasswordRequired = "새 비밀번호를 입력해 주세요."
     const val ConfirmPasswordRequired =
-        "\uC0C8 \uBE44\uBC00\uBC88\uD638 \uD655\uC778\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+        "새 비밀번호 확인을 입력해 주세요."
     const val NewPasswordSameAsCurrent =
-        "\uC0C8 \uBE44\uBC00\uBC88\uD638\uB294 \uD604\uC7AC \uBE44\uBC00\uBC88\uD638\uC640 \uB2E4\uB974\uAC8C \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+        "새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요."
     const val PasswordConfirmMismatch =
-        "\uC0C8 \uBE44\uBC00\uBC88\uD638 \uD655\uC778\uC774 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC544\uC694."
+        "새 비밀번호 확인이 일치하지 않아요."
 
     fun nicknameActionLabel(hasNickname: Boolean): String {
         return if (hasNickname) ActionEdit else ActionRegister
@@ -151,10 +151,10 @@ internal object ProfileStrings {
     }
 
     fun requiredNumberMessage(fieldLabel: String): String {
-        return "$fieldLabel\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+        return "${fieldLabel}를 입력해 주세요."
     }
 
     fun positiveNumberMessage(fieldLabel: String): String {
-        return "$fieldLabel\uB294 0\uBCF4\uB2E4 \uD070 \uAC12\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+        return "${fieldLabel}는 0보다 큰 값을 입력해 주세요."
     }
 }

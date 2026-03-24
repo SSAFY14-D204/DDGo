@@ -54,12 +54,12 @@ internal fun ChallengeMetricOverviewPanel(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ChallengeMetricCard(
-                title = "\uCD5C\uACE0 \uB3C4\uB2EC",
+                title = "최고 도달",
                 value = summary.bestReachedHoldsText + summary.bestReachedHoldsSuffix.orEmpty(),
                 modifier = Modifier.weight(1f)
             )
             ChallengeMetricCard(
-                title = "\uD3C9\uADE0 \uB3C4\uB2EC",
+                title = "평균 도달",
                 value = summary.averageReachedHoldsText + summary.averageReachedHoldsSuffix.orEmpty(),
                 modifier = Modifier.weight(1f)
             )
@@ -70,12 +70,12 @@ internal fun ChallengeMetricOverviewPanel(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ChallengeMetricCard(
-                title = "\uD3C9\uADE0 \uADE0\uD615 \uC720\uC9C0",
+                title = "평균 균형 유지",
                 value = summary.averageInsideSupportRatioText,
                 modifier = Modifier.weight(1f)
             )
             ChallengeMetricCard(
-                title = "\uD3C9\uADE0 \uC190\uBC1C \uC9C0\uC9C0",
+                title = "평균 손발 지지",
                 value = summary.averageStableContactRatioText,
                 modifier = Modifier.weight(1f)
             )
@@ -98,14 +98,14 @@ internal fun ChallengeAttemptTrendPanel(
     ) {
         Column {
             Text(
-                text = "\uC2DC\uB3C4\uBCC4 \uBCC0\uD654",
+                text = "시도별 변화",
                 color = AnalysisText,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "\uAC01 \uC2DC\uB3C4\uC5D0\uC11C \uC5BC\uB9C8\uB098 \uB354 \uBA40\uB9AC \uAC14\uACE0, \uADE0\uD615\uACFC \uC190\uBC1C \uC9C0\uC9C0\uAC00 \uC5B4\uB5BB\uAC8C \uBC14\uB00C\uC5C8\uB294\uC9C0 \uBCF4\uB294 \uADF8\uB798\uD504\uC785\uB2C8\uB2E4.",
+                text = "각 시도에서 얼마나 더 멀리 갔고, 균형과 손발 지지가 어떻게 바뀌었는지 보는 그래프입니다.",
                 color = AnalysisMuted,
                 fontSize = 13.sp,
                 lineHeight = 19.sp
@@ -124,21 +124,21 @@ internal fun ChallengeAttemptTrendPanel(
             ) {
                 ChartLineLegendItem(
                     color = AnalysisPrimary,
-                    label = "\uB3C4\uB2EC \uC9C4\uD589\uB3C4"
+                    label = "도달 진행도"
                 )
                 ChartLineLegendItem(
                     color = AnalysisSecondary,
-                    label = "\uADE0\uD615 \uC720\uC9C0"
+                    label = "균형 유지"
                 )
                 ChartLineLegendItem(
                     color = ContactTrendColor,
-                    label = "\uC190\uBC1C \uC9C0\uC9C0"
+                    label = "손발 지지"
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GuideChip(text = "\uC704\uB85C \uAC08\uC218\uB85D \uC88B\uC74C")
-                GuideChip(text = "\uC2DC\uB3C4 \uBC88\uD638 \uC21C\uC11C")
+                GuideChip(text = "위로 갈수록 좋음")
+                GuideChip(text = "시도 번호 순서")
             }
         }
     }
@@ -159,14 +159,14 @@ internal fun ChallengeCruxDistributionPanel(
     ) {
         Column {
             Text(
-                text = "\uBC18\uBCF5 \uB09C\uAD6C\uAC04 \uBD84\uD3EC",
+                text = "반복 난구간 분포",
                 color = AnalysisText,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "\uAC01 \uC2DC\uB3C4\uC5D0\uC11C \uAC00\uC7A5 \uBC84\uAC70\uC6E0\uB358 \uD640\uB4DC\uB97C \uC138\uC5B4\uBCF8 \uADF8\uB798\uD504\uC785\uB2C8\uB2E4. \uB9C9\uB300\uAC00 \uB192\uC744\uC218\uB85D \uC5EC\uB7EC \uBC88 \uBC18\uBCF5\uD574\uC11C \uC5B4\uB824\uC6E0\uB358 \uAD6C\uAC04\uC785\uB2C8\uB2E4.",
+                text = "각 시도에서 가장 버거웠던 홀드를 세어본 그래프입니다. 막대가 높을수록 여러 번 반복해서 어려웠던 구간입니다.",
                 color = AnalysisMuted,
                 fontSize = 13.sp,
                 lineHeight = 19.sp
@@ -174,7 +174,7 @@ internal fun ChallengeCruxDistributionPanel(
             Spacer(modifier = Modifier.height(18.dp))
             if (distribution.isEmpty()) {
                 Text(
-                    text = "\uBC18\uBCF5 \uB09C\uAD6C\uAC04 \uB370\uC774\uD130\uAC00 \uCDA9\uBD84\uD558\uC9C0 \uC54A\uC544 \uBD84\uD3EC\uB97C \uADF8\uB9AC\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.",
+                    text = "반복 난구간 데이터가 충분하지 않아 분포를 그리지 못했습니다.",
                     color = AnalysisMuted,
                     fontSize = 13.sp,
                     lineHeight = 19.sp
@@ -188,8 +188,8 @@ internal fun ChallengeCruxDistributionPanel(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GuideChip(text = "\uB9C9\uB300\uAC00 \uB192\uC744\uC218\uB85D \uBC18\uBCF5")
-                    GuideChip(text = "\uD640\uB4DC \uBC88\uD638 \uAE30\uC900")
+                    GuideChip(text = "막대가 높을수록 반복")
+                    GuideChip(text = "홀드 번호 기준")
                 }
             }
         }
@@ -315,7 +315,7 @@ private fun AttemptTrendChart(
         ) {
             trendPoints.forEach { point ->
                 Text(
-                    text = "${point.attemptNo}\uCC28",
+                    text = "${point.attemptNo}차",
                     color = AnalysisMuted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -387,7 +387,7 @@ private fun CruxDistributionChart(
                     verticalArrangement = Arrangement.Bottom
                 ) {
                     Text(
-                        text = "${item.count}\uD68C",
+                        text = "${item.count}회",
                         color = AnalysisText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
@@ -416,7 +416,7 @@ private fun CruxDistributionChart(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "${item.holdNo}\uBC88",
+                        text = "${item.holdNo}번",
                         color = AnalysisMuted,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium

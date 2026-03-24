@@ -39,13 +39,13 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "\uC27D\uAC8C \uAC00\uC785\uD558\uACE0\n\uAC04\uD3B8\uD558\uAC8C \uB85C\uADF8\uC778\uD558\uC138\uC694.",
+                text = "쉽게 가입하고\n간편하게 로그인하세요.",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 24.sp,
@@ -57,7 +57,7 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "\uC774\uBA54\uC77C",
+                text = "이메일",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 16.sp,
@@ -71,7 +71,7 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             TextField(
                 value = viewModel.username,
                 onValueChange = viewModel::updateUsername,
-                placeholder = { Text("\uC774\uBA54\uC77C", color = Color(0xFF8391A1)) },
+                placeholder = { Text("이메일", color = Color(0xFF8391A1)) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -101,7 +101,7 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00A3FF))
         ) {
             Text(
-                "\uB2E4\uC74C",
+                "다음",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,

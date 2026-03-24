@@ -42,7 +42,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 private val GridMonthFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy\uB144 M\uC6D4", Locale.KOREAN)
+    DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)
 
 // 월 카드 안에서 헤더와 날짜 그리드를 함께 렌더링한다.
 @Composable
@@ -79,7 +79,7 @@ internal fun CalendarMonthSection(
                         color = CalendarPalette.TextPrimary
                     )
                     Text(
-                        text = "\uB0A0\uC9DC\uB97C \uB204\uB974\uBA74 \uD574\uB2F9 \uD558\uB8E8\uC758 \uAE30\uB85D\uC744 \uD655\uC778\uD560 \uC218 \uC788\uC5B4\uC694.",
+                        text = "날짜를 누르면 해당 하루의 기록을 확인할 수 있어요.",
                         style = MaterialTheme.typography.bodySmall,
                         color = CalendarPalette.TextSecondary
                     )
@@ -90,7 +90,7 @@ internal fun CalendarMonthSection(
                     color = CalendarPalette.AccentSoft
                 ) {
                     Text(
-                        text = "\uC624\uB298 ${today.dayOfMonth}\uC77C",
+                        text = "오늘 ${today.dayOfMonth}일",
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = CalendarPalette.AccentStrong

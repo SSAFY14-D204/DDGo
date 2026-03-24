@@ -32,7 +32,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val FullDateFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("M\uC6D4 d\uC77C EEEE", Locale.KOREAN)
+    DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN)
 
 // 선택한 날짜의 기록 목록을 보여주고, 비어 있으면 빈 상태를 노출한다.
 @Composable
@@ -71,9 +71,9 @@ internal fun SelectedDateSection(
                     )
                     Text(
                         text = if (entries.isEmpty()) {
-                            "\uC120\uD0DD\uD55C \uB0A0\uC9DC\uC5D0 \uAE30\uB85D\uB41C \uC138\uC158\uC774 \uC5C6\uC5B4\uC694."
+                            "선택한 날짜에 기록된 세션이 없어요."
                         } else {
-                            "${entries.size}\uAC1C\uC758 \uAE30\uB85D\uC774 \uC788\uC5B4\uC694."
+                            "${entries.size}개의 기록이 있어요."
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = CalendarPalette.TextSecondary,
@@ -137,17 +137,17 @@ private fun EmptyCalendarState() {
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Schedule,
-                    contentDescription = "\uBE48 \uC77C\uC815",
+                    contentDescription = "빈 일정",
                     tint = CalendarPalette.AccentStrong
                 )
             }
             Text(
-                text = "\uC544\uC9C1 \uAE30\uB85D\uC774 \uC5C6\uC5B4\uC694",
+                text = "아직 기록이 없어요",
                 style = MaterialTheme.typography.titleMedium,
                 color = CalendarPalette.TextPrimary
             )
             Text(
-                text = "\uC120\uD0DD\uD55C \uB0A0\uC9DC\uC5D0 \uD65C\uB3D9 \uAE30\uB85D\uC774 \uC788\uC73C\uBA74 \uC5EC\uAE30\uC5D0 \uD45C\uC2DC\uB429\uB2C8\uB2E4.",
+                text = "선택한 날짜에 활동 기록이 있으면 여기에 표시됩니다.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = CalendarPalette.TextSecondary,
                 textAlign = TextAlign.Center
@@ -183,7 +183,7 @@ private fun CalendarEntryRow(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Schedule,
-                    contentDescription = "\uAE30\uB85D",
+                    contentDescription = "기록",
                     tint = CalendarPalette.AccentStrong
                 )
             }
@@ -229,7 +229,7 @@ private fun CalendarEntryRow(
                     }
                 } else {
                     Text(
-                        text = "\uAE30\uB85D",
+                        text = "기록",
                         style = MaterialTheme.typography.labelLarge,
                         color = CalendarPalette.TextSecondary
                     )

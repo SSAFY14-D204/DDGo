@@ -47,9 +47,9 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.ProblemStatsPan
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.StabilityPanel
 
 internal enum class FinalAnalysisTab(val label: String) {
-    Stats("\uD1B5\uACC4"),
-    Stability("\uC548\uC815\uC131"),
-    Failure("\uC2E4\uD328 \uC6D0\uC778")
+    Stats("통계"),
+    Stability("안정성"),
+    Failure("실패 원인")
 }
 
 internal data class FinalAnalysisPageState(
@@ -110,17 +110,17 @@ internal fun FinalAnalysisPage(
             FinalAnalysisTab.Stats -> {
                 ProblemStatsPanel(
                     isSuccess = state.currentSummary.isSuccess,
-                    reachedHoldsTitle = "\uCD5C\uACE0 \uB3C4\uB2EC \uD640\uB4DC",
+                    reachedHoldsTitle = "최고 도달 홀드",
                     reachedHoldsText = state.reachedHoldsText,
                     reachedHoldsSuffix = state.reachedHoldsSuffix,
-                    insideSupportTitle = "\uADE0\uD615 \uC720\uC9C0 \uBE44\uC728",
+                    insideSupportTitle = "균형 유지 비율",
                     insideSupportRatioText = state.currentSummary.insideSupportRatioText,
-                    stableContactTitle = "\uC190\uBC1C \uC9C0\uC9C0 \uC548\uC815\uB3C4",
+                    stableContactTitle = "손발 지지 안정도",
                     stableContactRatioText = state.currentSummary.stableContactRatioText,
                     timeline = state.currentSummary.stabilityTimeline,
                     focusFraction = state.statsFocusFraction,
                     focusReasonText = state.focusReasonText,
-                    focusGuideText = "\uBC1D\uC740 \uC138\uB85C\uC120\uC740 \uC774 \uC2DC\uB3C4\uC5D0\uC11C \uAC00\uC7A5 \uBC84\uAC70\uC6E0\uB358 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+                    focusGuideText = "밝은 세로선은 이 시도에서 가장 버거웠던 구간입니다."
                 )
             }
 
@@ -185,7 +185,7 @@ private fun FinalAnalysisFeedbackCard(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "\uC885\uD569 \uD53C\uB4DC\uBC31",
+                text = "종합 피드백",
                 color = AnalysisMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
@@ -199,7 +199,7 @@ private fun FinalAnalysisFeedbackCard(
             }
             loadFocusLabel?.let { focus ->
                 Text(
-                    text = "\uBD80\uB2F4\uC774 \uD070 \uBD80\uC704: $focus",
+                    text = "부담이 큰 부위: $focus",
                     color = AnalysisMuted,
                     fontSize = 13.sp,
                     lineHeight = 20.sp
@@ -213,7 +213,7 @@ private fun FinalAnalysisFeedbackCard(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "\uCF54\uCE6D: $coachingLine",
+                text = "코칭: $coachingLine",
                 color = AnalysisMuted,
                 fontSize = 13.sp,
                 lineHeight = 20.sp
@@ -244,9 +244,9 @@ private fun FeedbackTypeChip(
 
 private fun feedbackTypeChipLabel(type: String): String {
     return when (type) {
-        "\uBC1C \uC0AC\uC6A9 \uBD80\uC871" -> "\uBC1C \uD65C\uC6A9 \uBD80\uC871"
-        "\uD314 \uC0AC\uC6A9 \uACFC\uB2E4" -> "\uD314 \uC758\uC874 \uD07C"
-        "\uACFC\uD55C \uBC84\uD2F0\uAE30" -> "\uC624\uB798 \uBC84\uD2F0\uAE30"
+        "발 사용 부족" -> "발 활용 부족"
+        "팔 사용 과다" -> "팔 의존 큼"
+        "과한 버티기" -> "오래 버티기"
         else -> type
     }
 }
@@ -274,13 +274,13 @@ private fun FinalAnalysisTopBar(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "\uB4A4\uB85C\uAC00\uAE30",
+                contentDescription = "뒤로가기",
                 tint = Color.White
             )
         }
 
         Text(
-            text = "\uBD84\uC11D \uB9AC\uD3EC\uD2B8",
+            text = "분석 리포트",
             modifier = Modifier.align(Alignment.Center),
             color = AnalysisText,
             fontSize = 18.sp,

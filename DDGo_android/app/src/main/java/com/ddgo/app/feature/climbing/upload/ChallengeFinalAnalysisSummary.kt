@@ -98,7 +98,7 @@ internal fun buildChallengeFinalAnalysisSummary(
     val repeatedLoadFocusLabel = mostFrequentOrNull(
         validAttemptSummaries.mapNotNull { it.loadFocusLabel }
     )
-    val repeatedCruxHoldLabel = repeatedCruxHoldNo?.let { "$it\uBC88 \uD640\uB4DC" }
+        val repeatedCruxHoldLabel = repeatedCruxHoldNo?.let { "${it}번 홀드" }
     val attempts = validAttemptSummaries.map { summary ->
         ChallengeAttemptComparisonItem(
             attemptNo = summary.attemptNo,
@@ -215,10 +215,10 @@ internal fun buildChallengeFinalAnalysisSummary(
 
 internal fun displayFeedbackTypeLabel(type: String): String {
     return when (type) {
-        "\uBC1C \uC0AC\uC6A9 \uBD80\uC871" -> "\uBC1C \uD65C\uC6A9 \uBD80\uC871"
-        "\uC911\uC2EC \uD754\uB4E4\uB9BC" -> "\uC911\uC2EC \uD754\uB4E4\uB9BC"
-        "\uD314 \uC0AC\uC6A9 \uACFC\uB2E4" -> "\uD314 \uC758\uC874 \uD07C"
-        "\uACFC\uD55C \uBC84\uD2F0\uAE30" -> "\uC624\uB798 \uBC84\uD2F0\uAE30"
+        "발 사용 부족" -> "발 활용 부족"
+        "중심 흔들림" -> "중심 흔들림"
+        "팔 사용 과다" -> "팔 의존 큼"
+        "과한 버티기" -> "오래 버티기"
         else -> type
     }
 }
@@ -255,7 +255,7 @@ private fun fallbackAttemptSummary(
         dangerEventCount = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
-        feedbackLine = "\uBD84\uC11D \uB370\uC774\uD130\uAC00 \uCDA9\uBD84\uD558\uC9C0 \uC54A\uC544 \uC885\uD569 \uC694\uC57D\uC744 \uB9CC\uB4E4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.",
+        feedbackLine = "분석 데이터가 충분하지 않아 종합 요약을 만들지 못했습니다.",
         coachingLine = "",
         effectiveModeLabel = "",
         fallbackLabel = null
@@ -277,7 +277,7 @@ private fun buildChallengeSummaryLine(
     )
 
     return if (overallSuccess) {
-        "\uCD1D ${attemptCount}\uBC88 \uC2DC\uB3C4 \uC911 ${successAttemptCount}\uBC88 \uC644\uB4F1\uC5D0 \uC131\uACF5\uD588\uACE0, \uD3C9\uADE0 $averageReachedText \uD640\uB4DC\uAE4C\uC9C0 \uB3C4\uB2EC\uD588\uC2B5\uB2C8\uB2E4."
+        "총 ${attemptCount}번 시도 중 ${successAttemptCount}번 완등에 성공했고, 평균 $averageReachedText 홀드까지 도달했습니다."
     } else {
         val bestReachedText = bestAttempt?.let {
             formatReachedMetric(
@@ -286,7 +286,7 @@ private fun buildChallengeSummaryLine(
                 hasReachedValue = it.reachedHolds != null
             )
         } ?: FinalAnalysisUnknownMetricText
-        "\uCD1D ${attemptCount}\uBC88 \uC2DC\uB3C4\uD588\uACE0, \uD3C9\uADE0 $averageReachedText \uD640\uB4DC\uAE4C\uC9C0 \uB3C4\uB2EC\uD588\uC2B5\uB2C8\uB2E4. \uCD5C\uACE0 \uAE30\uB85D\uC740 $bestReachedText\uC600\uC2B5\uB2C8\uB2E4."
+                "총 ${attemptCount}번 시도했고, 평균 $averageReachedText 홀드까지 도달했습니다. 최고 기록은 ${bestReachedText}였습니다."
     }
 }
 
@@ -298,15 +298,15 @@ private fun buildChallengeCompletionLine(
 ): String {
     return when {
         overallSuccess && bestAttempt != null -> {
-            "\uC644\uB4F1\uC740 ${bestAttempt.attemptNo}\uBC88\uC9F8 \uC2DC\uB3C4\uC5D0\uC11C \uB098\uC654\uACE0, \uC804\uCCB4 \uC644\uB4F1 \uC131\uACF5 \uC2DC\uB3C4\uB294 ${successAttemptCount}\uBC88\uC785\uB2C8\uB2E4."
+            "완등은 ${bestAttempt.attemptNo}번째 시도에서 나왔고, 전체 완등 성공 시도는 ${successAttemptCount}번입니다."
         }
 
         bestAttempt?.reachedHolds != null && totalHolds > 0 -> {
-            "\uAC00\uC7A5 \uB192\uC774 \uC62C\uB77C\uAC14\uB358 \uACB0\uACFC\uB294 ${bestAttempt.attemptNo}\uBC88\uC9F8 \uC2DC\uB3C4\uC758 ${bestAttempt.reachedHolds}/$totalHolds \uD640\uB4DC \uB3C4\uB2EC\uC774\uC5C8\uC2B5\uB2C8\uB2E4."
+            "가장 높이 올라갔던 결과는 ${bestAttempt.attemptNo}번째 시도의 ${bestAttempt.reachedHolds}/$totalHolds 홀드 도달이었습니다."
         }
 
         else -> {
-            "\uC644\uB4F1\uAE4C\uC9C0 \uC774\uC5B4\uC9C0\uC9C4 \uC54A\uC558\uC9C0\uB9CC, \uC2DC\uB3C4\uBCC4 \uACBD\uD5A5\uC744 \uB9E5\uB77D \uC788\uAC8C \uC815\uB9AC\uD588\uC2B5\uB2C8\uB2E4."
+            "완등까지 이어지진 않았지만, 시도별 경향을 맥락 있게 정리했습니다."
         }
     }
 }
@@ -316,33 +316,33 @@ private fun buildChallengeNatureLine(
     repeatedLoadFocusLabel: String?
 ): String {
     return when {
-        repeatedPatternLabels.contains("\uBC1C \uD65C\uC6A9 \uBD80\uC871") &&
-            repeatedPatternLabels.contains("\uC911\uC2EC \uD754\uB4E4\uB9BC") -> {
-            "\uC774 \uBB38\uC81C\uB294 \uBC1C\uC744 \uC138\uC6B0\uBA74\uC11C \uC911\uC2EC\uC744 \uB193\uCE58\uC9C0 \uC54A\uB294 \uC5F0\uACB0\uC774 \uD575\uC2EC\uC774\uC5C8\uC2B5\uB2C8\uB2E4."
+        repeatedPatternLabels.contains("발 활용 부족") &&
+            repeatedPatternLabels.contains("중심 흔들림") -> {
+            "이 문제는 발을 세우면서 중심을 놓치지 않는 연결이 핵심이었습니다."
         }
 
-        repeatedPatternLabels.contains("\uC911\uC2EC \uD754\uB4E4\uB9BC") -> {
-            "\uC774 \uBB38\uC81C\uB294 \uB2E4\uC74C \uD640\uB4DC\uB85C \uAC00\uAE30 \uC804\uC5D0 \uC911\uC2EC\uC744 \uC548\uC815\uC801\uC73C\uB85C \uC7A1\uB294 \uD750\uB984\uC774 \uC911\uC694\uD588\uC2B5\uB2C8\uB2E4."
+        repeatedPatternLabels.contains("중심 흔들림") -> {
+            "이 문제는 다음 홀드로 가기 전에 중심을 안정적으로 잡는 흐름이 중요했습니다."
         }
 
-        repeatedPatternLabels.contains("\uBC1C \uD65C\uC6A9 \uBD80\uC871") -> {
-            "\uC774 \uBB38\uC81C\uB294 \uC190\uC73C\uB85C \uBC84\uD2F0\uAE30\uBCF4\uB2E4 \uD558\uCCB4\uB85C \uBA3C\uC800 \uBC00\uC5B4 \uC62C\uB9AC\uB294 \uD750\uB984\uC774 \uC911\uC694\uD588\uC2B5\uB2C8\uB2E4."
+        repeatedPatternLabels.contains("발 활용 부족") -> {
+            "이 문제는 손으로 버티기보다 하체로 먼저 밀어 올리는 흐름이 중요했습니다."
         }
 
-        repeatedPatternLabels.contains("\uD314 \uC758\uC874 \uD07C") -> {
-            "\uC774 \uBB38\uC81C\uB294 \uC0C1\uCCB4\uB85C \uC624\uB798 \uBC84\uD2F0\uAE30\uBCF4\uB2E4 \uD558\uCCB4\uC640 \uD568\uAED8 \uD798\uC744 \uB098\uB204\uB294 \uD750\uB984\uC774 \uC911\uC694\uD588\uC2B5\uB2C8\uB2E4."
+        repeatedPatternLabels.contains("팔 의존 큼") -> {
+            "이 문제는 상체로 오래 버티기보다 하체와 함께 힘을 나누는 흐름이 중요했습니다."
         }
 
-        repeatedPatternLabels.contains("\uC624\uB798 \uBC84\uD2F0\uAE30") -> {
-            "\uC774 \uBB38\uC81C\uB294 \uD55C \uC790\uC138\uC5D0\uC11C \uBA08\uCD94\uB294 \uC2DC\uAC04\uC744 \uC904\uC774\uACE0 \uB9AC\uB4EC \uC788\uAC8C \uC5F0\uACB0\uD558\uB294 \uD750\uB984\uC774 \uC911\uC694\uD588\uC2B5\uB2C8\uB2E4."
+        repeatedPatternLabels.contains("오래 버티기") -> {
+            "이 문제는 한 자세에서 먈추는 시간을 줄이고 리듬 있게 연결하는 흐름이 중요했습니다."
         }
 
-        repeatedLoadFocusLabel == "\uBA38\uD1B5" -> {
-            "\uC774 \uBB38\uC81C\uB294 \uBA38\uD1B5 \uACE0\uC815\uACFC \uCCB4\uC911 \uC774\uB3D9\uC774 \uB09C\uC774\uB3C4\uB97C \uD06C\uAC8C \uC88C\uC6B0\uD588\uC2B5\uB2C8\uB2E4."
+        repeatedLoadFocusLabel == "머통" -> {
+            "이 문제는 머통 고정과 체중 이동이 난이도를 크게 좌우했습니다."
         }
 
         else -> {
-            "\uC774 \uBB38\uC81C\uB294 \uD55C \uAD6C\uAC04\uC758 \uD798\uC73C\uB85C \uBC84\uD2F0\uAE30\uBCF4\uB2E4, \uC190\uBC1C\uC744 \uC5F0\uACB0\uD558\uBA70 \uD750\uB984\uC744 \uC774\uC5B4\uAC00\uB294 \uAC83\uC774 \uC911\uC694\uD588\uC2B5\uB2C8\uB2E4."
+            "이 문제는 한 구간의 힘으로 버티기보다, 손발을 연결하며 흐름을 이어가는 것이 중요했습니다."
         }
     }
 }
@@ -357,13 +357,13 @@ private fun buildTrendHighlights(
     return buildList {
         if (firstAttempt?.reachedHolds != null && lastAttempt?.reachedHolds != null) {
             add(
-                "\uCCAB \uC2DC\uB3C4 \uB300\uBE44 \uB9C8\uC9C0\uB9C9 \uC2DC\uB3C4 \uB3C4\uB2EC \uD640\uB4DC: " +
+                "첫 시도 대비 마지막 시도 도달 홀드: " +
                     formatReachedMetric(
                         reachedText = firstAttempt.reachedHoldsText,
                         totalHolds = totalHolds,
                         hasReachedValue = true
                     ) +
-                    " \u2192 " +
+                    " → " +
                     formatReachedMetric(
                         reachedText = lastAttempt.reachedHoldsText,
                         totalHolds = totalHolds,
@@ -373,28 +373,28 @@ private fun buildTrendHighlights(
         }
         if (firstAttempt?.insideSupportRatio != null && lastAttempt?.insideSupportRatio != null) {
             add(
-                "\uADE0\uD615 \uC720\uC9C0\uC728: ${firstAttempt.insideSupportRatio}% \u2192 ${lastAttempt.insideSupportRatio}%"
+                "균형 유지율: ${firstAttempt.insideSupportRatio}% → ${lastAttempt.insideSupportRatio}%"
             )
         }
         if (firstAttempt?.stableContactRatio != null && lastAttempt?.stableContactRatio != null) {
             add(
-                "\uC190\uBC1C \uC9C0\uC9C0 \uC548\uC815\uB3C4: ${firstAttempt.stableContactRatio}% \u2192 ${lastAttempt.stableContactRatio}%"
+                "손발 지지 안정도: ${firstAttempt.stableContactRatio}% → ${lastAttempt.stableContactRatio}%"
             )
         }
         when {
             successAttemptCount > 0 -> {
-                add("\uC644\uB4F1 \uC131\uACF5 \uC2DC\uB3C4\uB294 \uCD1D ${successAttemptCount}\uBC88\uC774\uC5C8\uC2B5\uB2C8\uB2E4.")
+                add("완등 성공 시도는 총 ${successAttemptCount}번이었습니다.")
             }
 
             bestAttempt != null -> {
                 add(
-                    "\uAC00\uC7A5 \uC88B\uC558\uB358 \uD750\uB984\uC740 ${bestAttempt.attemptNo}\uBC88\uC9F8 \uC2DC\uB3C4\uC5D0\uC11C \uB098\uC654\uC2B5\uB2C8\uB2E4."
+                    "가장 좋았던 흐름은 ${bestAttempt.attemptNo}번째 시도에서 나왔습니다."
                 )
             }
         }
     }.ifEmpty {
         listOf(
-            "\uC2DC\uB3C4 \uC218\uAC00 \uC801\uC5B4 \uBCC0\uD654 \uCD94\uC138\uB97C \uB2E8\uC815\uD558\uAE30\uBCF4\uB2E4, \uC804\uCCB4 \uACBD\uD5A5\uC744 \uC911\uC2EC\uC73C\uB85C \uC815\uB9AC\uD588\uC2B5\uB2C8\uB2E4."
+            "시도 수가 적어 변화 추세를 단정하기보다, 전체 경향을 중심으로 정리했습니다."
         )
     }
 }
@@ -407,22 +407,22 @@ private fun buildPatternHighlights(
 ): List<String> {
     return buildList {
         repeatedCruxHoldLabel?.let {
-            add("\uBC18\uBCF5\uD574\uC11C \uAC00\uC7A5 \uBC84\uAC70\uC6E0\uB358 \uAD6C\uAC04\uC740 $it \uBD80\uADFC\uC774\uC5C8\uC2B5\uB2C8\uB2E4.")
+            add("반복해서 가장 버거웠던 구간은 $it 부근이었습니다.")
         }
         if (repeatedPatternLabels.isNotEmpty()) {
             add(
-                "\uC2DC\uB3C4 \uC804\uBC18\uC5D0\uC11C \uC790\uC8FC \uBCF4\uC778 \uD575\uC2EC \uC6D0\uC778\uC740 ${repeatedPatternLabels.joinToString(", ")}\uC774\uC5C8\uC2B5\uB2C8\uB2E4."
+                "시도 전반에서 자주 보인 핵심 원인은 ${repeatedPatternLabels.joinToString(", ")}이었습니다."
             )
         }
         repeatedLoadFocusLabel?.let {
-            add("\uBD80\uB2F4\uC740 \uC8FC\uB85C $it \uCABD\uC5D0 \uBAB0\uB838\uC2B5\uB2C8\uB2E4.")
+            add("부담은 주로 $it 쪽에 몰렸습니다.")
         }
         bestAttempt?.attemptNo?.let {
-            add("\uCD5C\uACE0 \uAE30\uB85D\uC740 ${it}\uBC88\uC9F8 \uC2DC\uB3C4\uC5D0\uC11C \uB098\uC654\uC2B5\uB2C8\uB2E4.")
+            add("최고 기록은 ${it}번째 시도에서 나왔습니다.")
         }
     }.ifEmpty {
         listOf(
-            "\uBC18\uBCF5 \uD328\uD134\uC744 \uD655\uC2E4\uD788 \uC9D1\uC5B4 \uB0B4\uAE30\uC5D0\uB294 \uB370\uC774\uD130\uAC00 \uBD80\uC871\uD574, \uC804\uCCB4 \uACBD\uD5A5 \uC704\uC8FC\uB85C \uD574\uC11D\uD588\uC2B5\uB2C8\uB2E4."
+            "반복 패턴을 확실히 집어 내기에는 데이터가 부족해, 전체 경향 위주로 해석했습니다."
         )
     }
 }
@@ -448,11 +448,11 @@ private fun buildChallengeFocusReasonText(
 ): String? {
     val causeSentence = when {
         repeatedPatternLabels.size >= 2 -> {
-            "${repeatedPatternLabels.joinToString("\uACFC ")}\uC774 \uD568\uAED8 \uB098\uD0C0\uB09C \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+            "${repeatedPatternLabels.joinToString("과 ")}이 함께 나타난 구간입니다."
         }
 
         repeatedPatternLabels.size == 1 -> {
-            "${repeatedPatternLabels.first()}\uC774 \uB450\uB4DC\uB7EC\uC9C4 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+            "${repeatedPatternLabels.first()}이 두드러진 구간입니다."
         }
 
         else -> null
@@ -460,12 +460,12 @@ private fun buildChallengeFocusReasonText(
 
     return when {
         causeSentence != null && repeatedLoadFocusLabel != null -> {
-            "$causeSentence \uD2B9\uD788 $repeatedLoadFocusLabel\uC5D0 \uBD80\uB2F4\uC774 \uCEE4\uC9C4 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+        "$causeSentence 특히 ${repeatedLoadFocusLabel}에 부담이 커진 구간입니다."
         }
 
         causeSentence != null -> causeSentence
         repeatedLoadFocusLabel != null -> {
-            "$repeatedLoadFocusLabel\uC5D0 \uBD80\uB2F4\uC774 \uCEE4\uC9C4 \uAD6C\uAC04\uC785\uB2C8\uB2E4."
+        "${repeatedLoadFocusLabel}에 부담이 커진 구간입니다."
         }
 
         else -> null

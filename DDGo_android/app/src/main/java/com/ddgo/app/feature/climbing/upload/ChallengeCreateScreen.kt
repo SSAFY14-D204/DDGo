@@ -1,4 +1,4 @@
-﻿package com.ddgo.app.feature.climbing.upload
+package com.ddgo.app.feature.climbing.upload
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -99,6 +100,11 @@ private enum class CreateStep {
     COLOR
 }
 
+enum class ChallengeCreatePresentationMode {
+    UploadFullScreen,
+    RealtimeEmbedded
+}
+
 enum class ChallengeCreateEntryStep {
     GYM_NAME,
     LEVEL,
@@ -110,8 +116,28 @@ fun ChallengeCreateScreen(
     viewModel: UploadViewModel = hiltViewModel(),
     initialStep: ChallengeCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME,
     minimumStep: ChallengeCreateEntryStep = initialStep,
+    presentationMode: ChallengeCreatePresentationMode = ChallengeCreatePresentationMode.UploadFullScreen,
     onNavigateToNext: () -> Unit = {},
     onNavigateBack: () -> Unit = {}
+) {
+    ChallengeCreateFlowContent(
+        viewModel = viewModel,
+        initialStep = initialStep,
+        minimumStep = minimumStep,
+        presentationMode = presentationMode,
+        onNavigateToNext = onNavigateToNext,
+        onNavigateBack = onNavigateBack
+    )
+}
+
+@Composable
+private fun ChallengeCreateFlowContent(
+    viewModel: UploadViewModel,
+    initialStep: ChallengeCreateEntryStep,
+    minimumStep: ChallengeCreateEntryStep,
+    presentationMode: ChallengeCreatePresentationMode,
+    onNavigateToNext: () -> Unit,
+    onNavigateBack: () -> Unit
 ) {
     var step by rememberSaveable(initialStep) { mutableStateOf(initialStep.toCreateStep()) }
     val minimumAllowedStep = minimumStep.toCreateStep()
@@ -139,13 +165,15 @@ fun ChallengeCreateScreen(
         CreateStep.LEVEL -> GymLevelStep(
             viewModel = viewModel,
             onNext = { step = CreateStep.COLOR },
-            onBack = handleBack
+            onBack = handleBack,
+            presentationMode = presentationMode
         )
 
         CreateStep.COLOR -> GymColorStep(
             viewModel = viewModel,
             onNext = onNavigateToNext,
-            onBack = handleBack
+            onBack = handleBack,
+            presentationMode = presentationMode
         )
     }
 }
@@ -168,7 +196,7 @@ private fun CreateAppBar(onBack: () -> Unit) {
     TopAppBar(
         title = {
             Text(
-                text = "\uD074\uB77C\uC774\uBC0D \uAE30\uB85D",
+                text = "클라이밍 기록",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
@@ -178,7 +206,7 @@ private fun CreateAppBar(onBack: () -> Unit) {
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "\uB4A4\uB85C",
+                    contentDescription = "뒤로",
                     tint = Color.White
                 )
             }
@@ -249,7 +277,7 @@ private fun GymNameStep(
             startIncrementalLocationSearch()
         } else {
             isResolvingLocation = false
-            locationMessage = "\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."
+            locationMessage = "위치 권한이 필요합니다."
         }
     }
 
@@ -341,7 +369,7 @@ private fun GymNameStep(
 
                     if (places.isEmpty()) {
                         Text(
-                            text = "\uAC80\uC0C9 \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
+                            text = "검색 결과가 없습니다.",
                             color = Color(0xFFB0B0B0),
                             fontSize = 14.sp
                         )
@@ -373,7 +401,7 @@ private fun GymNameStep(
 
                 GymResolveUiState.Loading -> {
                     Text(
-                        text = "\uC120\uD0DD\uD55C \uC554\uC7A5 \uC815\uBCF4\uB97C \uD655\uC778\uD558\uB294 \uC911\uC785\uB2C8\uB2E4...",
+                        text = "선택한 암장 정보를 확인하는 중입니다...",
                         color = Color(0xFFB0B0B0),
                         fontSize = 14.sp
                     )
@@ -414,7 +442,7 @@ private fun GymNameStep(
                 disabledContentColor = Color(0xFF666666)
             )
         ) {
-            Text(text = "\uB2E4\uC74C", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(text = "다음", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -455,7 +483,7 @@ private fun NearbyPlaceItem(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = place.roadAddressName ?: place.addressName ?: "\uC8FC\uC18C \uC815\uBCF4 \uC5C6\uC74C",
+                    text = place.roadAddressName ?: place.addressName ?: "주소 정보 없음",
                     color = Color(0xFFB0B0B0),
                     fontSize = 13.sp,
                     lineHeight = 19.sp
@@ -493,8 +521,12 @@ private data class LevelChoice(
 private fun GymLevelStep(
     viewModel: UploadViewModel,
     onNext: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    presentationMode: ChallengeCreatePresentationMode = ChallengeCreatePresentationMode.UploadFullScreen
 ) {
+    val isEmbedded = presentationMode == ChallengeCreatePresentationMode.RealtimeEmbedded
+    val screenModifier = if (isEmbedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
+    val contentModifier = if (isEmbedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
     val grades = viewModel.resolvedGymGrades
     val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
     val availableGradesByKey = remember(grades) { buildAvailableLevelGradeMap(grades) }
@@ -509,20 +541,24 @@ private fun GymLevelStep(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = screenModifier
             .background(Color(0xFF0B0B0E))
     ) {
         SelectionStepHeader(
             progressFraction = 0.5f,
-            onBack = onBack
+            onBack = onBack,
+            presentationMode = presentationMode
         )
 
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = contentModifier) {
             Spacer(modifier = Modifier.height(27.dp))
 
             Text(
-                text = "\uBCFC\uB354\uB9C1 \uBB38\uC81C\uC758\n\uB808\uBCA8\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694",
+                text = if (isEmbedded) {
+                    "문제 난이도를\n골라 주세요"
+                } else {
+                    "볼더링 문제의\n레벨을 선택해주세요"
+                },
                 modifier = Modifier.padding(start = 25.dp),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -554,19 +590,28 @@ private fun GymLevelStep(
                 HoldColorSelectionPanel(
                     availableGradesByKey = availableGradesByKey,
                     selectedPaletteKey = selectedPaletteKey,
-                    onSelect = { viewModel.selectGymLevel(it.sortOrder) },
+                    onSelect = { grade ->
+                        viewModel.selectGymLevel(grade.sortOrder)
+                        if (isEmbedded) {
+                            onNext()
+                        }
+                    },
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .offset(x = 191.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            if (isEmbedded) {
+                Spacer(modifier = Modifier.height(16.dp))
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
 
             when {
                 grades.isEmpty() -> {
                     Text(
-                        text = "\uC120\uD0DD \uAC00\uB2A5\uD55C \uB09C\uC774\uB3C4 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
+                        text = "선택 가능한 난이도 정보가 없습니다.",
                         modifier = Modifier.padding(horizontal = 22.dp),
                         color = Color(0xFF999999),
                         fontSize = 14.sp
@@ -575,7 +620,11 @@ private fun GymLevelStep(
 
                 selectedLevelGrade != null -> {
                     Text(
-                        text = "${resolveHoldColorDisplayName(selectedLevelGrade.colorName, selectedLevelGrade.colorHex)} 난이도로 기록할게요",
+                        text = if (isEmbedded) {
+                            "${resolveHoldColorDisplayName(selectedLevelGrade.colorName, selectedLevelGrade.colorHex)} 난이도로 준비할게요"
+                        } else {
+                            "${resolveHoldColorDisplayName(selectedLevelGrade.colorName, selectedLevelGrade.colorHex)} 난이도로 기록할게요"
+                        },
                         modifier = Modifier.padding(horizontal = 22.dp),
                         color = resolveGymGradeAccentColor(selectedLevelGrade),
                         fontSize = 18.sp,
@@ -584,29 +633,31 @@ private fun GymLevelStep(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (!isEmbedded) {
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = onNext,
-                enabled = selectedLevelSortOrder != null,
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (selectedLevelSortOrder != null) Color(0xFF1D9BF0) else Color(0xFF505050),
-                    contentColor = Color.White,
-                    disabledContainerColor = Color(0xFF505050).copy(alpha = 0.55f),
-                    disabledContentColor = Color.White.copy(alpha = 0.6f)
-                )
-            ) {
-                Text(
-                    text = "\uB2E4\uC74C",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Button(
+                    onClick = onNext,
+                    enabled = selectedLevelSortOrder != null,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selectedLevelSortOrder != null) Color(0xFF1D9BF0) else Color(0xFF505050),
+                        contentColor = Color.White,
+                        disabledContainerColor = Color(0xFF505050).copy(alpha = 0.55f),
+                        disabledContentColor = Color.White.copy(alpha = 0.6f)
+                    )
+                ) {
+                    Text(
+                        text = "다음",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
@@ -616,8 +667,12 @@ private fun GymLevelStep(
 private fun GymColorStep(
     viewModel: UploadViewModel,
     onNext: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    presentationMode: ChallengeCreatePresentationMode = ChallengeCreatePresentationMode.UploadFullScreen
 ) {
+    val isEmbedded = presentationMode == ChallengeCreatePresentationMode.RealtimeEmbedded
+    val screenModifier = if (isEmbedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
+    val contentModifier = if (isEmbedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
     val challengeCreationUiState by viewModel.challengeCreationUiState.collectAsState()
     val canBypassChallengeCreationForDev = viewModel.canBypassChallengeCreationForDev
     val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
@@ -633,28 +688,32 @@ private fun GymColorStep(
         }
     }
 
-    LaunchedEffect(challengeCreationUiState, canBypassChallengeCreationForDev) {
-        if (!canBypassChallengeCreationForDev && challengeCreationUiState is ChallengeCreationUiState.Success) {
+    LaunchedEffect(challengeCreationUiState, canBypassChallengeCreationForDev, isEmbedded) {
+        if (!isEmbedded && !canBypassChallengeCreationForDev && challengeCreationUiState is ChallengeCreationUiState.Success) {
             viewModel.consumeChallengeCreationResult()
             onNext()
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = screenModifier
             .background(Color(0xFF0B0B0E))
     ) {
         SelectionStepHeader(
             progressFraction = 1f,
-            onBack = onBack
+            onBack = onBack,
+            presentationMode = presentationMode
         )
 
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = contentModifier) {
             Spacer(modifier = Modifier.height(27.dp))
 
             Text(
-                text = "문제 홀드의 컬러를 골라주세요",
+                text = if (isEmbedded) {
+                    "문제 홀드 색을 골라주세요"
+                } else {
+                    "문제 홀드의 컬러를 골라주세요"
+                },
                 modifier = Modifier.padding(start = 25.dp),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -662,26 +721,40 @@ private fun GymColorStep(
                 lineHeight = 28.sp
             )
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(if (isEmbedded) 14.dp else 22.dp))
 
             HoldColorHero(
                 previewSlot = selectedHoldSlot,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
+                isEmbedded = isEmbedded,
+                modifier = if (isEmbedded) {
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 188.dp)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                }
             )
+
+            if (isEmbedded) {
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             ColorSelectionSheet(
                 selectedPaletteKey = selectedPaletteKey,
                 onSelect = viewModel::updateHoldColor,
-                modifier = Modifier
-                    .fillMaxWidth()
+                modifier = Modifier.fillMaxWidth()
             )
 
             when {
                 selectedLevelSortOrder == null && !canBypassChallengeCreationForDev -> {
                     Text(
-                        text = "\uBA3C\uC800 \uB808\uBCA8\uC744 \uC120\uD0DD\uD574\uC8FC\uC138\uC694.",
+                        text = if (isEmbedded) {
+                            "먼저 난이도를 선택해 주세요."
+                        } else {
+                            "먼저 레벨을 선택해주세요."
+                        },
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFFFF8A8A),
                         fontSize = 14.sp
@@ -690,7 +763,7 @@ private fun GymColorStep(
 
                 false -> {
                     Text(
-                        text = "\uC120\uD0DD\uD55C \uB808\uBCA8\uC5D0 \uC5F0\uACB0\uB41C \uD640\uB4DC \uCEEC\uB7EC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
+                        text = "선택한 레벨에 연결된 홀드 컬러가 없습니다.",
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFFFF8A8A),
                         fontSize = 14.sp
@@ -699,7 +772,11 @@ private fun GymColorStep(
 
                 challengeCreationUiState is ChallengeCreationUiState.Loading -> {
                     Text(
-                        text = "\uCC4C\uB9B0\uC9C0\uB97C \uC0DD\uC131\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4...",
+                        text = if (isEmbedded) {
+                            "촬영 준비를 마무리하고 있습니다..."
+                        } else {
+                            "챌린지를 생성하고 있습니다..."
+                        },
                         modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
                         color = Color(0xFF999999),
                         fontSize = 14.sp
@@ -716,21 +793,45 @@ private fun GymColorStep(
                 }
             }
 
-                GradientActionButton(
-                    text = "\uD640\uB4DC \uCC3E\uAE30",
-                    enabled = (canBypassChallengeCreationForDev || selectedLevelSortOrder != null) &&
-                        selectedPaletteKey != null &&
-                        challengeCreationUiState !is ChallengeCreationUiState.Loading,
-                    onClick = {
-                        viewModel.finalizeHoldDetectionColorSelection()
-                        if (canBypassChallengeCreationForDev) {
-                            onNext()
-                        } else {
-                            viewModel.createChallengeFromSelection()
+            GradientActionButton(
+                text = if (isEmbedded) {
+                    "촬영 준비 완료"
+                } else {
+                    "홀드 찾기"
+                },
+                enabled = when {
+                    isEmbedded -> {
+                        selectedLevelSortOrder != null &&
+                            selectedPaletteKey != null &&
+                            challengeCreationUiState !is ChallengeCreationUiState.Loading
+                    }
+
+                    else -> {
+                        (canBypassChallengeCreationForDev || selectedLevelSortOrder != null) &&
+                            selectedPaletteKey != null &&
+                            challengeCreationUiState !is ChallengeCreationUiState.Loading
+                    }
+                },
+                onClick = {
+                    when {
+                        isEmbedded -> viewModel.completeRealtimeChallengeSetup()
+                        else -> {
+                            viewModel.finalizeHoldDetectionColorSelection()
+                            when {
+                                canBypassChallengeCreationForDev -> onNext()
+                                else -> viewModel.createChallengeFromSelection()
+                            }
+                        }
                     }
                 },
                 modifier = Modifier
-                    .navigationBarsPadding()
+                    .then(
+                        if (isEmbedded) {
+                            Modifier
+                        } else {
+                            Modifier.navigationBarsPadding()
+                        }
+                    )
                     .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
                     .fillMaxWidth()
                     .height(58.dp)
@@ -742,12 +843,19 @@ private fun GymColorStep(
 @Composable
 private fun SelectionStepHeader(
     progressFraction: Float,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    presentationMode: ChallengeCreatePresentationMode = ChallengeCreatePresentationMode.UploadFullScreen
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
+            .then(
+                if (presentationMode == ChallengeCreatePresentationMode.UploadFullScreen) {
+                    Modifier.statusBarsPadding()
+                } else {
+                    Modifier
+                }
+            )
     ) {
         Box(
             modifier = Modifier
@@ -762,13 +870,13 @@ private fun SelectionStepHeader(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "\uB4A4\uB85C",
+                    contentDescription = "뒤로",
                     tint = Color.White
                 )
             }
 
             Text(
-                text = "\uD074\uB77C\uC774\uBC0D \uAE30\uB85D",
+                text = "클라이밍 기록",
                 modifier = Modifier.align(Alignment.Center),
                 color = Color.White,
                 fontSize = 16.sp,
@@ -801,7 +909,7 @@ private fun GymReferenceSubtitle(
         text = buildAnnotatedString {
             if (gymName.isBlank()) {
                 withStyle(SpanStyle(color = Color(0xFF999999))) {
-                    append("\uAE30\uC900 \uB09C\uC774\uB3C4\uD45C")
+                    append("기준 난이도표")
                 }
             } else {
                 withStyle(
@@ -813,7 +921,7 @@ private fun GymReferenceSubtitle(
                     append(gymName)
                 }
                 withStyle(SpanStyle(color = Color(0xFF999999))) {
-                    append(" \uAE30\uC900 \uB09C\uC774\uB3C4\uD45C")
+                    append(" 기준 난이도표")
                 }
             }
         },
@@ -839,13 +947,13 @@ private fun DifficultyReferenceBar(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "\uC5B4\uB824\uC6C0",
+                text = "어려움",
                 color = Color(0xFF999999),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "\uC26C\uC6C0",
+                text = "쉬움",
                 color = Color(0xFF999999),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
@@ -909,7 +1017,7 @@ private fun LevelSelectionPanel(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "\uB09C\uC774\uB3C4 \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
+                    text = "난이도 정보가 없습니다.",
                     color = Color(0xFF767676),
                     fontSize = 14.sp
                 )
@@ -965,7 +1073,7 @@ private fun LevelChoiceCard(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "\uBB38\uC81C \uB808\uBCA8",
+                text = "문제 레벨",
                 color = Color(0xFF767676),
                 fontSize = 12.sp
             )
@@ -1029,8 +1137,12 @@ private fun LevelSummaryCard(
 @Composable
 private fun HoldColorHero(
     previewSlot: HoldPaletteSlot,
+    isEmbedded: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val previewWidthFraction = if (isEmbedded) 0.5f else 0.72f
+    val previewMaxHeight = if (isEmbedded) 180.dp else 280.dp
+
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
@@ -1038,8 +1150,9 @@ private fun HoldColorHero(
         HoldAssetGraphic(
             slot = previewSlot,
             modifier = Modifier
-                .fillMaxWidth(0.72f)
+                .fillMaxWidth(previewWidthFraction)
                 .aspectRatio(HOLD_ASSET_ASPECT_RATIO)
+                .heightIn(max = previewMaxHeight)
         )
     }
 }
@@ -1152,7 +1265,7 @@ private fun GradientActionButton(
         Text(
             text = text,
             color = Color.White,
-            fontSize = 18.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold
         )
     }
@@ -1442,7 +1555,7 @@ private fun GymGradeItem(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = grade.colorName.ifBlank { grade.gradeLabel ?: "\uB09C\uC774\uB3C4" },
+                text = grade.colorName.ifBlank { grade.gradeLabel ?: "난이도" },
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
@@ -1457,7 +1570,7 @@ private fun GymGradeItem(
 
         if (selected) {
             Text(
-                text = "\uC120\uD0DD\uB428",
+                text = "선택됨",
                 color = Color(0xFF9CCCFF),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
@@ -1472,7 +1585,7 @@ private fun SelectedHoldPreviewCard(
     modifier: Modifier = Modifier
 ) {
     val accentColor = resolveGymGradeAccentColor(grade)
-    val title = grade.colorName.ifBlank { grade.gradeLabel ?: "\uBB38\uC81C \uC0C9\uC0C1" }
+    val title = grade.colorName.ifBlank { grade.gradeLabel ?: "문제 색상" }
 
     Row(
         modifier = modifier
@@ -1492,7 +1605,7 @@ private fun SelectedHoldPreviewCard(
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "\uC120\uD0DD\uD55C \uD640\uB4DC \uC0C9\uC0C1",
+                text = "선택한 홀드 색상",
                 color = Color(0xFF9CCCFF),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
@@ -1530,7 +1643,7 @@ private fun SelectedGymSummaryCard(
             .padding(18.dp)
     ) {
         Text(
-            text = "\uC120\uD0DD\uD55C \uC554\uC7A5",
+            text = "선택한 암장",
             color = Color(0xFF9CCCFF),
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold
@@ -1553,7 +1666,7 @@ private fun SelectedGymSummaryCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             SummaryBadge(
-                label = "\uB09C\uC774\uB3C4 \uC218",
+                label = "난이도 수",
                 value = gradeCount.toString()
             )
         }
@@ -1601,18 +1714,18 @@ private fun resolveGymGradeAccentColor(grade: GymGrade): Color {
 
 private fun holdAssetColorOverride(colorName: String): Color? {
     return when (colorName.trim().lowercase()) {
-        "\uBE68\uAC15", "red" -> Color(0xFFFF0000)
-        "\uC8FC\uD669", "orange" -> Color(0xFFFF7700)
-        "\uB178\uB791", "yellow" -> Color(0xFFFED500)
-        "\uCD08\uB85D", "green" -> Color(0xFF65B969)
-        "\uD558\uB298\uC0C9", "skyblue", "cyan" -> Color(0xFF4396FB)
-        "\uD30C\uB791", "blue", "\uB0A8\uC0C9", "navy" -> Color(0xFF373FD7)
-        "\uBCF4\uB77C", "purple" -> Color(0xFF876FFF)
-        "\uAC08\uC0C9", "brown" -> Color(0xFF6B3E1C)
-        "\uD551\uD06C", "pink" -> Color(0xFFFF56A8)
-        "\uD770\uC0C9", "white" -> Color.White
-        "\uD68C\uC0C9", "gray", "grey" -> Color(0xFF505050)
-        "\uAC80\uC815", "black" -> Color(0xFF292929)
+        "빨강", "red" -> Color(0xFFFF0000)
+        "주황", "orange" -> Color(0xFFFF7700)
+        "노랑", "yellow" -> Color(0xFFFED500)
+        "초록", "green" -> Color(0xFF65B969)
+        "하늘색", "skyblue", "cyan" -> Color(0xFF4396FB)
+        "파랑", "blue", "남색", "navy" -> Color(0xFF373FD7)
+        "보라", "purple" -> Color(0xFF876FFF)
+        "갈색", "brown" -> Color(0xFF6B3E1C)
+        "핑크", "pink" -> Color(0xFFFF56A8)
+        "흰색", "white" -> Color.White
+        "회색", "gray", "grey" -> Color(0xFF505050)
+        "검정", "black" -> Color(0xFF292929)
         else -> null
     }
 }
@@ -1729,13 +1842,13 @@ private fun loadCurrentLocation(
     onError: (String) -> Unit
 ) {
     if (!hasLocationPermission(context)) {
-        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+        onError("위치 권한이 필요합니다.")
         return
     }
 
     val locationManager = context.getSystemService(LocationManager::class.java)
         ?: run {
-            onError("\uC704\uCE58 \uC11C\uBE44\uC2A4\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.")
+            onError("위치 서비스를 사용할 수 없습니다.")
             return
         }
 
@@ -1746,7 +1859,7 @@ private fun loadCurrentLocation(
     ).filter(locationManager::isProviderEnabled)
 
     if (availableProviders.isEmpty()) {
-        onError("\uC704\uCE58 \uC11C\uBE44\uC2A4\uB97C \uCF1C\uC8FC\uC138\uC694.")
+        onError("위치 서비스를 켜주세요.")
         return
     }
 
@@ -1766,7 +1879,7 @@ private fun loadCurrentLocation(
             onError = onError
         )
     } catch (_: SecurityException) {
-        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+        onError("위치 권한이 필요합니다.")
     }
 }
 
@@ -1787,7 +1900,7 @@ private fun GymSearchBar(
         singleLine = true,
         placeholder = {
             Text(
-                text = "\uC554\uC7A5\uBA85\uC744 \uC785\uB825\uD574\uBCF4\uC138\uC694",
+                text = "암장명을 입력해보세요",
                 color = Color(0xFF8A94A3),
                 fontSize = 15.sp
             )
@@ -1795,7 +1908,7 @@ private fun GymSearchBar(
         leadingIcon = {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = "\uAC80\uC0C9",
+                contentDescription = "검색",
                 tint = Color(0xFF7F8EA3)
             )
         },
@@ -1840,7 +1953,7 @@ private fun SearchBarTrailingActions(
     ) {
         SearchActionChip(
             icon = Icons.Default.MyLocation,
-            contentDescription = "\uD604\uC7AC \uC704\uCE58 \uAC80\uC0C9",
+            contentDescription = "현재 위치 검색",
             tint = Color(0xFF1D9BF0),
             onClick = onCurrentLocationSearch,
             enabled = !isBusy,
@@ -1849,7 +1962,7 @@ private fun SearchBarTrailingActions(
 
         SearchActionChip(
             icon = Icons.Default.NearMe,
-            contentDescription = "\uD0A4\uC6CC\uB4DC \uAC80\uC0C9",
+            contentDescription = "키워드 검색",
             tint = Color(0xFF1D9BF0),
             onClick = onSearch,
             enabled = !isBusy,
@@ -1866,13 +1979,13 @@ private fun loadCurrentLocationIncrementally(
     onError: (String) -> Unit
 ) {
     if (!hasLocationPermission(context)) {
-        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+        onError("위치 권한이 필요합니다.")
         return
     }
 
     val locationManager = context.getSystemService(LocationManager::class.java)
         ?: run {
-            onError("\uC704\uCE58 \uC11C\uBE44\uC2A4\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.")
+            onError("위치 서비스를 사용할 수 없습니다.")
             return
         }
 
@@ -1883,7 +1996,7 @@ private fun loadCurrentLocationIncrementally(
     ).filter(locationManager::isProviderEnabled)
 
     if (availableProviders.isEmpty()) {
-        onError("\uC704\uCE58 \uC11C\uBE44\uC2A4\uB97C \uCF1C\uC8FC\uC138\uC694.")
+        onError("위치 서비스를 켜주세요.")
         return
     }
 
@@ -1913,7 +2026,7 @@ private fun loadCurrentLocationIncrementally(
             onError = onError
         )
     } catch (_: SecurityException) {
-        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+        onError("위치 권한이 필요합니다.")
     }
 }
 
@@ -1972,7 +2085,7 @@ private fun SearchHeroSection(
             .padding(20.dp)
     ) {
         Text(
-            text = "\uC554\uC7A5 \uD0D0\uC0C9",
+            text = "암장 탐색",
             color = Color(0xFF82B1FF),
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
@@ -1981,7 +2094,7 @@ private fun SearchHeroSection(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "\uC9C0\uAE08 \uAC00\uACE0 \uC2F6\uC740 \uD074\uB77C\uC774\uBC0D\uC7A5\uC744\n\uBE60\uB974\uAC8C \uCC3E\uC544\uBCF4\uC138\uC694",
+            text = "지금 가고 싶은 클라이밍장을\n빠르게 찾아보세요",
             color = Color.White,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
@@ -2001,7 +2114,7 @@ private fun SearchHeroSection(
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = "\uC554\uC7A5\uBA85\uC73C\uB85C \uCC3E\uAC70\uB098, \uD604\uC7AC \uC704\uCE58 \uBC84\uD2BC\uC73C\uB85C \uC8FC\uBCC0 \uC554\uC7A5\uB9CC \uBC14\uB85C \uD655\uC778\uD560 \uC218 \uC788\uC5B4\uC694.",
+            text = "암장명으로 찾거나, 현재 위치 버튼으로 주변 암장만 바로 확인할 수 있어요.",
             color = Color.White.copy(alpha = 0.62f),
             fontSize = 13.sp,
             lineHeight = 19.sp
@@ -2010,7 +2123,7 @@ private fun SearchHeroSection(
         if (isResolvingLocation) {
             Spacer(modifier = Modifier.height(12.dp))
             SearchStatusChip(
-                text = "\uD604\uC7AC \uC704\uCE58\uB97C \uD655\uC778\uD558\uB294 \uC911\uC785\uB2C8\uB2E4",
+                text = "현재 위치를 확인하는 중입니다",
                 background = Color(0xFF173657),
                 content = Color(0xFF9CCCFF)
             )
@@ -2059,7 +2172,7 @@ private fun SearchEmptyGuide() {
             .padding(20.dp)
     ) {
         Text(
-            text = "\uC544\uC9C1 \uAC80\uC0C9\uD55C \uC554\uC7A5\uC774 \uC5C6\uC5B4\uC694",
+            text = "아직 검색한 암장이 없어요",
             color = Color.White,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold
@@ -2068,7 +2181,7 @@ private fun SearchEmptyGuide() {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "\uC554\uC7A5\uBA85\uC744 \uC785\uB825\uD574 \uCC3E\uAC70\uB098, \uD604\uC7AC \uC704\uCE58 \uBC84\uD2BC\uC73C\uB85C \uAC00\uAE4C\uC6B4 \uD074\uB77C\uC774\uBC0D\uC7A5\uC744 \uBD88\uB7EC\uC624\uC138\uC694.",
+            text = "암장명을 입력해 찾거나, 현재 위치 버튼으로 가까운 클라이밍장을 불러오세요.",
             color = Color.White.copy(alpha = 0.62f),
             fontSize = 14.sp,
             lineHeight = 20.sp
@@ -2102,7 +2215,7 @@ private fun SelectionPill() {
             .padding(horizontal = 10.dp, vertical = 5.dp)
     ) {
         Text(
-            text = "\uC120\uD0DD\uB428",
+            text = "선택됨",
             color = Color(0xFFB7DCFF),
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold
@@ -2128,12 +2241,12 @@ private fun requestCurrentLocation(
     onError: (String) -> Unit
 ) {
     if (!hasLocationPermission(context)) {
-        onError("\uC704\uCE58 \uAD8C\uD55C\uC774 \uD544\uC694\uD569\uB2C8\uB2E4.")
+        onError("위치 권한이 필요합니다.")
         return
     }
 
     if (providerIndex >= providers.size) {
-        onError("\uD604\uC7AC \uC704\uCE58\uB97C \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.")
+        onError("현재 위치를 가져오지 못했습니다.")
         return
     }
 

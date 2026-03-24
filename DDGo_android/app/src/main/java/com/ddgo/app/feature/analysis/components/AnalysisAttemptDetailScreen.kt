@@ -219,25 +219,25 @@ private fun AttemptMetricsSection(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     AttemptSignalBar(
-                        label = "\uC548\uC815\uB960",
+                        label = "안정률",
                         score = detail.stabilityScore,
                         valueLabel = detail.stabilityValueLabel,
                         tone = AnalysisBadgeTone.Accent
                     )
                     AttemptSignalBar(
-                        label = "\uCD5C\uB300 \uD640\uB4DC",
+                        label = "최대 홀드",
                         score = detail.reachScore,
                         valueLabel = detail.reachValueLabel,
                         tone = AnalysisBadgeTone.Success
                     )
                     AttemptSignalBar(
-                        label = "\uC704\uD5D8 \uC774\uBCA4\uD2B8",
+                        label = "위험 이벤트",
                         score = detail.dangerEventScore,
                         valueLabel = detail.dangerEventValueLabel,
                         tone = AnalysisBadgeTone.Warning
                     )
                     AttemptSignalBar(
-                        label = "\uD06C\uB7ED\uC2A4 \uAD6C\uAC04 \uC2DC\uAC04",
+                        label = "크럭스 구간 시간",
                         score = detail.cruxFocusScore,
                         valueLabel = detail.cruxFocusValueLabel,
                         tone = AnalysisBadgeTone.Danger
