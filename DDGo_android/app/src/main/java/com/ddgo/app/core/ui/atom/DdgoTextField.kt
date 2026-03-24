@@ -38,7 +38,8 @@ fun DdgoTextField(
     singleLine: Boolean = true,
     minLines: Int = 1,
     supportingText: String? = null,
-    visualTransformation: VisualTransformation = VisualTransformation.None
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     val enabled = state != DdgoFieldState.Disabled
     val isError = state == DdgoFieldState.Error
@@ -76,7 +77,7 @@ fun DdgoTextField(
                 )
             }
         },
-        trailingIcon = trailingText?.let { text ->
+        trailingIcon = trailingContent ?: trailingText?.let { text ->
             {
                 Text(
                     text = text,

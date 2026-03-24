@@ -2,21 +2,23 @@ package com.ddgo.app.feature.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.core.ui.atom.DdgoFieldState
@@ -34,6 +36,7 @@ fun RegisterPasswordScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val errorMessage = viewModel.errorMessage
+    var isPasswordVisible by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
         when (uiState) {
@@ -58,9 +61,7 @@ fun RegisterPasswordScreen(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
-            }
+            AuthBackButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp))
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -92,10 +93,22 @@ fun RegisterPasswordScreen(
                 value = viewModel.password,
                 onValueChange = viewModel::updatePassword,
                 placeholder = "\uBE44\uBC00\uBC88\uD638",
-                visualTransformation = PasswordVisualTransformation(),
+                visualTransformation = if (isPasswordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
                 modifier = Modifier.fillMaxWidth(),
                 state = if (errorMessage != null) DdgoFieldState.Error else DdgoFieldState.Default,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                trailingContent = {
+                    AuthPasswordTrailingActions(
+                        value = viewModel.password,
+                        isPasswordVisible = isPasswordVisible,
+                        onClear = { viewModel.updatePassword("") },
+                        onToggleVisibility = { isPasswordVisible = !isPasswordVisible }
+                    )
+                }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
