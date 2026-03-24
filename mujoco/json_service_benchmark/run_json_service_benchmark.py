@@ -23,10 +23,26 @@ sys.path.insert(0, str(DYNAMIC_ROOT))
 sys.path.insert(0, str(CUSTOM_SKELETON_ROOT))
 
 import run_dynamic_sequence_analysis as dyn  # noqa: E402
-from contact_force_distribution import estimate_contact_forces, summarize_contact_force_history  # noqa: E402
-from evaluate_static_fit import AUX_SITE_TARGETS, POLE_TARGETS, SITE_TARGETS, fit_static_pose  # noqa: E402
-from hold_contact_state import HoldContactTracker, HoldDetection, compute_contact_points_px  # noqa: E402
+from contact_force_distribution import (  # noqa: E402
+    decompose_contact_force,
+    estimate_contact_forces,
+    summarize_contact_force_history,
+)
+from evaluate_static_fit import (  # noqa: E402
+    AUX_SITE_TARGETS,
+    POLE_TARGETS,
+    SITE_TARGETS,
+    compute_high_step_score,
+    compute_knee_flexion_target,
+    fit_static_pose,
+)
 from mediapipe_custom_skeleton_verify import MetricSkeletonMapper  # noqa: E402
+from polygon_hold_contact_state import (  # noqa: E402
+    PolygonHoldContactTracker as HoldContactTracker,
+    PolygonHoldDetection as HoldDetection,
+    compute_contact_points_px,
+    load_polygon_service_holds,
+)
 from personalize_articulated_model import (  # noqa: E402
     apply_personalization,
     body_local,
@@ -42,6 +58,16 @@ DEFAULT_USER_BODY_JSON = ROOT / "benchmark_inputs" / "user_body.json"
 DEFAULT_XML = ARTIC_ROOT / "custom_articulated_human.xml"
 DEFAULT_CACHE_DIR = ROOT / "cache"
 DEFAULT_OUTPUT = ROOT / "json_service_benchmark_report.json"
+
+HIGH_STEP_SCORE_THRESHOLD = 0.70
+HIGH_STEP_KNEE_GAP_THRESHOLD_DEG = 30.0
+HIGH_STEP_KNEE_SEED_BLEND = 0.65
+HIGH_STEP_HIP_X_NEUTRAL_BLEND = 0.45
+HIGH_STEP_HIP_Z_NEUTRAL_BLEND = 0.25
+HIGH_STEP_ANKLE_X_NEUTRAL_BLEND = 0.50
+HIGH_STEP_ANKLE_Y_NEUTRAL_BLEND = 0.45
+CONTACT_FORCE_SMOOTHING_ALPHA = 0.40
+CONTACT_FORCE_SMOOTHING_MAX_GAP_MS = 220.0
 
 
 @dataclass(slots=True)
@@ -75,40 +101,7 @@ def load_service_holds(holds_json: Path) -> dict[str, Any]:
     payload = json.loads(holds_json.read_text(encoding="utf-8"))
     if "detections" in payload:
         return dyn.load_hold_detections(holds_json)
-
-    holds = payload.get("holds", [])
-    hold_objects: list[HoldDetection] = []
-    max_x = 0.0
-    max_y = 0.0
-    for hold in holds:
-        bbox = hold["bbox_px"]
-        x1 = float(bbox["x1"])
-        y1 = float(bbox["y1"])
-        x2 = float(bbox["x2"])
-        y2 = float(bbox["y2"])
-        radius_px = float(hold.get("radius_px", 0.45 * min(max(1.0, x2 - x1), max(1.0, y2 - y1))))
-        hold_objects.append(
-            HoldDetection(
-                hold_id=int(hold["hold_id"]),
-                cx_px=float(hold["center_px"]["x"]),
-                cy_px=float(hold["center_px"]["y"]),
-                radius_px=radius_px,
-                x1=x1,
-                y1=y1,
-                x2=x2,
-                y2=y2,
-                confidence=float(hold.get("confidence", 0.0)),
-            )
-        )
-        max_x = max(max_x, x2)
-        max_y = max(max_y, y2)
-
-    return {
-        "source_file": payload.get("source", {}).get("legacy_source_file") or payload.get("source", {}).get("path"),
-        "detection_count": len(hold_objects),
-        "bbox_extent_px": [max_x, max_y],
-        "holds": hold_objects,
-    }
+    return load_polygon_service_holds(holds_json)
 
 
 def sample_detected_frames(frames: list[dict[str, Any]], sample_count: int) -> list[dict[str, Any]]:
@@ -232,6 +225,254 @@ def should_retry_high_confidence(limb_states: dict[str, dict[str, Any]] | None) 
     engaged = sum(1 for state in states if state in ("GRIP", "STEP"))
     has_transition = any(state in ("REACH", "RELEASE") for state in states)
     return engaged >= 2 and not has_transition
+
+
+def summarize_limb_contact_confidences(frames: list[dict[str, Any]]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    limb_names = ("left_hand", "right_hand", "left_foot", "right_foot")
+    for limb_name in limb_names:
+        presence_counts: dict[str, int] = {}
+        identity_counts: dict[str, int] = {}
+        for frame in frames:
+            payload = frame.get("limb_states", {}).get(limb_name, {})
+            presence = str(payload.get("contact_presence_confidence", "none"))
+            identity = str(payload.get("hold_identity_confidence", "none"))
+            presence_counts[presence] = presence_counts.get(presence, 0) + 1
+            identity_counts[identity] = identity_counts.get(identity, 0) + 1
+        summary[limb_name] = {
+            "contact_presence_confidence_counts": presence_counts,
+            "hold_identity_confidence_counts": identity_counts,
+        }
+    return summary
+
+
+def summarize_limb_tracker_debug(frames: list[dict[str, Any]]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    limb_names = ("left_hand", "right_hand", "left_foot", "right_foot")
+    for limb_name in limb_names:
+        route_bias_counts: dict[str, int] = {}
+        hysteresis_counts: dict[str, int] = {}
+        for frame in frames:
+            payload = frame.get("limb_states", {}).get(limb_name, {})
+            route_bias = payload.get("route_bias_applied")
+            hysteresis = payload.get("identity_hysteresis_applied")
+            if route_bias:
+                key = str(route_bias)
+                route_bias_counts[key] = route_bias_counts.get(key, 0) + 1
+            if hysteresis:
+                key = str(hysteresis)
+                hysteresis_counts[key] = hysteresis_counts.get(key, 0) + 1
+        summary[limb_name] = {
+            "route_bias_applied_counts": route_bias_counts,
+            "identity_hysteresis_applied_counts": hysteresis_counts,
+        }
+    return summary
+
+
+def summarize_freeze_reasons(frames: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for frame in frames:
+        reason = frame.get("freeze_reason")
+        if reason is None:
+            continue
+        key = str(reason)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def build_display_contact_force_payload(
+    raw_contact_forces: dict[str, Any],
+    wall_normal_world: list[float] | None,
+) -> dict[str, Any]:
+    if not raw_contact_forces:
+        return {}
+    if wall_normal_world is None:
+        wall_normal = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+    else:
+        wall_normal = np.asarray(wall_normal_world, dtype=np.float64)
+
+    display_payload: dict[str, Any] = {}
+    for limb_name, payload in raw_contact_forces.items():
+        force_xyz = np.asarray(payload.get("force_xyz", [0.0, 0.0, 0.0]), dtype=np.float64)
+        decomposition = decompose_contact_force(force_xyz, wall_normal)
+        display_payload[limb_name] = {
+            **payload,
+            "force_xyz": force_xyz.tolist(),
+            "force_norm_n": float(np.linalg.norm(force_xyz)),
+            "normal_force_n": decomposition["compressive_wall_normal_force_n"]
+            if str(payload.get("mode", "MOVE")) == "STEP"
+            else payload.get("normal_force_n"),
+            "tangential_force_n": decomposition["wall_tangential_force_n"]
+            if str(payload.get("mode", "MOVE")) == "STEP"
+            else payload.get("tangential_force_n"),
+            **decomposition,
+        }
+    return display_payload
+
+
+def apply_temporal_contact_force_smoothing(frames: list[dict[str, Any]], alpha: float) -> dict[str, Any]:
+    limb_names = ("left_hand", "right_hand", "left_foot", "right_foot")
+    prev_vectors: dict[str, np.ndarray] = {}
+    prev_modes: dict[str, str] = {}
+    prev_timestamps_ms: dict[str, int] = {}
+    prev_hold_ids: dict[str, int | None] = {}
+    smoothed_frame_count = 0
+    smoothed_limb_count = 0
+
+    for frame in frames:
+        raw_payload = frame.get("estimated_contact_forces_raw_n", {})
+        display_payload = build_display_contact_force_payload(
+            raw_contact_forces=raw_payload,
+            wall_normal_world=frame.get("contact_force_distribution", {}).get("wall_normal_world"),
+        )
+        can_smooth = (
+            frame.get("analysis_confidence") == "high"
+            and frame.get("contact_force_status") == "ok"
+        )
+        frame_smoothed = False
+        timestamp_ms = int(frame.get("timestamp_ms", 0))
+
+        for limb_name in limb_names:
+            payload = display_payload.get(limb_name)
+            if payload is None:
+                prev_vectors.pop(limb_name, None)
+                prev_modes.pop(limb_name, None)
+                prev_timestamps_ms.pop(limb_name, None)
+                prev_hold_ids.pop(limb_name, None)
+                continue
+
+            mode = str(payload.get("mode", "MOVE"))
+            force_xyz = np.asarray(payload.get("force_xyz", [0.0, 0.0, 0.0]), dtype=np.float64)
+            prev_vec = prev_vectors.get(limb_name)
+            prev_mode = prev_modes.get(limb_name)
+            prev_timestamp_ms = prev_timestamps_ms.get(limb_name)
+            current_hold_id = (frame.get("limb_states", {}).get(limb_name, {}) or {}).get("active_hold_id")
+            prev_hold_id = prev_hold_ids.get(limb_name)
+            raw_force_norm = float(np.linalg.norm(force_xyz))
+            prev_force_norm = float(np.linalg.norm(prev_vec)) if prev_vec is not None else None
+            relative_force_jump = (
+                abs(raw_force_norm - prev_force_norm) / max(raw_force_norm, prev_force_norm, 1.0)
+                if prev_force_norm is not None
+                else None
+            )
+            should_smooth = (
+                can_smooth
+                and prev_vec is not None
+                and prev_mode == mode
+                and prev_timestamp_ms is not None
+                and (timestamp_ms - prev_timestamp_ms) <= CONTACT_FORCE_SMOOTHING_MAX_GAP_MS
+                and current_hold_id == prev_hold_id
+                and current_hold_id is not None
+                and relative_force_jump is not None
+                and relative_force_jump <= 0.30
+            )
+            if should_smooth:
+                force_xyz = alpha * force_xyz + (1.0 - alpha) * prev_vec
+                decomposition = decompose_contact_force(
+                    force_xyz,
+                    np.asarray(frame.get("contact_force_distribution", {}).get("wall_normal_world", [1.0, 0.0, 0.0]), dtype=np.float64),
+                )
+                payload["force_xyz"] = force_xyz.tolist()
+                payload["force_norm_n"] = float(np.linalg.norm(force_xyz))
+                if mode == "STEP":
+                    payload["normal_force_n"] = decomposition["compressive_wall_normal_force_n"]
+                    payload["tangential_force_n"] = decomposition["wall_tangential_force_n"]
+                payload.update(decomposition)
+                payload["smoothed_for_display"] = True
+                smoothed_limb_count += 1
+                frame_smoothed = True
+            else:
+                payload["smoothed_for_display"] = False
+
+            prev_vectors[limb_name] = force_xyz
+            prev_modes[limb_name] = mode
+            prev_timestamps_ms[limb_name] = timestamp_ms
+            prev_hold_ids[limb_name] = current_hold_id
+
+        if frame_smoothed:
+            smoothed_frame_count += 1
+        frame["estimated_contact_forces_n"] = display_payload
+
+    return {
+        "alpha": alpha,
+        "max_gap_ms": CONTACT_FORCE_SMOOTHING_MAX_GAP_MS,
+        "smoothed_frame_count": smoothed_frame_count,
+        "smoothed_limb_count": smoothed_limb_count,
+    }
+
+
+def _joint_meta(model: mujoco.MjModel, joint_name: str) -> tuple[int, int, float, float]:
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    qpos_adr = int(model.jnt_qposadr[joint_id])
+    low = float(model.jnt_range[joint_id, 0])
+    high = float(model.jnt_range[joint_id, 1])
+    return joint_id, qpos_adr, low, high
+
+
+def _blend_scalar(current: float, target: float, alpha: float) -> float:
+    alpha = float(np.clip(alpha, 0.0, 1.0))
+    return float((1.0 - alpha) * current + alpha * target)
+
+
+def build_high_step_seed_qpos(
+    model: mujoco.MjModel,
+    prev_qpos: np.ndarray | None,
+    target_points: dict[str, np.ndarray],
+    limb_states: dict[str, dict[str, Any]] | None,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    if prev_qpos is None or limb_states is None:
+        return prev_qpos, {}
+
+    injected_seed = np.asarray(prev_qpos, dtype=np.float64).copy()
+    applied: dict[str, Any] = {}
+
+    for side in ("left", "right"):
+        foot_state = str((limb_states.get(f"{side}_foot", {}) or {}).get("state", "FREE"))
+        if foot_state not in ("STEP", "REACH"):
+            continue
+
+        high_step_score = float(compute_high_step_score(target_points, side))
+        if high_step_score < HIGH_STEP_SCORE_THRESHOLD:
+            continue
+
+        _, knee_qpos_adr, knee_low, knee_high = _joint_meta(model, f"knee_{side}")
+        target_knee_qpos = float(np.clip(compute_knee_flexion_target(target_points, side), knee_low, knee_high))
+        current_knee_qpos = float(prev_qpos[knee_qpos_adr])
+        knee_gap_deg = float(np.degrees(abs(target_knee_qpos) - abs(current_knee_qpos)))
+        if knee_gap_deg < HIGH_STEP_KNEE_GAP_THRESHOLD_DEG:
+            continue
+
+        injected_seed[knee_qpos_adr] = _blend_scalar(
+            current=current_knee_qpos,
+            target=target_knee_qpos,
+            alpha=HIGH_STEP_KNEE_SEED_BLEND,
+        )
+
+        for joint_name, alpha, neutral_target in (
+            (f"hip_x_{side}", HIGH_STEP_HIP_X_NEUTRAL_BLEND, 0.0),
+            (f"hip_z_{side}", HIGH_STEP_HIP_Z_NEUTRAL_BLEND, max(0.0, _joint_meta(model, f"hip_z_{side}")[2])),
+            (f"ankle_x_{side}", HIGH_STEP_ANKLE_X_NEUTRAL_BLEND, 0.0),
+            (f"ankle_y_{side}", HIGH_STEP_ANKLE_Y_NEUTRAL_BLEND, 0.0),
+        ):
+            _, qpos_adr, low, high = _joint_meta(model, joint_name)
+            target_value = float(np.clip(neutral_target, low, high))
+            injected_seed[qpos_adr] = _blend_scalar(
+                current=float(prev_qpos[qpos_adr]),
+                target=target_value,
+                alpha=alpha,
+            )
+
+        applied[side] = {
+            "state": foot_state,
+            "high_step_score": high_step_score,
+            "target_knee_flex_deg": float(np.degrees(abs(target_knee_qpos))),
+            "previous_knee_flex_deg": float(np.degrees(abs(current_knee_qpos))),
+            "knee_gap_deg": knee_gap_deg,
+        }
+
+    if not applied:
+        return prev_qpos, {}
+    return injected_seed, applied
 
 
 def interpolate_qpos_pair(model: mujoco.MjModel, qpos_a: np.ndarray, qpos_b: np.ndarray, alpha: float) -> np.ndarray:
@@ -370,11 +611,15 @@ def evaluate_from_json_inputs(
     frames: list[dict[str, Any]] = []
     prev_qpos: np.ndarray | None = None
     prev_target_points: dict[str, np.ndarray] | None = None
+    prev_target_timestamp_ms: int | None = None
     last_good_bundle: dict[str, object] | None = None
     fitted_frame_count = 0
     interpolated_frame_count = 0
     retry_attempt_count = 0
     retry_applied_count = 0
+    high_step_seed_attempt_count = 0
+    high_step_seed_applied_count = 0
+    high_step_seed_frame_indices: list[int] = []
 
     for raw_frame in frames_input:
         frame_index = int(raw_frame["frame_index"])
@@ -398,6 +643,10 @@ def evaluate_from_json_inputs(
             "fit_max_error_m": None,
             "fit_final_error_norm": None,
             "lower_limb_consistency": {},
+            "freeze_reason": None,
+            "target_jump_mean_m": None,
+            "target_jump_max_m": None,
+            "high_step_seed": {},
         }
         should_fit_frame = fit_frame_step <= 1 or (frame_index % fit_frame_step == 0)
 
@@ -414,6 +663,7 @@ def evaluate_from_json_inputs(
                         "fit_max_error_m": frozen["fit"]["max_error_m"],
                         "fit_final_error_norm": frozen["fit"]["final_error_norm"],
                         "lower_limb_consistency": frozen["fit"].get("lower_limb_consistency", {}),
+                        "freeze_reason": "missing_landmarks",
                     }
                 )
             frames.append(base_record)
@@ -422,7 +672,12 @@ def evaluate_from_json_inputs(
         mapper_snapshot = mapper.snapshot_state()
         target_points = mapper.map_frame(world_landmarks)
         mean_jump, max_jump = dyn.target_jump_stats(target_points, prev_target_points)
-        if prev_target_points is not None and (max_jump > dyn.MAX_TARGET_JUMP_M or mean_jump > dyn.MEAN_TARGET_JUMP_M):
+        base_record["target_jump_mean_m"] = float(mean_jump)
+        base_record["target_jump_max_m"] = float(max_jump)
+        mean_jump_threshold, max_jump_threshold = dyn.scaled_target_jump_thresholds(
+            None if prev_target_timestamp_ms is None else (timestamp_ms - prev_target_timestamp_ms)
+        )
+        if prev_target_points is not None and (max_jump > max_jump_threshold or mean_jump > mean_jump_threshold):
             mapper.restore_state(mapper_snapshot)
             if last_good_bundle is not None:
                 frozen = dyn.clone_pose_bundle(last_good_bundle)
@@ -435,6 +690,7 @@ def evaluate_from_json_inputs(
                         "fit_max_error_m": frozen["fit"]["max_error_m"],
                         "fit_final_error_norm": frozen["fit"]["final_error_norm"],
                         "lower_limb_consistency": frozen["fit"].get("lower_limb_consistency", {}),
+                        "freeze_reason": "target_jump",
                     }
                 )
             frames.append(base_record)
@@ -449,14 +705,28 @@ def evaluate_from_json_inputs(
             )
             frames.append(base_record)
             prev_target_points = {key: value.copy() for key, value in target_points.items()}
+            prev_target_timestamp_ms = int(timestamp_ms)
             continue
+
+        seed_qpos = prev_qpos
+        seed_qpos, high_step_seed = build_high_step_seed_qpos(
+            model=model,
+            prev_qpos=prev_qpos,
+            target_points=target_points,
+            limb_states=limb_states,
+        )
+        if high_step_seed:
+            high_step_seed_attempt_count += 1
+            high_step_seed_applied_count += len(high_step_seed)
+            high_step_seed_frame_indices.append(frame_index)
+            base_record["high_step_seed"] = high_step_seed
 
         fit = fit_static_pose(
             model=model,
             data=data,
             site_ids=site_ids,
             target_points=target_points,
-            seed_qpos=prev_qpos,
+            seed_qpos=seed_qpos,
             iterations=ik_iterations,
             damping=damping,
         )
@@ -495,14 +765,21 @@ def evaluate_from_json_inputs(
                 fit = retry
                 retry_applied_count += 1
 
-        if (
+        bad_fit_error = (
             float(fit["mean_error_m"]) > dyn.BAD_FIT_MEAN_ERROR_M
             or float(fit["max_error_m"]) > dyn.BAD_FIT_MAX_ERROR_M
-            or dyn.has_bad_lower_limb_consistency(fit)
-        ):
+        )
+        bad_lower_limb = dyn.has_bad_lower_limb_consistency(fit)
+        if bad_fit_error or bad_lower_limb:
             mapper.restore_state(mapper_snapshot)
             if last_good_bundle is not None:
                 frozen = dyn.clone_pose_bundle(last_good_bundle)
+                if bad_fit_error and bad_lower_limb:
+                    freeze_reason = "bad_fit_and_lower_limb"
+                elif bad_fit_error:
+                    freeze_reason = "bad_fit_error"
+                else:
+                    freeze_reason = "bad_lower_limb_consistency"
                 base_record.update(
                     {
                         "qpos": np.asarray(frozen["qpos"], dtype=np.float64).copy(),
@@ -512,6 +789,7 @@ def evaluate_from_json_inputs(
                         "fit_max_error_m": frozen["fit"]["max_error_m"],
                         "fit_final_error_norm": frozen["fit"]["final_error_norm"],
                         "lower_limb_consistency": frozen["fit"].get("lower_limb_consistency", {}),
+                        "freeze_reason": freeze_reason,
                     }
                 )
             frames.append(base_record)
@@ -519,6 +797,7 @@ def evaluate_from_json_inputs(
 
         prev_qpos = fit["qpos"].copy()
         prev_target_points = {key: value.copy() for key, value in target_points.items()}
+        prev_target_timestamp_ms = int(timestamp_ms)
         last_good_bundle = {
             "qpos": fit["qpos"].copy(),
             "fit": fit,
@@ -584,6 +863,11 @@ def evaluate_from_json_inputs(
             limb_name: str(frame["limb_states"].get(limb_name, {}).get("state", "MOVE"))
             for limb_name in active_contact_limbs
         }
+        contact_confidence_scores = dyn.build_contact_confidence_scores(
+            limb_states=frame.get("limb_states"),
+            active_contact_limbs=active_contact_limbs,
+            contact_modes=contact_modes,
+        )
         active_contact_positions = {
             limb_name: np.asarray(data.site_xpos[site_ids[dyn.SUPPORT_SITE_BY_LIMB[limb_name]]], dtype=np.float64)
             for limb_name in active_contact_limbs
@@ -593,6 +877,7 @@ def evaluate_from_json_inputs(
             required_wrench=root_inverse_force,
             contact_positions_xyz=active_contact_positions,
             contact_modes=contact_modes,
+            contact_confidence_scores=contact_confidence_scores,
         )
 
         root_linear_speed = float(np.linalg.norm(qvel[0:3]))
@@ -626,17 +911,28 @@ def evaluate_from_json_inputs(
         frame["root_inverse_force"] = root_inverse_force.tolist()
         frame["body_loads"] = body_loads
         frame["contact_force_distribution"] = contact_force_distribution
+        frame["contact_force_confidence_scores"] = contact_confidence_scores
         frame["top_joint_loads"] = dyn.top_joint_loads(joint_inverse_forces, top_k_joints)
         frame["joint_loads"] = {
             joint_name: float(payload["qfrc_inverse"])
             for joint_name, payload in joint_inverse_forces.items()
         }
         frame["com_position_m"] = com.tolist()
-        frame["estimated_contact_forces_n"] = contact_force_distribution.get("contact_forces", {})
+        frame["contact_force_status"] = contact_force_distribution.get("status")
+        frame["contact_force_relative_residual"] = contact_force_distribution.get("relative_residual")
+        frame["estimated_contact_forces_raw_n"] = contact_force_distribution.get("contact_forces", {})
+        frame["estimated_contact_forces_n"] = build_display_contact_force_payload(
+            raw_contact_forces=frame["estimated_contact_forces_raw_n"],
+            wall_normal_world=contact_force_distribution.get("wall_normal_world"),
+        )
         if not keep_qpos:
             frame.pop("qpos", None)
 
     inverse_dynamics_s = float(time.perf_counter() - inverse_started)
+    contact_force_display_smoothing = apply_temporal_contact_force_smoothing(
+        frames=frames,
+        alpha=CONTACT_FORCE_SMOOTHING_ALPHA,
+    )
 
     report = {
         "schema_version": "1.0.0",
@@ -680,14 +976,21 @@ def evaluate_from_json_inputs(
             "interpolated_frame_count": interpolated_frame_count,
             "retry_attempt_count": retry_attempt_count,
             "retry_applied_count": retry_applied_count,
+            "high_step_seed_attempt_count": high_step_seed_attempt_count,
+            "high_step_seed_applied_count": high_step_seed_applied_count,
+            "high_step_seed_frame_indices": high_step_seed_frame_indices,
         },
         "pose_mode_counts": pose_mode_counts,
         "phase_counts": phase_counts,
         "support_mode_counts": support_mode_counts,
         "hold_state_summary": dyn.summarize_hold_states(frames),
+        "limb_contact_confidence_summary": summarize_limb_contact_confidences(frames),
+        "limb_tracker_debug_summary": summarize_limb_tracker_debug(frames),
+        "freeze_reason_summary": summarize_freeze_reasons(frames),
         "joint_load_summary": dyn.summarize_joint_load_history(joint_force_history),
         "body_load_summary": dyn.summarize_body_load_history(body_load_history),
         "contact_force_distribution_summary": summarize_contact_force_history(frames),
+        "contact_force_display_smoothing": contact_force_display_smoothing,
         "support_stability_summary": dyn.summarize_support_stability(frames),
         "dynamic_sequence_gate": dyn.sequence_gate_decision(frames),
         "frames": [
@@ -697,6 +1000,11 @@ def evaluate_from_json_inputs(
                 "pose_mode": frame["pose_mode"],
                 "phase": frame["phase"],
                 "analysis_confidence": frame["analysis_confidence"],
+                "limb_states": frame["limb_states"],
+                "freeze_reason": frame["freeze_reason"],
+                "target_jump_mean_m": frame["target_jump_mean_m"],
+                "target_jump_max_m": frame["target_jump_max_m"],
+                "high_step_seed": frame.get("high_step_seed", {}),
                 "active_contact_limbs": frame["active_contact_limbs"],
                 "active_hold_ids": frame["active_hold_ids"],
                 "support_mode": frame["support_mode"],
@@ -705,9 +1013,11 @@ def evaluate_from_json_inputs(
                 "top_joint_loads": frame["top_joint_loads"],
                 "body_loads": frame["body_loads"],
                 "com_position_m": frame["com_position_m"],
+                "estimated_contact_forces_raw_n": frame["estimated_contact_forces_raw_n"],
                 "estimated_contact_forces_n": frame["estimated_contact_forces_n"],
-                "contact_force_status": frame["contact_force_distribution"].get("status"),
-                "contact_force_relative_residual": frame["contact_force_distribution"].get("relative_residual"),
+                "contact_force_confidence_scores": frame.get("contact_force_confidence_scores", {}),
+                "contact_force_status": frame["contact_force_status"],
+                "contact_force_relative_residual": frame["contact_force_relative_residual"],
                 **(
                     {
                         "qpos": np.asarray(frame["qpos"], dtype=np.float64).tolist(),

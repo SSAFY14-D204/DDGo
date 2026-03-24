@@ -56,6 +56,8 @@ AUX_SITE_TARGETS = {
     "right_knee_forward_site": ("right_knee_forward", 0.12),
     "left_heel_site": ("left_heel", 0.12),
     "right_heel_site": ("right_heel", 0.12),
+    "left_foot_dorsal_site": ("left_foot_dorsal", 0.10),
+    "right_foot_dorsal_site": ("right_foot_dorsal", 0.10),
 }
 
 ROOT_BLEND_ALPHA = 0.35
@@ -66,6 +68,11 @@ KNEE_TARGET_REG = 0.22
 HIP_NEUTRAL_REG = 0.045
 HIP_TWIST_REG = 0.140
 ANKLE_NEUTRAL_REG = 0.110
+ANKLE_Y_ALIGNMENT_REG = 0.085
+HIGH_STEP_KNEE_FORWARD_REG = 0.070
+RIGHT_ANKLE_Y_REG_SCALE = 1.60
+RIGHT_ANKLE_X_REG_SCALE = 1.45
+RIGHT_FOOT_TARGET_SCALE = 1.10
 
 PASS_THRESHOLDS_M = {
     "overall_mean_error_m": 0.12,
@@ -231,14 +238,38 @@ def build_pole_targets(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     elbow_right_pref = normalize(-0.80 * left_axis - 0.35 * up_axis)
     left_stance_forward = stance_forward("left")
     right_stance_forward = stance_forward("right")
-    knee_left_pref = normalize(0.01 * left_axis + 0.995 * left_stance_forward - 0.03 * up_axis)
-    knee_right_pref = normalize(-0.01 * left_axis + 0.995 * right_stance_forward - 0.03 * up_axis)
+    left_high_step = compute_high_step_score(points, "left")
+    right_high_step = compute_high_step_score(points, "right")
+    knee_left_pref = normalize(
+        0.01 * left_axis
+        + (0.995 + 0.28 * left_high_step) * left_stance_forward
+        + 0.18 * left_high_step * up_axis
+        - 0.02 * up_axis
+    )
+    knee_right_pref = normalize(
+        -0.01 * left_axis
+        + (0.995 + 0.28 * right_high_step) * right_stance_forward
+        + 0.18 * right_high_step * up_axis
+        - 0.02 * up_axis
+    )
 
     return {
         "left_elbow_pole": make_pole(points["left_shoulder"], points["left_elbow"], points["left_hand"], elbow_left_pref, 0.08),
         "right_elbow_pole": make_pole(points["right_shoulder"], points["right_elbow"], points["right_hand"], elbow_right_pref, 0.08),
-        "left_knee_pole": make_pole(points["left_hip"], points["left_knee"], points["left_ankle"], knee_left_pref, 0.10),
-        "right_knee_pole": make_pole(points["right_hip"], points["right_knee"], points["right_ankle"], knee_right_pref, 0.10),
+        "left_knee_pole": make_pole(
+            points["left_hip"],
+            points["left_knee"],
+            points["left_ankle"],
+            knee_left_pref,
+            0.10 + 0.05 * left_high_step,
+        ),
+        "right_knee_pole": make_pole(
+            points["right_hip"],
+            points["right_knee"],
+            points["right_ankle"],
+            knee_right_pref,
+            0.10 + 0.05 * right_high_step,
+        ),
     }
 
 
@@ -293,9 +324,23 @@ def build_aux_targets(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         knee = np.asarray(points[f"{side}_knee"], dtype=np.float64)
         bend_score = compute_knee_flex_score(points, side)
         vertical_score = compute_thigh_vertical_score(points, side)
+        high_step_score = compute_high_step_score(points, side)
         side_forward = stance_forward(side)
-        offset = 0.038 + 0.060 * bend_score + 0.055 * vertical_score
-        return knee + side_forward * offset - up_axis * (0.004 * bend_score)
+        offset = 0.038 + 0.060 * bend_score + 0.055 * vertical_score + 0.085 * high_step_score
+        return knee + side_forward * offset + up_axis * (0.020 * high_step_score) - up_axis * (0.003 * bend_score)
+
+    def make_foot_dorsal(side: str) -> np.ndarray:
+        ankle = np.asarray(points[f"{side}_ankle"], dtype=np.float64)
+        heel = np.asarray(points[f"{side}_heel"], dtype=np.float64)
+        toe = np.asarray(points[f"{side}_foot"], dtype=np.float64)
+        high_step_score = compute_high_step_score(points, side)
+        foot_vec = toe - heel
+        foot_flat = foot_vec - float(np.dot(foot_vec, up_axis)) * up_axis
+        foot_len = float(np.linalg.norm(foot_flat))
+        side_forward = stance_forward(side)
+        forward_offset = np.clip(0.52 * max(foot_len, 0.16), 0.085, 0.115)
+        dorsal_height = 0.028 + 0.012 * high_step_score
+        return ankle + side_forward * forward_offset + up_axis * dorsal_height
 
     return {
         "left_thigh_lateral": make_thigh_lateral(points["left_hip"], points["left_knee"], 1.0),
@@ -304,6 +349,8 @@ def build_aux_targets(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         "right_knee_forward": make_knee_forward("right"),
         "left_heel": np.asarray(points["left_heel"], dtype=np.float64),
         "right_heel": np.asarray(points["right_heel"], dtype=np.float64),
+        "left_foot_dorsal": make_foot_dorsal("left"),
+        "right_foot_dorsal": make_foot_dorsal("right"),
     }
 
 
@@ -340,6 +387,26 @@ def compute_thigh_vertical_score(points: dict[str, np.ndarray], side: str) -> fl
     return float(np.clip((verticality - 0.60) / 0.30, 0.0, 1.0))
 
 
+def compute_high_step_score(points: dict[str, np.ndarray], side: str) -> float:
+    pelvis = np.asarray(points["pelvis"], dtype=np.float64)
+    thorax = np.asarray(points["thorax"], dtype=np.float64)
+    up_axis = normalize(thorax - pelvis)
+    hip = np.asarray(points[f"{side}_hip"], dtype=np.float64)
+    knee = np.asarray(points[f"{side}_knee"], dtype=np.float64)
+    ankle = np.asarray(points[f"{side}_ankle"], dtype=np.float64)
+    foot = np.asarray(points[f"{side}_foot"], dtype=np.float64)
+
+    thigh_len = float(np.linalg.norm(knee - hip))
+    shank_len = float(np.linalg.norm(ankle - knee))
+    leg_len = max(1e-6, thigh_len + shank_len)
+    hip_to_ankle_drop = float(np.dot(hip - ankle, up_axis))
+    pelvis_to_foot_drop = float(np.dot(pelvis - foot, up_axis))
+
+    drop_score = (0.82 * leg_len - hip_to_ankle_drop) / (0.42 * leg_len)
+    foot_score = (0.92 * leg_len - pelvis_to_foot_drop) / (0.55 * leg_len)
+    return float(np.clip(max(drop_score, foot_score), 0.0, 1.0))
+
+
 def enforce_lower_limb_forward_consistency(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     adjusted = {key: np.asarray(value, dtype=np.float64).copy() for key, value in points.items()}
     pelvis = adjusted["pelvis"]
@@ -365,25 +432,32 @@ def enforce_lower_limb_forward_consistency(points: dict[str, np.ndarray]) -> dic
             stance_forward = forward_axis
         else:
             flat_norm = float(np.linalg.norm(flat))
-            side_component = float(np.dot(flat, left_axis))
-            forward_component = max(abs(float(np.dot(flat, forward_axis))), 0.60 * flat_norm)
+            vertical_score = compute_thigh_vertical_score(adjusted, side)
+            high_step_score = compute_high_step_score(adjusted, side)
+            side_limit = max(0.010, (0.08 - 0.05 * vertical_score - 0.035 * high_step_score) * flat_norm)
+            side_component = float(np.clip(np.dot(flat, left_axis), -side_limit, side_limit))
+            forward_component = max(
+                abs(float(np.dot(flat, forward_axis))),
+                (0.92 - 0.05 * vertical_score + 0.06 * high_step_score) * flat_norm,
+            )
             stance_forward = normalize(forward_axis * forward_component + left_axis * side_component)
             if float(np.dot(stance_forward, forward_axis)) < 0.0:
                 stance_forward = -stance_forward
 
-        vertical_score = compute_thigh_vertical_score(adjusted, side)
         mean_side = 0.5 * (float(np.dot(toe_rel, left_axis)) + float(np.dot(heel_rel, left_axis)))
-        mean_side = float(np.clip(mean_side, -0.012, 0.012))
+        mean_side = float(np.clip(mean_side, -0.004, 0.004))
+        high_step_score = compute_high_step_score(adjusted, side)
         toe_forward = max(
             0.11,
             abs(float(np.dot(toe_rel, stance_forward))),
-            (0.86 + 0.10 * vertical_score) * float(np.linalg.norm(toe_rel - float(np.dot(toe_rel, up_axis)) * up_axis)),
+            (0.86 + 0.10 * vertical_score + 0.08 * high_step_score)
+            * float(np.linalg.norm(toe_rel - float(np.dot(toe_rel, up_axis)) * up_axis)),
         )
-        heel_back = max(0.04, abs(float(np.dot(heel_rel, stance_forward))), 0.32 * toe_forward)
+        heel_back = max(0.05, abs(float(np.dot(heel_rel, stance_forward))), (0.38 + 0.10 * high_step_score) * toe_forward)
         toe_up = float(np.dot(toe_rel, up_axis))
         heel_up = float(np.dot(heel_rel, up_axis))
 
-        side_offset = left_axis * mean_side + left_axis * (0.006 * side_sign)
+        side_offset = left_axis * mean_side + left_axis * (0.003 * side_sign)
         adjusted[f"{side}_foot"] = ankle + stance_forward * toe_forward + up_axis * toe_up + side_offset
         adjusted[f"{side}_heel"] = ankle - stance_forward * heel_back + up_axis * heel_up + side_offset
 
@@ -406,16 +480,24 @@ def build_dynamic_site_weights(points: dict[str, np.ndarray]) -> dict[str, float
 
         knee_bend_score = compute_knee_flex_score(points, side)
         thigh_vertical_score = compute_thigh_vertical_score(points, side)
+        high_step_score = compute_high_step_score(points, side)
 
-        weights[f"{side}_knee_site"] = 1.28 + 0.62 * knee_bend_score + 0.10 * thigh_vertical_score
+        foot_scale = RIGHT_FOOT_TARGET_SCALE if side == "right" else 1.0
+        weights[f"{side}_knee_site"] = (1.28 + 0.62 * knee_bend_score + 0.10 * thigh_vertical_score + 0.18 * high_step_score) * foot_scale
         weights[f"{side}_ankle_site"] = 1.00 + 0.22 * knee_bend_score
-        weights[f"{side}_foot_site"] = 1.05 + 0.20 * toe_stand_score + 0.12 * knee_bend_score
-        weights[f"{side}_heel_site"] = 0.10 + 0.22 * (1.0 - toe_stand_score) * knee_bend_score
+        weights[f"{side}_foot_site"] = (1.34 + 0.34 * toe_stand_score + 0.24 * knee_bend_score) * foot_scale
+        weights[f"{side}_heel_site"] = (0.24 + 0.32 * (1.0 - toe_stand_score) * knee_bend_score) * foot_scale
+        weights[f"{side}_foot_dorsal_site"] = (0.10 + 0.18 * knee_bend_score + 0.72 * high_step_score) * foot_scale
         weights[f"{side}_thigh_lateral_site"] = max(
             0.08,
             0.12 * (1.0 - 0.88 * knee_bend_score) * (1.0 - 0.92 * thigh_vertical_score),
         )
-        weights[f"{side}_knee_forward_site"] = 0.24 + 0.32 * knee_bend_score + 0.34 * thigh_vertical_score
+        weights[f"{side}_knee_forward_site"] = (
+            0.82
+            + 0.54 * knee_bend_score
+            + 0.56 * thigh_vertical_score
+            + 0.75 * high_step_score
+        ) * foot_scale
 
     return weights
 
@@ -463,14 +545,22 @@ def build_joint_priors(
         target = float(np.clip(compute_knee_flexion_target(target_points, side), low, high))
         flex_score = compute_knee_flex_score(target_points, side)
         vertical_score = compute_thigh_vertical_score(target_points, side)
-        min_forward_flex = -np.deg2rad(4.0 + 12.0 * vertical_score)
+        high_step_score = compute_high_step_score(target_points, side)
+        min_forward_flex = -np.deg2rad(4.0 + 12.0 * vertical_score + 26.0 * high_step_score)
         target = min(target, min_forward_flex)
         knee_abs = abs(target)
         if knee_abs > np.deg2rad(10.0):
-            weight = KNEE_TARGET_REG * (1.0 + 0.6 * flex_score)
+            weight = KNEE_TARGET_REG * (1.0 + 0.6 * flex_score + 0.55 * high_step_score)
             joint_targets.append((qpos_adr, dof_adr, target, weight))
         else:
-            joint_targets.append((qpos_adr, dof_adr, target, KNEE_TARGET_REG * (0.18 + 0.35 * vertical_score)))
+            joint_targets.append(
+                (
+                    qpos_adr,
+                    dof_adr,
+                    target,
+                    KNEE_TARGET_REG * (0.18 + 0.35 * vertical_score + 0.45 * high_step_score),
+                )
+            )
 
         # Keep hip abduction/adduction from taking over crouch. Also add a mild
         # axial-twist prior when the thigh is close to vertical so the knee and
@@ -482,21 +572,38 @@ def build_joint_priors(
         hip_z_jid = joint_ids[f"hip_z_{side}"]
         hip_z_qpos_adr = int(model.jnt_qposadr[hip_z_jid])
         hip_z_dof_adr = int(model.jnt_dofadr[hip_z_jid])
-        hip_z_weight = HIP_TWIST_REG * (0.55 + 1.75 * vertical_score) * (1.0 - 0.10 * flex_score)
+        hip_z_weight = HIP_TWIST_REG * 1.55 * (0.55 + 1.75 * vertical_score + 0.95 * high_step_score) * (1.0 - 0.10 * flex_score)
         joint_targets.append((hip_z_qpos_adr, hip_z_dof_adr, 0.0, hip_z_weight))
+        hip_z_low = float(model.jnt_range[hip_z_jid, 0])
+        hip_z_clamp_target = max(0.0, hip_z_low)
+        joint_targets.append(
+            (
+                hip_z_qpos_adr,
+                hip_z_dof_adr,
+                hip_z_clamp_target,
+                HIGH_STEP_KNEE_FORWARD_REG * high_step_score,
+            )
+        )
 
         toe_stand_score = compute_toe_stand_score(target_points, side)
         ankle_y_jid = joint_ids[f"ankle_y_{side}"]
         ankle_y_qpos_adr = int(model.jnt_qposadr[ankle_y_jid])
         ankle_y_dof_adr = int(model.jnt_dofadr[ankle_y_jid])
-        ankle_y_weight = ANKLE_NEUTRAL_REG * (1.0 - 0.72 * toe_stand_score) * (1.0 - 0.80 * flex_score)
+        ankle_y_weight = ANKLE_NEUTRAL_REG * (1.0 - 0.40 * toe_stand_score) * (1.0 - 0.35 * flex_score)
+        ankle_y_weight = max(ANKLE_NEUTRAL_REG * 0.55, ankle_y_weight)
+        ankle_y_weight += ANKLE_Y_ALIGNMENT_REG * (0.35 + 0.65 * vertical_score) * (0.40 + 0.60 * flex_score)
+        if side == "right":
+            ankle_y_weight *= RIGHT_ANKLE_Y_REG_SCALE
         if ankle_y_weight > 1e-6:
             joint_targets.append((ankle_y_qpos_adr, ankle_y_dof_adr, 0.0, ankle_y_weight))
 
         ankle_x_jid = joint_ids[f"ankle_x_{side}"]
         ankle_x_qpos_adr = int(model.jnt_qposadr[ankle_x_jid])
         ankle_x_dof_adr = int(model.jnt_dofadr[ankle_x_jid])
-        joint_targets.append((ankle_x_qpos_adr, ankle_x_dof_adr, 0.0, ANKLE_NEUTRAL_REG * 0.65))
+        ankle_x_weight = ANKLE_NEUTRAL_REG * 1.10
+        if side == "right":
+            ankle_x_weight *= RIGHT_ANKLE_X_REG_SCALE
+        joint_targets.append((ankle_x_qpos_adr, ankle_x_dof_adr, 0.0, ankle_x_weight))
 
     return joint_targets
 

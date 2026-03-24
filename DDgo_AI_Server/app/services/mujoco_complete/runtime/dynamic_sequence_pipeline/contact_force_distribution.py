@@ -31,6 +31,20 @@ def _project_step_force(force_xyz: np.ndarray, normal_xyz: np.ndarray, friction_
     return normal_mag * normal_xyz + tangent
 
 
+def decompose_contact_force(force_xyz: np.ndarray, wall_normal_xyz: np.ndarray) -> dict[str, float]:
+    force_xyz = np.asarray(force_xyz, dtype=np.float64)
+    wall_normal_xyz = np.asarray(wall_normal_xyz, dtype=np.float64)
+    normal_component = float(np.dot(force_xyz, wall_normal_xyz))
+    tangent_vec = force_xyz - normal_component * wall_normal_xyz
+    return {
+        "wall_normal_component_n": normal_component,
+        "compressive_wall_normal_force_n": max(0.0, normal_component),
+        "wall_tangential_force_n": float(np.linalg.norm(tangent_vec)),
+        "lateral_force_n": float(force_xyz[1]),
+        "vertical_force_n": float(force_xyz[2]),
+    }
+
+
 def _build_wrench_matrix(root_position_xyz: np.ndarray, contact_positions_xyz: list[np.ndarray]) -> np.ndarray:
     contact_count = len(contact_positions_xyz)
     mat = np.zeros((6, 3 * contact_count), dtype=np.float64)
@@ -47,6 +61,7 @@ def estimate_contact_forces(
     required_wrench: np.ndarray,
     contact_positions_xyz: dict[str, np.ndarray],
     contact_modes: dict[str, str],
+    contact_confidence_scores: dict[str, float] | None = None,
     friction_coeff: float = 0.8,
     regularization: float = 1e-3,
     iterations: int = 120,
@@ -68,6 +83,7 @@ def estimate_contact_forces(
     required_wrench = np.asarray(required_wrench, dtype=np.float64)
     root_position_xyz = np.asarray(root_position_xyz, dtype=np.float64)
     wrench_matrix = _build_wrench_matrix(root_position_xyz, positions)
+    contact_confidence_scores = contact_confidence_scores or {}
 
     mean_contact_x = float(np.mean([pos[0] for pos in positions]))
     wall_sign = np.sign(root_position_xyz[0] - mean_contact_x)
@@ -75,16 +91,44 @@ def estimate_contact_forces(
         wall_sign = -1.0
     wall_normal = np.array([wall_sign, 0.0, 0.0], dtype=np.float64)
 
-    lhs = wrench_matrix.T @ wrench_matrix + regularization * np.eye(wrench_matrix.shape[1], dtype=np.float64)
+    regularization_diag = np.zeros(wrench_matrix.shape[1], dtype=np.float64)
+    regularization_scales: dict[str, float] = {}
+    mode_bias_scales: dict[str, float] = {}
+    axis_regularization_scale_xyz: dict[str, list[float]] = {}
+    for idx, limb_name in enumerate(limb_names):
+        confidence_score = float(np.clip(contact_confidence_scores.get(limb_name, 1.0), 0.25, 1.0))
+        mode = str(contact_modes.get(limb_name, "MOVE"))
+        # Confidence weighting stays intentionally mild so good support frames do not drift.
+        penalty_scale = float(np.interp(confidence_score, [0.25, 0.55, 0.75, 1.0], [1.35, 1.20, 1.08, 1.00]))
+        mode_bias_scale = 1.0
+        if mode == "STEP":
+            mode_bias_scale = 1.0
+        elif mode == "GRIP":
+            mode_bias_scale = 1.0
+        axis_scale = np.ones(3, dtype=np.float64)
+        if mode == "STEP":
+            # STEP is expected to receive more compressive wall-normal load than tangential load.
+            axis_scale = np.array([0.68, 0.92, 0.92], dtype=np.float64)
+        elif mode == "GRIP":
+            # GRIP remains usable, but wall-normal and vertical dominance should be a bit more expensive.
+            axis_scale = np.array([1.22, 1.00, 1.10], dtype=np.float64)
+
+        diag_values = regularization * penalty_scale * mode_bias_scale * axis_scale
+        regularization_diag[3 * idx : 3 * idx + 3] = diag_values
+        regularization_scales[limb_name] = float(np.mean(diag_values) / max(regularization, 1e-12))
+        mode_bias_scales[limb_name] = mode_bias_scale
+        axis_regularization_scale_xyz[limb_name] = diag_values.tolist()
+
+    lhs = wrench_matrix.T @ wrench_matrix + np.diag(regularization_diag)
     rhs = wrench_matrix.T @ required_wrench
     force_vec = np.linalg.solve(lhs, rhs)
 
     spectral = float(np.linalg.norm(wrench_matrix, ord=2))
-    step_size = 0.5 / max(spectral * spectral + regularization, 1e-6)
+    step_size = 0.5 / max(spectral * spectral + float(np.max(regularization_diag)), 1e-6)
 
     for _ in range(iterations):
         residual = wrench_matrix @ force_vec - required_wrench
-        grad = 2.0 * (wrench_matrix.T @ residual) + 2.0 * regularization * force_vec
+        grad = 2.0 * (wrench_matrix.T @ residual) + 2.0 * regularization_diag * force_vec
         force_vec = force_vec - step_size * grad
         for idx, limb_name in enumerate(limb_names):
             col = 3 * idx
@@ -106,18 +150,21 @@ def estimate_contact_forces(
         col = 3 * idx
         force_xyz = force_vec[col : col + 3].copy()
         mode = str(contact_modes.get(limb_name, "MOVE"))
-        normal_n = float(np.dot(force_xyz, wall_normal)) if mode == "STEP" else None
-        tangential_norm = None
-        if mode == "STEP":
-            tangential_vec = force_xyz - float(normal_n) * wall_normal
-            tangential_norm = float(np.linalg.norm(tangential_vec))
+        decomposition = decompose_contact_force(force_xyz, wall_normal)
+        normal_n = decomposition["compressive_wall_normal_force_n"] if mode == "STEP" else None
+        tangential_norm = decomposition["wall_tangential_force_n"] if mode == "STEP" else None
         contact_forces[limb_name] = {
             "mode": mode,
             "position_xyz": positions[idx].tolist(),
             "force_xyz": force_xyz.tolist(),
             "force_norm_n": float(np.linalg.norm(force_xyz)),
+            "confidence_score": float(np.clip(contact_confidence_scores.get(limb_name, 1.0), 0.25, 1.0)),
+            "mode_bias_scale": float(mode_bias_scales.get(limb_name, 1.0)),
+            "regularization_scale": float(regularization_scales.get(limb_name, 1.0)),
+            "axis_regularization_scale_xyz": axis_regularization_scale_xyz.get(limb_name, [regularization] * 3),
             "normal_force_n": normal_n,
             "tangential_force_n": tangential_norm,
+            **decomposition,
         }
 
     status = "ok"
@@ -132,6 +179,13 @@ def estimate_contact_forces(
         "wrench_residual": wrench_residual.tolist(),
         "relative_residual": relative_residual,
         "wall_normal_world": wall_normal.tolist(),
+        "contact_confidence_scores": {
+            limb_name: float(np.clip(contact_confidence_scores.get(limb_name, 1.0), 0.25, 1.0))
+            for limb_name in limb_names
+        },
+        "contact_regularization_scales": regularization_scales,
+        "contact_mode_bias_scales": mode_bias_scales,
+        "contact_axis_regularization_scale_xyz": axis_regularization_scale_xyz,
         "contact_forces": contact_forces,
     }
 

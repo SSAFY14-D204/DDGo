@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "input_video": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\audit_10fps.mp4",
+  "hold_final_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\hold_final.json",
+  "task_model": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_skeleton_verify\\pose_landmarker_lite.task",
+  "height_cm": 167.0,
+  "weight_kg": 75.0,
+  "wingspan_cm": 168.0,
+  "frame_step": 1,
+  "max_frames": null,
+  "outputs": {
+    "holds_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\audit_final_10fps\\holds_polygon.json",
+    "pose_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\audit_final_10fps\\pose3d_sequence.json",
+    "user_body_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\audit_final_10fps\\user_body.json"
+  },
+  "route_metadata": {
+    "subset_hold_count": 11,
+    "start_hold_ids": [
+      1
+    ],
+    "end_hold_ids": [
+      11
+    ],
+    "has_explicit_start_end": true
+  }
+}

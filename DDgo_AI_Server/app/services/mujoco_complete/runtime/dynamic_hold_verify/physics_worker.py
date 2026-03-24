@@ -233,7 +233,29 @@ def unwrap_half_turn(angle_rad: float) -> float:
 def mp_to_mj(point_xyz: np.ndarray) -> np.ndarray:
     """MediaPipe world -> MuJoCo coordinates used by pysical_verify."""
     x, y, z = point_xyz
-    return np.array([-z, -x, -y], dtype=np.float64)
+    return np.array([-z, -x, y], dtype=np.float64)
+
+
+def infer_vertical_sign_from_landmarks(landmarks_mp: np.ndarray, fallback_sign: float = 1.0) -> float:
+    shoulder_mid_y = 0.5 * (
+        float(landmarks_mp[LEFT_SHOULDER, 1]) + float(landmarks_mp[RIGHT_SHOULDER, 1])
+    )
+    hip_mid_y = 0.5 * (
+        float(landmarks_mp[LEFT_HIP, 1]) + float(landmarks_mp[RIGHT_HIP, 1])
+    )
+    torso_delta_y = shoulder_mid_y - hip_mid_y
+    if abs(torso_delta_y) < 1e-5:
+        return 1.0 if fallback_sign >= 0.0 else -1.0
+    return 1.0 if torso_delta_y >= 0.0 else -1.0
+
+
+def map_landmarks_mp_to_mj(landmarks_mp: np.ndarray, fallback_vertical_sign: float = 1.0) -> np.ndarray:
+    vertical_sign = infer_vertical_sign_from_landmarks(landmarks_mp, fallback_sign=fallback_vertical_sign)
+    mapped = np.zeros_like(landmarks_mp, dtype=np.float64)
+    mapped[:, 0] = -landmarks_mp[:, 2]
+    mapped[:, 1] = -landmarks_mp[:, 0]
+    mapped[:, 2] = vertical_sign * landmarks_mp[:, 1]
+    return mapped
 
 
 def infer_palm_contact(
@@ -848,7 +870,7 @@ def extract_joint_pose_targets(
     landmarks_mp: np.ndarray,
     swap_lr: bool = False,
 ) -> tuple[dict[str, float], dict[str, np.ndarray]]:
-    mapped = np.array([mp_to_mj(p) for p in landmarks_mp], dtype=np.float64)
+    mapped = map_landmarks_mp_to_mj(np.asarray(landmarks_mp, dtype=np.float64))
     return _extract_joint_pose_targets_from_mapped(mapped, swap_lr=swap_lr)
 
 
@@ -1443,7 +1465,7 @@ def run_worker(
     model_shoulder = float(np.linalg.norm(data.xpos[left_shoulder_bid] - data.xpos[right_shoulder_bid]))
 
     first_landmarks = parse_landmarks(frames[0])
-    first_mapped_local = np.array([mp_to_mj(p) for p in first_landmarks], dtype=np.float64)
+    first_mapped_local = map_landmarks_mp_to_mj(first_landmarks)
     first_shoulder_width_local = float(np.linalg.norm(first_mapped_local[LEFT_SHOULDER] - first_mapped_local[RIGHT_SHOULDER]))
     first_segment_lengths_local = segment_lengths_local_from_calibration(calibration, first_shoulder_width_local)
     first_mapped_local = apply_inverse_depth_correction_to_mapped(
@@ -1462,7 +1484,7 @@ def run_worker(
     for index, frame in enumerate(frames):
         timestamp_ms = int(frame.get("timestamp_ms", index * 33))
         landmarks_mp = parse_landmarks(frame)
-        mapped_local = np.array([mp_to_mj(p) for p in landmarks_mp], dtype=np.float64)
+        mapped_local = map_landmarks_mp_to_mj(landmarks_mp)
         shoulder_width_local = float(np.linalg.norm(mapped_local[LEFT_SHOULDER] - mapped_local[RIGHT_SHOULDER]))
         segment_lengths_local = segment_lengths_local_from_calibration(calibration, shoulder_width_local)
         mapped_local = apply_inverse_depth_correction_to_mapped(

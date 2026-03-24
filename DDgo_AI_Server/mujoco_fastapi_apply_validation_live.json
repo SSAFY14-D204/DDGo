@@ -1,0 +1,10 @@
+{
+  "health_status": "ok",
+  "health_service": "mujoco-complete",
+  "mode": "physics_crux_detection",
+  "has_contact_force_display_smoothing": true,
+  "frame_has_estimated_contact_forces_raw_n": true,
+  "frame_has_contact_force_status": true,
+  "fit_mean_error_m": 0.11820492849488676,
+  "recovery_ratio": 0.045171339563862926
+}

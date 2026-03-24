@@ -48,6 +48,8 @@ JUMP_KEYS = (
 )
 MAX_TARGET_JUMP_M = 0.45
 MEAN_TARGET_JUMP_M = 0.16
+TARGET_JUMP_REFERENCE_DT_S = 1.0 / 30.0
+TARGET_JUMP_MAX_SCALE = 3.0
 BAD_FIT_MEAN_ERROR_M = 0.28
 BAD_FIT_MAX_ERROR_M = 0.80
 BAD_FOOT_FORWARD_DOT = -0.05
@@ -68,6 +70,20 @@ BODY_GROUPS = {
     "right_leg": ("hip_x_right", "hip_z_right", "hip_y_right", "knee_right", "ankle_y_right", "ankle_x_right"),
 }
 
+CONTACT_PRESENCE_CONFIDENCE_SCORES = {
+    "none": 0.30,
+    "low": 0.50,
+    "medium": 0.75,
+    "high": 1.00,
+}
+
+HOLD_IDENTITY_CONFIDENCE_SCORES = {
+    "none": 0.40,
+    "low": 0.60,
+    "medium": 0.82,
+    "high": 1.00,
+}
+
 
 def target_jump_stats(current: dict[str, np.ndarray], previous: dict[str, np.ndarray] | None) -> tuple[float, float]:
     if previous is None:
@@ -80,6 +96,15 @@ def target_jump_stats(current: dict[str, np.ndarray], previous: dict[str, np.nda
     if not diffs:
         return 0.0, 0.0
     return float(np.mean(diffs)), float(np.max(diffs))
+
+
+def scaled_target_jump_thresholds(delta_ms: int | float | None) -> tuple[float, float]:
+    if delta_ms is None:
+        scale = 1.0
+    else:
+        delta_s = max(float(delta_ms) / 1000.0, TARGET_JUMP_REFERENCE_DT_S)
+        scale = float(np.clip(delta_s / TARGET_JUMP_REFERENCE_DT_S, 1.0, TARGET_JUMP_MAX_SCALE))
+    return MEAN_TARGET_JUMP_M * scale, MAX_TARGET_JUMP_M * scale
 
 
 def has_bad_lower_limb_consistency(fit: dict[str, object]) -> bool:
@@ -307,6 +332,36 @@ def summarize_body_loads(joint_forces: dict[str, dict[str, float]]) -> dict[str,
                 loads[group_name] += value
                 break
     return loads
+
+
+def build_contact_confidence_scores(
+    limb_states: dict[str, dict[str, Any]] | None,
+    active_contact_limbs: list[str],
+    contact_modes: dict[str, str] | None = None,
+) -> dict[str, float]:
+    if limb_states is None:
+        return {}
+
+    scores: dict[str, float] = {}
+    for limb_name in active_contact_limbs:
+        payload = limb_states.get(limb_name, {}) or {}
+        presence = CONTACT_PRESENCE_CONFIDENCE_SCORES.get(
+            str(payload.get("contact_presence_confidence", "none")),
+            CONTACT_PRESENCE_CONFIDENCE_SCORES["none"],
+        )
+        identity = HOLD_IDENTITY_CONFIDENCE_SCORES.get(
+            str(payload.get("hold_identity_confidence", "none")),
+            HOLD_IDENTITY_CONFIDENCE_SCORES["none"],
+        )
+        mode = str((contact_modes or {}).get(limb_name, payload.get("state", "MOVE")))
+        if mode == "STEP":
+            score = 0.55 * presence + 0.45 * identity
+        elif mode == "GRIP":
+            score = 0.65 * presence + 0.35 * identity
+        else:
+            score = presence
+        scores[limb_name] = float(np.clip(score, 0.25, 1.0))
+    return scores
 
 
 def summarize_joint_load_history(history: list[dict[str, dict[str, float]]]) -> dict[str, dict[str, float]]:
@@ -660,6 +715,11 @@ def evaluate_video(
             limb_name: str(frame["limb_states"].get(limb_name, {}).get("state", "MOVE"))
             for limb_name in active_contact_limbs
         }
+        contact_confidence_scores = build_contact_confidence_scores(
+            limb_states=frame.get("limb_states"),
+            active_contact_limbs=active_contact_limbs,
+            contact_modes=contact_modes,
+        )
         active_contact_positions = {
             limb_name: np.asarray(data.site_xpos[site_ids[SUPPORT_SITE_BY_LIMB[limb_name]]], dtype=np.float64)
             for limb_name in active_contact_limbs
@@ -669,6 +729,7 @@ def evaluate_video(
             required_wrench=root_inverse_force,
             contact_positions_xyz=active_contact_positions,
             contact_modes=contact_modes,
+            contact_confidence_scores=contact_confidence_scores,
         )
 
         root_linear_speed = float(np.linalg.norm(qvel[0:3]))

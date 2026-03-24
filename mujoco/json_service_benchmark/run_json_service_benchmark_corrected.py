@@ -34,6 +34,7 @@ def main() -> None:
     parser.add_argument("--fit-frame-step", type=int, default=2)
     parser.add_argument("--retry-high-confidence-only", action="store_true", default=True)
     parser.add_argument("--retry-all-frames", dest="retry_high_confidence_only", action="store_false")
+    parser.add_argument("--keep-qpos", action="store_true")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -74,6 +75,7 @@ def main() -> None:
         retry_high_confidence_only=bool(args.retry_high_confidence_only),
         pose_payload_override=corrected_payload,
         user_body_payload_override=user_body_payload,
+        keep_qpos=bool(args.keep_qpos),
     )
     report["mode"] = "json_only_service_benchmark_corrected"
     report["hold_tracker_mode"] = args.hold_mode

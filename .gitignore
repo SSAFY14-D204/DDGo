@@ -188,6 +188,9 @@ fabric.properties
 hs_err_pid*
 replay_pid*
 
+# video file
+.mp4
+
 ### Kotlin ###
 # Compiled class file
 

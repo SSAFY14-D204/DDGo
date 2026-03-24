@@ -389,6 +389,10 @@ class MujocoCompleteService:
 
 
 def load_polygon_service_holds_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    route_meta = payload.get("route_holds", {}) if isinstance(payload.get("route_holds"), dict) else {}
+    start_hold_ids = {int(hold_id) for hold_id in route_meta.get("start_hold_ids", [])}
+    end_hold_ids = {int(hold_id) for hold_id in route_meta.get("end_hold_ids", [])}
+
     if "predictions" in payload:
         holds: list[PolygonHoldDetection] = []
         max_x = 0.0
@@ -421,6 +425,10 @@ def load_polygon_service_holds_from_payload(payload: dict[str, Any]) -> dict[str
                 y2=y2,
                 confidence=float(pred.get("confidence", 0.0)),
                 polygon_px=polygon,
+                original_hold_no=int(pred.get("original_hold_no")) if pred.get("original_hold_no") is not None else None,
+                route_role=str(pred.get("route_role")) if pred.get("route_role") is not None else None,
+                is_start=bool(pred.get("is_start", index in start_hold_ids)),
+                is_end=bool(pred.get("is_end", index in end_hold_ids)),
             )
             holds.append(hold)
             max_x = max(max_x, x2)
@@ -469,6 +477,10 @@ def load_polygon_service_holds_from_payload(payload: dict[str, Any]) -> dict[str
                 y2=y2,
                 confidence=float(item.get("confidence", 0.0)),
                 polygon_px=polygon,
+                original_hold_no=int(item.get("original_hold_no")) if item.get("original_hold_no") is not None else None,
+                route_role=str(item.get("route_role")) if item.get("route_role") is not None else None,
+                is_start=bool(item.get("is_start", int(item["hold_id"]) in start_hold_ids)),
+                is_end=bool(item.get("is_end", int(item["hold_id"]) in end_hold_ids)),
             )
             holds.append(hold)
             max_x = max(max_x, x2)
