@@ -2395,6 +2395,7 @@ private fun emptyAttemptCompletionSummary(attemptNo: Int): FinalAnalysisAttemptS
         hasAiResult = false,
         isSuccess = false,
         analysisPoints = emptyList(),
+        videoDurationMs = null,
         reachedHolds = null,
         reachedHoldsText = FinalAnalysisUnknownMetricText,
         processedFrames = null,

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -16,6 +17,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.domain.model.AiAnalysisResult
+import com.ddgo.app.domain.model.AiAnalysisVideoMetadata
+import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.domain.model.AnalysisPointKind
+import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
+import com.ddgo.app.domain.usecase.PolygonTrackedLimb
+import com.ddgo.app.feature.climbing.upload.FinalAnalysisAttemptSummary
 import com.ddgo.app.feature.climbing.upload.UploadBackgroundUploadSnackbarHost
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
 import com.ddgo.app.feature.climbing.upload.buildChallengeFinalAnalysisSummary
@@ -24,7 +32,6 @@ import com.ddgo.app.feature.climbing.upload.formatAnalysisDate
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPage
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPageState
-import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisTab
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -32,9 +39,11 @@ import kotlin.math.max
 fun FinalAnalysisRoute(
     viewModel: UploadViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
-    onNavigateToChallenge: () -> Unit = {}
+    onNavigateToChallenge: () -> Unit = {},
+    onNavigateToMain: () -> Unit = {}
 ) {
     val attemptVideoUris = viewModel.playbackAttemptUris.ifEmpty { viewModel.allAttemptUris }
+    val uploadedAttemptCount = attemptVideoUris.size
     val totalHolds = viewModel.totalSelectedHoldCount
         .takeIf { it > 0 }
         ?: viewModel.detectedHolds.size.takeIf { it > 0 }
@@ -46,12 +55,7 @@ fun FinalAnalysisRoute(
         ),
         viewModel.attemptHoldReachResults.size
     ).coerceAtLeast(1)
-    val preferredAttempt = (viewModel.currentAttemptIndex + 1).coerceIn(1, attemptCount)
-    val initialSelectedAttempt = when {
-        attemptVideoUris.isNotEmpty() && preferredAttempt <= attemptVideoUris.size -> preferredAttempt
-        attemptVideoUris.isNotEmpty() -> attemptVideoUris.size.coerceIn(1, attemptCount)
-        else -> attemptCount
-    }
+    val initialSelectedAttempt = 1
     val attemptSummaries = remember(
         attemptCount,
         totalHolds,
@@ -119,31 +123,94 @@ fun FinalAnalysisRoute(
     var pendingSeekTimeMs by rememberSaveable {
         mutableStateOf<Long?>(null)
     }
-    var selectedTab by rememberSaveable {
-        mutableStateOf(FinalAnalysisTab.Stats)
-    }
 
     val safeSelectedAttempt = selectedAttempt.coerceIn(1, attemptCount)
+    val safeSelectedAttemptIndex = (safeSelectedAttempt - 1).coerceAtLeast(0)
     val currentSummary = attemptSummaries[(safeSelectedAttempt - 1).coerceIn(0, attemptSummaries.lastIndex)]
+    val previousSummary = attemptSummaries.getOrNull(safeSelectedAttempt - 2)
+    val isSingleUploadedAttempt = uploadedAttemptCount <= 1
     val selectedAttemptVideoUri = attemptVideoUris
         .getOrNull((safeSelectedAttempt - 1).coerceAtLeast(0))
-    val reachedHoldsSuffix = remember(currentSummary.reachedHolds, totalHolds) {
-        if (currentSummary.reachedHolds != null && totalHolds > 0) {
+
+    LaunchedEffect(safeSelectedAttemptIndex, attemptCount) {
+        if (attemptCount > 0) {
+            viewModel.selectAttempt(safeSelectedAttemptIndex)
+        }
+    }
+
+    val aiPresentationPoints = remember(
+        safeSelectedAttemptIndex,
+        viewModel.attemptPresentationResults,
+        currentSummary.analysisPoints
+    ) {
+        viewModel.attemptPresentationResults
+            .getOrNull(safeSelectedAttemptIndex)
+            ?.second
+            ?.takeIf { it.isNotEmpty() }
+            ?: currentSummary.analysisPoints
+    }
+    val currentAttemptContactDebugResult = viewModel.currentAttemptPolygonHoldContactDebugResult
+    val analysisStartTimeMs = remember(currentAttemptContactDebugResult) {
+        currentAttemptContactDebugResult?.findClimbStartTimeMs()
+    }
+    val currentAttemptEndHoldNo = remember(
+        viewModel.currentAttemptDisplayHolds,
+        viewModel.selectedEndHold
+    ) {
+        viewModel.currentAttemptDisplayHolds
+            .firstOrNull { it.isEnd }
+            ?.holdNo
+            ?: viewModel.selectedEndHold?.holdNo
+    }
+    val currentAttemptAiAnalysisResult = viewModel.currentAttemptAiAnalysisResult
+    val displaySummary = remember(
+        currentSummary,
+        currentAttemptAiAnalysisResult,
+        currentAttemptContactDebugResult
+    ) {
+        currentSummary.withDisplayCrux(
+            aiAnalysisResult = currentAttemptAiAnalysisResult,
+            contactDebugResult = currentAttemptContactDebugResult
+        )
+    }
+
+    val timelinePoints = remember(
+        currentSummary.analysisPoints,
+        aiPresentationPoints,
+        currentSummary.videoDurationMs,
+        currentAttemptContactDebugResult,
+        analysisStartTimeMs,
+        currentAttemptEndHoldNo
+    ) {
+        buildAttemptFocusTimelinePoints(
+            summary = currentSummary,
+            fallbackPoints = aiPresentationPoints,
+            contactDebugResult = currentAttemptContactDebugResult,
+            analysisStartTimeMs = analysisStartTimeMs,
+            endHoldNo = currentAttemptEndHoldNo
+        )
+    }
+
+    val reachedHoldsSuffix = remember(displaySummary.reachedHolds, totalHolds) {
+        if (displaySummary.reachedHolds != null && totalHolds > 0) {
             "/$totalHolds"
         } else {
             null
         }
     }
-    val statsFocusFraction = remember(currentSummary) {
-        currentSummary.stabilityFocusFraction
-    }
     val focusReasonText = remember(
-        currentSummary.feedbackTypes,
-        currentSummary.loadFocusLabel
+        displaySummary.feedbackTypes,
+        displaySummary.loadFocusLabel
     ) {
         buildFocusReasonText(
-            feedbackTypes = currentSummary.feedbackTypes,
-            loadFocusLabel = currentSummary.loadFocusLabel
+            feedbackTypes = displaySummary.feedbackTypes,
+            loadFocusLabel = displaySummary.loadFocusLabel
+        )
+    }
+    val riskLine = remember(displaySummary, focusReasonText) {
+        buildRiskLine(
+            summary = displaySummary,
+            focusReasonText = focusReasonText
         )
     }
     val displayDate = remember(viewModel.createdChallenge?.startedAt) {
@@ -159,13 +226,20 @@ fun FinalAnalysisRoute(
         viewModel.detectedHolds,
         safeSelectedAttempt,
         attemptCount,
-        currentSummary,
+        displaySummary,
+        previousSummary,
         selectedAttemptVideoUri,
+        timelinePoints,
+        viewModel.currentAttemptPoseSequence,
+        viewModel.currentAttemptOverlayCache,
+        viewModel.currentAttemptPrePoseEntry,
+        viewModel.allRawHolds,
+        analysisStartTimeMs,
         seekRequestId,
         pendingSeekTimeMs,
         reachedHoldsSuffix,
-        focusReasonText,
-        statsFocusFraction
+        riskLine,
+        isSingleUploadedAttempt
     ) {
         FinalAnalysisPageState(
             heroState = AttemptPreviewHeroState(
@@ -174,30 +248,43 @@ fun FinalAnalysisRoute(
                 difficultyLabel = viewModel.difficultyLevel,
                 holdColorLabel = viewModel.holdColor,
                 selectedAttempt = safeSelectedAttempt,
-                isSuccess = currentSummary.isSuccess,
-                analysisModeLabel = currentSummary.effectiveModeLabel.takeIf { it.isNotBlank() },
-                fallbackLabel = currentSummary.fallbackLabel,
+                isSuccess = displaySummary.isSuccess,
+                analysisModeLabel = displaySummary.effectiveModeLabel.takeIf { it.isNotBlank() },
+                fallbackLabel = displaySummary.fallbackLabel,
                 previewBitmap = viewModel.bestFrameBitmap,
                 previewHolds = viewModel.detectedHolds,
+                numberedHolds = viewModel.currentAttemptDisplayHolds,
                 selectedAttemptVideoUri = selectedAttemptVideoUri,
+                analysisPoints = timelinePoints,
+                attemptPoseSequence = viewModel.currentAttemptPoseSequence,
+                overlayCache = viewModel.currentAttemptOverlayCache,
+                rawHolds = viewModel.allRawHolds,
+                wallArrivalTimeMs = viewModel.currentAttemptPrePoseEntry?.wallArrivalTimeMs,
+                personObservationStartTimeMs = viewModel.currentAttemptPrePoseEntry?.personObservationStartTimeMs,
+                usesPoseTimeline = viewModel.currentAttemptPrePoseEntry != null,
                 seekRequestId = seekRequestId,
                 seekRequestTimeMs = pendingSeekTimeMs
             ),
             selectedAttempt = safeSelectedAttempt,
             totalAttempts = attemptCount,
-            currentSummary = currentSummary,
-            reachedHoldsText = currentSummary.reachedHoldsText,
+            currentSummary = displaySummary,
+            previousSummary = previousSummary,
+            analysisStartTimeMs = analysisStartTimeMs,
+            timelinePoints = timelinePoints,
+            reachedHoldsText = displaySummary.reachedHoldsText,
             reachedHoldsSuffix = reachedHoldsSuffix,
-            feedbackTypes = currentSummary.feedbackTypes,
-            loadFocusLabel = currentSummary.loadFocusLabel,
-            feedbackLine = currentSummary.feedbackLine,
-            coachingLine = currentSummary.coachingLine,
-            focusReasonText = focusReasonText,
-            statsFocusFraction = statsFocusFraction,
-            actionText = if (attemptCount > 1 && safeSelectedAttempt < attemptCount) {
-                "다음 시도"
+            feedbackLine = displaySummary.feedbackLine,
+            riskLine = riskLine,
+            coachingLine = displaySummary.coachingLine,
+            previousActionText = if (safeSelectedAttempt > 1) {
+                "이전 시도 분석 결과 보기"
             } else {
-                "챌린지 종합 분석 보기"
+                null
+            },
+            actionText = when {
+                isSingleUploadedAttempt -> "홈으로 이동"
+                safeSelectedAttempt < attemptCount -> "다음 시도 분석 결과 보기"
+                else -> "챌린지 종합 분석 결과 보기"
             }
         )
     }
@@ -205,32 +292,40 @@ fun FinalAnalysisRoute(
     Box(modifier = Modifier.fillMaxSize()) {
         FinalAnalysisPage(
             state = pageState,
-            selectedTab = selectedTab,
             onNavigateBack = onNavigateBack,
-            onTabSelected = { selectedTab = it },
-            onAttemptSelected = {
-                selectedAttempt = it.coerceIn(1, attemptCount)
-                pendingSeekTimeMs = null
-            },
             onAnalysisPointSelected = { timeMs ->
                 pendingSeekTimeMs = timeMs
                 seekRequestId += 1L
             },
-            onPrimaryAction = {
-                if (attemptCount > 1 && safeSelectedAttempt < attemptCount) {
-                    selectedAttempt = safeSelectedAttempt + 1
+            onSecondaryAction = if (safeSelectedAttempt > 1) {
+                {
+                    selectedAttempt = (safeSelectedAttempt - 1).coerceAtLeast(1)
                     pendingSeekTimeMs = null
-                } else {
-                    scope.launch {
-                        val closed = viewModel.closeChallengeForFinalAnalysis(
-                            challengeResult = challengeResult,
-                            averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
-                            mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
-                            maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
-                            finalComment = closeSummaryPayload.finalComment
-                        )
-                        if (closed) {
-                            onNavigateToChallenge()
+                }
+            } else {
+                null
+            },
+            onPrimaryAction = {
+                when {
+                    isSingleUploadedAttempt -> onNavigateToMain()
+
+                    safeSelectedAttempt < attemptCount -> {
+                        selectedAttempt = safeSelectedAttempt + 1
+                        pendingSeekTimeMs = null
+                    }
+
+                    else -> {
+                        scope.launch {
+                            val closed = viewModel.closeChallengeForFinalAnalysis(
+                                challengeResult = challengeResult,
+                                averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                                mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                                maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                                finalComment = closeSummaryPayload.finalComment
+                            )
+                            if (closed) {
+                                onNavigateToChallenge()
+                            }
                         }
                     }
                 }
@@ -253,6 +348,368 @@ private data class ChallengeCloseRouteSummary(
     val finalComment: String?
 )
 
+private data class DisplayCruxSummary(
+    val holdNo: Int,
+    val durationMs: Int?,
+    val focusFraction: Float?
+)
+
+private fun FinalAnalysisAttemptSummary.withDisplayCrux(
+    aiAnalysisResult: AiAnalysisResult?,
+    contactDebugResult: PolygonHoldContactDebugResult?
+): FinalAnalysisAttemptSummary {
+    val displayCrux = resolveDisplayCruxSummary(
+        aiAnalysisResult = aiAnalysisResult,
+        contactDebugResult = contactDebugResult
+    ) ?: return this
+
+    if (
+        primaryCruxHoldNo == displayCrux.holdNo &&
+        primaryCruxDurationMs == displayCrux.durationMs &&
+        stabilityFocusFraction == displayCrux.focusFraction
+    ) {
+        return this
+    }
+
+    return copy(
+        primaryCruxHoldNo = displayCrux.holdNo,
+        primaryCruxDurationMs = displayCrux.durationMs,
+        stabilityFocusFraction = displayCrux.focusFraction ?: stabilityFocusFraction
+    )
+}
+
+private fun resolveDisplayCruxSummary(
+    aiAnalysisResult: AiAnalysisResult?,
+    contactDebugResult: PolygonHoldContactDebugResult?
+): DisplayCruxSummary? {
+    val analysis = aiAnalysisResult ?: return null
+    val analysisStartTimeMs = contactDebugResult?.findClimbStartTimeMs()
+    val candidates = (analysis.cruxResult.topCandidates + analysis.cruxResult.allCandidates)
+        .filter { candidate ->
+            candidate.holdId > 1 && candidate.bestSegment != null
+        }
+        .distinctBy { candidate ->
+            Triple(
+                candidate.holdId,
+                candidate.bestSegment?.startTimeMs,
+                candidate.bestSegment?.endTimeMs
+            )
+        }
+
+    val preferredCandidate = candidates.firstOrNull { candidate ->
+        val segment = candidate.bestSegment ?: return@firstOrNull false
+        analysisStartTimeMs == null || segment.startTimeMs >= analysisStartTimeMs
+    } ?: candidates.firstOrNull { candidate ->
+        val segment = candidate.bestSegment ?: return@firstOrNull false
+        analysisStartTimeMs == null || segment.endTimeMs >= analysisStartTimeMs
+    } ?: return null
+
+    val segment = preferredCandidate.bestSegment ?: return null
+    val effectiveStartTimeMs = max(segment.startTimeMs, analysisStartTimeMs ?: 0L)
+    val effectiveEndTimeMs = max(segment.endTimeMs, effectiveStartTimeMs)
+    val durationMs = (segment.endTimeMs - effectiveStartTimeMs)
+        .takeIf { it > 0L }
+        ?.coerceAtMost(Int.MAX_VALUE.toLong())
+        ?.toInt()
+    val focusFraction = analysis.calculateSegmentFocusFraction(
+        startTimeMs = effectiveStartTimeMs,
+        endTimeMs = effectiveEndTimeMs
+    )
+
+    return DisplayCruxSummary(
+        holdNo = preferredCandidate.holdId,
+        durationMs = durationMs,
+        focusFraction = focusFraction
+    )
+}
+
+private fun buildAttemptFocusTimelinePoints(
+    summary: FinalAnalysisAttemptSummary,
+    fallbackPoints: List<AnalysisPoint>,
+    contactDebugResult: PolygonHoldContactDebugResult?,
+    analysisStartTimeMs: Long?,
+    endHoldNo: Int?
+): List<AnalysisPoint> {
+    val sourcePoints = summary.analysisPoints.ifEmpty {
+        fallbackPoints.filter { it.kind == AnalysisPointKind.GENERIC }
+    }
+
+    val keyPoints = buildImportantTimelinePoints(
+        points = sourcePoints,
+        analysisStartTimeMs = analysisStartTimeMs
+    ).toMutableList()
+    buildSuccessTimelinePoint(
+        summary = summary,
+        sourcePoints = sourcePoints,
+        contactDebugResult = contactDebugResult,
+        endHoldNo = endHoldNo,
+        analysisStartTimeMs = analysisStartTimeMs
+    )?.let(keyPoints::add)
+
+    val points = keyPoints
+        .filter { it.timeMs >= 0L }
+        .sortedBy { it.timeMs }
+        .toMutableList()
+
+    val climbEndTimeMs = summary.videoDurationMs
+        ?.takeIf { it > 0L }
+        ?: points.maxOfOrNull { it.timeMs }
+
+    climbEndTimeMs?.let { endTimeMs ->
+        if (points.none { it.kind == AnalysisPointKind.CLIMB_END }) {
+            points += AnalysisPoint(
+                index = 0,
+                timeMs = endTimeMs,
+                description = "등반 종료",
+                kind = AnalysisPointKind.CLIMB_END
+            )
+        }
+    }
+
+    return points
+        .distinctBy { point ->
+            point.timeMs to point.kind to refinedTimelineDescription(
+                description = point.description,
+                kind = point.kind
+            )
+        }
+        .sortedBy { point -> point.timeMs }
+        .mapIndexed { index, point ->
+            point.copy(
+                index = index + 1,
+                description = refinedTimelineDescription(
+                    description = point.description,
+                    kind = point.kind
+                )
+            )
+        }
+}
+
+private fun buildImportantTimelinePoints(
+    points: List<AnalysisPoint>,
+    analysisStartTimeMs: Long?
+): List<AnalysisPoint> {
+    if (points.isEmpty()) return emptyList()
+
+    val prioritized = points
+        .filter { point ->
+            point.kind == AnalysisPointKind.GENERIC &&
+                point.timeMs >= 0L &&
+                (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs)
+        }
+        .sortedBy { point -> point.timeMs }
+        .sortedByDescending(::refinedTimelinePointPriority)
+
+    val selected = prioritized
+        .distinctBy { point -> refinedTimelineDescription(point.description, point.kind) }
+        .take(1)
+        .sortedBy { point -> point.timeMs }
+
+    return if (selected.isNotEmpty()) {
+        selected
+    } else {
+        points
+            .filter { point ->
+                point.kind == AnalysisPointKind.GENERIC &&
+                    point.timeMs >= 0L &&
+                    (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs)
+            }
+            .sortedBy { point -> point.timeMs }
+            .take(1)
+    }
+}
+
+private fun buildSuccessTimelinePoint(
+    summary: FinalAnalysisAttemptSummary,
+    sourcePoints: List<AnalysisPoint>,
+    contactDebugResult: PolygonHoldContactDebugResult?,
+    endHoldNo: Int?,
+    analysisStartTimeMs: Long?
+): AnalysisPoint? {
+    if (!summary.isSuccess) return null
+
+    val climbEndTimeMs = summary.videoDurationMs
+        ?.takeIf { it > 0L }
+        ?: sourcePoints.maxOfOrNull { point -> point.timeMs }
+        ?: return null
+
+    val successTimeMs = contactDebugResult
+        ?.findSuccessfulTopContactTimeMs(
+            endHoldNo = endHoldNo,
+            analysisStartTimeMs = analysisStartTimeMs
+        )
+        ?.coerceAtMost((climbEndTimeMs - 200L).coerceAtLeast(0L))
+        ?: sourcePoints
+            .filter { point ->
+                point.kind == AnalysisPointKind.GENERIC &&
+                    point.timeMs >= 0L &&
+                    (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs)
+            }
+            .maxOfOrNull { point -> point.timeMs }
+            ?.coerceAtMost((climbEndTimeMs - 800L).coerceAtLeast(0L))
+        ?: (climbEndTimeMs - 1_200L).coerceAtLeast(0L)
+
+    return AnalysisPoint(
+        index = 0,
+        timeMs = successTimeMs,
+        description = "완등",
+        kind = AnalysisPointKind.GENERIC
+    )
+}
+
+private fun PolygonHoldContactDebugResult.findClimbStartTimeMs(): Long? {
+    return frames.firstOrNull { frame ->
+        val limbStatesByLimb = frame.limbStates.associateBy { it.limb }
+        listOf(
+            PolygonTrackedLimb.LEFT_HAND,
+            PolygonTrackedLimb.RIGHT_HAND,
+            PolygonTrackedLimb.LEFT_FOOT,
+            PolygonTrackedLimb.RIGHT_FOOT
+        ).all { limb ->
+            limbStatesByLimb[limb]?.activeHoldNo != null
+        }
+    }?.frameTimeMs
+}
+
+private fun PolygonHoldContactDebugResult.findSuccessfulTopContactTimeMs(
+    endHoldNo: Int?,
+    analysisStartTimeMs: Long?
+): Long? {
+    val resolvedEndHoldNo = endHoldNo?.takeIf { it > 0 } ?: return null
+    return frames.firstOrNull { frame ->
+        if (analysisStartTimeMs != null && frame.frameTimeMs < analysisStartTimeMs) {
+            return@firstOrNull false
+        }
+        val limbStatesByLimb = frame.limbStates.associateBy { it.limb }
+        limbStatesByLimb[PolygonTrackedLimb.LEFT_HAND]?.activeHoldNo == resolvedEndHoldNo &&
+            limbStatesByLimb[PolygonTrackedLimb.RIGHT_HAND]?.activeHoldNo == resolvedEndHoldNo
+    }?.frameTimeMs
+}
+
+private fun refinedTimelinePointPriority(point: AnalysisPoint): Int {
+    val lowered = point.description.lowercase()
+    val holdNo = extractTimelineHoldNumber(point.description)
+
+    return when {
+        point.description.contains("완등") || point.description.contains("성공") -> 4
+        point.description.contains("균형") || lowered.contains("balance") || lowered.contains("stability") -> 3
+        point.description.contains("접촉") || lowered.contains("contact") -> 3
+        point.description.contains("팔") || lowered.contains("arm") -> 2
+        point.description.contains("발") || point.description.contains("하체") ||
+            lowered.contains("foot") || lowered.contains("leg") -> 2
+        holdNo != null && holdNo > 1 -> 2
+        else -> 1
+    }
+}
+
+private fun refinedTimelineDescription(
+    description: String,
+    kind: AnalysisPointKind
+): String {
+    if (kind == AnalysisPointKind.CLIMB_END) return "등반 종료"
+    if (description.contains("완등") || description.contains("성공")) return "완등"
+
+    extractTimelineHoldNumber(description)
+        ?.takeIf { holdNo -> holdNo > 1 }
+        ?.let { holdNo ->
+            val lowered = description.lowercase()
+            return when {
+                description.contains("균형") || lowered.contains("balance") || lowered.contains("stability") ->
+                    "${holdNo}번 홀드 흔들림"
+
+                description.contains("접촉") || lowered.contains("contact") ->
+                    "${holdNo}번 홀드 접촉"
+
+                description.contains("팔") || lowered.contains("arm") ->
+                    "${holdNo}번 홀드 버팀"
+
+                else -> "${holdNo}번 홀드 공략"
+            }
+        }
+
+    val lowered = description.lowercase()
+
+    return when {
+        description.contains("균형") || lowered.contains("balance") || lowered.contains("stability") ->
+            "균형 흔들림"
+
+        description.contains("접촉") || lowered.contains("contact") ->
+            "접촉 불안정"
+
+        description.contains("팔") || lowered.contains("arm") ->
+            "상지 부담"
+
+        description.contains("발") || description.contains("하체") ||
+            lowered.contains("foot") || lowered.contains("leg") ->
+            "하체 포인트"
+
+        else -> "핵심 장면"
+    }
+}
+
+private fun timelinePointPriority(point: AnalysisPoint): Int {
+    val lowered = point.description.lowercase()
+    val holdNo = extractTimelineHoldNumber(point.description)
+
+    return when {
+        holdNo != null && holdNo > 1 -> 5
+        point.description.contains("성공") || point.description.contains("완등") -> 4
+        point.description.contains("균형") || lowered.contains("balance") || lowered.contains("stability") -> 3
+        point.description.contains("접촉") || lowered.contains("contact") -> 3
+        point.description.contains("팔") || lowered.contains("arm") -> 2
+        point.description.contains("발") || point.description.contains("하체") ||
+            lowered.contains("foot") || lowered.contains("leg") -> 2
+        else -> 1
+    }
+}
+
+private fun simplifyTimelineDescription(
+    description: String,
+    kind: AnalysisPointKind
+): String {
+    if (kind == AnalysisPointKind.CLIMB_END) return "등반 종료"
+    if (description.contains("성공") || description.contains("완등")) return "완등"
+
+    extractTimelineHoldNumber(description)
+        ?.takeIf { holdNo -> holdNo > 1 }
+        ?.let { holdNo -> return "${holdNo}번 홀드" }
+
+    val lowered = description.lowercase()
+
+    return when {
+        description.contains("균형") || lowered.contains("balance") || lowered.contains("stability") ->
+            "균형 흔들림"
+
+        description.contains("접촉") || lowered.contains("contact") ->
+            "접촉 불안정"
+
+        description.contains("팔") || lowered.contains("arm") ->
+            "상지 부담"
+
+        description.contains("발") || description.contains("하체") ||
+            lowered.contains("foot") || lowered.contains("leg") ->
+            "하체 포인트"
+
+        else -> "핵심 장면"
+    }
+}
+
+private fun extractTimelineHoldNumber(description: String): Int? {
+    val patterns = listOf(
+        Regex("""(\d+)\s*번?\s*홀드"""),
+        Regex("""hold\s*(\d+)""", RegexOption.IGNORE_CASE),
+        Regex("""(\d+)\s*hold""", RegexOption.IGNORE_CASE)
+    )
+
+    return patterns.firstNotNullOfOrNull { pattern ->
+        pattern.find(description)
+            ?.groupValues
+            ?.drop(1)
+            ?.firstOrNull { value -> value.isNotBlank() }
+            ?.toIntOrNull()
+    }
+}
+
 private fun buildFocusReasonText(
     feedbackTypes: List<String>,
     loadFocusLabel: String?
@@ -260,38 +717,93 @@ private fun buildFocusReasonText(
     val causeKeywords = feedbackTypes
         .take(2)
         .map(::toFocusReasonKeyword)
+        .filter { it.isNotBlank() }
+
     val causeSentence = when {
-        causeKeywords.size >= 2 ->
-            "${causeKeywords.joinToString("과 ")}이 함께 나타난 구간입니다."
-
-        causeKeywords.size == 1 ->
-            "${causeKeywords.first()}이 두드러진 구간입니다."
-
-        else ->
-            null
+        causeKeywords.size >= 2 -> "${causeKeywords.joinToString("과 ")}가 함께 나타났어요."
+        causeKeywords.size == 1 -> "${causeKeywords.first()} 흐름이 보여요."
+        else -> null
     }
 
     return when {
         causeSentence != null && loadFocusLabel != null ->
-            "$causeSentence 특히 ${loadFocusLabel}에 부담이 크게 실린 구간입니다."
+            "$causeSentence 특히 $loadFocusLabel 쪽 부담이 같이 커졌어요."
 
-        causeSentence != null ->
-            causeSentence
-
-        loadFocusLabel != null ->
-            "${loadFocusLabel}에 부담이 크게 실린 구간입니다."
-
-        else ->
-            null
+        causeSentence != null -> causeSentence
+        loadFocusLabel != null -> "$loadFocusLabel 쪽 부담이 두드러졌어요."
+        else -> null
     }
+}
+
+private fun buildRiskLine(
+    summary: FinalAnalysisAttemptSummary,
+    focusReasonText: String?
+): String {
+    if ("중심 흔들림" in summary.feedbackTypes && "팔 사용 과다" in summary.feedbackTypes) {
+        return "중심이 흔들릴 때 팔 힘이 먼저 커졌어요."
+    }
+
+    if ("발 사용 부족" in summary.feedbackTypes && "팔 사용 과다" in summary.feedbackTypes) {
+        return "발보다 팔에 힘이 먼저 실렸어요."
+    }
+
+    if ("중심 흔들림" in summary.feedbackTypes) {
+        return "핵심 구간에서 중심이 한 번 크게 흔들렸어요."
+    }
+
+    focusReasonText
+        ?.takeIf { it.isNotBlank() }
+        ?.let { return it.substringBefore('.').trimEnd() + "." }
+
+    summary.dangerEventCount?.let { dangerEventCount ->
+        return when {
+            dangerEventCount <= 0 -> "끝까지 같은 리듬을 유지하는 게 중요했어요."
+            dangerEventCount == 1 -> "한 번 흔들린 구간이 보여요."
+            else -> "흔들린 장면이 여러 번 보였어요."
+        }
+    }
+
+    summary.loadFocusLabel
+        ?.takeIf { it.isNotBlank() }
+        ?.let { return "$it 쪽 부담이 커졌어요." }
+
+    return "이번 시도는 핵심 구간에서 흐름이 한 번 끊겼어요."
+}
+
+private fun AiAnalysisResult.calculateSegmentFocusFraction(
+    startTimeMs: Long,
+    endTimeMs: Long
+): Float? {
+    val resolvedDurationMs = videoMetadata.durationMs()
+        ?: cruxResult.topCandidates.mapNotNull { it.bestSegment?.endTimeMs }.maxOrNull()
+        ?: cruxResult.allCandidates.mapNotNull { it.bestSegment?.endTimeMs }.maxOrNull()
+        ?: endTimeMs.takeIf { it > 0L }
+        ?: return null
+
+    if (resolvedDurationMs <= 0L) return null
+
+    val segmentMidMs = if (endTimeMs > startTimeMs) {
+        (startTimeMs + endTimeMs) / 2L
+    } else {
+        startTimeMs
+    }
+
+    return (segmentMidMs.toFloat() / resolvedDurationMs.toFloat()).coerceIn(0f, 1f)
+}
+
+private fun AiAnalysisVideoMetadata?.durationMs(): Long? {
+    val metadata = this ?: return null
+    val fpsValue = metadata.fps?.takeIf { it > 0f } ?: return null
+    if (metadata.totalFrames <= 0) return null
+    return ((metadata.totalFrames / fpsValue) * 1000f).toLong()
 }
 
 private fun toFocusReasonKeyword(type: String): String {
     return when (type) {
-        "발 사용 부족" -> "발 활용 부족"
-        "중심 흔들림" -> "중심 흔들림"
-        "팔 사용 과다" -> "팔 힘 의존"
-        "과한 버티기" -> "오래 버티기"
+        "중심 이탈" -> "중심 이탈"
+        "접촉 불안정" -> "접촉 불안정"
+        "상지 보상" -> "상지 보상"
+        "과도한 버티기" -> "과도한 버티기"
         else -> type
     }
 }

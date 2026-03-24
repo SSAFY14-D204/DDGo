@@ -255,11 +255,7 @@ fun NavGraphBuilder.uploadGraph(
                 onLoadingFinished = {
                     when (viewModel.analysisLoadingPhase) {
                         AnalysisLoadingPhase.AttemptResultPreparation -> {
-                            navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_ATTEMPT_RESULT) {
-                                popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) {
-                                    inclusive = true
-                                }
-                            }
+                            viewModel.prepareFinalAnalysisLoading()
                         }
 
                         AnalysisLoadingPhase.FinalAnalysisPreparation -> {
@@ -283,17 +279,7 @@ fun NavGraphBuilder.uploadGraph(
                 onLoadingFinished = {
                     when (viewModel.analysisLoadingPhase) {
                         AnalysisLoadingPhase.AttemptResultPreparation -> {
-                            val popUpRoute = if (viewModel.isAttemptOnlyUploadMode) {
-                                ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD
-                            } else {
-                                ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD
-                            }
-
-                            navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) {
-                                popUpTo(popUpRoute) {
-                                    inclusive = true
-                                }
-                            }
+                            viewModel.prepareFinalAnalysisLoading()
                         }
 
                         AnalysisLoadingPhase.FinalAnalysisPreparation -> {
@@ -367,6 +353,11 @@ fun NavGraphBuilder.uploadGraph(
                 onNavigateToChallenge = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_FINAL_ANALYSIS) {
                         launchSingleTop = true
+                    }
+                },
+                onNavigateToMain = {
+                    navController.navigate(ScreenRoutes.Main.route) {
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )

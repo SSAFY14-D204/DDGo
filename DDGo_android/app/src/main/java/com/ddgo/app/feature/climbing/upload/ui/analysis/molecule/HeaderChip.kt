@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.molecule
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
@@ -18,12 +19,18 @@ internal fun HeaderChip(
     text: String,
     background: Color,
     contentColor: Color,
+    borderColor: Color = Color.Transparent,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(background)
+            .border(
+                width = if (borderColor.alpha > 0f) 1.dp else 0.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(8.dp)
+            )
             .padding(horizontal = 9.dp, vertical = 4.dp)
     ) {
         Text(
