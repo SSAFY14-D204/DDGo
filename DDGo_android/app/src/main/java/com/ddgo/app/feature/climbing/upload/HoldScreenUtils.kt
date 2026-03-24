@@ -341,18 +341,37 @@ internal fun cropHoldRegion(
     return Bitmap.createBitmap(bitmap, cropL, cropT, cropW, cropH)
 }
 
-internal fun holdLabelToComposeColor(label: String): Color = when (label) {
-    "red"    -> Color(0xFFE53935)
-    "orange" -> Color(0xFFFF6F00)
-    "yellow" -> Color(0xFFFFD600)
-    "green"  -> Color(0xFF43A047)
-    "skyblue" -> Color(0xFF00B8D4)
-    "navy"   -> Color(0xFF1565C0)
-    "purple" -> Color(0xFF7B1FA2)
-    "brown"  -> Color(0xFF5D4037)
-    "pink"   -> Color(0xFFF16698)
-    "white"  -> Color(0xFFFFFFFF)
-    "gray"   -> Color(0xFF757575)
-    "black"  -> Color(0xFF212121)
-    else     -> Color(0xFF888888)
+internal fun holdLabelToComposeColor(label: String): Color {
+    val normalized = label.trim().lowercase()
+    return when {
+        normalized.contains("빨강") || normalized.contains("레드") || normalized.contains("red") ->
+            Color(0xFFE53935)
+        normalized.contains("주황") || normalized.contains("오렌지") || normalized.contains("orange") ->
+            Color(0xFFFF6F00)
+        normalized.contains("노랑") || normalized.contains("옐로") || normalized.contains("yellow") ->
+            Color(0xFFFFD600)
+        normalized.contains("초록") || normalized.contains("그린") || normalized.contains("green") ->
+            Color(0xFF43A047)
+        normalized.contains("하늘") || normalized.contains("스카이") ||
+            normalized.contains("skyblue") || normalized == "sky" ||
+            normalized.contains("sky blue") || normalized.contains("파랑") ||
+            normalized.contains("블루") || normalized == "blue" ->
+            Color(0xFF00B8D4)
+        normalized.contains("남색") || normalized.contains("네이비") || normalized.contains("navy") ->
+            Color(0xFF1565C0)
+        normalized.contains("보라") || normalized.contains("퍼플") || normalized.contains("purple") ->
+            Color(0xFF7B1FA2)
+        normalized.contains("갈색") || normalized.contains("브라운") || normalized.contains("brown") ->
+            Color(0xFF5D4037)
+        normalized.contains("분홍") || normalized.contains("핑크") || normalized.contains("pink") ->
+            Color(0xFFF16698)
+        normalized.contains("하양") || normalized.contains("화이트") || normalized.contains("white") ->
+            Color(0xFFFFFFFF)
+        normalized.contains("회색") || normalized.contains("그레이") ||
+            normalized.contains("gray") || normalized.contains("grey") ->
+            Color(0xFF757575)
+        normalized.contains("검정") || normalized.contains("블랙") || normalized.contains("black") ->
+            Color(0xFF212121)
+        else -> Color(0xFF888888)
+    }
 }

@@ -1,0 +1,185 @@
+package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.domain.model.AnalysisPointKind
+import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
+import com.ddgo.app.feature.climbing.upload.AnalysisMuted
+import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
+import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
+import com.ddgo.app.feature.climbing.upload.AnalysisText
+import com.ddgo.app.feature.climbing.upload.toVideoTimeString
+
+@Composable
+internal fun AttemptAnalysisTimelineRow(
+    points: List<AnalysisPoint>,
+    selectedTimeMs: Long?,
+    onPointSelected: (AnalysisPoint) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (points.isEmpty()) {
+        return
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(AnalysisPanelColor)
+            .padding(vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "핵심 장면",
+            modifier = Modifier.padding(horizontal = 16.dp),
+            color = AnalysisText,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        if (points.size <= 3) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                points.forEach { point ->
+                    AttemptTimelineCard(
+                        point = point,
+                        isSelected = selectedTimeMs == point.timeMs,
+                        onClick = { onPointSelected(point) },
+                        useFixedWidth = false,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
+                }
+            }
+        } else {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(points) { _, point ->
+                    AttemptTimelineCard(
+                        point = point,
+                        isSelected = selectedTimeMs == point.timeMs,
+                        onClick = { onPointSelected(point) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttemptTimelineCard(
+    point: AnalysisPoint,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    useFixedWidth: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = if (point.kind == AnalysisPointKind.CLIMB_END) {
+        Color(0xFFFFB357)
+    } else {
+        AnalysisPrimary
+    }
+
+    Column(
+        modifier = modifier
+            .then(if (useFixedWidth) Modifier.width(148.dp) else Modifier)
+            .clip(RoundedCornerShape(18.dp))
+            .background(AnalysisCardColor)
+            .border(
+                width = if (isSelected) 1.5.dp else 1.dp,
+                color = if (isSelected) {
+                    accentColor.copy(alpha = 0.72f)
+                } else {
+                    Color.White.copy(alpha = 0.05f)
+                },
+                shape = RoundedCornerShape(18.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(accentColor.copy(alpha = if (isSelected) 0.26f else 0.14f))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = point.timeMs.toVideoTimeString(),
+                    color = accentColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(if (isSelected) accentColor else Color.Transparent)
+                    .border(
+                        width = if (isSelected) 0.dp else 1.dp,
+                        color = if (isSelected) Color.Transparent else AnalysisMuted.copy(alpha = 0.35f),
+                        shape = RoundedCornerShape(999.dp)
+                    )
+            )
+        }
+
+        Text(
+            text = point.description,
+            color = AnalysisText,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            lineHeight = 20.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Text(
+            text = if (point.kind == AnalysisPointKind.CLIMB_END) {
+                "등반 끝"
+            } else {
+                "장면 보기"
+            },
+            color = AnalysisMuted,
+            fontSize = 12.sp
+        )
+    }
+}

@@ -10,70 +10,80 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
-import com.ddgo.app.feature.climbing.upload.AnalysisSecondary
 import com.ddgo.app.feature.climbing.upload.AnalysisSuccess
 import com.ddgo.app.feature.climbing.upload.AnalysisText
-import com.ddgo.app.feature.climbing.upload.StabilityLineChart
-import androidx.compose.material3.Text
-import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.ChartLineLegendItem
+import com.ddgo.app.feature.climbing.upload.FinalAnalysisAttemptSummary
+import com.ddgo.app.feature.climbing.upload.FinalAnalysisUnknownMetricText
+import com.ddgo.app.feature.climbing.upload.displayFeedbackTypeLabel
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisInsightCard
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.MetricHeadline
+import kotlin.math.abs
 
 @Composable
 internal fun ProblemStatsPanel(
-    isSuccess: Boolean,
-    reachedHoldsTitle: String,
+    currentSummary: FinalAnalysisAttemptSummary,
+    previousSummary: FinalAnalysisAttemptSummary?,
     reachedHoldsText: String,
     reachedHoldsSuffix: String?,
-    insideSupportTitle: String,
-    insideSupportRatioText: String,
-    stableContactTitle: String,
-    stableContactRatioText: String,
-    timeline: List<Float>,
-    focusFraction: Float?,
-    focusReasonText: String?,
-    focusGuideText: String,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 22.dp, vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 22.dp, vertical = 28.dp)
     ) {
         MetricHeadline(
-            title = "완등 여부",
-            value = if (isSuccess) "성공" else "실패",
-            valueColor = if (isSuccess) AnalysisSuccess else AnalysisFailure
-        )
-
-        Spacer(modifier = Modifier.height(34.dp))
-
-        MetricHeadline(
-            title = reachedHoldsTitle,
+            title = if (currentSummary.isSuccess) "완등까지 갔어요" else "이번 시도 최고 도달",
             value = reachedHoldsText,
-            suffix = reachedHoldsSuffix
+            suffix = reachedHoldsSuffix,
+            caption = buildReachedCaption(
+                currentSummary = currentSummary,
+                previousSummary = previousSummary
+            ),
+            valueColor = if (currentSummary.isSuccess) AnalysisSuccess else AnalysisText
         )
 
-        Spacer(modifier = Modifier.height(34.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
-        Text(
-            text = "안정성 지표",
-            color = AnalysisText,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            StatsMetricCard(
+                title = "중심 안정",
+                value = currentSummary.insideSupportRatioText,
+                description = buildMetricDeltaLabel(
+                    currentValue = currentSummary.insideSupportRatio,
+                    previousValue = previousSummary?.insideSupportRatio,
+                    suffix = "%p"
+                ),
+                accentColor = AnalysisPrimary,
+                modifier = Modifier.weight(1f)
+            )
+            StatsMetricCard(
+                title = "접촉 유지",
+                value = currentSummary.stableContactRatioText,
+                description = buildMetricDeltaLabel(
+                    currentValue = currentSummary.stableContactRatio,
+                    previousValue = previousSummary?.stableContactRatio,
+                    suffix = "%p"
+                ),
+                accentColor = AnalysisPrimary,
+                modifier = Modifier.weight(1f)
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -81,122 +91,87 @@ internal fun ProblemStatsPanel(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            StatsSummaryCard(
-                title = insideSupportTitle,
-                description = "몸의 중심이 안정적으로 유지된 구간 비율",
-                value = insideSupportRatioText,
+            StatsMetricCard(
+                title = "위험 이벤트",
+                value = currentSummary.dangerEventCount?.let { "${it}회" }
+                    ?: FinalAnalysisUnknownMetricText,
+                description = buildDangerDeltaLabel(
+                    currentValue = currentSummary.dangerEventCount,
+                    previousValue = previousSummary?.dangerEventCount
+                ),
+                accentColor = if ((currentSummary.dangerEventCount ?: 0) > 0) {
+                    AnalysisFailure
+                } else {
+                    AnalysisPrimary
+                },
                 modifier = Modifier.weight(1f)
             )
-            StatsSummaryCard(
-                title = stableContactTitle,
-                description = "손발 지지가 안정적으로 이어진 구간 비율",
-                value = stableContactRatioText,
+            StatsMetricCard(
+                title = "대표 크럭스",
+                value = currentSummary.primaryCruxHoldNo?.let { "${it}번 홀드" }
+                    ?: FinalAnalysisUnknownMetricText,
+                description = currentSummary.primaryCruxDurationMs
+                    ?.let { "${formatDurationLabel(it)} 동안 머문 구간" }
+                    ?: "반복적으로 막힌 핵심 구간",
+                accentColor = AnalysisSuccess,
                 modifier = Modifier.weight(1f)
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(AnalysisPanelColor)
-                .padding(horizontal = 16.dp, vertical = 20.dp)
-        ) {
-            Column {
-                Text(
-                    text = "구간별 균형 흐름",
-                    color = AnalysisText,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "시간 순서대로 균형이 얼마나 안정적이었는지 보여주는 흐름 그래프입니다. 정확한 수치보다 올라가고 내려가는 흐름을 보면 됩니다.",
-                    color = AnalysisMuted,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                StabilityLineChart(
-                    data = timeline,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(184.dp),
-                    focusFraction = focusFraction
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ChartLineLegendItem(
-                        color = AnalysisPrimary,
-                        label = "파란선: 순간 변화"
-                    )
-                    ChartLineLegendItem(
-                        color = AnalysisSecondary,
-                        label = "보라선: 전체 흐름"
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    StatsGuideChip(text = "위로 갈수록 안정")
-                    StatsGuideChip(text = "아래로 갈수록 흔들림")
-                }
-                focusFraction?.let {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = focusGuideText,
-                        color = AnalysisMuted,
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp
-                    )
-                    focusReasonText?.let { reason ->
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                text = "왜 버거웠나요?",
-                                color = AnalysisText,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = reason,
-                                color = AnalysisMuted,
-                                fontSize = 13.sp,
-                                lineHeight = 19.sp
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        AnalysisInsightCard(
+            title = "이전 시도와 비교",
+            highlights = buildComparisonHighlights(
+                currentSummary = currentSummary,
+                previousSummary = previousSummary
+            ),
+            emptyText = "첫 번째 시도라 비교할 이전 시도가 없어요."
+        )
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        AnalysisInsightCard(
+            title = "이번 시도 포인트",
+            highlights = buildStatHighlights(currentSummary),
+            emptyText = "핵심 지표가 아직 충분하지 않아요."
+        )
     }
 }
 
 @Composable
-private fun StatsSummaryCard(
+private fun StatsMetricCard(
     title: String,
-    description: String,
     value: String,
+    description: String,
+    accentColor: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(AnalysisPanelColor)
             .padding(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(accentColor.copy(alpha = 0.14f))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = title,
+                    color = accentColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             Text(
-                text = title,
+                text = value,
                 color = AnalysisText,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
             )
             Text(
                 text = description,
@@ -204,33 +179,137 @@ private fun StatsSummaryCard(
                 fontSize = 12.sp,
                 lineHeight = 18.sp
             )
-            Text(
-                text = value,
-                color = AnalysisText,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }
 
-@Composable
-private fun StatsGuideChip(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(AnalysisMuted.copy(alpha = 0.12f))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = text,
-            color = AnalysisText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
+private fun buildReachedCaption(
+    currentSummary: FinalAnalysisAttemptSummary,
+    previousSummary: FinalAnalysisAttemptSummary?
+): String {
+    val currentHolds = currentSummary.reachedHolds
+    val previousHolds = previousSummary?.reachedHolds
+
+    return when {
+        previousSummary == null -> "이번 시도 결과"
+        currentHolds == null || previousHolds == null -> "이전 시도와 비교할 수 있는 데이터가 부족해요."
+        currentHolds == previousHolds -> "이전 시도와 같은 높이까지 도달했어요."
+        currentHolds > previousHolds -> "이전 시도보다 ${currentHolds - previousHolds}홀드 더 올라갔어요."
+        else -> "이전 시도보다 ${previousHolds - currentHolds}홀드 낮은 구간에서 멈췄어요."
     }
 }
 
+private fun buildMetricDeltaLabel(
+    currentValue: Int?,
+    previousValue: Int?,
+    suffix: String
+): String {
+    return when {
+        currentValue == null || previousValue == null -> "이전 시도와 비교 데이터가 없어요."
+        currentValue == previousValue -> "이전 시도와 비슷한 수준이에요."
+        currentValue > previousValue -> "이전보다 ${currentValue - previousValue}$suffix 좋아졌어요."
+        else -> "이전보다 ${previousValue - currentValue}$suffix 낮아졌어요."
+    }
+}
+
+private fun buildDangerDeltaLabel(
+    currentValue: Int?,
+    previousValue: Int?
+): String {
+    return when {
+        currentValue == null || previousValue == null -> "흔들림이 감지된 횟수예요."
+        currentValue == previousValue -> "이전 시도와 같은 수준이에요."
+        currentValue < previousValue -> "이전보다 ${previousValue - currentValue}회 줄었어요."
+        else -> "이전보다 ${currentValue - previousValue}회 늘었어요."
+    }
+}
+
+private fun buildComparisonHighlights(
+    currentSummary: FinalAnalysisAttemptSummary,
+    previousSummary: FinalAnalysisAttemptSummary?
+): List<String> {
+    if (previousSummary == null) return emptyList()
+
+    return buildList {
+        val reachedDelta = compareMetric(
+            current = currentSummary.reachedHolds,
+            previous = previousSummary.reachedHolds
+        )
+        reachedDelta?.let { delta ->
+            add(
+                if (delta > 0) {
+                    "최고 도달 홀드가 이전보다 ${delta}홀드 높아졌어요."
+                } else if (delta < 0) {
+                    "최고 도달 홀드가 이전보다 ${abs(delta)}홀드 낮아졌어요."
+                } else {
+                    "최고 도달 홀드는 이전 시도와 비슷했어요."
+                }
+            )
+        }
+
+        val stabilityDelta = compareMetric(
+            current = currentSummary.insideSupportRatio,
+            previous = previousSummary.insideSupportRatio
+        )
+        stabilityDelta?.let { delta ->
+            add(
+                if (delta > 0) {
+                    "중심 안정도가 ${delta}%p 좋아졌어요."
+                } else if (delta < 0) {
+                    "중심 안정도가 ${abs(delta)}%p 낮아졌어요."
+                } else {
+                    "중심 안정도는 비슷하게 유지됐어요."
+                }
+            )
+        }
+
+        val dangerDelta = compareMetric(
+            current = currentSummary.dangerEventCount,
+            previous = previousSummary.dangerEventCount
+        )
+        dangerDelta?.let { delta ->
+            add(
+                if (delta < 0) {
+                    "위험 이벤트가 ${abs(delta)}회 줄어서 흐름이 더 안정적이었어요."
+                } else if (delta > 0) {
+                    "위험 이벤트가 ${delta}회 늘어서 흔들린 구간이 더 많았어요."
+                } else {
+                    "위험 이벤트 수는 이전 시도와 비슷했어요."
+                }
+            )
+        }
+    }.take(3)
+}
+
+private fun buildStatHighlights(summary: FinalAnalysisAttemptSummary): List<String> {
+    return buildList {
+        summary.primaryCruxHoldNo?.let { add("가장 오래 막힌 구간은 ${it}번 홀드 전후였어요.") }
+        summary.primaryCruxDurationMs
+            ?.takeIf { it > 0 }
+            ?.let { add("대표 크럭스는 ${formatDurationLabel(it)} 동안 이어졌어요.") }
+        summary.feedbackTypes.firstOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { add("이번 시도의 대표 패턴은 ${displayFeedbackTypeLabel(it)} 쪽이었어요.") }
+        summary.loadFocusLabel
+            ?.takeIf { it.isNotBlank() }
+            ?.let { add("$it 쪽에 힘이 몰리면서 자세 균형이 흔들렸어요.") }
+    }.ifEmpty {
+        summary.failureHighlights.take(3)
+    }
+}
+
+private fun compareMetric(current: Int?, previous: Int?): Int? {
+    if (current == null || previous == null) return null
+    return current - previous
+}
+
+private fun formatDurationLabel(durationMs: Int): String {
+    val totalSeconds = (durationMs / 1000f).toInt().coerceAtLeast(1)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return if (minutes > 0) {
+        "${minutes}분 ${seconds}초"
+    } else {
+        "${seconds}초"
+    }
+}

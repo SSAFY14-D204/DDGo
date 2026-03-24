@@ -67,11 +67,7 @@ internal fun previewStartMs(
 internal fun resolveAnalysisSeekTimeMs(
     point: AnalysisPoint,
     usesPoseDetectorTimeline: Boolean
-): Long = when {
-    !usesPoseDetectorTimeline -> point.timeMs.coerceAtLeast(0L)
-    point.kind == AnalysisPointKind.CLIMB_END -> previewStartMs(point.timeMs)
-    else -> point.timeMs.coerceAtLeast(0L)
-}
+): Long = previewStartMs(point.timeMs, lookbackMs = 2_000L)
 
 internal fun resolvePlaybackActiveAnalysisCardIndex(
     points: List<AnalysisPoint>,

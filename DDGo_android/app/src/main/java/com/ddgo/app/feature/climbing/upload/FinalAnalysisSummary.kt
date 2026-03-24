@@ -22,6 +22,7 @@ internal data class FinalAnalysisAttemptSummary(
     val hasAiResult: Boolean,
     val isSuccess: Boolean,
     val analysisPoints: List<AnalysisPoint>,
+    val videoDurationMs: Long?,
     val reachedHolds: Int?,
     val reachedHoldsText: String,
     val processedFrames: Int?,
@@ -96,6 +97,7 @@ private fun emptyFinalAnalysisAttemptSummary(
         hasAiResult = false,
         isSuccess = isSuccess,
         analysisPoints = emptyList(),
+        videoDurationMs = null,
         reachedHolds = reachedHolds,
         reachedHoldsText = reachedHolds?.toString() ?: FinalAnalysisUnknownMetricText,
         processedFrames = null,
@@ -141,6 +143,7 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
     holdReachResult: AttemptHoldReachResult? = null
 ): FinalAnalysisAttemptSummary {
     val analysisPoints = toFinalAnalysisPoints()
+    val videoDurationMs = extractVideoDurationMs()
     val reachedHolds = holdReachResult?.highestReachedHoldNo ?: extractReachedHoldNo()
     val processedFrames = extractProcessedFrames()
     val highConfidenceRatio = extractHighConfidenceRatioPercent(processedFrames = processedFrames)
@@ -175,6 +178,7 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         hasAiResult = true,
         isSuccess = isSuccess,
         analysisPoints = analysisPoints,
+        videoDurationMs = videoDurationMs,
         reachedHolds = reachedHolds,
         reachedHoldsText = reachedHolds?.toString() ?: FinalAnalysisUnknownMetricText,
         processedFrames = processedFrames,
@@ -326,6 +330,12 @@ private fun AiAnalysisResult.extractReachedHoldNo(): Int? {
         ?: cruxResult.allCandidates.firstOrNull()?.holdId?.takeIf { it > 0 }
 }
 
+private fun AiAnalysisResult.extractVideoDurationMs(): Long? {
+    return videoMetadata.durationMs()
+        ?: cruxResult.topCandidates.mapNotNull { it.bestSegment?.endTimeMs }.maxOrNull()
+        ?: cruxResult.allCandidates.mapNotNull { it.bestSegment?.endTimeMs }.maxOrNull()
+}
+
 private fun AiAnalysisResult.extractHighConfidenceFrameCount(): Int? {
     return physicsSummary?.getIntOrNull("high_confidence_frame_count")?.takeIf { it >= 0 }
         ?: physicsResult?.getArrayOrNull("frames")
@@ -433,8 +443,12 @@ private fun AiAnalysisResult.extractStabilityFocusFraction(): Float? {
 }
 
 private fun AiAnalysisResult.extractPrimaryCruxHoldNo(): Int? {
-    return cruxResult.topCandidates.firstOrNull()?.holdId?.takeIf { it > 0 }
-        ?: cruxResult.allCandidates.firstOrNull()?.holdId?.takeIf { it > 0 }
+    return cruxResult.topCandidates
+        .firstOrNull { candidate -> candidate.holdId > 1 }
+        ?.holdId
+        ?: cruxResult.allCandidates
+            .firstOrNull { candidate -> candidate.holdId > 1 }
+            ?.holdId
 }
 
 private fun AiAnalysisResult.extractPrimaryCruxDurationMs(): Int? {
@@ -620,31 +634,31 @@ private fun AiAnalysisResult.buildFeedbackLine(
 
     return when {
         isSuccess && (insideSupportRatio ?: 0) >= 70 && (stableContactRatio ?: 0) >= 70 ->
-            "전반적으로 균형과 손발 지지가 안정적이어서 흐름을 잘 이어갔습니다."
+            "균형과 손발 지지가 안정적이었어요."
 
         isSuccess ->
-            "완등에는 성공했지만 일부 난구간에서 균형과 손발 지지가 잠시 흔들렸습니다."
+            "완등은 했지만 난구간에서 잠시 흔들렸어요."
 
         "발 사용 부족" in feedbackTypes && "팔 사용 과다" in feedbackTypes && holdLabel != null ->
-            "${holdLabel} 부근에서 발 사용이 줄고 상체 의존이 커지며 흐름이 끊겼습니다."
+            "${holdLabel}에서 발보다 팔 힘이 먼저 커졌어요."
 
         "중심 흔들림" in feedbackTypes && holdLabel != null ->
-            "${holdLabel} 부근에서 중심이 흔들리며 다음 동작 연결이 끊겼습니다."
+            "${holdLabel}에서 중심이 흔들렸어요."
 
         "과한 버티기" in feedbackTypes && holdLabel != null ->
-            "${holdLabel} 부근에서 오래 버티며 리듬이 끊겼습니다."
+            "${holdLabel}에서 너무 오래 버텼어요."
 
         "팔 사용 과다" in feedbackTypes && holdLabel != null && peakLoadLabel != null ->
-            "${holdLabel} 부근에서 ${peakLoadLabel}에 부담이 몰리며 상체 의존이 커졌습니다."
+            "${holdLabel}에서 ${peakLoadLabel} 부담이 커졌어요."
 
         reasonLabel != null && holdLabel != null ->
-            "${holdLabel} 부근에서 ${reasonLabel}이 두드러져 난이도가 크게 올라갔습니다."
+            "${holdLabel}에서 ${reasonLabel}이 두드러졌어요."
 
         reachedHolds != null && totalHolds > 0 ->
-            "${reachedHolds}번 홀드까지는 비교적 안정적이었지만 이후 구간 연결이 어려웠습니다."
+            "${reachedHolds}번 홀드 이후 연결이 어려웠어요."
 
         else ->
-            "핵심 구간에서 균형 유지와 다음 동작 연결이 동시에 어려웠습니다."
+            "핵심 구간에서 흐름이 끊겼어요."
     }
 }
 
@@ -654,28 +668,28 @@ private fun buildCoachingLine(
 ): String {
     return when {
         "발 사용 부족" in feedbackTypes ->
-            "다음 홀드로 가기 전 발을 먼저 올려 몸을 세운 뒤 손을 보내보세요."
+            "발을 먼저 세우고 손을 보내 보세요."
 
         "중심 흔들림" in feedbackTypes ->
-            "손보다 중심을 먼저 옮기고 엉덩이를 벽에 붙인 채 다음 동작을 이어가 보세요."
+            "중심을 먼저 옮기고 다음 동작을 이어가 보세요."
 
         "과한 버티기" in feedbackTypes ->
-            "한 자세에서 오래 멈추기보다 시선을 먼저 보내고 리듬 있게 다음 홀드로 연결해 보세요."
+            "오래 버티기보다 리듬 있게 이어가 보세요."
 
         "팔 사용 과다" in feedbackTypes ->
-            "팔로 버티기보다 발로 밀어 올리고 팔은 균형만 잡는 느낌으로 써보세요."
+            "팔로 버티기보다 발로 밀어 올려 보세요."
 
         loadFocusLabel == "몸통" ->
-            "복부 힘을 먼저 잡고 발을 디딘 뒤 손을 움직이면 흔들림을 줄일 수 있습니다."
+            "몸통 힘을 먼저 잡고 손을 움직여 보세요."
 
         loadFocusLabel == "왼팔" || loadFocusLabel == "오른팔" ->
-            "한쪽 팔로만 버티지 말고 발을 먼저 세워 상체 부담을 나눠보세요."
+            "한쪽 팔 대신 발로 하중을 나눠 보세요."
 
         loadFocusLabel == "왼다리" || loadFocusLabel == "오른다리" ->
-            "한쪽 발에만 체중을 싣기보다 반대 발도 빨리 세워 하중을 분산해보세요."
+            "반대 발도 빨리 세워 하중을 나눠 보세요."
 
         else ->
-            "가장 어려운 구간에서는 중심을 먼저 옮기고 손발을 함께 연결하는 연습이 도움이 됩니다."
+            "중심과 손발을 함께 연결하는 연습을 해보세요."
     }
 }
 

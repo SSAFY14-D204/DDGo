@@ -802,19 +802,8 @@ private fun InfoChip(text: String, bg: Color) {
     }
 }
 
-internal fun holdColorToUiColor(name: String) = when (name) {
-    "빨강" -> Color(0xFFEF5350)
-    "주황" -> Color(0xFFFF7043)
-    "노랑" -> Color(0xFFFFCA28)
-    "초록" -> Color(0xFF66BB6A)
-    "파랑" -> Color(0xFF42A5F5)
-    "남색" -> Color(0xFF3949AB)
-    "보라" -> Color(0xFFAB47BC)
-    "분홍" -> Color(0xFFEC407A)
-    "회색" -> Color(0xFFE0E0E0)
-    "검정" -> Color(0xFF424242)
-    "갈색" -> Color(0xFF8D6E63)
-    else -> Color(0xFF607D8B)
+internal fun holdColorToUiColor(name: String): Color {
+    return holdLabelToComposeColor(name)
 }
 
 @Composable
