@@ -1,35 +1,31 @@
 package com.ddgo.app.feature.auth
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
 import com.ddgo.app.R
 import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
-import com.ddgo.app.core.ui.atom.DdgoTextButton
-import com.ddgo.app.core.ui.atom.DdgoTextButtonTone
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.tokens.DdgoColorTokens
 import com.ddgo.app.core.ui.theme.PretendardFamily
@@ -39,54 +35,66 @@ fun AuthLandingScreen(onRegisterClick: () -> Unit, onLoginClick: () -> Unit) {
     SafeAreaScreen(
         modifier = Modifier
             .background(
-                brush = Brush.verticalGradient(
+                brush = Brush.linearGradient(
                     colors = listOf(
-                        DdgoColorTokens.SurfaceTint,
-                        DdgoColorTokens.Surface
-                    )
+                        Color(0xFF8667FF).copy(alpha = 0.58f),
+                        Color(0xFFD7CBFF).copy(alpha = 0.28f),
+                        Color.White,
+                        Color.White
+                    ),
+                    start = Offset(320f, -48f),
+                    end = Offset(72f, 520f)
                 )
             )
-            .padding(horizontal = 24.dp, vertical = 40.dp)
+            .padding(horizontal = 16.dp)
     ) {
         Column(
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = (-40).dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            DdgoMascotBadge()
-            Spacer(modifier = Modifier.height(28.dp))
-
+            DdgoMascotMark()
+            Spacer(modifier = Modifier.height(18.dp))
+            DdgoKoreanWordmark(fontSize = 68.sp)
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "\uCD94\uB77D\uC758 \uB370\uC774\uD130\uB97C \uBC14\uAFB8\uB294",
-                fontSize = 16.sp,
-                fontFamily = PretendardFamily
+                text = AuthStrings.WelcomeDescription,
+                color = Color(0xFF65676C),
+                fontFamily = PretendardFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                lineHeight = 21.sp
             )
-            Spacer(modifier = Modifier.height(10.dp))
-            DdgoKoreanWordmark(fontSize = 60.sp)
         }
 
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             DdgoPrimaryButton(
-                text = "\uC2DC\uC791\uD558\uAE30",
+                text = AuthStrings.WelcomeRegister,
                 onClick = onRegisterClick,
                 modifier = Modifier.fillMaxWidth()
             )
-
+            Spacer(modifier = Modifier.height(22.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "\uC774\uBBF8 \uACC4\uC815\uC774 \uC788\uB098\uC694? ",
+                    text = "${AuthStrings.WelcomeLoginQuestion} ",
                     color = DdgoColorTokens.TextSecondary,
-                    fontFamily = PretendardFamily
+                    fontFamily = PretendardFamily,
+                    fontSize = 15.sp
                 )
-                DdgoTextButton(
-                    text = "\uB85C\uADF8\uC778",
-                    onClick = onLoginClick,
-                    tone = DdgoTextButtonTone.Primary
+                Text(
+                    text = AuthStrings.WelcomeLoginAction,
+                    modifier = Modifier.clickable(onClick = onLoginClick),
+                    color = DdgoColorTokens.BrandBlue,
+                    fontFamily = PretendardFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
                 )
             }
         }
@@ -94,31 +102,16 @@ fun AuthLandingScreen(onRegisterClick: () -> Unit, onLoginClick: () -> Unit) {
 }
 
 @Composable
-private fun DdgoMascotBadge(size: Dp = 132.dp) {
-    Card(
-        shape = RoundedCornerShape(36.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 18.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(size)
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            DdgoColorTokens.BrandBlue,
-                            DdgoColorTokens.BrandGradientStart
-                        )
-                    ),
-                    shape = RoundedCornerShape(36.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_ddgo_mascot),
-                contentDescription = "\uB514\uB514 \uCE90\uB9AD\uD130",
-                modifier = Modifier.size(size * 0.6f)
-            )
-        }
-    }
+private fun DdgoMascotMark() {
+    val context = LocalContext.current
+    AsyncImage(
+        model = ImageRequest.Builder(context)
+            .data(R.raw.main_dd_icon)
+            .decoderFactory(SvgDecoder.Factory())
+            .build(),
+        contentDescription = "디디고 로고",
+        modifier = Modifier
+            .width(153.dp)
+            .height(99.dp)
+    )
 }
