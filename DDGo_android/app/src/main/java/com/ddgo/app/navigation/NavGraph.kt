@@ -15,15 +15,20 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.ddgo.app.BuildConfig
 import com.ddgo.app.core.datastore.AuthSessionEvent
 import com.ddgo.app.core.ui.components.DevNavigationOverlay
 import com.ddgo.app.feature.auth.authGraph
+import com.ddgo.app.feature.auth.AuthSuccessDestination
 import com.ddgo.app.feature.debug.debugGraph
 import com.ddgo.app.feature.main.mainGraph
+import com.ddgo.app.feature.onboarding.OnboardingMode
+import com.ddgo.app.feature.onboarding.OnboardingScreen
 import com.ddgo.app.feature.splash.SplashScreen
 import kotlinx.coroutines.flow.collectLatest
 
@@ -88,14 +93,70 @@ fun NavGraph(
                         navController.navigate(ScreenRoutes.MainGraph.route) {
                             popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
                         }
+                    },
+                    onNavigateToOnboarding = { nextRoute, mode ->
+                        navController.navigate(
+                            ScreenRoutes.Onboarding.createRoute(
+                                nextRoute = nextRoute,
+                                mode = mode.name
+                            )
+                        ) {
+                            popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            composable(
+                route = ScreenRoutes.Onboarding.ROUTE_WITH_ARG,
+                arguments = listOf(
+                    navArgument(ScreenRoutes.Onboarding.ARG_NEXT_ROUTE) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ScreenRoutes.Auth.route
+                    },
+                    navArgument(ScreenRoutes.Onboarding.ARG_MODE) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = OnboardingMode.INTRO.name
+                    }
+                )
+            ) { backStackEntry ->
+                val nextRoute = backStackEntry.arguments
+                    ?.getString(ScreenRoutes.Onboarding.ARG_NEXT_ROUTE)
+                    .orEmpty()
+                    .ifBlank { ScreenRoutes.Auth.route }
+                val mode = OnboardingMode.fromRouteArg(
+                    backStackEntry.arguments?.getString(ScreenRoutes.Onboarding.ARG_MODE)
+                )
+
+                OnboardingScreen(
+                    mode = mode,
+                    onFinish = {
+                        navController.navigate(nextRoute) {
+                            popUpTo(0) { inclusive = true }
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
 
             authGraph(
                 navController = navController,
-                onLoginSuccess = {
-                    navController.navigate(ScreenRoutes.MainGraph.route) {
+                onLoginSuccess = { destination ->
+                    val targetRoute = when (destination) {
+                        AuthSuccessDestination.Main -> ScreenRoutes.MainGraph.route
+                        AuthSuccessDestination.ProfileOnboarding -> ScreenRoutes.Onboarding.createRoute(
+                            nextRoute = ScreenRoutes.MainGraph.route,
+                            mode = OnboardingMode.PROFILE.name
+                        )
+                        AuthSuccessDestination.FullOnboarding -> ScreenRoutes.Onboarding.createRoute(
+                            nextRoute = ScreenRoutes.MainGraph.route,
+                            mode = OnboardingMode.INTRO_AND_PROFILE.name
+                        )
+                    }
+
+                    navController.navigate(targetRoute) {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true
                     }

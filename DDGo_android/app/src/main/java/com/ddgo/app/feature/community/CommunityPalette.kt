@@ -2,34 +2,40 @@ package com.ddgo.app.feature.community
 
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.ddgo.app.core.ui.tokens.DdgoBrushTokens
+import com.ddgo.app.core.ui.tokens.DdgoColorTokens
 
 internal object CommunityPalette {
-    val BrandBlue = Color(0xFF42A5F5)
-    val BrandGray = Color(0xFF6C7B8A)
-    val BrandGreen = Color(0xFFE8F3FF)
-    val NeutralBlack = Color(0xFF1E232C)
-    val NeutralGray = Color(0xFF90A0AF)
-    val NeutralWhite = Color(0xFFFFFFFF)
-    val NeutralBackground = Color(0xFFF7FBFF)
-    val LightBlue = Color(0xFFE8F3FF)
-    val LightPurple = Color(0xFFD7E5F5)
-    val Surface = Color(0xFFFFFFFF)
-    val SurfaceMuted = Color(0xFFF4F8FD)
-    val Border = Color(0xFFD7E5F5)
-    val TextPrimary = Color(0xFF1E232C)
-    val TextSecondary = Color(0xFF6C7B8A)
-    val Accent = Color(0xFF42A5F5)
-    val AccentStrong = Color(0xFF1E88E5)
-    val AccentSoft = Color(0xFFE8F3FF)
-    val OnAccent = Color.White
+    val BrandBlue = DdgoColorTokens.BrandBlue
+    val BrandGray = DdgoColorTokens.BrandGray
+    val BrandGreen = DdgoColorTokens.SurfaceTint
+    val NeutralBlack = DdgoColorTokens.TextPrimary
+    val NeutralGray = DdgoColorTokens.TextSecondary
+    val NeutralWhite = DdgoColorTokens.Surface
+    val NeutralBackground = DdgoColorTokens.Background
+    val LightBlue = DdgoColorTokens.SurfaceTint
+    val LightPurple = DdgoColorTokens.Border
+    val Surface = DdgoColorTokens.Surface
+    val SurfaceMuted = DdgoColorTokens.SurfaceMuted
+    val Border = DdgoColorTokens.Border
+    val TextPrimary = DdgoColorTokens.TextPrimary
+    val TextSecondary = DdgoColorTokens.TextSecondary
+    val Accent = DdgoColorTokens.BrandBlue
+    val AccentStrong = DdgoColorTokens.BrandBlueStrong
+    val AccentSoft = DdgoColorTokens.SurfaceTint
+    val OnAccent = DdgoColorTokens.TextInverse
 
     val PageGradient = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFFF7FBFF),
-            Color(0xFFEAF3FF),
-            Color(0xFFF7FBFF)
+            DdgoColorTokens.Background,
+            DdgoColorTokens.SurfaceTint,
+            DdgoColorTokens.Background
         )
     )
 
-    val HeroGradient = Brush.horizontalGradient(colors = listOf(Accent, AccentStrong))
+    val HeroGradient = DdgoBrushTokens.HeroGradient
+    val Danger = DdgoColorTokens.Error
+    val Success = DdgoColorTokens.Success
+    val Warning = DdgoColorTokens.Warning
+    val NeutralTransparent = Color.Transparent
 }

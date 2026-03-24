@@ -28,6 +28,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -37,21 +39,15 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -74,6 +71,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.compose.ui.viewinterop.AndroidView
+import com.ddgo.app.core.ui.atom.DdgoChoiceChip
+import com.ddgo.app.core.ui.atom.DdgoOutlinedButton
+import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
+import com.ddgo.app.core.ui.atom.DdgoTextButton
+import com.ddgo.app.core.ui.atom.DdgoTextButtonTone
+import com.ddgo.app.core.ui.atom.DdgoTextField
 import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityPostDetail
@@ -332,37 +335,37 @@ private fun FeedScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "커뮤니티 게시판",
-                        modifier = Modifier.weight(1f),
+                        text = "커뮤니티 게시판",
+                        modifier = Modifier.fillMaxWidth(),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = CommunityPalette.TextPrimary
                     )
-                    OutlinedTextField(
-                        value = uiState.searchKeyword,
-                        onValueChange = onKeywordChanged,
-                        modifier = Modifier.width(176.dp),
-                        placeholder = { Text("검색") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        trailingIcon = {
-                            TextButton(onClick = onSearchSubmit) { Text("조회") }
-                        },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodySmall,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = CommunityPalette.NeutralWhite,
-                            unfocusedContainerColor = CommunityPalette.NeutralWhite,
-                            focusedBorderColor = CommunityPalette.BrandBlue,
-                            unfocusedBorderColor = CommunityPalette.NeutralGray.copy(alpha = 0.28f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DdgoTextField(
+                            value = uiState.searchKeyword,
+                            onValueChange = onKeywordChanged,
+                            modifier = Modifier.weight(1f),
+                            placeholder = "검색어를 입력하세요",
+                            leadingIcon = Icons.Default.Search,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { onSearchSubmit() })
                         )
-                    )
+                        DdgoPrimaryButton(
+                            text = "조회",
+                            onClick = onSearchSubmit,
+                            modifier = Modifier.width(96.dp)
+                        )
+                    }
                 }
             }
 
@@ -497,24 +500,18 @@ private fun FeedScreen(
             }
         }
 
-        FilledTonalButton(
+        DdgoPrimaryButton(
+            text = "글쓰기",
             onClick = onOpenCompose,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                .width(120.dp)
                 .padding(
                     end = CommunityPagePadding,
                     bottom = MainChromeDefaults.OverlayFabBottomPadding
                 ),
-            shape = RoundedCornerShape(CommunityChipRadius),
-            colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = CommunityPalette.AccentStrong,
-                contentColor = CommunityPalette.OnAccent
-            )
-        ) {
-            Icon(Icons.Default.Add, contentDescription = null)
-            Spacer(Modifier.width(6.dp))
-            Text("글쓰기")
-        }
+            leadingIcon = Icons.Default.Add
+        )
     }
 }
 
@@ -593,9 +590,16 @@ private fun DetailScreen(
                             )
                         }
                         if (detail.isMine) {
-                            Row {
-                                TextButton(onClick = onEditPost) { Text("수정") }
-                                TextButton(onClick = onDeletePost) { Text("삭제", color = Color(0xFFD84A4A)) }
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                DdgoTextButton(
+                                    text = "수정",
+                                    onClick = onEditPost
+                                )
+                                DdgoTextButton(
+                                    text = "삭제",
+                                    onClick = onDeletePost,
+                                    tone = DdgoTextButtonTone.Danger
+                                )
                             }
                         }
                     }
@@ -634,18 +638,16 @@ private fun DetailScreen(
                             DetailMeta("좋아요", detail.likeCount.toString())
                             DetailMeta("댓글", detail.commentCount.toString(), showDivider = false)
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                FilledTonalButton(
+                                DdgoPrimaryButton(
+                                    text = if (detail.isLiked) "좋아요 취소" else "좋아요",
                                     onClick = onTogglePostLike,
-                                    shape = RoundedCornerShape(CommunityChipRadius),
-                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = CommunityPalette.AccentSoft,
-                                        contentColor = CommunityPalette.AccentStrong
-                                    )
-                                ) {
-                                    Icon(if (detail.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = null)
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(if (detail.isLiked) "좋아요 취소" else "좋아요")
-                                }
+                                    modifier = Modifier.width(148.dp),
+                                    leadingIcon = if (detail.isLiked) {
+                                        Icons.Default.Favorite
+                                    } else {
+                                        Icons.Default.FavoriteBorder
+                                    }
+                                )
                             }
                         }
                     }
@@ -794,17 +796,13 @@ private fun ComposeScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    FilledTonalButton(
+                    DdgoPrimaryButton(
+                        text = if (isEditMode) "수정" else "등록",
                         onClick = onSubmit,
                         enabled = !composeState.isSubmitting,
-                        shape = RoundedCornerShape(CommunityChipRadius),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = CommunityPalette.AccentSoft,
-                            contentColor = CommunityPalette.AccentStrong
-                        )
-                    ) {
-                        Text(if (composeState.isSubmitting) "저장 중..." else "저장")
-                    }
+                        isLoading = composeState.isSubmitting,
+                        modifier = Modifier.width(108.dp)
+                    )
                 }
             }
 
@@ -820,11 +818,11 @@ private fun ComposeScreen(
                 CommunitySectionCard {
                     Text("제목", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
+                    DdgoTextField(
                         value = composeState.title,
                         onValueChange = onTitleChanged,
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("제목을 입력하세요") }
+                        placeholder = "제목을 입력하세요"
                     )
                 }
             }
@@ -833,12 +831,13 @@ private fun ComposeScreen(
                 CommunitySectionCard {
                     Text("내용", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
+                    DdgoTextField(
                         value = composeState.content,
                         onValueChange = onContentChanged,
                         modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
                         minLines = 8,
-                        placeholder = { Text("내용을 입력하세요") }
+                        placeholder = "내용을 입력하세요"
                     )
                 }
             }
@@ -860,7 +859,11 @@ private fun ComposeScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             CommunityAccentChip(text = composeState.gymName, selected = true)
-                            TextButton(onClick = onClearGym) { Text("해제") }
+                            DdgoTextButton(
+                                text = "해제",
+                                onClick = onClearGym,
+                                tone = DdgoTextButtonTone.Neutral
+                            )
                         }
                     } else {
                         Text(
@@ -869,12 +872,11 @@ private fun ComposeScreen(
                         )
                     }
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(
+                    DdgoOutlinedButton(
+                        text = "내 챌린지 기록에서 선택",
                         onClick = onOpenChallengeSheet,
-                        shape = RoundedCornerShape(CommunityChipRadius)
-                    ) {
-                        Text("내 챌린지 기록에서 선택")
-                    }
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 
@@ -889,15 +891,12 @@ private fun ComposeScreen(
                         Text("${composeState.videos.size} / 3", color = CommunityPalette.TextSecondary)
                     }
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(
+                    DdgoOutlinedButton(
+                        text = "영상 선택",
                         onClick = onPickVideos,
                         enabled = composeState.videos.size < 3,
-                        shape = RoundedCornerShape(CommunityChipRadius)
-                    ) {
-                        Icon(Icons.Default.PlayCircle, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("영상 선택")
-                    }
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(Modifier.height(12.dp))
                     if (composeState.videos.isEmpty()) {
                         Text("첨부된 영상이 없습니다.", color = CommunityPalette.TextSecondary)
@@ -1017,12 +1016,30 @@ private fun CommentRow(
                     )
                     Text(comment.createdAt, color = CommunityPalette.TextSecondary, style = MaterialTheme.typography.bodySmall)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (!isReply) TextButton(onClick = { onReply(comment) }) { Text("답글") }
-                    TextButton(onClick = { onToggleLike(comment) }) { Text(if (comment.isLiked) "좋아요 취소" else "좋아요") }
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (!isReply) {
+                        DdgoTextButton(
+                            text = "답글",
+                            onClick = { onReply(comment) },
+                            tone = DdgoTextButtonTone.Neutral
+                        )
+                    }
+                    DdgoTextButton(
+                        text = if (comment.isLiked) "좋아요 취소" else "좋아요",
+                        onClick = { onToggleLike(comment) },
+                        tone = DdgoTextButtonTone.Primary
+                    )
                     if (comment.isMine) {
-                        TextButton(onClick = { onEdit(comment) }) { Text("수정") }
-                        TextButton(onClick = { onDelete(comment) }) { Text("삭제", color = Color(0xFFD84A4A)) }
+                        DdgoTextButton(
+                            text = "수정",
+                            onClick = { onEdit(comment) },
+                            tone = DdgoTextButtonTone.Neutral
+                        )
+                        DdgoTextButton(
+                            text = "삭제",
+                            onClick = { onDelete(comment) },
+                            tone = DdgoTextButtonTone.Danger
+                        )
                     }
                 }
             }
@@ -1059,10 +1076,22 @@ private fun VideoDraftRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = CommunityPalette.TextSecondary
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TextButton(onClick = onMoveUp) { Text("위로") }
-                TextButton(onClick = onMoveDown) { Text("아래로") }
-                TextButton(onClick = onRemove) { Text("제거", color = Color(0xFFD84A4A)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                DdgoTextButton(
+                    text = "위로",
+                    onClick = onMoveUp,
+                    tone = DdgoTextButtonTone.Neutral
+                )
+                DdgoTextButton(
+                    text = "아래로",
+                    onClick = onMoveDown,
+                    tone = DdgoTextButtonTone.Neutral
+                )
+                DdgoTextButton(
+                    text = "제거",
+                    onClick = onRemove,
+                    tone = DdgoTextButtonTone.Danger
+                )
             }
         }
     }
@@ -1135,42 +1164,20 @@ private fun BoardCard(
 
 @Composable
 private fun SortButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.clickable(onClick = onClick),
-        color = if (selected) CommunityPalette.BrandBlue.copy(alpha = 0.12f) else CommunityPalette.NeutralWhite,
-        shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(
-            1.dp,
-            if (selected) CommunityPalette.BrandBlue else CommunityPalette.NeutralGray.copy(alpha = 0.22f)
-        )
-    ) {
-        Text(
-            label,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            color = if (selected) CommunityPalette.BrandBlue else CommunityPalette.BrandGray,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-        )
-    }
+    DdgoChoiceChip(
+        label = label,
+        selected = selected,
+        onClick = onClick
+    )
 }
 
 @Composable
 private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.clickable(onClick = onClick),
-        color = if (selected) CommunityPalette.BrandGreen.copy(alpha = 0.18f) else CommunityPalette.NeutralWhite,
-        shape = RoundedCornerShape(CommunityChipRadius),
-        border = BorderStroke(
-            1.dp,
-            if (selected) CommunityPalette.BrandGreen.copy(alpha = 0.7f) else CommunityPalette.NeutralGray.copy(alpha = 0.18f)
-        )
-    ) {
-        Text(
-            label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = CommunityPalette.TextPrimary
-        )
-    }
+    DdgoChoiceChip(
+        label = label,
+        selected = selected,
+        onClick = onClick
+    )
 }
 
 @Composable
@@ -1206,28 +1213,27 @@ private fun CommunityCommentInputBar(
                     color = CommunityPalette.TextSecondary,
                     style = MaterialTheme.typography.bodySmall
                 )
-                TextButton(onClick = onCancelComment) { Text("취소") }
+                DdgoTextButton(
+                    text = "취소",
+                    onClick = onCancelComment,
+                    tone = DdgoTextButtonTone.Neutral
+                )
             }
             Spacer(Modifier.height(10.dp))
         }
-        OutlinedTextField(
+        DdgoTextField(
             value = commentInput,
             onValueChange = onCommentChanged,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("댓글을 입력하세요") }
+            placeholder = "댓글을 입력하세요"
         )
         Spacer(Modifier.height(10.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            FilledTonalButton(
+            DdgoPrimaryButton(
+                text = if (editingCommentId != null) "수정" else "등록",
                 onClick = onSubmitComment,
-                shape = RoundedCornerShape(CommunityChipRadius),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = CommunityPalette.AccentSoft,
-                    contentColor = CommunityPalette.AccentStrong
-                )
-            ) {
-                Text(if (editingCommentId != null) "수정" else "등록")
-            }
+                modifier = Modifier.width(104.dp)
+            )
         }
     }
 }

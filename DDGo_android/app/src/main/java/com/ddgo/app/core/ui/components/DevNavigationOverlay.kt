@@ -47,9 +47,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.core.dev.DevOptions
 import com.ddgo.app.domain.model.AiAnalysisMode
+import com.ddgo.app.feature.onboarding.OnboardingMode
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import com.ddgo.app.navigation.ScreenRoutes
+import com.ddgo.app.core.ui.tokens.DdgoColorTokens
 import kotlin.math.roundToInt
 
 /**
@@ -100,7 +102,7 @@ fun DevNavigationOverlay(navController: NavController) {
                     .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
                     .padding(end = 16.dp, bottom = 100.dp)
                     .size(48.dp)
-                    .background(Color(0xFFFF6B35), CircleShape)
+                    .background(DdgoColorTokens.BrandBlue, CircleShape)
                     .clickable { expanded = true }
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
@@ -138,6 +140,22 @@ private val devRoutes = listOf(
     DevRoute("Register Email", ScreenRoutes.Auth.REGISTER_EMAIL),
     DevRoute("Register Password", ScreenRoutes.Auth.REGISTER_PASSWORD),
 
+    // ── Onboarding ──
+    DevRoute(
+        "Onboarding Intro",
+        ScreenRoutes.Onboarding.createRoute(
+            nextRoute = ScreenRoutes.MainGraph.route,
+            mode = OnboardingMode.INTRO.name
+        )
+    ),
+    DevRoute(
+        "Onboarding Full",
+        ScreenRoutes.Onboarding.createRoute(
+            nextRoute = ScreenRoutes.MainGraph.route,
+            mode = OnboardingMode.INTRO_AND_PROFILE.name
+        )
+    ),
+
     // ── Main ──
     DevRoute("Main (탭 UI)", ScreenRoutes.Main.route, clearBackStack = true),
 
@@ -160,9 +178,10 @@ private val devRoutes = listOf(
 
 private val sectionLabels = mapOf(
     0 to "Auth",
-    5 to "Main",
-    6 to "Upload Flow",
-    17 to "Record",
+    5 to "Onboarding",
+    7 to "Main",
+    8 to "Upload Flow",
+    19 to "Record",
 )
 
 @Composable
@@ -183,7 +202,7 @@ private fun DevPanel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFFF6B35))
+                    .background(DdgoColorTokens.BrandBlue)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -218,7 +237,7 @@ private fun DevPanel(
                         if (index > 0) Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = section,
-                            color = Color(0xFFFF6B35),
+                        color = DdgoColorTokens.BrandBlue,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
@@ -261,7 +280,7 @@ private fun AiAnalysisModeSection() {
     ) {
         Text(
             text = "AI Analysis",
-            color = Color(0xFFFF6B35),
+                        color = DdgoColorTokens.BrandBlue,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
@@ -298,7 +317,7 @@ private fun AiModeButton(
         modifier = modifier.height(38.dp),
         shape = RoundedCornerShape(8.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(0xFFFF6B35) else Color(0xFF2D2D2D),
+                        containerColor = if (selected) DdgoColorTokens.BrandBlue else Color(0xFF2D2D2D),
             contentColor = Color.White
         ),
         contentPadding = PaddingValues(horizontal = 12.dp)

@@ -20,7 +20,7 @@ import com.ddgo.app.navigation.ScreenRoutes
  */
 fun NavGraphBuilder.authGraph(
     navController: NavController,
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: (AuthSuccessDestination) -> Unit
 ) {
     navigation(startDestination = ScreenRoutes.Auth.WELCOME, route = ScreenRoutes.Auth.route) {
 
