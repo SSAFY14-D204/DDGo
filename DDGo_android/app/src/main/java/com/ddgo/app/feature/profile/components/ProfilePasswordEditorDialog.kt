@@ -37,6 +37,7 @@ internal fun ProfilePasswordEditorDialog(
         confirmTone = ProfileActionTone.Accent,
         message = state.errorMessage,
         isProcessing = state.isSaving,
+        confirmEnabled = state.canSubmit,
         onConfirm = onConfirm,
         onDismiss = onDismiss,
         content = {
@@ -47,6 +48,7 @@ internal fun ProfilePasswordEditorDialog(
                 enabled = !state.isSaving,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = PasswordVisualTransformation(),
+                feedback = state.currentPasswordFeedback,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -57,6 +59,7 @@ internal fun ProfilePasswordEditorDialog(
                 enabled = !state.isSaving,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = PasswordVisualTransformation(),
+                feedback = state.newPasswordFeedback,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -67,6 +70,7 @@ internal fun ProfilePasswordEditorDialog(
                 enabled = !state.isSaving,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = PasswordVisualTransformation(),
+                feedback = state.confirmPasswordFeedback,
                 modifier = Modifier.fillMaxWidth()
             )
         }

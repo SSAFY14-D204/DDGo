@@ -2,7 +2,10 @@ package com.ddgo.app.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.core.validation.AuthInputPolicy
+import com.ddgo.app.core.validation.ValidationResult
 import com.ddgo.app.domain.model.LogoutResult
+import com.ddgo.app.domain.usecase.CheckNicknameAvailabilityUseCase
 import com.ddgo.app.domain.usecase.DeleteMeUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.LogoutUseCase
@@ -11,6 +14,8 @@ import com.ddgo.app.domain.usecase.UpdatePasswordUseCase
 import com.ddgo.app.domain.usecase.UpdateProfileUseCase
 import com.ddgo.app.feature.profile.model.ProfileActionType
 import com.ddgo.app.feature.profile.model.ProfileBodyProfileEditorUiState
+import com.ddgo.app.feature.profile.model.ProfileFieldFeedback
+import com.ddgo.app.feature.profile.model.ProfileFieldFeedbackTone
 import com.ddgo.app.feature.profile.model.ProfilePasswordEditorUiState
 import com.ddgo.app.feature.profile.model.ProfileSexOption
 import com.ddgo.app.feature.profile.model.ProfileUiEvent
@@ -22,6 +27,8 @@ import com.ddgo.app.feature.profile.state.ValidatedBodyProfile
 import com.ddgo.app.feature.profile.state.ValidatedPasswordChange
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,14 +37,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/**
- * 프로필 화면의 상태와 액션을 조율하는 ViewModel입니다.
- *
- * 역할:
- * - 프로필 조회, 닉네임 수정, 신체 정보 수정, 비밀번호 변경, 로그아웃, 회원 탈퇴를 조율합니다.
- * - 화면에 필요한 원본 상태는 [ProfileFeatureState]로 유지하고, 노출용 상태는 `uiState`로만 전달합니다.
- * - 일회성 메시지와 화면 전환은 [ProfileUiEvent]로 분리해 Compose 재구성의 영향을 줄입니다.
- */
+private const val NICKNAME_CHECK_DEBOUNCE_MS = 350L
+
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val getMyInfoUseCase: GetMyInfoUseCase,
@@ -45,30 +46,25 @@ class ProfileViewModel @Inject constructor(
     private val updateNicknameUseCase: UpdateNicknameUseCase,
     private val updatePasswordUseCase: UpdatePasswordUseCase,
     private val logoutUseCase: LogoutUseCase,
-    private val deleteMeUseCase: DeleteMeUseCase
+    private val deleteMeUseCase: DeleteMeUseCase,
+    private val checkNicknameAvailabilityUseCase: CheckNicknameAvailabilityUseCase
 ) : ViewModel() {
 
-    /** 프로필 feature 내부에서만 관리하는 원본 상태입니다. */
     private var featureState = ProfileFeatureState()
-
-    /** Compose 화면이 구독하는 최종 UI 상태입니다. */
     private val _uiState = MutableStateFlow(featureState.toUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
-    /** 스낵바, 인증 화면 이동처럼 한 번만 소비해야 하는 이벤트입니다. */
     private val _uiEvent = MutableSharedFlow<ProfileUiEvent>()
     val uiEvent: SharedFlow<ProfileUiEvent> = _uiEvent.asSharedFlow()
+
+    private var nicknameAvailabilityJob: Job? = null
+    private var lastCheckedNickname: String? = null
+    private var lastCheckedNicknameAvailable: Boolean = false
 
     init {
         loadMyInfo()
     }
 
-    /**
-     * 화면에서 들어온 액션을 종류에 맞게 분기합니다.
-     *
-     * 확인 다이얼로그가 필요한 액션은 Screen에서 한 번 더 감싼 뒤,
-     * 최종 확인이 끝났을 때 이 메서드가 다시 호출됩니다.
-     */
     fun onActionClick(actionType: ProfileActionType) {
         when (actionType) {
             ProfileActionType.EditNickname -> openNicknameEditor()
@@ -79,84 +75,105 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** 닉네임 편집 다이얼로그를 엽니다. */
     fun openNicknameEditor() {
+        resetNicknameAvailabilityState()
         updateState { it.openNicknameEditor() }
+        refreshNicknameFeedback()
     }
 
-    /** 닉네임 편집 다이얼로그를 닫습니다. */
     fun dismissNicknameEditor() {
+        cancelNicknameAvailabilityCheck()
         updateState { it.closeNicknameEditor() }
     }
 
-    /** 닉네임 입력값을 상태에 반영합니다. */
     fun updateNicknameInput(input: String) {
         updateState { it.updateNicknameInput(input) }
+        refreshNicknameFeedback()
     }
 
-    /** 닉네임 저장을 시작합니다. */
     fun submitNickname() {
         val editor = featureState.nicknameEditor ?: return
         if (editor.isSaving) return
 
-        when (
-            val validation = ProfileInputValidator.validateNickname(
-                rawInput = editor.nicknameInput,
-                currentNickname = featureState.resolveNickname()
-            )
-        ) {
-            is ProfileValidation.Invalid -> updateState {
-                it.showNicknameEditorError(validation.message)
+        val validation = ProfileInputValidator.validateNickname(
+            rawInput = editor.nicknameInput,
+            currentNickname = featureState.resolveNickname()
+        )
+
+        when (validation) {
+            is ProfileValidation.Invalid -> {
+                resetNicknameAvailabilityState()
+                updateState {
+                    it.updateNicknameFeedback(
+                        feedback = errorFeedback(validation.message),
+                        isCheckingAvailability = false,
+                        isNicknameAvailable = false
+                    )
+                }
             }
-            is ProfileValidation.Valid -> submitNicknameInternal(validation.value)
+
+            is ProfileValidation.Valid -> {
+                val nickname = validation.value
+
+                if (editor.isCheckingAvailability) {
+                    updateState {
+                        it.updateNicknameFeedback(
+                            feedback = neutralFeedback(ProfileStrings.NicknameChecking),
+                            isCheckingAvailability = true,
+                            isNicknameAvailable = false
+                        )
+                    }
+                    return
+                }
+
+                if (!editor.isNicknameAvailable || lastCheckedNickname != nickname) {
+                    updateState {
+                        it.updateNicknameFeedback(
+                            feedback = errorFeedback(ProfileStrings.NicknameUnavailable),
+                            isCheckingAvailability = false,
+                            isNicknameAvailable = false
+                        )
+                    }
+                    return
+                }
+
+                submitNicknameInternal(nickname)
+            }
         }
     }
 
-    /** 신체 정보 편집 다이얼로그를 엽니다. */
     fun openBodyProfileEditor() {
         updateState { it.openBodyProfileEditor() }
     }
 
-    /** 신체 정보 편집 다이얼로그를 닫습니다. */
     fun dismissBodyProfileEditor() {
         updateState { it.closeBodyProfileEditor() }
     }
 
-    /** 성별 선택값을 상태에 반영합니다. */
     fun updateBodyProfileSex(option: ProfileSexOption) {
         updateState { state ->
             state.updateBodyProfileEditor { editor -> editor.copy(sex = option) }
         }
     }
 
-    /** 키 입력값을 상태에 반영합니다. */
     fun updateHeightInput(input: String) {
         updateBodyProfileInput { editor ->
-            editor.copy(
-                heightCmInput = ProfileInputValidator.sanitizeNumberInput(input)
-            )
+            editor.copy(heightCmInput = ProfileInputValidator.sanitizeNumberInput(input))
         }
     }
 
-    /** 몸무게 입력값을 상태에 반영합니다. */
     fun updateWeightInput(input: String) {
         updateBodyProfileInput { editor ->
-            editor.copy(
-                weightKgInput = ProfileInputValidator.sanitizeNumberInput(input)
-            )
+            editor.copy(weightKgInput = ProfileInputValidator.sanitizeNumberInput(input))
         }
     }
 
-    /** 팔 길이 입력값을 상태에 반영합니다. */
     fun updateWingspanInput(input: String) {
         updateBodyProfileInput { editor ->
-            editor.copy(
-                wingspanCmInput = ProfileInputValidator.sanitizeNumberInput(input)
-            )
+            editor.copy(wingspanCmInput = ProfileInputValidator.sanitizeNumberInput(input))
         }
     }
 
-    /** 신체 정보 저장을 시작합니다. */
     fun submitBodyProfile() {
         val editor = featureState.bodyProfileEditor ?: return
         if (editor.isSaving) return
@@ -165,6 +182,7 @@ class ProfileViewModel @Inject constructor(
             is ProfileValidation.Invalid -> updateState {
                 it.showBodyProfileEditorError(validation.message)
             }
+
             is ProfileValidation.Valid -> submitBodyProfileInternal(
                 originalEditor = editor,
                 validated = validation.value
@@ -172,32 +190,30 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** 비밀번호 편집 다이얼로그를 엽니다. */
     fun openPasswordEditor() {
         updateState { it.openPasswordEditor() }
+        refreshPasswordFeedbacks()
     }
 
-    /** 비밀번호 편집 다이얼로그를 닫습니다. */
     fun dismissPasswordEditor() {
         updateState { it.closePasswordEditor() }
     }
 
-    /** 현재 비밀번호 입력값을 상태에 반영합니다. */
     fun updateCurrentPasswordInput(input: String) {
         updatePasswordInput { editor -> editor.copy(currentPasswordInput = input) }
+        refreshPasswordFeedbacks()
     }
 
-    /** 새 비밀번호 입력값을 상태에 반영합니다. */
     fun updateNewPasswordInput(input: String) {
         updatePasswordInput { editor -> editor.copy(newPasswordInput = input) }
+        refreshPasswordFeedbacks()
     }
 
-    /** 새 비밀번호 확인 입력값을 상태에 반영합니다. */
     fun updateConfirmPasswordInput(input: String) {
         updatePasswordInput { editor -> editor.copy(confirmPasswordInput = input) }
+        refreshPasswordFeedbacks()
     }
 
-    /** 비밀번호 변경 요청을 시작합니다. */
     fun submitPasswordChange() {
         val editor = featureState.passwordEditor ?: return
         if (editor.isSaving) return
@@ -209,9 +225,10 @@ class ProfileViewModel @Inject constructor(
                 currentNickname = featureState.resolveNickname()
             )
         ) {
-            is ProfileValidation.Invalid -> updateState {
-                it.showPasswordEditorError(validation.message)
+            is ProfileValidation.Invalid -> {
+                refreshPasswordFeedbacks(showRequired = true)
             }
+
             is ProfileValidation.Valid -> submitPasswordChangeInternal(
                 originalEditor = editor,
                 validated = validation.value
@@ -219,12 +236,177 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 로그아웃을 처리합니다.
-     *
-     * 회원 탈퇴와 동시에 실행되지 않도록 가드하고,
-     * 성공 시 인증 화면으로 복귀시킵니다.
-     */
+    private fun refreshNicknameFeedback(showRequired: Boolean = false) {
+        cancelNicknameAvailabilityCheck()
+
+        val editor = featureState.nicknameEditor ?: return
+        val rawInput = editor.nicknameInput
+
+        if (rawInput.isBlank()) {
+            resetNicknameAvailabilityState()
+            updateState {
+                it.updateNicknameFeedback(
+                    feedback = if (showRequired) {
+                        errorFeedback(ProfileStrings.NicknameRequired)
+                    } else {
+                        null
+                    },
+                    isCheckingAvailability = false,
+                    isNicknameAvailable = false
+                )
+            }
+            return
+        }
+
+        when (
+            val validation = ProfileInputValidator.validateNickname(
+                rawInput = rawInput,
+                currentNickname = featureState.resolveNickname()
+            )
+        ) {
+            is ProfileValidation.Invalid -> {
+                resetNicknameAvailabilityState()
+                updateState {
+                    it.updateNicknameFeedback(
+                        feedback = errorFeedback(validation.message),
+                        isCheckingAvailability = false,
+                        isNicknameAvailable = false
+                    )
+                }
+            }
+
+            is ProfileValidation.Valid -> {
+                val nickname = validation.value
+
+                if (lastCheckedNickname == nickname) {
+                    updateState {
+                        it.updateNicknameFeedback(
+                            feedback = if (lastCheckedNicknameAvailable) {
+                                successFeedback(ProfileStrings.NicknameAvailable)
+                            } else {
+                                errorFeedback(ProfileStrings.NicknameUnavailable)
+                            },
+                            isCheckingAvailability = false,
+                            isNicknameAvailable = lastCheckedNicknameAvailable
+                        )
+                    }
+                    return
+                }
+
+                updateState {
+                    it.updateNicknameFeedback(
+                        feedback = neutralFeedback(ProfileStrings.NicknameChecking),
+                        isCheckingAvailability = true,
+                        isNicknameAvailable = false
+                    )
+                }
+
+                // 입력이 잠시 멈췄을 때만 서버에 중복 확인을 보내서 타이핑 중 호출을 줄입니다.
+                nicknameAvailabilityJob = viewModelScope.launch {
+                    delay(NICKNAME_CHECK_DEBOUNCE_MS)
+
+                    checkNicknameAvailabilityUseCase(nickname)
+                        .onSuccess { available ->
+                            // 이전 요청 응답이 늦게 도착해도 현재 입력값과 다르면 화면을 덮어쓰지 않습니다.
+                            val currentInput = featureState.nicknameEditor?.nicknameInput?.trim()
+                            if (currentInput != nickname) return@launch
+
+                            lastCheckedNickname = nickname
+                            lastCheckedNicknameAvailable = available
+                            updateState {
+                                it.updateNicknameFeedback(
+                                    feedback = if (available) {
+                                        successFeedback(ProfileStrings.NicknameAvailable)
+                                    } else {
+                                        errorFeedback(ProfileStrings.NicknameUnavailable)
+                                    },
+                                    isCheckingAvailability = false,
+                                    isNicknameAvailable = available
+                                )
+                            }
+                        }
+                        .onFailure { throwable ->
+                            val currentInput = featureState.nicknameEditor?.nicknameInput?.trim()
+                            if (currentInput != nickname) return@launch
+
+                            resetNicknameAvailabilityState()
+                            updateState {
+                                it.updateNicknameFeedback(
+                                    feedback = errorFeedback(
+                                        throwable.message ?: ProfileStrings.NicknameCheckFailed
+                                    ),
+                                    isCheckingAvailability = false,
+                                    isNicknameAvailable = false
+                                )
+                            }
+                        }
+                }
+            }
+        }
+    }
+
+    private fun refreshPasswordFeedbacks(showRequired: Boolean = false) {
+        val editor = featureState.passwordEditor ?: return
+
+        val currentPasswordFeedback = when {
+            editor.currentPasswordInput.isBlank() && showRequired ->
+                errorFeedback(ProfileStrings.CurrentPasswordRequired)
+
+            editor.currentPasswordInput.isBlank() -> null
+            else -> null
+        }
+
+        val newPasswordFeedback = when {
+            editor.newPasswordInput.isBlank() && showRequired ->
+                errorFeedback(ProfileStrings.NewPasswordRequired)
+
+            editor.newPasswordInput.isBlank() -> null
+            editor.currentPasswordInput.isNotBlank() &&
+                editor.currentPasswordInput == editor.newPasswordInput ->
+                errorFeedback(ProfileStrings.NewPasswordSameAsCurrent)
+
+            else -> {
+                when (
+                    val validation = AuthInputPolicy.validatePassword(
+                        rawPassword = editor.newPasswordInput,
+                        normalizedUsername = featureState.currentUser?.username
+                            ?.let(AuthInputPolicy::normalizeUsername)
+                            .orEmpty(),
+                        nickname = featureState.resolveNickname()
+                    )
+                ) {
+                    is ValidationResult.Invalid -> errorFeedback(validation.message)
+                    is ValidationResult.Valid -> successFeedback(ProfileStrings.NewPasswordValid)
+                }
+            }
+        }
+
+        val confirmPasswordFeedback = when {
+            editor.confirmPasswordInput.isBlank() && showRequired ->
+                errorFeedback(ProfileStrings.ConfirmPasswordRequired)
+
+            editor.confirmPasswordInput.isBlank() -> null
+            editor.newPasswordInput.isBlank() -> null
+            editor.confirmPasswordInput != editor.newPasswordInput ->
+                errorFeedback(ProfileStrings.PasswordConfirmMismatch)
+
+            else -> successFeedback(ProfileStrings.ConfirmPasswordReady)
+        }
+
+        val canSubmit = editor.currentPasswordInput.isNotBlank() &&
+            newPasswordFeedback?.tone == ProfileFieldFeedbackTone.Success &&
+            confirmPasswordFeedback?.tone == ProfileFieldFeedbackTone.Success
+
+        updateState {
+            it.updatePasswordFeedbacks(
+                currentPasswordFeedback = currentPasswordFeedback,
+                newPasswordFeedback = newPasswordFeedback,
+                confirmPasswordFeedback = confirmPasswordFeedback,
+                canSubmit = canSubmit
+            )
+        }
+    }
+
     private fun logout() {
         if (featureState.isLoggingOut || featureState.isDeletingAccount) return
 
@@ -244,14 +426,6 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /**
-     * 회원 탈퇴를 처리합니다.
-     *
-     * 역할:
-     * - 진행 중에는 중복 호출을 막습니다.
-     * - 성공 시 인증 화면으로 복귀합니다.
-     * - 실패 시 현재 화면에 남아 오류만 안내합니다.
-     */
     private fun deleteAccount() {
         if (featureState.isDeletingAccount || featureState.isLoggingOut) return
 
@@ -272,19 +446,12 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** 화면 진입 시 내 정보를 불러옵니다. */
     private fun loadMyInfo() {
         viewModelScope.launch {
             reloadMyInfo(showLoading = true, suppressErrorMessage = false)
         }
     }
 
-    /**
-     * `/me` 응답으로 프로필 상태를 다시 맞춥니다.
-     *
-     * 저장 직후의 재조회에서는 전체 로딩을 다시 띄우지 않기 위해
-     * [showLoading]을 `false`로 넘길 수 있습니다.
-     */
     private suspend fun reloadMyInfo(
         showLoading: Boolean,
         suppressErrorMessage: Boolean
@@ -307,7 +474,6 @@ class ProfileViewModel @Inject constructor(
         publishState()
     }
 
-    /** 닉네임 저장 API를 호출하고 결과를 상태에 반영합니다. */
     private fun submitNicknameInternal(nickname: String) {
         val hadNickname = !featureState.resolveNickname().isNullOrBlank()
 
@@ -317,6 +483,7 @@ class ProfileViewModel @Inject constructor(
 
             updateNicknameUseCase(nickname)
                 .onSuccess {
+                    resetNicknameAvailabilityState()
                     featureState = featureState.applySavedNickname(nickname)
                     publishState()
 
@@ -329,11 +496,11 @@ class ProfileViewModel @Inject constructor(
                             throwable.message ?: ProfileStrings.NicknameSaveFailed
                         )
                     publishState()
+                    refreshNicknameFeedback()
                 }
         }
     }
 
-    /** 신체 정보 저장 API를 호출하고 결과를 상태에 반영합니다. */
     private fun submitBodyProfileInternal(
         originalEditor: ProfileBodyProfileEditorUiState,
         validated: ValidatedBodyProfile
@@ -368,7 +535,6 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** 비밀번호 변경 API를 호출하고 결과를 상태에 반영합니다. */
     private fun submitPasswordChangeInternal(
         originalEditor: ProfilePasswordEditorUiState,
         validated: ValidatedPasswordChange
@@ -390,11 +556,11 @@ class ProfileViewModel @Inject constructor(
                         throwable.message ?: ProfileStrings.PasswordChangeFailed
                     )
                 publishState()
+                refreshPasswordFeedbacks(showRequired = true)
             }
         }
     }
 
-    /** 로그아웃 결과를 화면 전환 이벤트로 바꿉니다. */
     private suspend fun handleLogoutSuccess(result: LogoutResult) {
         when (result) {
             LogoutResult.ServerConfirmed,
@@ -402,21 +568,18 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /** 신체 정보 편집기의 숫자 입력값을 공통 방식으로 갱신합니다. */
     private fun updateBodyProfileInput(
         transform: (ProfileBodyProfileEditorUiState) -> ProfileBodyProfileEditorUiState
     ) {
         updateState { state -> state.updateBodyProfileEditor(transform) }
     }
 
-    /** 비밀번호 편집기의 입력값을 공통 방식으로 갱신합니다. */
     private fun updatePasswordInput(
         transform: (ProfilePasswordEditorUiState) -> ProfilePasswordEditorUiState
     ) {
         updateState { state -> state.updatePasswordEditor(transform) }
     }
 
-    /** feature 상태를 갱신하고 즉시 UI 상태로 반영합니다. */
     private fun updateState(
         transform: (ProfileFeatureState) -> ProfileFeatureState
     ) {
@@ -424,15 +587,45 @@ class ProfileViewModel @Inject constructor(
         publishState()
     }
 
-    /** 현재 feature 상태를 화면에 전달할 최종 UI 상태로 발행합니다. */
     private fun publishState() {
         _uiState.value = featureState.toUiState()
     }
 
-    /** 화면 하단 스낵바에서 사용할 메시지를 이벤트로 보냅니다. */
     private fun emitMessage(message: String) {
         viewModelScope.launch {
             _uiEvent.emit(ProfileUiEvent.ShowMessage(message))
         }
+    }
+
+    private fun cancelNicknameAvailabilityCheck() {
+        nicknameAvailabilityJob?.cancel()
+        nicknameAvailabilityJob = null
+    }
+
+    private fun resetNicknameAvailabilityState() {
+        cancelNicknameAvailabilityCheck()
+        lastCheckedNickname = null
+        lastCheckedNicknameAvailable = false
+    }
+
+    private fun neutralFeedback(message: String): ProfileFieldFeedback {
+        return ProfileFieldFeedback(
+            message = message,
+            tone = ProfileFieldFeedbackTone.Neutral
+        )
+    }
+
+    private fun successFeedback(message: String): ProfileFieldFeedback {
+        return ProfileFieldFeedback(
+            message = message,
+            tone = ProfileFieldFeedbackTone.Success
+        )
+    }
+
+    private fun errorFeedback(message: String): ProfileFieldFeedback {
+        return ProfileFieldFeedback(
+            message = message,
+            tone = ProfileFieldFeedbackTone.Error
+        )
     }
 }

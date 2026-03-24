@@ -1,11 +1,27 @@
 package com.ddgo.app.feature.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,7 +46,11 @@ fun LoginPasswordScreen(
     onForgotPassword: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val errorMessage = viewModel.errorMessage
+    val passwordFeedback = viewModel.loginPasswordFeedback
+
+    LaunchedEffect(Unit) {
+        viewModel.clearErrorState()
+    }
 
     LaunchedEffect(uiState) {
         when (uiState) {
@@ -60,7 +80,10 @@ fun LoginPasswordScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "뒤로가기"
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -88,21 +111,25 @@ fun LoginPasswordScreen(
 
                 TextField(
                     value = viewModel.password,
-                    onValueChange = viewModel::updatePassword,
-                    placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
+                    onValueChange = viewModel::updateLoginPassword,
+                    placeholder = {
+                        Text("비밀번호", color = Color(0xFF8391A1))
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
+                    isError = passwordFeedback?.tone == AuthFieldFeedbackTone.Error,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
                         focusedIndicatorColor = Color(0xFF1DA1F2),
                         unfocusedIndicatorColor = Color(0xFF1DA1F2),
+                        errorIndicatorColor = Color(0xFFD92D20)
                     )
                 )
 
-                errorMessage?.let { message ->
+                passwordFeedback?.let { feedback ->
                     Spacer(modifier = Modifier.height(8.dp))
-                    AuthInlineErrorMessage(message = message)
+                    AuthInlineFeedbackMessage(feedback = feedback)
                 }
             }
 
@@ -110,7 +137,7 @@ fun LoginPasswordScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 TextButton(
                     onClick = onForgotPassword,
@@ -125,10 +152,12 @@ fun LoginPasswordScreen(
                         )
                     )
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
+
                 Button(
-                    onClick = { viewModel.login() },
-                    enabled = uiState !is AuthUiState.Loading,
+                    onClick = viewModel::login,
+                    enabled = uiState !is AuthUiState.Loading && viewModel.canSubmitLoginWithPassword(),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
@@ -143,7 +172,7 @@ fun LoginPasswordScreen(
                         )
                     } else {
                         Text(
-                            "로그인",
+                            text = "로그인",
                             color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,

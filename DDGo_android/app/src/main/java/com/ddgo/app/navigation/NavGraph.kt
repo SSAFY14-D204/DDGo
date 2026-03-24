@@ -4,9 +4,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -124,25 +121,12 @@ fun NavGraph(
         DevNavigationOverlay(navController = navController)
 
         if (showSessionExpiredDialog) {
-            AlertDialog(
-                onDismissRequest = {},
-                title = {
-                    Text(text = "세션 만료")
-                },
-                text = {
-                    Text(text = "세션이 만료되었어요. 다시 로그인해 주세요.")
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showSessionExpiredDialog = false
-                            navController.navigate(ScreenRoutes.Auth.route) {
-                                popUpTo(0) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        }
-                    ) {
-                        Text(text = "확인")
+            SessionExpiredDialog(
+                onConfirm = {
+                    showSessionExpiredDialog = false
+                    navController.navigate(ScreenRoutes.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
             )

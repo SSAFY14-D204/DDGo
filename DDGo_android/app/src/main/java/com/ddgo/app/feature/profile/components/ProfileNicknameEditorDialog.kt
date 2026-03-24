@@ -32,6 +32,7 @@ internal fun ProfileNicknameEditorDialog(
         confirmTone = ProfileActionTone.Accent,
         message = state.errorMessage,
         isProcessing = state.isSaving,
+        confirmEnabled = state.isNicknameAvailable && !state.isCheckingAvailability,
         onConfirm = onConfirm,
         onDismiss = onDismiss,
         content = {
@@ -40,6 +41,7 @@ internal fun ProfileNicknameEditorDialog(
                 onValueChange = onNicknameChanged,
                 label = ProfileStrings.NicknameFieldLabel,
                 enabled = !state.isSaving,
+                feedback = state.nicknameFeedback,
                 modifier = Modifier.fillMaxWidth()
             )
         }

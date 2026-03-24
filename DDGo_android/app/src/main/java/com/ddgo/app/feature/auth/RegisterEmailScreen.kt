@@ -1,11 +1,22 @@
 package com.ddgo.app.feature.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -20,11 +31,16 @@ import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
-fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: () -> Unit = {}) {
-    val errorMessage = viewModel.errorMessage
+fun RegisterEmailScreen(
+    viewModel: AuthViewModel,
+    onNext: () -> Unit,
+    onBack: () -> Unit = {}
+) {
+    val usernameFeedback = viewModel.registerUsernameFeedback
 
     LaunchedEffect(Unit) {
         viewModel.clearErrorState()
+        viewModel.refreshRegisterUsernameFeedback()
     }
 
     SafeAreaScreen(
@@ -39,7 +55,10 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "뒤로가기"
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -70,26 +89,30 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
 
             TextField(
                 value = viewModel.username,
-                onValueChange = viewModel::updateUsername,
-                placeholder = { Text("이메일", color = Color(0xFF8391A1)) },
+                onValueChange = viewModel::updateRegisterUsername,
+                placeholder = {
+                    Text("이메일", color = Color(0xFF8391A1))
+                },
                 modifier = Modifier.fillMaxWidth(),
+                isError = usernameFeedback?.tone == AuthFieldFeedbackTone.Error,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color(0xFF1DA1F2),
                     unfocusedIndicatorColor = Color(0xFF1DA1F2),
+                    errorIndicatorColor = Color(0xFFD92D20)
                 )
             )
 
-            errorMessage?.let { message ->
+            usernameFeedback?.let { feedback ->
                 Spacer(modifier = Modifier.height(8.dp))
-                AuthInlineErrorMessage(message = message)
+                AuthInlineFeedbackMessage(feedback = feedback)
             }
         }
 
         Button(
             onClick = {
-                if (viewModel.validateUsernameStep() == null) {
+                if (viewModel.validateRegisterUsernameStep() == null) {
                     onNext()
                 }
             },
@@ -98,10 +121,11 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
                 .fillMaxWidth()
                 .height(56.dp),
             shape = RoundedCornerShape(12.dp),
+            enabled = viewModel.canProceedWithRegisterUsername(),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00A3FF))
         ) {
             Text(
-                "다음",
+                text = "다음",
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,

@@ -4,6 +4,7 @@ import com.ddgo.app.domain.model.User
 import com.ddgo.app.feature.profile.mapper.ProfileUiStateMapper
 import com.ddgo.app.feature.profile.model.ProfileBodyProfileEditorUiState
 import com.ddgo.app.feature.profile.model.ProfileBodyProfileSnapshot
+import com.ddgo.app.feature.profile.model.ProfileFieldFeedback
 import com.ddgo.app.feature.profile.model.ProfileNicknameEditorUiState
 import com.ddgo.app.feature.profile.model.ProfilePasswordEditorUiState
 import com.ddgo.app.feature.profile.model.ProfileUiState
@@ -99,6 +100,27 @@ internal data class ProfileFeatureState(
         return copy(
             nicknameEditor = editor.copy(
                 nicknameInput = input,
+                nicknameFeedback = null,
+                isCheckingAvailability = false,
+                isNicknameAvailable = false,
+                errorMessage = null
+            )
+        )
+    }
+
+    fun updateNicknameFeedback(
+        feedback: ProfileFieldFeedback?,
+        isCheckingAvailability: Boolean,
+        isNicknameAvailable: Boolean
+    ): ProfileFeatureState {
+        val editor = nicknameEditor ?: return this
+        if (editor.isSaving) return this
+
+        return copy(
+            nicknameEditor = editor.copy(
+                nicknameFeedback = feedback,
+                isCheckingAvailability = isCheckingAvailability,
+                isNicknameAvailable = isNicknameAvailable,
                 errorMessage = null
             )
         )
@@ -110,6 +132,9 @@ internal data class ProfileFeatureState(
         return copy(
             nicknameEditor = editor.copy(
                 nicknameInput = nickname,
+                nicknameFeedback = null,
+                isCheckingAvailability = false,
+                isNicknameAvailable = false,
                 errorMessage = null,
                 isSaving = true
             )
@@ -122,6 +147,9 @@ internal data class ProfileFeatureState(
         return copy(
             nicknameEditor = editor.copy(
                 nicknameInput = nickname,
+                nicknameFeedback = null,
+                isCheckingAvailability = false,
+                isNicknameAvailable = false,
                 errorMessage = null,
                 isSaving = false
             )
@@ -270,11 +298,35 @@ internal data class ProfileFeatureState(
         )
     }
 
+    fun updatePasswordFeedbacks(
+        currentPasswordFeedback: ProfileFieldFeedback?,
+        newPasswordFeedback: ProfileFieldFeedback?,
+        confirmPasswordFeedback: ProfileFieldFeedback?,
+        canSubmit: Boolean
+    ): ProfileFeatureState {
+        val editor = passwordEditor ?: return this
+        if (editor.isSaving) return this
+
+        return copy(
+            passwordEditor = editor.copy(
+                currentPasswordFeedback = currentPasswordFeedback,
+                newPasswordFeedback = newPasswordFeedback,
+                confirmPasswordFeedback = confirmPasswordFeedback,
+                canSubmit = canSubmit,
+                errorMessage = null
+            )
+        )
+    }
+
     /** 비밀번호 저장 진행 중 상태로 전환합니다. */
     fun markPasswordSaving(): ProfileFeatureState {
         val editor = passwordEditor ?: return this
         return copy(
             passwordEditor = editor.copy(
+                currentPasswordFeedback = null,
+                newPasswordFeedback = null,
+                confirmPasswordFeedback = null,
+                canSubmit = false,
                 errorMessage = null,
                 isSaving = true
             )
@@ -299,6 +351,7 @@ internal data class ProfileFeatureState(
         return copy(
             passwordEditor = editor.copy(
                 errorMessage = message,
+                canSubmit = false,
                 isSaving = false
             )
         )

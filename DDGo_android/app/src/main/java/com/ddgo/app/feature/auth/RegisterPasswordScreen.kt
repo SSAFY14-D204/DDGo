@@ -1,11 +1,24 @@
 package com.ddgo.app.feature.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -23,9 +36,18 @@ import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
-fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, onBack: () -> Unit = {}) {
+fun RegisterPasswordScreen(
+    viewModel: AuthViewModel,
+    onRegComplete: () -> Unit,
+    onBack: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsState()
-    val errorMessage = viewModel.errorMessage
+    val passwordFeedback = viewModel.registerPasswordFeedback
+
+    LaunchedEffect(Unit) {
+        viewModel.clearErrorState()
+        viewModel.refreshRegisterPasswordFeedback()
+    }
 
     LaunchedEffect(uiState) {
         when (uiState) {
@@ -34,7 +56,7 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
                 onRegComplete()
             }
 
-            else -> {}
+            else -> Unit
         }
     }
 
@@ -50,13 +72,16 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
             modifier = Modifier.fillMaxWidth()
         ) {
             IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "뒤로가기"
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "비밀번호를 정확하게 입력해주세요",
+                text = "비밀번호를 설정해 주세요",
                 style = TextStyle(
                     fontFamily = PretendardFamily,
                     fontSize = 24.sp,
@@ -65,7 +90,18 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
                 )
             )
 
-            Spacer(modifier = Modifier.height(60.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "입력하는 동안 바로 조건을 확인해드릴게요.",
+                style = TextStyle(
+                    fontFamily = PretendardFamily,
+                    fontSize = 14.sp,
+                    color = Color(0xFF64788D)
+                )
+            )
+
+            Spacer(modifier = Modifier.height(44.dp))
 
             Text(
                 text = "비밀번호",
@@ -81,47 +117,49 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
 
             TextField(
                 value = viewModel.password,
-                onValueChange = viewModel::updatePassword,
-                placeholder = { Text("비밀번호", color = Color(0xFF8391A1)) },
+                onValueChange = viewModel::updateRegisterPassword,
+                placeholder = {
+                    Text("비밀번호", color = Color(0xFF8391A1))
+                },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
+                isError = passwordFeedback?.tone == AuthFieldFeedbackTone.Error,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color(0xFF1DA1F2),
                     unfocusedIndicatorColor = Color(0xFF1DA1F2),
-                ),
-                trailingIcon = {
-                    Text("~", color = Color(0xFF64788D))
-                }
+                    errorIndicatorColor = Color(0xFFD92D20)
+                )
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            errorMessage?.let { message ->
-                AuthInlineErrorMessage(message = message)
+            passwordFeedback?.let { feedback ->
                 Spacer(modifier = Modifier.height(8.dp))
+                AuthInlineFeedbackMessage(feedback = feedback)
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
                 text = AuthStrings.RegisterPasswordRule,
                 style = TextStyle(
-                    color = Color(0xFFFF3B30),
+                    color = Color(0xFF64788D),
                     fontSize = 12.sp,
+                    lineHeight = 18.sp,
                     fontFamily = PretendardFamily
                 )
             )
         }
 
         Button(
-            onClick = { viewModel.register() },
+            onClick = viewModel::register,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(56.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64788D)),
-            enabled = uiState != AuthUiState.Loading && viewModel.password.isNotBlank()
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00A3FF)),
+            enabled = uiState != AuthUiState.Loading && viewModel.canSubmitRegistration()
         ) {
             if (uiState == AuthUiState.Loading) {
                 CircularProgressIndicator(
@@ -131,7 +169,7 @@ fun RegisterPasswordScreen(viewModel: AuthViewModel, onRegComplete: () -> Unit, 
                 )
             } else {
                 Text(
-                    "다음",
+                    text = AuthStrings.StartNowAction,
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,

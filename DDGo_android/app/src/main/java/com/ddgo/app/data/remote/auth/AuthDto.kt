@@ -60,6 +60,11 @@ data class PasswordResetConfirmRequestDto(
 )
 
 @Serializable
+data class AvailabilityResponseDto(
+    @SerialName("available") val available: Boolean
+)
+
+@Serializable
 data class UserResponseDto(
     @SerialName("id") val id: Long,
     @SerialName("username") val username: String,

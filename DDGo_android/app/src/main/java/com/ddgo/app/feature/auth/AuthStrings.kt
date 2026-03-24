@@ -2,38 +2,39 @@ package com.ddgo.app.feature.auth
 
 internal object AuthStrings {
 
-    const val WelcomeEyebrow = "기록이 남는 클라이밍 루틴"
-    const val WelcomeTitle = "디디고로 도전 기록을 이어가세요"
+    const val WelcomeEyebrow = "클라이밍 기록을 더 선명하게"
+    const val WelcomeTitle = "디디고와 함께\n도전의 흐름을 남겨보세요"
     const val WelcomeDescription =
-        "아이디로 간단히 가입하고 시도, 챌린지, 분석 기록을 계속 쌓을 수 있어요."
+        "시도한 영상과 피드백을 한곳에 모아 두고, 어제보다 나은 움직임을 차근차근 확인해 보세요."
     const val WelcomeRegister = "회원가입"
     const val WelcomeLoginQuestion = "이미 계정이 있나요?"
     const val WelcomeLoginAction = "로그인"
-    const val LoginToRegisterPrefix = "처음이라면"
+    const val LoginToRegisterPrefix = "처음 오셨나요?"
 
     const val UsernameLabel = "아이디"
-    const val UsernamePlaceholder = "로그인에 사용할 아이디"
+    const val UsernamePlaceholder = "가입한 이메일을 입력해 주세요"
     const val PasswordLabel = "비밀번호"
-    const val PasswordPlaceholder = "비밀번호 입력"
+    const val PasswordPlaceholder = "비밀번호를 입력해 주세요"
     const val NextAction = "다음"
     const val LoginAction = "로그인"
-    const val RegisterAction = "가입하기"
-    const val StartNowAction = "가입하고 시작하기"
+    const val RegisterAction = "회원가입"
+    const val StartNowAction = "지금 시작하기"
 
-    const val LoginUsernameTitle = "로그인할 아이디를 입력해 주세요"
+    const val LoginUsernameTitle = "가입한 이메일을 입력해 주세요"
     const val LoginUsernameDescription =
-        "가입한 아이디로 디디고에 다시 들어갈 수 있어요."
+        "로그인에 사용할 이메일을 먼저 확인할게요."
     const val LoginUsernameHelper =
-        "아직 계정이 없다면 아래에서 회원가입을 진행해 주세요."
+        "이메일을 먼저 확인한 뒤 비밀번호 입력 단계로 이어집니다."
     const val LoginPasswordTitle = "비밀번호를 입력해 주세요"
-    const val LoginPasswordDescriptionPrefix = "입력한 계정"
-    const val LoginPasswordDescriptionSuffix = "로 로그인할게요."
+    const val LoginPasswordDescriptionPrefix = "입력한"
+    const val LoginPasswordDescriptionSuffix = "계정으로 로그인합니다."
     const val LoginPasswordHelper =
-        "비밀번호가 맞지 않으면 로그인되지 않아요."
+        "비밀번호가 기억나지 않으면 아래에서 재설정을 진행할 수 있어요."
     const val ForgotPasswordAction = "비밀번호를 잊으셨나요?"
+
     const val PasswordResetTitle = "비밀번호 재설정"
     const val PasswordResetDescription =
-        "가입한 이메일로 재설정 메일을 보내고, 메일에서 받은 링크나 토큰으로 새 비밀번호를 설정할 수 있어요."
+        "가입한 이메일로 재설정 메일을 보내드릴게요. 메일의 링크나 토큰으로 새 비밀번호를 설정할 수 있어요."
     const val PasswordResetEmailLabel = "이메일"
     const val PasswordResetSendAction = "재설정 메일 보내기"
     const val PasswordResetResendAction = "메일 다시 보내기"
@@ -44,61 +45,73 @@ internal object AuthStrings {
     const val PasswordResetNewPasswordLabel = "새 비밀번호"
     const val PasswordResetConfirmPasswordLabel = "새 비밀번호 확인"
     const val PasswordResetCompleteAction = "새 비밀번호로 변경"
-    const val PasswordResetTokenRequired = "재설정 링크 또는 토큰을 입력해 주세요."
+    const val PasswordResetTokenRequired = "메일에서 받은 링크나 토큰을 입력해 주세요."
     const val PasswordResetConfirmRequired = "새 비밀번호 확인을 입력해 주세요."
-    const val PasswordResetPasswordMismatch = "새 비밀번호가 서로 일치하지 않습니다."
+    const val PasswordResetPasswordMismatch = "새 비밀번호가 서로 일치하지 않아요."
     const val PasswordResetRequestFailed =
         "비밀번호 재설정 메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요."
     const val PasswordResetConfirmFailed =
-        "비밀번호 재설정을 완료하지 못했어요. 링크 또는 토큰을 다시 확인해 주세요."
+        "비밀번호 재설정에 실패했어요. 링크를 다시 확인한 뒤 시도해 주세요."
 
-    const val RegisterUsernameTitle = "로그인에 사용할 아이디를 만들어 주세요"
+    const val RegisterUsernameTitle = "회원가입에 사용할 이메일을 입력해 주세요"
     const val RegisterUsernameDescription =
-        "아이디는 회원가입 후 로그인에 계속 사용돼요."
+        "이메일은 로그인 아이디로 사용되며, 중복 여부를 바로 확인해 드려요."
     const val RegisterUsernameHelper =
-        "표시 이름과 신체 정보는 가입 후 프로필에서 이어서 설정할 수 있어요."
+        "이메일 형식이 맞고 이미 가입된 계정이 아니어야 다음 단계로 넘어갈 수 있어요."
     const val RegisterPasswordTitle = "비밀번호를 설정해 주세요"
     const val RegisterPasswordDescription =
-        "가입이 완료되면 바로 로그인되고 프로필에서 정보를 이어서 정리할 수 있어요."
+        "안전하게 사용할 수 있도록 비밀번호 규칙을 바로 확인해 드릴게요."
     const val RegisterPasswordHelper =
-        "현재 가입 단계에서는 아이디와 비밀번호만 설정해요."
+        "입력하면서 바로 피드백을 보고 조건을 맞출 수 있어요."
     const val RegisterPasswordRule =
-        "영문/숫자/특수문자 중 2종 이상, 8~64자. 이메일·닉네임, 1234/qwer, aaa 같은 패턴은 사용할 수 없어요."
+        "영문, 숫자, 특수문자 중 2종 이상을 포함하고 8~64자로 입력해 주세요. 1234, qwer, aaa 같은 쉬운 패턴은 사용할 수 없어요."
+    const val RegisterPasswordValid = "사용 가능한 비밀번호예요."
 
     const val UsernameRequired = "아이디를 입력해 주세요."
     const val UsernameInvalidFormat = "아이디는 이메일 형식으로 입력해 주세요."
     const val UsernameTooLong = "아이디는 255자 이하로 입력해 주세요."
+    const val UsernameAvailabilityChecking = "사용 가능한 아이디인지 확인하고 있어요."
+    const val UsernameAvailable = "사용 가능한 아이디예요."
+    const val UsernameUnavailable = "이미 사용 중인 아이디예요."
+    const val UsernameAvailabilityCheckFailed =
+        "아이디 중복 확인에 실패했어요. 잠시 후 다시 시도해 주세요."
+    const val UsernameAvailabilityPending =
+        "아이디 확인이 아직 끝나지 않았어요. 잠시만 기다려 주세요."
+    const val LoginUsernameChecking = "가입된 아이디인지 확인하고 있어요."
+    const val LoginUsernameNotFound = "아이디가 틀렸어요. 가입한 이메일인지 확인해 주세요."
+    const val LoginUsernameCheckFailed =
+        "아이디 확인에 실패했어요. 잠시 후 다시 시도해 주세요."
     const val PasswordRequired = "비밀번호를 입력해 주세요."
     const val LoginFailed =
-        "로그인에 실패했어요. 아이디와 비밀번호를 확인해 주세요."
+        "로그인에 실패했어요. 아이디와 비밀번호를 다시 확인해 주세요."
     const val KakaoLoginFailed =
         "카카오 로그인에 실패했어요. 잠시 후 다시 시도해 주세요."
     const val KakaoTalkRequired =
-        "카카오톡 앱이 설치되어 있어야 카카오톡으로 로그인할 수 있어요."
+        "카카오톡 설치가 필요해요. 카카오톡을 설치한 뒤 다시 시도해 주세요."
     const val KakaoTalkLoginFailed =
-        "카카오톡 앱으로 로그인하지 못했어요. 카카오톡 상태를 확인한 뒤 다시 시도해 주세요."
+        "카카오톡 로그인에 실패했어요. 권한과 계정 상태를 확인한 뒤 다시 시도해 주세요."
     const val KakaoConsentFailed =
-        "카카오 프로필 정보 동의를 완료하지 못했어요. 다시 시도해 주세요."
+        "카카오 권한 동의에 실패했어요. 다시 시도해 주세요."
     const val KakaoNotConfigured =
-        "카카오 네이티브 앱 키가 설정되지 않았어요. local.properties에 kakao.native.app.key를 추가해 주세요."
+        "카카오 설정이 아직 완료되지 않았어요. local.properties의 kakao.native.app.key를 확인해 주세요."
     const val GoogleLoginFailed =
-        "구글 로그인에 실패했어요. 잠시 후 다시 시도해 주세요."
+        "Google 로그인에 실패했어요. 잠시 후 다시 시도해 주세요."
     const val GoogleAccountReauthFailed =
-        "구글 계정 재인증을 완료하지 못했어요. 기기에서 구글 계정 상태를 확인한 뒤 다시 시도해 주세요."
+        "Google 계정 확인에 실패했어요. 다시 시도해 주세요."
     const val GoogleNotConfigured =
-        "구글 Web Client ID가 설정되지 않았어요. local.properties에 google.web.client.id를 추가해 주세요."
+        "Google Web Client ID 설정이 필요해요. local.properties의 google.web.client.id를 확인해 주세요."
     const val RegisterFailed =
-        "회원가입을 완료하지 못했어요. 입력한 정보를 확인해 주세요."
+        "회원가입에 실패했어요. 입력한 정보를 다시 확인해 주세요."
     const val RegisterAutoLoginFailed =
-        "회원가입은 완료됐지만 자동 로그인에 실패했어요. 다시 로그인해 주세요."
+        "회원가입은 완료됐지만 자동 로그인에 실패했어요. 로그인 화면에서 다시 시도해 주세요."
     const val RegisterCompleted =
-        "가입이 완료됐어요. 닉네임은 프로필에서 바꿀 수 있어요."
+        "회원가입이 완료됐어요. 바로 시작해 볼까요?"
 
     fun loginPasswordDescription(username: String): String {
         return "${LoginPasswordDescriptionPrefix} ${username.ifBlank { UsernamePlaceholder }} ${LoginPasswordDescriptionSuffix}"
     }
 
     fun passwordResetSentDescription(email: String): String {
-        return "$email 주소로 안내 메일을 보냈어요. 메일에 있는 링크 전체를 붙여 넣어도 token 값을 자동으로 읽어올게요."
+        return "$email 주소로 재설정 메일을 보냈어요. 메일의 링크 전체를 붙여 넣거나 token 값만 입력해서 이어서 진행해 주세요."
     }
 }

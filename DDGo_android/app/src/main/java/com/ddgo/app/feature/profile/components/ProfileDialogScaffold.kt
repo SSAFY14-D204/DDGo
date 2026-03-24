@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ddgo.app.feature.profile.model.ProfileActionTone
+import com.ddgo.app.feature.profile.model.ProfileFieldFeedback
+import com.ddgo.app.feature.profile.model.ProfileFieldFeedbackTone
 import com.ddgo.app.feature.profile.style.ProfilePalette
 
 /**
@@ -59,6 +62,7 @@ internal fun ProfileDialogScaffold(
     confirmTone: ProfileActionTone,
     message: String? = null,
     isProcessing: Boolean,
+    confirmEnabled: Boolean = true,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     content: (@Composable ColumnScope.() -> Unit)? = null
@@ -117,6 +121,7 @@ internal fun ProfileDialogScaffold(
                         dismissLabel = dismissLabel,
                         confirmTone = confirmTone,
                         isProcessing = isProcessing,
+                        confirmEnabled = confirmEnabled,
                         onConfirm = onConfirm,
                         onDismiss = onDismiss
                     )
@@ -142,7 +147,8 @@ internal fun ProfileDialogTextField(
     modifier: Modifier = Modifier,
     singleLine: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
-    visualTransformation: VisualTransformation = VisualTransformation.None
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    feedback: ProfileFieldFeedback? = null
 ) {
     OutlinedTextField(
         value = value,
@@ -152,11 +158,23 @@ internal fun ProfileDialogTextField(
         singleLine = singleLine,
         keyboardOptions = keyboardOptions,
         visualTransformation = visualTransformation,
+        isError = feedback?.tone == ProfileFieldFeedbackTone.Error,
         textStyle = TextStyle(
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             color = ProfilePalette.TextPrimary
         ),
+        supportingText = {
+            feedback?.let { support ->
+                Text(
+                    text = support.message,
+                    color = supportTextColor(support.tone),
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
         shape = RoundedCornerShape(18.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = ProfilePalette.TextPrimary,
@@ -168,9 +186,11 @@ internal fun ProfileDialogTextField(
             focusedBorderColor = ProfilePalette.AccentStrong,
             unfocusedBorderColor = ProfilePalette.Divider,
             disabledBorderColor = ProfilePalette.Divider,
+            errorBorderColor = ProfilePalette.Danger,
             focusedLabelColor = ProfilePalette.AccentStrong,
             unfocusedLabelColor = ProfilePalette.TextSecondary,
             disabledLabelColor = ProfilePalette.TextHint,
+            errorLabelColor = ProfilePalette.Danger,
             cursorColor = ProfilePalette.AccentStrong
         ),
         modifier = modifier
@@ -260,6 +280,7 @@ private fun ProfileDialogActions(
     dismissLabel: String,
     confirmTone: ProfileActionTone,
     isProcessing: Boolean,
+    confirmEnabled: Boolean,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -272,7 +293,7 @@ private fun ProfileDialogActions(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
             onClick = onConfirm,
-            enabled = !isProcessing,
+            enabled = !isProcessing && confirmEnabled,
             shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = confirmContainerColor,
@@ -314,5 +335,13 @@ private fun ProfileDialogActions(
                 fontWeight = FontWeight.Medium
             )
         }
+    }
+}
+
+private fun supportTextColor(tone: ProfileFieldFeedbackTone): Color {
+    return when (tone) {
+        ProfileFieldFeedbackTone.Neutral -> ProfilePalette.TextSecondary
+        ProfileFieldFeedbackTone.Success -> Color(0xFF1E8E5A)
+        ProfileFieldFeedbackTone.Error -> ProfilePalette.Danger
     }
 }
