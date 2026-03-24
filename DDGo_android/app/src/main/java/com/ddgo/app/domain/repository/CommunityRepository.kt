@@ -3,6 +3,7 @@ package com.ddgo.app.domain.repository
 import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityFeedPage
+import com.ddgo.app.domain.model.CommunityLikeResult
 import com.ddgo.app.domain.model.CommunityPostDetail
 import com.ddgo.app.domain.model.CommunityPostUpsertRequest
 import com.ddgo.app.domain.model.CommunitySort
@@ -49,13 +50,13 @@ interface CommunityRepository {
         commentId: Long
     ): Result<List<CommunityComment>>
 
-    suspend fun likePost(postId: Long): Result<Unit>
+    suspend fun likePost(postId: Long): Result<CommunityLikeResult>
 
-    suspend fun unlikePost(postId: Long): Result<Unit>
+    suspend fun unlikePost(postId: Long): Result<CommunityLikeResult>
 
-    suspend fun likeComment(commentId: Long): Result<Unit>
+    suspend fun likeComment(commentId: Long): Result<CommunityLikeResult>
 
-    suspend fun unlikeComment(commentId: Long): Result<Unit>
+    suspend fun unlikeComment(commentId: Long): Result<CommunityLikeResult>
 
     suspend fun issueVideoUploadTickets(
         videos: List<CommunityVideoUploadRequest>

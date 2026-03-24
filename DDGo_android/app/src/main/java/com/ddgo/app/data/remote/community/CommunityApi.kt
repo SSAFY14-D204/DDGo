@@ -66,16 +66,16 @@ interface CommunityApi {
     ): ApiResponse<EmptyDto>
 
     @POST("v1/community/posts/{postId}/likes")
-    suspend fun likePost(@Path("postId") postId: Long): ApiResponse<EmptyDto>
+    suspend fun likePost(@Path("postId") postId: Long): ApiResponse<CommunityLikeResponseDto>
 
     @DELETE("v1/community/posts/{postId}/likes")
-    suspend fun unlikePost(@Path("postId") postId: Long): ApiResponse<EmptyDto>
+    suspend fun unlikePost(@Path("postId") postId: Long): ApiResponse<CommunityLikeResponseDto>
 
     @POST("v1/community/comments/{commentId}/likes")
-    suspend fun likeComment(@Path("commentId") commentId: Long): ApiResponse<EmptyDto>
+    suspend fun likeComment(@Path("commentId") commentId: Long): ApiResponse<CommunityLikeResponseDto>
 
     @DELETE("v1/community/comments/{commentId}/likes")
-    suspend fun unlikeComment(@Path("commentId") commentId: Long): ApiResponse<EmptyDto>
+    suspend fun unlikeComment(@Path("commentId") commentId: Long): ApiResponse<CommunityLikeResponseDto>
 
     @POST("v1/community/media/video-urls")
     suspend fun issueVideoUploadUrls(

@@ -3,6 +3,7 @@ package com.ddgo.app.domain.usecase
 import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityFeedPage
+import com.ddgo.app.domain.model.CommunityLikeResult
 import com.ddgo.app.domain.model.CommunityPostDetail
 import com.ddgo.app.domain.model.CommunityPostUpsertRequest
 import com.ddgo.app.domain.model.CommunitySort
@@ -95,7 +96,7 @@ class DeleteCommunityCommentUseCase @Inject constructor(
 class ToggleCommunityPostLikeUseCase @Inject constructor(
     private val communityRepository: CommunityRepository
 ) {
-    suspend operator fun invoke(postId: Long, shouldLike: Boolean): Result<Unit> {
+    suspend operator fun invoke(postId: Long, shouldLike: Boolean): Result<CommunityLikeResult> {
         return if (shouldLike) {
             communityRepository.likePost(postId)
         } else {
@@ -107,7 +108,7 @@ class ToggleCommunityPostLikeUseCase @Inject constructor(
 class ToggleCommunityCommentLikeUseCase @Inject constructor(
     private val communityRepository: CommunityRepository
 ) {
-    suspend operator fun invoke(commentId: Long, shouldLike: Boolean): Result<Unit> {
+    suspend operator fun invoke(commentId: Long, shouldLike: Boolean): Result<CommunityLikeResult> {
         return if (shouldLike) {
             communityRepository.likeComment(commentId)
         } else {

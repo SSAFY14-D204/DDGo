@@ -7,6 +7,12 @@ import com.ddgo.app.domain.model.CommunityPostSummary
 import com.ddgo.app.domain.model.CommunitySort
 import com.ddgo.app.domain.model.CommunityVideoDraft
 
+enum class CommunityFeedTab {
+    Recommended,
+    Popular,
+    Latest
+}
+
 sealed interface CommunityDestination {
     data object Feed : CommunityDestination
     data class Detail(val postId: Long) : CommunityDestination
@@ -26,12 +32,16 @@ data class CommunityComposeState(
 data class CommunityUiState(
     val destination: CommunityDestination = CommunityDestination.Feed,
     val posts: List<CommunityPostSummary> = emptyList(),
+    val selectedFeedTab: CommunityFeedTab = CommunityFeedTab.Recommended,
     val selectedSort: CommunitySort = CommunitySort.LATEST,
     val searchKeyword: String = "",
     val selectedGymId: Long? = null,
     val selectedGymName: String? = null,
     val availableGyms: List<Pair<Long, String>> = emptyList(),
     val isLoadingFeed: Boolean = true,
+    val isLoadingMoreFeed: Boolean = false,
+    val currentFeedPage: Int = 0,
+    val hasMoreFeed: Boolean = true,
     val feedError: String? = null,
     val detail: CommunityPostDetail? = null,
     val comments: List<CommunityComment> = emptyList(),
