@@ -9,20 +9,29 @@ import com.ddgo.app.data.mapper.CommunityMapper.toDomain
 import com.ddgo.app.data.mapper.CommunityMapper.toDto
 import com.ddgo.app.data.mapper.CommunityMapper.toPayload
 import com.ddgo.app.data.mapper.CommunityMapper.toReference
+import com.ddgo.app.data.mapper.GymMapper.toDomain
+import com.ddgo.app.data.mapper.GymMapper.toDomainOrNull
 import com.ddgo.app.data.remote.attempt.AttemptApi
 import com.ddgo.app.data.remote.challenge.ChallengeApi
 import com.ddgo.app.data.remote.community.CommunityApi
 import com.ddgo.app.data.remote.community.CommunityCommentRequestDto
 import com.ddgo.app.data.remote.community.CommunityPostUpsertRequestDto
 import com.ddgo.app.data.remote.community.CommunityVideoUploadUrlRequestDto
+import com.ddgo.app.data.remote.gym.GymApi
+import com.ddgo.app.data.remote.gym.ResolveGymRequestDto
+import com.ddgo.app.data.remote.kakao.KakaoLocalApi
+import com.ddgo.app.data.remote.kakao.KakaoPlaceDocumentDto
 import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityDraftVideoStatus
 import com.ddgo.app.domain.model.CommunityFeedPage
+import com.ddgo.app.domain.model.CommunityLikeResult
+import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.CommunityPostDetail
 import com.ddgo.app.domain.model.CommunityPostUpsertRequest
 import com.ddgo.app.domain.model.CommunitySort
 import com.ddgo.app.domain.model.CommunityVideoDraft
+import com.ddgo.app.domain.model.CommunityVideoUploadFailureException
 import com.ddgo.app.domain.model.CommunityVideoUploadRequest
 import com.ddgo.app.domain.model.CommunityVideoUploadTicket
 import com.ddgo.app.domain.repository.CommunityRepository
@@ -47,6 +56,8 @@ class CommunityRepositoryImpl @Inject constructor(
     private val communityApi: CommunityApi,
     private val challengeApi: ChallengeApi,
     private val attemptApi: AttemptApi,
+    private val kakaoLocalApi: KakaoLocalApi,
+    private val gymApi: GymApi,
     @Named("DirectUploadOkHttpClient") private val directUploadOkHttpClient: OkHttpClient
 ) : CommunityRepository {
 
@@ -69,10 +80,7 @@ class CommunityRepositoryImpl @Inject constructor(
         if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "게시글 상세를 불러오지 못했어요." })
         }
-        val detail = response.data.toDomain()
-        detail.copy(
-            videos = detail.videos.map { it.copy(playbackUrl = toEmulatorAccessibleUrl(it.playbackUrl)) }
-        )
+        response.data.toDomain().toEmulatorAccessibleDetail()
     }
 
     override suspend fun createPost(request: CommunityPostUpsertRequest): Result<CommunityPostDetail> = runCatching {
@@ -88,10 +96,7 @@ class CommunityRepositoryImpl @Inject constructor(
         if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "게시글을 작성하지 못했어요." })
         }
-        val detail = response.data.toDomain()
-        detail.copy(
-            videos = detail.videos.map { it.copy(playbackUrl = toEmulatorAccessibleUrl(it.playbackUrl)) }
-        )
+        response.data.toDomain().toEmulatorAccessibleDetail()
     }
 
     override suspend fun updatePost(
@@ -111,10 +116,7 @@ class CommunityRepositoryImpl @Inject constructor(
         if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "게시글을 수정하지 못했어요." })
         }
-        val detail = response.data.toDomain()
-        detail.copy(
-            videos = detail.videos.map { it.copy(playbackUrl = toEmulatorAccessibleUrl(it.playbackUrl)) }
-        )
+        response.data.toDomain().toEmulatorAccessibleDetail()
     }
 
     override suspend fun deletePost(postId: Long): Result<Unit> = runCatching {
@@ -174,32 +176,36 @@ class CommunityRepositoryImpl @Inject constructor(
         getComments(postId).getOrThrow()
     }
 
-    override suspend fun likePost(postId: Long): Result<Unit> = runCatching {
+    override suspend fun likePost(postId: Long): Result<CommunityLikeResult> = runCatching {
         val response = communityApi.likePost(postId)
-        if (!response.success) {
+        if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "게시글 좋아요를 반영하지 못했어요." })
         }
+        response.data.toDomain()
     }
 
-    override suspend fun unlikePost(postId: Long): Result<Unit> = runCatching {
+    override suspend fun unlikePost(postId: Long): Result<CommunityLikeResult> = runCatching {
         val response = communityApi.unlikePost(postId)
-        if (!response.success) {
+        if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "게시글 좋아요를 반영하지 못했어요." })
         }
+        response.data.toDomain()
     }
 
-    override suspend fun likeComment(commentId: Long): Result<Unit> = runCatching {
+    override suspend fun likeComment(commentId: Long): Result<CommunityLikeResult> = runCatching {
         val response = communityApi.likeComment(commentId)
-        if (!response.success) {
+        if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "댓글 좋아요를 반영하지 못했어요." })
         }
+        response.data.toDomain()
     }
 
-    override suspend fun unlikeComment(commentId: Long): Result<Unit> = runCatching {
+    override suspend fun unlikeComment(commentId: Long): Result<CommunityLikeResult> = runCatching {
         val response = communityApi.unlikeComment(commentId)
-        if (!response.success) {
+        if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "댓글 좋아요를 반영하지 못했어요." })
         }
+        response.data.toDomain()
     }
 
     override suspend fun issueVideoUploadTickets(
@@ -221,7 +227,7 @@ class CommunityRepositoryImpl @Inject constructor(
         runCatching {
             val uploadUri = Uri.parse(ticket.uploadUrl)
             if (uploadUri.host.equals("minio", ignoreCase = true)) {
-                throw IllegalStateException("백엔드가 외부에서 접근 가능한 업로드 URL을 반환해야 해요.")
+                throw IllegalStateException("서버가 기기에서 접근할 수 없는 내부 업로드 주소를 반환했어요.")
             }
 
             val localUri = requireNotNull(draft.localUri) { "로컬 영상 URI가 없어요." }
@@ -233,7 +239,7 @@ class CommunityRepositoryImpl @Inject constructor(
 
                 override fun writeTo(sink: BufferedSink) {
                     openInputStream(videoUri).use { inputStream ->
-                        requireNotNull(inputStream) { "업로드할 영상 스트림을 열지 못했어요." }
+                        requireNotNull(inputStream) { "업로드할 영상을 열지 못했어요." }
                         sink.writeAll(inputStream.source())
                     }
                 }
@@ -262,7 +268,7 @@ class CommunityRepositoryImpl @Inject constructor(
     override suspend fun getChallengeReferences(): Result<List<CommunityChallengeReference>> = runCatching {
         val challengesResponse = challengeApi.getChallenges()
         if (!challengesResponse.success || challengesResponse.data == null) {
-            throw IllegalStateException(challengesResponse.message.ifBlank { "챌린지 목록을 불러오지 못했어요." })
+            throw IllegalStateException(challengesResponse.message.ifBlank { "챌린지 참고 목록을 불러오지 못했어요." })
         }
 
         challengesResponse.data.map { challenge ->
@@ -273,7 +279,7 @@ class CommunityRepositoryImpl @Inject constructor(
                 ?.map { it.toReference(challenge.id) }
                 .orEmpty()
 
-            challenge.toReference(attempts)
+            challenge.toReference(attempts).enrichGymReference()
         }
     }
 
@@ -299,8 +305,17 @@ class CommunityRepositoryImpl @Inject constructor(
             }
         ).getOrThrow()
 
+        if (tickets.size != pending.size) {
+            throw IllegalStateException("영상 업로드 준비에 필요한 정보가 일부 누락되었어요.")
+        }
+
         val uploaded = pending.zip(tickets).map { (draft, ticket) ->
-            uploadVideo(ticket, draft).getOrThrow()
+            uploadVideo(ticket, draft).getOrElse { throwable ->
+                throw CommunityVideoUploadFailureException(
+                    draftId = draft.id,
+                    message = throwable.message ?: "영상 업로드에 실패했어요."
+                )
+            }
         }
 
         val uploadedById = uploaded.associateBy { it.id }
@@ -316,7 +331,9 @@ class CommunityRepositoryImpl @Inject constructor(
             val fileName = resolveFileName(uri)
             val contentType = resolveContentType(uri, fileName)
             val fileSize = resolveFileSize(uri)
-            val durationMs = resolveDuration(uri)
+            val durationMs = requireNotNull(resolveDuration(uri)?.takeIf { it > 0L }) {
+                "영상 길이를 확인할 수 없어 준비하지 못했어요."
+            }
 
             CommunityVideoDraft(
                 id = uriString,
@@ -383,7 +400,7 @@ class CommunityRepositoryImpl @Inject constructor(
         }
 
         openInputStream(uri).use { inputStream ->
-            requireNotNull(inputStream) { "영상 크기를 읽지 못했어요." }
+            requireNotNull(inputStream) { "선택한 영상 크기를 읽지 못했어요." }
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
             var totalBytes = 0L
             while (true) {
@@ -438,4 +455,101 @@ class CommunityRepositoryImpl @Inject constructor(
                 .toString()
         }.getOrDefault(url)
     }
+
+    private suspend fun CommunityChallengeReference.enrichGymReference(): CommunityChallengeReference {
+        if (gymId != null) return this
+
+        val resolvedGym = resolveGymByName(gymName) ?: return this
+        return copy(
+            gymId = resolvedGym.first,
+            gymName = resolvedGym.second
+        )
+    }
+
+    private suspend fun resolveGymByName(gymName: String): Pair<Long, String>? {
+        val nearbyPlace = searchGymPlaceByName(gymName) ?: return null
+        val response = runCatching {
+            gymApi.resolveGym(
+                ResolveGymRequestDto(
+                    mapProvider = "KAKAO",
+                    externalPlaceId = nearbyPlace.externalPlaceId,
+                    placeName = nearbyPlace.placeName,
+                    addressName = nearbyPlace.addressName,
+                    roadAddressName = nearbyPlace.roadAddressName,
+                    latitude = nearbyPlace.latitude,
+                    longitude = nearbyPlace.longitude
+                )
+            )
+        }.getOrNull() ?: return null
+
+        val data = response.data ?: return null
+        if (!response.success) return null
+
+        val resolvedGym = data.toDomain()
+        return resolvedGym.gymId.toLong() to resolvedGym.gym.displayName
+    }
+
+    private suspend fun searchGymPlaceByName(gymName: String): NearbyPlace? {
+        val documents = runCatching {
+            kakaoLocalApi.searchPlacesByKeyword(
+                query = gymName,
+                sort = null,
+                size = 10
+            ).documents
+        }.getOrDefault(emptyList())
+
+        val matchingDocument = documents
+            .filter(::isClimbingRelevant)
+            .sortedByDescending { scoreGymNameMatch(it, gymName) }
+            .firstOrNull()
+            ?: return null
+
+        return matchingDocument.toDomainOrNull()
+    }
+
+    private fun isClimbingRelevant(document: KakaoPlaceDocumentDto): Boolean {
+        val searchableText = buildString {
+            append(document.placeName)
+            append(' ')
+            append(document.categoryName.orEmpty())
+            append(' ')
+            append(document.categoryGroupName.orEmpty())
+        }.lowercase()
+
+        val climbingKeywords = listOf(
+            "클라이밍",
+            "암벽",
+            "암장",
+            "볼더링",
+            "climbing",
+            "bouldering"
+        )
+
+        return climbingKeywords.any(searchableText::contains)
+    }
+
+    private fun scoreGymNameMatch(document: KakaoPlaceDocumentDto, gymName: String): Int {
+        val normalizedPlaceName = document.placeName.normalizeGymText()
+        val normalizedGymName = gymName.normalizeGymText()
+
+        return when {
+            normalizedPlaceName == normalizedGymName -> 3
+            normalizedPlaceName.contains(normalizedGymName) -> 2
+            normalizedGymName.contains(normalizedPlaceName) -> 1
+            else -> 0
+        }
+    }
+
+    private fun String.normalizeGymText(): String {
+        return lowercase()
+            .replace(" ", "")
+            .replace("클라이밍", "")
+            .replace("암벽", "")
+            .replace("센터", "")
+            .replace("gym", "")
+            .replace("climbing", "")
+    }
+
+    private fun CommunityPostDetail.toEmulatorAccessibleDetail(): CommunityPostDetail =
+        copy(videos = videos.map { it.copy(playbackUrl = toEmulatorAccessibleUrl(it.playbackUrl)) })
 }

@@ -3,6 +3,7 @@ package com.ddgo.app.data.mapper
 import com.ddgo.app.data.remote.attempt.AttemptDetailResponseDto
 import com.ddgo.app.data.remote.challenge.ChallengeListResponseDto
 import com.ddgo.app.data.remote.community.CommunityCommentDto
+import com.ddgo.app.data.remote.community.CommunityLikeResponseDto
 import com.ddgo.app.data.remote.community.CommunityPostDetailResponseDto
 import com.ddgo.app.data.remote.community.CommunityPostPageResponseDto
 import com.ddgo.app.data.remote.community.CommunityPostSummaryDto
@@ -14,6 +15,7 @@ import com.ddgo.app.domain.model.CommunityAttemptReference
 import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityFeedPage
+import com.ddgo.app.domain.model.CommunityLikeResult
 import com.ddgo.app.domain.model.CommunityPostDetail
 import com.ddgo.app.domain.model.CommunityPostSummary
 import com.ddgo.app.domain.model.CommunityVideoAttachment
@@ -61,7 +63,8 @@ object CommunityMapper {
         viewCount = viewCount,
         isLiked = isLiked,
         isMine = isMine,
-        videos = videos.sortedBy { it.sortOrder }.map { it.toDomain() }
+        videos = videos.sortedBy { it.sortOrder }.map { it.toDomain() },
+        comments = comments.sortedBy { it.createdAt }.map { it.toDomain(id) }
     )
 
     fun CommunityVideoDto.toDomain(): CommunityVideoAttachment = CommunityVideoAttachment(
@@ -86,6 +89,12 @@ object CommunityMapper {
         isLiked = isLiked,
         isMine = isMine,
         replies = replies.sortedBy { it.createdAt }.map { it.toDomain(postId) }
+    )
+
+    fun CommunityLikeResponseDto.toDomain(): CommunityLikeResult = CommunityLikeResult(
+        targetId = targetId,
+        liked = liked,
+        likeCount = likeCount
     )
 
     fun CommunityVideoUploadTicketDto.toDomain(): CommunityVideoUploadTicket = CommunityVideoUploadTicket(

@@ -50,7 +50,8 @@ data class CommunityPostDetail(
     val viewCount: Int,
     val isLiked: Boolean,
     val isMine: Boolean,
-    val videos: List<CommunityVideoAttachment>
+    val videos: List<CommunityVideoAttachment>,
+    val comments: List<CommunityComment> = emptyList()
 )
 
 data class CommunityVideoAttachment(
@@ -81,6 +82,17 @@ data class CommunityVideoUploadTicket(
     val uploadUrl: String,
     val objectKey: String
 )
+
+data class CommunityLikeResult(
+    val targetId: Long,
+    val liked: Boolean,
+    val likeCount: Int
+)
+
+class CommunityVideoUploadFailureException(
+    val draftId: String,
+    override val message: String
+) : IllegalStateException(message)
 
 data class CommunityVideoDraft(
     val id: String,

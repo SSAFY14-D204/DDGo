@@ -51,7 +51,8 @@ data class CommunityPostDetailResponseDto(
     val isLiked: Boolean = false,
     @SerialName("mine")
     val isMine: Boolean = false,
-    val videos: List<CommunityVideoDto> = emptyList()
+    val videos: List<CommunityVideoDto> = emptyList(),
+    val comments: List<CommunityCommentDto> = emptyList()
 )
 
 @Serializable
@@ -104,6 +105,13 @@ data class CommunityCommentDto(
 data class CommunityCommentRequestDto(
     val content: String,
     val parentCommentId: Long? = null
+)
+
+@Serializable
+data class CommunityLikeResponseDto(
+    val targetId: Long,
+    val liked: Boolean,
+    val likeCount: Int
 )
 
 @Serializable
