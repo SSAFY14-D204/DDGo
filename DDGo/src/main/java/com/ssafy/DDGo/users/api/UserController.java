@@ -5,16 +5,19 @@ import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
 import com.ssafy.DDGo.users.application.UserPasswordResetService;
 import com.ssafy.DDGo.users.application.UserService;
+import com.ssafy.DDGo.users.dto.request.NicknameAvailabilityCheckRequest;
 import com.ssafy.DDGo.users.dto.request.PasswordResetConfirmRequest;
 import com.ssafy.DDGo.users.dto.request.PasswordResetMailRequest;
 import com.ssafy.DDGo.users.dto.request.SocialLoginRequest;
 import com.ssafy.DDGo.users.dto.request.TokenRefreshRequest;
+import com.ssafy.DDGo.users.dto.request.UsernameAvailabilityCheckRequest;
 import com.ssafy.DDGo.users.dto.request.UserLoginRequest;
 import com.ssafy.DDGo.users.dto.request.UserNicknameUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserOnboardRequest;
 import com.ssafy.DDGo.users.dto.request.UserPasswordUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserProfileUpdateRequest;
 import com.ssafy.DDGo.users.dto.request.UserRegisterRequest;
+import com.ssafy.DDGo.users.dto.response.DuplicateCheckResponse;
 import com.ssafy.DDGo.users.dto.response.TokenRefreshResponse;
 import com.ssafy.DDGo.users.dto.response.UserInfoResponse;
 import com.ssafy.DDGo.users.dto.response.UserLoginResponse;
@@ -31,6 +34,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -135,6 +139,28 @@ public class UserController {
               "code": "A002",
               "message": "유효하지 않거나 만료된 비밀번호 재설정 토큰입니다.",
               "data": null
+            }
+            """;
+
+    private static final String CHECK_USERNAME_SUCCESS_EXAMPLE = """
+            {
+              "success": true,
+              "code": null,
+              "message": "아이디 중복 확인이 완료되었습니다.",
+              "data": {
+                "available": true
+              }
+            }
+            """;
+
+    private static final String CHECK_NICKNAME_SUCCESS_EXAMPLE = """
+            {
+              "success": true,
+              "code": null,
+              "message": "닉네임 중복 확인이 완료되었습니다.",
+              "data": {
+                "available": true
+              }
             }
             """;
 
@@ -337,5 +363,34 @@ public class UserController {
         }
         userService.logout(bearerToken.substring(7));
         return ResponseEntity.ok(ApiResponse.success("로그아웃이 완료되었습니다.", null));
+    }
+    @Operation(summary = "아이디 중복 확인", description = "회원가입에 사용할 아이디(이메일 형식)의 사용 가능 여부를 확인합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "아이디 중복 확인 성공",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(name = "success", value = CHECK_USERNAME_SUCCESS_EXAMPLE)))
+    })
+    @GetMapping("/check-username")
+    public ResponseEntity<ApiResponse<DuplicateCheckResponse>> checkUsernameAvailability(
+            @Valid @ModelAttribute UsernameAvailabilityCheckRequest request) {
+        DuplicateCheckResponse response = userService.checkUsernameAvailability(request.getUsername());
+        return ResponseEntity.ok(ApiResponse.success("아이디 중복 확인이 완료되었습니다.", response));
+    }
+
+    @Operation(summary = "닉네임 중복 확인", description = "프로필 수정 등에 사용할 닉네임의 사용 가능 여부를 확인합니다.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "닉네임 중복 확인 성공",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(name = "success", value = CHECK_NICKNAME_SUCCESS_EXAMPLE)))
+    })
+    @GetMapping("/check-nickname")
+    public ResponseEntity<ApiResponse<DuplicateCheckResponse>> checkNicknameAvailability(
+            @Valid @ModelAttribute NicknameAvailabilityCheckRequest request) {
+        DuplicateCheckResponse response = userService.checkNicknameAvailability(request.getNickname());
+        return ResponseEntity.ok(ApiResponse.success("닉네임 중복 확인이 완료되었습니다.", response));
     }
 }
