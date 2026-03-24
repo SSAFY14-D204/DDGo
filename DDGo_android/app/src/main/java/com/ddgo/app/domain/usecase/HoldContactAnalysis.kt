@@ -95,7 +95,8 @@ data class AttemptHoldReachResult(
     val highestReachedFrameTimeMs: Long?,
     val totalHoldCount: Int,
     val contactedHoldNos: Set<Int>,
-    val reachedRatio: Float
+    val reachedRatio: Float,
+    val completedWithBothHandsOnEndHold: Boolean = false
 ) {
     val highestReachedProgress: Float?
         get() = highestReachedHold?.normalizedProgress
@@ -265,15 +266,18 @@ fun analyzeAttemptHoldReach(
             highestReachedFrameTimeMs = null,
             totalHoldCount = totalHoldCount,
             contactedHoldNos = emptySet(),
-            reachedRatio = 0f
+            reachedRatio = 0f,
+            completedWithBothHandsOnEndHold = false
         ).also { result ->
             logAttemptHoldReachSummary(result)
         }
     }
 
+    val endHoldNo = holds.resolveEndHoldNo()
     var highestReachedHold: HoldNumbered? = null
     var highestReachedFrameTimeMs: Long? = null
     val contactedHoldNos = linkedSetOf<Int>()
+    var completedWithBothHandsOnEndHold = false
     var attemptStarted = false
     var minHipYSinceAttemptStart: Float? = null
     var previousPose: Pose? = null
@@ -313,6 +317,13 @@ fun analyzeAttemptHoldReach(
         attemptStarted = true
 
         contacts.mapTo(contactedHoldNos) { it.holdNo }
+        if (!completedWithBothHandsOnEndHold && endHoldNo != null) {
+            val endHoldContact = contacts.firstOrNull { it.holdNo == endHoldNo }
+            completedWithBothHandsOnEndHold =
+                endHoldContact?.handSides?.containsAll(
+                    setOf(ContactHand.LEFT, ContactHand.RIGHT)
+                ) == true
+        }
 
         val frameHighest = contacts.maxByOrNull { it.holdNo }?.hold ?: continue
         if (highestReachedHold == null || frameHighest.holdNo > highestReachedHold!!.holdNo) {
@@ -334,7 +345,8 @@ fun analyzeAttemptHoldReach(
         highestReachedFrameTimeMs = highestReachedFrameTimeMs,
         totalHoldCount = totalHoldCount,
         contactedHoldNos = contactedHoldNos.toSet(),
-        reachedRatio = reachedRatio
+        reachedRatio = reachedRatio,
+        completedWithBothHandsOnEndHold = completedWithBothHandsOnEndHold
     ).also { result ->
         logAttemptHoldReachSummary(result)
     }
@@ -364,6 +376,10 @@ fun summarizeHoldReachResults(
         totalHoldCount = totalHoldCount,
         averageReachedRatio = averageReachedRatio
     )
+}
+
+internal fun List<HoldNumbered>.resolveEndHoldNo(): Int? {
+    return firstOrNull(HoldNumbered::isEnd)?.holdNo ?: maxOfOrNull(HoldNumbered::holdNo)
 }
 
 private fun extractHands(landmarks: List<PoseLandmark>): List<HandPose> {
@@ -569,7 +585,8 @@ private fun logAttemptHoldReachSummary(result: AttemptHoldReachResult) {
         Log.i(
             HOLD_CONTACT_LOG_TAG,
             "$HOLD_CONTACT_LOG_PREFIX 분석 요약: highestHoldNo=${result.highestReachedHoldNo}, " +
-                "contacted=${result.contactedHoldNos}"
+                "contacted=${result.contactedHoldNos}, " +
+                "completedWithBothHandsOnEndHold=${result.completedWithBothHandsOnEndHold}"
         )
     }
 }

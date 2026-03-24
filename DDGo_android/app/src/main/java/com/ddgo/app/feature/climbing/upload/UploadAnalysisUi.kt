@@ -110,7 +110,7 @@ internal fun buildAttemptSummaries(
         val seed = safeAttemptResults[index % safeAttemptResults.size]
         val points = seed.second.takeIf { it.isNotEmpty() } ?: defaultAnalysisPoints()
         val holdReachResult = holdReachResults.getOrNull(index)
-        val isSuccess = holdReachResult?.let { it.highestReachedHoldNo >= safeTotalHolds } ?:
+        val isSuccess = holdReachResult?.completedWithBothHandsOnEndHold ?:
             seed.first
         val progressBase = when {
             isSuccess -> 0.88f

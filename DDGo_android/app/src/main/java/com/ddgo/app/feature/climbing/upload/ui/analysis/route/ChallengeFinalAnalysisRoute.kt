@@ -35,18 +35,23 @@ fun ChallengeFinalAnalysisRoute(
         ?: viewModel.detectedHolds.size.takeIf { it > 0 }
         ?: 0
     val attemptCount = max(
-        viewModel.playbackAttemptUris.size,
-        viewModel.attemptAiAnalysisResults.size
+        max(
+            viewModel.playbackAttemptUris.size,
+            viewModel.attemptAiAnalysisResults.size
+        ),
+        viewModel.attemptHoldReachResults.size
     ).coerceAtLeast(1)
     val attemptSummaries = remember(
         attemptCount,
         totalHolds,
-        viewModel.attemptAiAnalysisResults
+        viewModel.attemptAiAnalysisResults,
+        viewModel.attemptHoldReachResults
     ) {
         buildFinalAnalysisAttemptSummaries(
             attemptCount = attemptCount,
             totalHolds = totalHolds,
-            aiResults = viewModel.attemptAiAnalysisResults
+            aiResults = viewModel.attemptAiAnalysisResults,
+            holdReachResults = viewModel.attemptHoldReachResults
         )
     }
     val challengeSummary = remember(attemptSummaries, totalHolds) {
