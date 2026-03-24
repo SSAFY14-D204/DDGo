@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
@@ -28,7 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -48,8 +47,13 @@ fun AnalysisLoadingScreen(
     val finalAnalysisPreparationUiState by viewModel.finalAnalysisPreparationUiState.collectAsState()
     val phase = viewModel.analysisLoadingPhase
     val screenShownAtMillis = remember(phase) { SystemClock.elapsedRealtime() }
+    val ddLoadingBaseSize = 220.dp
+    val ddLoadingScale = 1.2f
+    val ddLoadingSize = ddLoadingBaseSize * ddLoadingScale
+    val scanLightScale = 2.5f
+    val scanTravelAmplitude = ddLoadingSize.value * 0.6f
     val phaseTitle = when (phase) {
-        AnalysisLoadingPhase.AttemptResultPreparation -> "자세를 분석중입니다."
+        AnalysisLoadingPhase.AttemptResultPreparation -> "디디고가 자세를 분석하고 있어요"
         AnalysisLoadingPhase.FinalAnalysisPreparation -> "최종 결과물을 가져오고 있습니다."
     }
     val isSuccess = when (phase) {
@@ -119,8 +123,8 @@ fun AnalysisLoadingScreen(
 
     val infiniteTransition = rememberInfiniteTransition(label = "scan")
     val offsetY by infiniteTransition.animateFloat(
-        initialValue = -100f,
-        targetValue = 100f,
+        initialValue = -scanTravelAmplitude,
+        targetValue = scanTravelAmplitude,
         animationSpec = infiniteRepeatable(
             animation = tween(1500, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
@@ -187,32 +191,31 @@ fun AnalysisLoadingScreen(
 
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(250.dp)
+                modifier = Modifier.size(300.dp)
             ) {
-                Box(
+                Image(
+                    painter = painterResource(id = R.drawable.dd_loading),
+                    contentDescription = "DDGO loading character",
                     modifier = Modifier
-                        .size(200.dp)
-                        .background(Color.DarkGray, shape = RoundedCornerShape(24.dp))
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_ddgo_mascot),
-                        contentDescription = "DDGO mascot",
-                        modifier = Modifier
-                            .size(120.dp)
-                            .align(Alignment.Center)
-                    )
-                }
+                        .size(ddLoadingBaseSize)
+                        .align(Alignment.Center)
+                        .graphicsLayer {
+                            scaleX = ddLoadingScale
+                            scaleY = ddLoadingScale
+                        }
+                )
 
-                Box(
+                Image(
+                    painter = painterResource(id = R.drawable.scan_light_loading),
+                    contentDescription = "Scan light",
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .height(8.dp)
+                        .fillMaxWidth()
+                        .align(Alignment.Center)
                         .offset(y = offsetY.dp)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color(0xFF42A5F5), Color.Transparent)
-                            )
-                        )
+                        .graphicsLayer {
+                            scaleX = scanLightScale
+                            scaleY = scanLightScale
+                        }
                 )
             }
         }

@@ -206,14 +206,6 @@ object NetworkModule {
         return retrofit.create(com.ddgo.app.data.remote.ai.AiAnalysisApi::class.java)
     }
 
-    @Provides
-    @Singleton
-    fun provideAiRealtimeSessionApi(
-        @Named("AiServerRetrofit") retrofit: Retrofit
-    ): com.ddgo.app.data.remote.ai.AiRealtimeSessionApi {
-        return retrofit.create(com.ddgo.app.data.remote.ai.AiRealtimeSessionApi::class.java)
-    }
-
     /**
      * presigned 직접 업로드 전용 순수 OkHttpClient를 제공합니다.
      *

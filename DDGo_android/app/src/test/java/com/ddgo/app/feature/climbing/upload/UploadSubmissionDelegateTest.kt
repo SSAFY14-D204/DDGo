@@ -11,9 +11,7 @@ import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
-import com.ddgo.app.domain.usecase.AttachAiRealtimeContextUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
-import com.ddgo.app.domain.usecase.FinalizeAiRealtimeSessionUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.HoldRole
@@ -38,9 +36,7 @@ class UploadSubmissionDelegateTest {
             uploadAttemptVideoUseCase = mockk<UploadAttemptVideoUseCase>(relaxed = true),
             endAttemptUseCase = mockk<EndAttemptUseCase>(relaxed = true),
             getMyInfoUseCase = mockk<GetMyInfoUseCase>(relaxed = true),
-            analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>(relaxed = true),
-            attachAiRealtimeContextUseCase = mockk<AttachAiRealtimeContextUseCase>(relaxed = true),
-            finalizeAiRealtimeSessionUseCase = mockk<FinalizeAiRealtimeSessionUseCase>(relaxed = true)
+            analyzeAttemptWithAiUseCase = mockk<AnalyzeAttemptWithAiUseCase>(relaxed = true)
         )
         val callbacks = FakeSubmissionCallbacks(
             readyPlaybackUris = listOf("file:///attempt.mp4")
@@ -62,7 +58,6 @@ class UploadSubmissionDelegateTest {
             ),
             bestFrameBitmap = mockk<Bitmap>(relaxed = true),
             aiMode = AiAnalysisMode.FAST,
-            primaryRealtimeSessionId = null,
             holdCoordinates = listOf(
                 ChallengeHoldCoordinate(
                     holdNo = 1,
@@ -117,6 +112,8 @@ class UploadSubmissionDelegateTest {
                         poseValidityFrames = emptyList(),
                         overlayCache = null,
                         personObservationStartTimeMs = null,
+                        wallArrivalTimeMs = null,
+                        stallSegment = null,
                         climbEndDetection = null,
                         handPeakAnnotation = null,
                         timelinePoints = emptyList(),

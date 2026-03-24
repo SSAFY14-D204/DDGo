@@ -1,4 +1,4 @@
-package com.ddgo.app.feature.climbing.record.ui
+﻿package com.ddgo.app.feature.climbing.record.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -30,7 +30,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FlashOff
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import com.ddgo.app.core.ui.theme.NeutralBackground
 import com.ddgo.app.core.ui.theme.NeutralSurface
 import com.ddgo.app.core.ui.theme.Primary80
-import com.ddgo.app.core.ui.theme.Tertiary80
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.feature.climbing.record.presentation.RecordUiState
@@ -75,7 +73,6 @@ fun RealtimeRecordPage(
     isTorchAvailable: Boolean,
     locationMessage: String?,
     isResolvingLocation: Boolean,
-    attemptStatusLabel: String?,
     previewContent: @Composable BoxScope.() -> Unit,
     overlayContent: @Composable BoxScope.() -> Unit,
     onNavigateBack: () -> Unit,
@@ -87,8 +84,6 @@ fun RealtimeRecordPage(
     onSelectDifficulty: (GymGrade) -> Unit,
     onTapShutter: () -> Unit,
     onLongPressShutter: () -> Unit,
-    onTapFinish: () -> Unit,
-    onTapRetake: () -> Unit,
     onTapFlash: () -> Unit,
     onSelectHoldColor: (String) -> Unit,
     onDismissHoldColorSheet: () -> Unit
@@ -128,10 +123,7 @@ fun RealtimeRecordPage(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                TopChrome(
-                    attemptStatusLabel = attemptStatusLabel,
-                    onNavigateBack = onNavigateBack
-                )
+                TopChrome(onNavigateBack = onNavigateBack)
 
                 if (!shouldShowSetupOverlay) {
                     Spacer(modifier = Modifier.height(14.dp))
@@ -148,8 +140,6 @@ fun RealtimeRecordPage(
                 overlayUiState = realtimeOverlayUiState,
                 isTorchEnabled = isTorchEnabled,
                 isTorchAvailable = isTorchAvailable,
-                onTapFinish = onTapFinish,
-                onTapRetake = onTapRetake,
                 onTapFlash = onTapFlash,
                 onTapShutter = onTapShutter,
                 onLongPressShutter = onLongPressShutter
@@ -174,10 +164,7 @@ fun RealtimeRecordPage(
 }
 
 @Composable
-private fun TopChrome(
-    attemptStatusLabel: String?,
-    onNavigateBack: () -> Unit
-) {
+private fun TopChrome(onNavigateBack: () -> Unit) {
     Column {
         Box(modifier = Modifier.fillMaxWidth()) {
             Surface(
@@ -204,22 +191,6 @@ private fun TopChrome(
             ) {
                 HeaderChip(text = "9:16")
                 HeaderChip(text = "720p")
-            }
-        }
-
-        if (!attemptStatusLabel.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = Primary80
-            ) {
-                Text(
-                    text = attemptStatusLabel,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    color = NeutralBackground,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
             }
         }
     }
@@ -259,8 +230,6 @@ private fun BottomControlRow(
     overlayUiState: UploadRealtimeOverlayUiState,
     isTorchEnabled: Boolean,
     isTorchAvailable: Boolean,
-    onTapFinish: () -> Unit,
-    onTapRetake: () -> Unit,
     onTapFlash: () -> Unit,
     onTapShutter: () -> Unit,
     onLongPressShutter: () -> Unit
@@ -270,53 +239,37 @@ private fun BottomControlRow(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        CircleActionButton(
-            label = "완등",
-            containerColor = Tertiary80,
-            contentColor = NeutralBackground,
-            enabled = overlayUiState.canFinishChallenge && !uiState.isRecording,
-            onClick = onTapFinish
-        )
+        val canCaptureAttempt =
+            overlayUiState.setupStep == RealtimeSetupStep.Ready &&
+                !overlayUiState.isSetupVisible
+
+        Spacer(modifier = Modifier.width(96.dp))
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             ShutterButton(
                 isRecording = uiState.isRecording,
                 enabled = (uiState.canStartRecording || uiState.isRecording) &&
-                    overlayUiState.isChallengeReady,
+                    canCaptureAttempt,
                 onClick = onTapShutter,
                 onLongClick = onLongPressShutter
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = if (uiState.isRecording) "탭해서 종료" else "길게 누르면 홀드 색",
+                text = if (uiState.isRecording) "탭해서 종료" else "길게 눌러 녹화 시작",
                 color = Color.White.copy(alpha = 0.82f),
                 fontSize = 12.sp
             )
         }
 
-        Column(
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            horizontalAlignment = Alignment.End
-        ) {
-            CircleActionButton(
-                label = if (isTorchEnabled) "켜짐" else "꺼짐",
-                subLabel = "플래시",
-                icon = if (isTorchEnabled) Icons.Rounded.FlashOn else Icons.Rounded.FlashOff,
-                containerColor = Color.Black.copy(alpha = 0.56f),
-                contentColor = Color.White,
-                enabled = isTorchAvailable && !uiState.isRecording,
-                onClick = onTapFlash
-            )
-
-            CircleActionButton(
-                label = "재촬영",
-                icon = Icons.Rounded.Refresh,
-                containerColor = Color.White.copy(alpha = 0.92f),
-                contentColor = NeutralBackground,
-                enabled = overlayUiState.canRetakeAttempt && !uiState.isRecording,
-                onClick = onTapRetake
-            )
-        }
+        CircleActionButton(
+            label = if (isTorchEnabled) "켜짐" else "꺼짐",
+            subLabel = "플래시",
+            icon = if (isTorchEnabled) Icons.Rounded.FlashOn else Icons.Rounded.FlashOff,
+            containerColor = Color.Black.copy(alpha = 0.56f),
+            contentColor = Color.White,
+            enabled = isTorchAvailable && !uiState.isRecording,
+            onClick = onTapFlash
+        )
     }
 }
 

@@ -7,6 +7,10 @@ sealed class ScreenRoutes(val route: String) {
         const val WELCOME = "welcome"
         const val LOGIN_EMAIL = "login_email"
         const val LOGIN_PASSWORD = "login_password"
+        const val PASSWORD_RESET = "password_reset"
+        const val ARG_PASSWORD_RESET_LINK = "passwordResetLink"
+        const val PASSWORD_RESET_WITH_ARG =
+            "$PASSWORD_RESET?$ARG_PASSWORD_RESET_LINK={$ARG_PASSWORD_RESET_LINK}"
         const val REGISTER_EMAIL = "register_email"
         const val REGISTER_PASSWORD = "register_password"
     }
@@ -26,11 +30,10 @@ sealed class ScreenRoutes(val route: String) {
 
             const val ATTEMPT_UPLOAD = "attempt_upload"
             const val ARG_RECORDED_VIDEO_URI = "recordedVideoUri"
-            const val ARG_REALTIME_SESSION_ID = "realtimeSessionId"
             const val REALTIME_RECORDED_ATTEMPT_WITH_ARGS =
-                "$REALTIME_RECORDED_ATTEMPT?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}&$ARG_REALTIME_SESSION_ID={$ARG_REALTIME_SESSION_ID}"
+                "$REALTIME_RECORDED_ATTEMPT?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}"
             const val ATTEMPT_UPLOAD_WITH_ARGS =
-                "$ATTEMPT_UPLOAD?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}&$ARG_REALTIME_SESSION_ID={$ARG_REALTIME_SESSION_ID}"
+                "$ATTEMPT_UPLOAD?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}"
 
             const val CHALLENGE_CREATE = "challenge_create"
             const val CHALLENGE_COLOR = "challenge_color"

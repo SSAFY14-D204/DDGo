@@ -42,6 +42,16 @@ interface AuthApi {
     ): ApiResponse<LoginResponseDto>
 
     /** 현재 로그인 상태를 종료합니다. */
+    @POST("v1/users/password/reset/request")
+    suspend fun requestPasswordReset(
+        @Body request: PasswordResetMailRequestDto
+    ): ApiResponse<EmptyDto>
+
+    @POST("v1/users/password/reset/confirm")
+    suspend fun confirmPasswordReset(
+        @Body request: PasswordResetConfirmRequestDto
+    ): ApiResponse<EmptyDto>
+
     @POST("v1/users/logout")
     suspend fun logout(): ApiResponse<EmptyDto>
 

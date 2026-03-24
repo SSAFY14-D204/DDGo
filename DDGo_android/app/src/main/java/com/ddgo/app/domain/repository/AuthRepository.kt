@@ -35,6 +35,13 @@ interface AuthRepository {
     ): Result<AuthToken>
 
     /** Refresh Token으로 새로운 토큰을 재발급받습니다. */
+    suspend fun requestPasswordReset(email: String): Result<Unit>
+
+    suspend fun confirmPasswordReset(
+        token: String,
+        newPassword: String
+    ): Result<Unit>
+
     suspend fun refreshToken(refreshToken: String): Result<AuthToken>
 
     /** 현재 로그인 상태를 종료합니다. */

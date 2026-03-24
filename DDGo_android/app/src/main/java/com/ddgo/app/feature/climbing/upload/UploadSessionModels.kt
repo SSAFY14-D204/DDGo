@@ -12,14 +12,14 @@ import com.ddgo.app.domain.usecase.AttemptHoldReachResult
 import com.ddgo.app.domain.usecase.ClimbEndDetection
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
+import com.ddgo.app.domain.usecase.StallSegmentAnnotation
 
 internal const val UPLOAD_PREPOSE_ANALYSIS_FPS = 10
 
 data class ManagedAttemptVideo(
     val sourceUri: String,
     val playbackUri: String,
-    val tempFilePath: String?,
-    val realtimeSessionId: String? = null
+    val tempFilePath: String?
 )
 
 enum class PrePoseStatus {
@@ -42,6 +42,8 @@ internal data class PrePoseCacheEntry(
     val poseValidityFrames: List<PoseValidityFrame> = emptyList(),
     val overlayCache: AttemptPoseOverlayCache? = null,
     val personObservationStartTimeMs: Long? = null,
+    val wallArrivalTimeMs: Long? = null,
+    val stallSegment: StallSegmentAnnotation? = null,
     val climbEndDetection: ClimbEndDetection? = null,
     val handPeakAnnotation: HandPeakAnnotation? = null,
     val timelinePoints: List<AnalysisPoint> = emptyList(),
@@ -62,6 +64,8 @@ internal fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = Termina
     poseValidityFrames = poseValidityFrames,
     overlayCache = overlayCache,
     personObservationStartTimeMs = personObservationStartTimeMs,
+    wallArrivalTimeMs = wallArrivalTimeMs,
+    stallSegment = stallSegment,
     climbEndDetection = climbEndDetection,
     handPeakAnnotation = handPeakAnnotation,
     timelinePoints = timelinePoints,
@@ -86,6 +90,8 @@ internal data class TerminalPrePoseEntry(
     val poseValidityFrames: List<PoseValidityFrame>,
     val overlayCache: AttemptPoseOverlayCache?,
     val personObservationStartTimeMs: Long?,
+    val wallArrivalTimeMs: Long?,
+    val stallSegment: StallSegmentAnnotation?,
     val climbEndDetection: ClimbEndDetection?,
     val handPeakAnnotation: HandPeakAnnotation?,
     val timelinePoints: List<AnalysisPoint>,

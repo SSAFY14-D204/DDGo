@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.auth
 
+import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -8,14 +9,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.core.validation.AuthInputPolicy
 import com.ddgo.app.core.validation.ValidationResult
-import com.ddgo.app.domain.model.User
 import com.ddgo.app.domain.model.SocialLoginProvider
+import com.ddgo.app.domain.model.User
+import com.ddgo.app.domain.usecase.ConfirmPasswordResetUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.LoginUseCase
 import com.ddgo.app.domain.usecase.RegisterUseCase
+import com.ddgo.app.domain.usecase.RequestPasswordResetUseCase
 import com.ddgo.app.domain.usecase.SocialLoginUseCase
 import com.ddgo.app.domain.usecase.UpdateNicknameUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.Locale
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,7 +34,9 @@ class AuthViewModel @Inject constructor(
     private val registerUseCase: RegisterUseCase,
     private val socialLoginUseCase: SocialLoginUseCase,
     private val getMyInfoUseCase: GetMyInfoUseCase,
-    private val updateNicknameUseCase: UpdateNicknameUseCase
+    private val updateNicknameUseCase: UpdateNicknameUseCase,
+    private val requestPasswordResetUseCase: RequestPasswordResetUseCase,
+    private val confirmPasswordResetUseCase: ConfirmPasswordResetUseCase
 ) : ViewModel() {
 
     private companion object {
@@ -51,6 +57,27 @@ class AuthViewModel @Inject constructor(
     var password by mutableStateOf("")
         private set
 
+    var passwordResetEmail by mutableStateOf("")
+        private set
+
+    var passwordResetTokenOrLink by mutableStateOf("")
+        private set
+
+    var passwordResetNewPassword by mutableStateOf("")
+        private set
+
+    var passwordResetConfirmPassword by mutableStateOf("")
+        private set
+
+    var lastPasswordResetRequestedEmail by mutableStateOf<String?>(null)
+        private set
+
+    var isRequestingPasswordReset by mutableStateOf(false)
+        private set
+
+    var isConfirmingPasswordReset by mutableStateOf(false)
+        private set
+
     fun updateUsername(input: String) {
         username = input
         clearErrorState()
@@ -58,6 +85,54 @@ class AuthViewModel @Inject constructor(
 
     fun updatePassword(input: String) {
         password = input
+        clearErrorState()
+    }
+
+    fun preparePasswordResetFlow() {
+        preparePasswordResetFlow(tokenOrLink = null)
+    }
+
+    fun preparePasswordResetFlow(tokenOrLink: String?) {
+        val prefilledEmail = username.trim()
+        if (prefilledEmail.isNotBlank() && passwordResetEmail.isBlank()) {
+            passwordResetEmail = prefilledEmail
+        }
+
+        passwordResetTokenOrLink = tokenOrLink?.trim().orEmpty()
+        passwordResetNewPassword = ""
+        passwordResetConfirmPassword = ""
+        lastPasswordResetRequestedEmail = null
+        isRequestingPasswordReset = false
+        isConfirmingPasswordReset = false
+        resetUiState()
+    }
+
+    fun updatePasswordResetEmail(input: String) {
+        passwordResetEmail = input
+
+        val normalizedInput = normalizeNullableEmail(input)
+        if (lastPasswordResetRequestedEmail != null && normalizedInput != lastPasswordResetRequestedEmail) {
+            lastPasswordResetRequestedEmail = null
+            passwordResetTokenOrLink = ""
+            passwordResetNewPassword = ""
+            passwordResetConfirmPassword = ""
+        }
+
+        clearErrorState()
+    }
+
+    fun updatePasswordResetTokenOrLink(input: String) {
+        passwordResetTokenOrLink = input
+        clearErrorState()
+    }
+
+    fun updatePasswordResetNewPassword(input: String) {
+        passwordResetNewPassword = input
+        clearErrorState()
+    }
+
+    fun updatePasswordResetConfirmPassword(input: String) {
+        passwordResetConfirmPassword = input
         clearErrorState()
     }
 
@@ -213,6 +288,98 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    fun requestPasswordReset() {
+        val normalizedEmail = when (val validation = AuthInputPolicy.validateUsername(passwordResetEmail)) {
+            is ValidationResult.Invalid -> {
+                setError(validation.message)
+                return
+            }
+
+            is ValidationResult.Valid -> validation.value
+        }
+        passwordResetEmail = normalizedEmail
+
+        viewModelScope.launch {
+            clearErrorState()
+            isRequestingPasswordReset = true
+
+            requestPasswordResetUseCase(normalizedEmail)
+                .onSuccess {
+                    username = normalizedEmail
+                    lastPasswordResetRequestedEmail = normalizedEmail
+                    passwordResetTokenOrLink = ""
+                    passwordResetNewPassword = ""
+                    passwordResetConfirmPassword = ""
+                    clearErrorState()
+                }
+                .onFailure { throwable ->
+                    setError(throwable.message ?: AuthStrings.PasswordResetRequestFailed)
+                }
+
+            isRequestingPasswordReset = false
+        }
+    }
+
+    fun confirmPasswordReset() {
+        val normalizedEmail = normalizeNullableEmail(passwordResetEmail)
+        if (normalizedEmail != null) {
+            passwordResetEmail = normalizedEmail
+        }
+
+        val resolvedToken = extractPasswordResetToken(passwordResetTokenOrLink)
+        if (resolvedToken.isBlank()) {
+            setError(AuthStrings.PasswordResetTokenRequired)
+            return
+        }
+
+        when (
+            val validation = AuthInputPolicy.validatePassword(
+                rawPassword = passwordResetNewPassword,
+                normalizedUsername = normalizedEmail.orEmpty(),
+                nickname = null
+            )
+        ) {
+            is ValidationResult.Invalid -> {
+                setError(validation.message)
+                return
+            }
+
+            is ValidationResult.Valid -> Unit
+        }
+
+        if (passwordResetConfirmPassword.isBlank()) {
+            setError(AuthStrings.PasswordResetConfirmRequired)
+            return
+        }
+
+        if (passwordResetNewPassword != passwordResetConfirmPassword) {
+            setError(AuthStrings.PasswordResetPasswordMismatch)
+            return
+        }
+
+        viewModelScope.launch {
+            clearErrorState()
+            isConfirmingPasswordReset = true
+
+            confirmPasswordResetUseCase(
+                token = resolvedToken,
+                newPassword = passwordResetNewPassword
+            ).onSuccess {
+                normalizedEmail?.let { username = it }
+                password = ""
+                passwordResetTokenOrLink = ""
+                passwordResetNewPassword = ""
+                passwordResetConfirmPassword = ""
+                clearErrorState()
+                _uiState.value = AuthUiState.PasswordResetCompleted
+            }.onFailure { throwable ->
+                setError(throwable.message ?: AuthStrings.PasswordResetConfirmFailed)
+            }
+
+            isConfirmingPasswordReset = false
+        }
+    }
+
     fun reportExternalLoginError(message: String) {
         setError(message)
     }
@@ -227,6 +394,11 @@ class AuthViewModel @Inject constructor(
         if (_uiState.value is AuthUiState.Error) {
             _uiState.value = AuthUiState.Idle
         }
+    }
+
+    fun consumePasswordResetCompletion() {
+        lastPasswordResetRequestedEmail = null
+        resetUiState()
     }
 
     private fun setError(message: String) {
@@ -294,11 +466,34 @@ class AuthViewModel @Inject constructor(
         return user.username.startsWith(GOOGLE_USERNAME_PREFIX) &&
             user.nickname.startsWith(PROVISIONAL_NICKNAME_PREFIX)
     }
+
+    private fun normalizeEmail(email: String): String = email.trim().lowercase(Locale.ROOT)
+
+    private fun normalizeNullableEmail(email: String): String? {
+        return email.trim()
+            .takeIf { it.isNotBlank() }
+            ?.let(::normalizeEmail)
+    }
+
+    private fun extractPasswordResetToken(rawInput: String): String {
+        val trimmedInput = rawInput.trim()
+        if (trimmedInput.isBlank()) {
+            return ""
+        }
+
+        return runCatching {
+            Uri.parse(trimmedInput).getQueryParameter("token")
+        }.getOrNull()
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: trimmedInput
+    }
 }
 
 sealed class AuthUiState {
     data object Idle : AuthUiState()
     data object Loading : AuthUiState()
     data object Success : AuthUiState()
+    data object PasswordResetCompleted : AuthUiState()
     data class Error(val message: String) : AuthUiState()
 }

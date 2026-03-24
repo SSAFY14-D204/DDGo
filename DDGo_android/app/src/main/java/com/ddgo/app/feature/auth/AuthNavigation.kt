@@ -1,11 +1,14 @@
 package com.ddgo.app.feature.auth
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
+import androidx.navigation.navArgument
 import com.ddgo.app.navigation.ScreenRoutes
 
 /**
@@ -52,6 +55,48 @@ fun NavGraphBuilder.authGraph(
             LoginPasswordScreen(
                 viewModel = viewModel,
                 onLoginComplete = onLoginSuccess,
+                onBack = { navController.popBackStack() },
+                onForgotPassword = {
+                    viewModel.preparePasswordResetFlow()
+                    navController.navigate(ScreenRoutes.Auth.PASSWORD_RESET)
+                }
+            )
+        }
+
+        composable(
+            route = ScreenRoutes.Auth.PASSWORD_RESET_WITH_ARG,
+            arguments = listOf(
+                navArgument(ScreenRoutes.Auth.ARG_PASSWORD_RESET_LINK) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Auth.route)
+            }
+            val viewModel: AuthViewModel = hiltViewModel(parentEntry)
+            val passwordResetLink =
+                backStackEntry.arguments?.getString(ScreenRoutes.Auth.ARG_PASSWORD_RESET_LINK)
+
+            LaunchedEffect(passwordResetLink) {
+                if (passwordResetLink != null) {
+                    viewModel.preparePasswordResetFlow(passwordResetLink)
+                }
+            }
+
+            PasswordResetScreen(
+                viewModel = viewModel,
+                onResetCompleted = {
+                    viewModel.consumePasswordResetCompletion()
+                    val popped = navController.popBackStack(ScreenRoutes.Auth.LOGIN_PASSWORD, false)
+                    if (!popped) {
+                        navController.navigate(ScreenRoutes.Auth.LOGIN_EMAIL) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
                 onBack = { navController.popBackStack() }
             )
         }

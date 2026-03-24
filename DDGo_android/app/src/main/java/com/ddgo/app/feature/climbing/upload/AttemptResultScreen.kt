@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +39,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -56,6 +62,9 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -65,6 +74,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -77,14 +87,21 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 private val C_BG = Color(0xFF0D0D0D)
-private val C_CARD = Color(0xFF1E1E1E)
-private val C_CARD_SEL = Color(0xFF1A2744)
 private val C_ACCENT = Color(0xFF2979FF)
 private val C_ACCENT_GLOW = Color(0xFF82B1FF)
 private val C_BONE = Color(0xFF00E5FF).copy(alpha = 0.85f)
 private val C_JOINT = Color.White
+private val C_STALL = Color(0xFFFFB300)
+private val C_TIMESTAMP_CARD = Color(0xFF1294FF)
+private val C_TIMESTAMP_TEXT = Color(0xFF626262)
+private val C_TIMESTAMP_BORDER = Color(0xFF121212)
 private val HIDDEN_FACE_LANDMARK_INDICES = (1..10).toSet()
+private val ANALYSIS_CARD_WIDTH = 160.dp
+private val ANALYSIS_CARD_HEIGHT = 104.dp
+private val VIDEO_FRAME_MASK_SAFE_INSET = 24.dp
+private val VIDEO_FRAME_MASK_EDGE_FADE = 18.dp
 
+@UnstableApi
 @Composable
 fun AttemptResultScreen(
     viewModel: UploadViewModel = hiltViewModel(),
@@ -93,9 +110,11 @@ fun AttemptResultScreen(
     onNavigateToAddAttempt: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     val cardListState = rememberLazyListState()
+    var bottomActionAreaHeightPx by remember { mutableIntStateOf(0) }
 
     val currentAttemptIndex = viewModel.currentAttemptIndex
     val playbackAttemptUris = viewModel.playbackAttemptUris
@@ -116,9 +135,10 @@ fun AttemptResultScreen(
     val currentAnalysisPoints = currentAttemptResult.second
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence
     val currentAttemptOverlayCache = viewModel.currentAttemptOverlayCache
-    val currentAttemptOverlayFrames = currentAttemptOverlayCache?.frames.orEmpty()
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
+    val wallArrivalTimeMs = currentAttemptPrePoseEntry?.wallArrivalTimeMs
     val personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs
+    val stallSegment = currentAttemptPrePoseEntry?.stallSegment
     val usesPoseDetectorTimeline = currentAttemptPrePoseEntry != null
     val numberedHolds = viewModel.currentAttemptDisplayHolds
     val endpointStatusMessage = remember(currentAttemptPrePoseEntry, currentAnalysisPoints) {
@@ -151,6 +171,7 @@ fun AttemptResultScreen(
     var scrubPositionMs by rememberSaveable(currentVideoUri) { mutableLongStateOf(0L) }
     var hasInitialAutoSeekApplied by rememberSaveable(currentVideoUri) { mutableStateOf(false) }
     var wasPlayingBeforeScrub by remember(currentVideoUri) { mutableStateOf(false) }
+    var tappedCardOverrideIdx by rememberSaveable(currentVideoUri) { mutableIntStateOf(-1) }
 
     val poseTimestamps = remember(currentAttemptPoses) {
         currentAttemptPoses
@@ -170,6 +191,14 @@ fun AttemptResultScreen(
             videoSize = playerVideoSize
         )
     }
+    val verticalVideoFrameMask = remember(numberedHolds, videoContentRect, videoAspectRatio, density) {
+        calculateVerticalVideoFrameMask(
+            holds = numberedHolds,
+            contentRect = videoContentRect,
+            videoAspectRatio = videoAspectRatio,
+            safeInsetPx = with(density) { VIDEO_FRAME_MASK_SAFE_INSET.toPx() }
+        )
+    }
 
     val currentOverlayFrame = remember(currentAttemptOverlayCache, displayedPositionMs) {
         currentAttemptOverlayCache?.let { overlayCache ->
@@ -179,36 +208,19 @@ fun AttemptResultScreen(
             )
         }
     }
-    val currentHipTrailSegments = remember(
-        currentAttemptOverlayCache,
-        currentOverlayFrame,
-    ) {
-        currentAttemptOverlayCache?.let { overlayCache ->
-            currentOverlayFrame?.let { overlayFrame ->
-            buildMap {
-                val hipSegments = buildOverlayTrackTrailSegments(
-                    cache = overlayCache,
-                    anchorTimeMs = overlayFrame.frameTimeMs,
-                    kind = OverlayTrackKind.HIP_CENTER,
-                    trailWindowMs = overlayCache.trailWindowMs
-                )
-                if (hipSegments.isNotEmpty()) {
-                    put(OverlayTrackKind.HIP_CENTER, hipSegments)
-                }
-            }
-            }
-        }.orEmpty()
-    }
-    val currentTrackedPoints = remember(currentOverlayFrame) {
-        currentOverlayFrame
-            ?.trackedPoints
-            ?.filterKeys { kind -> kind == OverlayTrackKind.HIP_CENTER }
-            .orEmpty()
+    val isStallSegmentActive = remember(stallSegment, displayedPositionMs) {
+        stallSegment?.let { segment ->
+            displayedPositionMs in segment.startTimeMs..segment.endTimeMs
+        } == true
     }
 
-    val activeIdx by remember(currentAnalysisPoints, displayedPositionMs) {
+    val activeIdx by remember(currentAnalysisPoints, displayedPositionMs, tappedCardOverrideIdx) {
         derivedStateOf {
-            currentAnalysisPoints.indexOfLast { point -> point.timeMs <= displayedPositionMs }
+            resolveActiveAnalysisCardIndex(
+                points = currentAnalysisPoints,
+                displayedPositionMs = displayedPositionMs,
+                tappedCardOverrideIdx = tappedCardOverrideIdx
+            )
         }
     }
     val scrubberMarkers = remember(currentAnalysisPoints, activeIdx) {
@@ -226,6 +238,7 @@ fun AttemptResultScreen(
         durationMs = 0L
         scrubPositionMs = 0L
         isScrubbing = false
+        tappedCardOverrideIdx = -1
         currentVideoUri?.let { videoUri ->
             exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(videoUri)))
             exoPlayer.prepare()
@@ -234,10 +247,36 @@ fun AttemptResultScreen(
         }
     }
 
-    LaunchedEffect(currentVideoUri, personObservationStartTimeMs, poseTimestamps, hasInitialAutoSeekApplied) {
+    LaunchedEffect(currentAnalysisPoints, tappedCardOverrideIdx) {
+        if (tappedCardOverrideIdx !in currentAnalysisPoints.indices) {
+            tappedCardOverrideIdx = -1
+        }
+    }
+
+    LaunchedEffect(currentAnalysisPoints, displayedPositionMs, tappedCardOverrideIdx) {
+        if (
+            tappedCardOverrideIdx >= 0 &&
+            !shouldKeepTappedAnalysisCardOverride(
+                points = currentAnalysisPoints,
+                tappedCardOverrideIdx = tappedCardOverrideIdx,
+                displayedPositionMs = displayedPositionMs
+            )
+        ) {
+            tappedCardOverrideIdx = -1
+        }
+    }
+
+    LaunchedEffect(
+        currentVideoUri,
+        wallArrivalTimeMs,
+        personObservationStartTimeMs,
+        poseTimestamps,
+        hasInitialAutoSeekApplied
+    ) {
         if (currentVideoUri == null || hasInitialAutoSeekApplied) return@LaunchedEffect
         val initialStartMs = resolveInitialAttemptPlaybackStartTimeMs(
-            personObservationStartTimeMs = personObservationStartTimeMs,
+            wallArrivalTimeMs = wallArrivalTimeMs,
+            fallbackPersonObservationStartTimeMs = personObservationStartTimeMs,
             poseTimestamps = poseTimestamps
         ) ?: return@LaunchedEffect
         exoPlayer.seekTo(initialStartMs)
@@ -297,6 +336,7 @@ fun AttemptResultScreen(
                 ?.also(exoPlayer::seekTo)
         }
     }
+    val bottomActionAreaPadding = with(density) { bottomActionAreaHeightPx.toDp() + 24.dp }
 
     SafeAreaScreen(containerColor = C_BG) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -304,7 +344,7 @@ fun AttemptResultScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(bottom = 88.dp)
+                .padding(bottom = bottomActionAreaPadding)
         ) {
             HeaderSection(viewModel)
 
@@ -337,48 +377,88 @@ fun AttemptResultScreen(
                     .aspectRatio(videoAspectRatio)
                     .onSizeChanged { videoContainerSize = it }
             ) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { viewContext ->
-                        PlayerView(viewContext).apply {
-                            player = exoPlayer
-                            useController = false
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            setShutterBackgroundColor(android.graphics.Color.BLACK)
-                        }
-                    },
-                    update = { playerView ->
-                        playerView.player = exoPlayer
-                    }
-                )
-
-                currentOverlayFrame?.let { overlayFrame ->
-                    PoseOverlay(
-                        pose = overlayFrame.pose,
-                        contentRect = videoContentRect,
+                Box(modifier = Modifier.matchParentSize()) {
+                    AndroidView(
                         modifier = Modifier.fillMaxSize(),
-                        lineColor = C_BONE,
-                        pointColor = C_JOINT,
-                        hiddenLandmarkIndices = HIDDEN_FACE_LANDMARK_INDICES
+                        factory = { viewContext ->
+                            PlayerView(viewContext).apply {
+                                player = exoPlayer
+                                useController = false
+                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                setShutterBackgroundColor(android.graphics.Color.BLACK)
+                            }
+                        },
+                        update = { playerView ->
+                            playerView.player = exoPlayer
+                        }
                     )
-                }
 
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    if (numberedHolds.isNotEmpty()) {
-                        drawHoldNumbers(
-                            holds = numberedHolds,
-                            contentRect = videoContentRect
+                    currentOverlayFrame?.let { overlayFrame ->
+                        PoseOverlay(
+                            pose = overlayFrame.pose,
+                            contentRect = videoContentRect,
+                            modifier = Modifier.fillMaxSize(),
+                            lineColor = C_BONE,
+                            pointColor = C_JOINT,
+                            hiddenLandmarkIndices = HIDDEN_FACE_LANDMARK_INDICES
                         )
                     }
-                }
 
-                currentOverlayFrame?.let {
-                    TrackedPointTrailOverlay(
-                        trailSegmentsByKind = currentHipTrailSegments,
-                        currentTrackedPoints = currentTrackedPoints,
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        if (numberedHolds.isNotEmpty()) {
+                            drawHoldNumbers(
+                                holds = numberedHolds,
+                                contentRect = videoContentRect
+                            )
+                        }
+                    }
+
+                    VerticalVideoFrameMaskOverlay(
+                        frameMask = verticalVideoFrameMask,
                         contentRect = videoContentRect,
+                        backgroundColor = C_BG,
+                        edgeFade = VIDEO_FRAME_MASK_EDGE_FADE,
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    if (isStallSegmentActive) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black.copy(alpha = 0.72f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "정체 구간",
+                                color = C_STALL,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            if (videoContentRect.width <= 0f || videoContentRect.height <= 0f) {
+                                return@Canvas
+                            }
+
+                            val horizontalInset = 16.dp.toPx()
+                            val barHeight = 4.dp.toPx()
+                            val barWidth = (videoContentRect.width - (horizontalInset * 2f)).coerceAtLeast(0f)
+                            if (barWidth <= 0f) return@Canvas
+
+                            drawRoundRect(
+                                color = C_STALL.copy(alpha = 0.95f),
+                                topLeft = Offset(
+                                    x = videoContentRect.left + horizontalInset,
+                                    y = videoContentRect.top + videoContentRect.height - barHeight - 10.dp.toPx()
+                                ),
+                                size = Size(width = barWidth, height = barHeight),
+                                cornerRadius = CornerRadius(barHeight / 2f, barHeight / 2f)
+                            )
+                        }
+                    }
                 }
 
                 if (currentAttemptPrePoseEntry?.status == PrePoseStatus.Failed) {
@@ -438,6 +518,7 @@ fun AttemptResultScreen(
                 ),
                 modifier = Modifier.padding(horizontal = 20.dp),
                 onTapSeek = { requestedTimeMs ->
+                    tappedCardOverrideIdx = -1
                     val wasPlaying = exoPlayer.isPlaying
                     seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
                         currentPositionMs = snappedTimeMs
@@ -451,6 +532,7 @@ fun AttemptResultScreen(
                 },
                 onScrubStart = {
                     if (!canScrub) return@PoseVideoScrubber
+                    tappedCardOverrideIdx = -1
                     wasPlayingBeforeScrub = exoPlayer.isPlaying
                     scrubPositionMs = poseTimestamps.findNearestTimestamp(displayedPositionMs)
                         ?: displayedPositionMs
@@ -519,12 +601,14 @@ fun AttemptResultScreen(
                                 point = point,
                                 isSelected = idx == activeIdx,
                                 onClick = {
-                                    exoPlayer.seekTo(
-                                        resolveAnalysisSeekTimeMs(
-                                            point = point,
-                                            usesPoseDetectorTimeline = usesPoseDetectorTimeline
-                                        )
+                                    val targetSeekMs = resolveAnalysisSeekTimeMs(
+                                        point = point,
+                                        usesPoseDetectorTimeline = usesPoseDetectorTimeline
                                     )
+                                    tappedCardOverrideIdx = idx
+                                    currentPositionMs = targetSeekMs
+                                    scrubPositionMs = targetSeekMs
+                                    exoPlayer.seekTo(targetSeekMs)
                                     exoPlayer.play()
                                 }
                             )
@@ -538,6 +622,7 @@ fun AttemptResultScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
+                .onSizeChanged { bottomActionAreaHeightPx = it.height }
                 .background(
                     Brush.verticalGradient(
                         listOf(Color.Transparent, C_BG.copy(alpha = 0.95f), C_BG)
@@ -687,46 +772,70 @@ private fun AnalysisCard(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier
-            .width(160.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (isSelected) C_CARD_SEL else C_CARD)
-            .clickable(onClick = onClick)
-            .padding(14.dp)
+            .width(ANALYSIS_CARD_WIDTH)
+            .padding(top = 10.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(26.dp)
-                    .background(
-                        if (isSelected) C_ACCENT else Color.White.copy(alpha = 0.12f),
-                        CircleShape
-                    )
-            ) {
-                Text(
-                    "${point.index}",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.White
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(ANALYSIS_CARD_HEIGHT)
+                .shadow(
+                    elevation = if (isSelected) 10.dp else 6.dp,
+                    shape = RoundedCornerShape(16.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.28f),
+                    spotColor = Color.Black.copy(alpha = 0.28f)
                 )
-            }
-            Spacer(Modifier.width(8.dp))
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (isSelected) Color(0xFFF7FBFF) else Color.White)
+                .border(
+                    width = 2.dp,
+                    color = if (isSelected) C_TIMESTAMP_CARD else C_TIMESTAMP_BORDER,
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .clickable(onClick = onClick)
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(
                 text = point.timeMs.toTimeString(),
-                fontSize = 15.sp,
+                modifier = Modifier.fillMaxWidth(),
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isSelected) C_ACCENT_GLOW else Color.White
+                textAlign = TextAlign.Center,
+                color = C_TIMESTAMP_CARD
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = point.description,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = C_TIMESTAMP_TEXT,
+                lineHeight = 20.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
             )
         }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = point.description,
-            fontSize = 13.sp,
-            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
-            lineHeight = 19.sp
-        )
+
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(34.dp)
+                .align(Alignment.TopStart)
+                .offset(x = 6.dp, y = (-10).dp)
+                .clip(CircleShape)
+                .background(if (isSelected) C_ACCENT else C_TIMESTAMP_CARD)
+        ) {
+            Text(
+                text = "${point.index}",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White
+            )
+        }
     }
 }
 
@@ -805,5 +914,4 @@ private fun DrawScope.drawHoldNumbers(
 
 private fun Long.toTimeString() =
     "%02d:%02d".format(this / 60_000L, (this / 1_000L) % 60L)
-
 

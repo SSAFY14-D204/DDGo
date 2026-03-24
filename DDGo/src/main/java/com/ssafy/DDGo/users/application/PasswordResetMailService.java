@@ -30,11 +30,7 @@ public class PasswordResetMailService {
         }
 
         String resetLink = passwordResetProperties.getResetUrl() + "?token=" + token;
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(toEmail);
-        message.setFrom(passwordResetProperties.getFrom());
-        message.setSubject("[DDGo] 비밀번호 재설정 안내");
-        message.setText("""
+        String text = """
                 안녕하세요, DDGo입니다.
 
                 아래 링크를 눌러 비밀번호를 재설정해 주세요.
@@ -42,9 +38,15 @@ public class PasswordResetMailService {
 
                 이 링크는 %d초 동안만 유효합니다.
                 본인이 요청하지 않았다면 이 메일을 무시해 주세요.
-                """.formatted(resetLink, passwordResetProperties.getTokenTtlSeconds()));
+                """.formatted(resetLink, passwordResetProperties.getTokenTtlSeconds());
 
         try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(toEmail);
+            message.setFrom(passwordResetProperties.getFrom());
+            message.setSubject("[DDGo] 비밀번호 재설정 안내");
+            message.setText(text);
+
             mailSender.send(message);
             return true;
         } catch (MailException e) {

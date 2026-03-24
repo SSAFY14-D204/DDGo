@@ -23,7 +23,12 @@ import com.ddgo.app.core.ui.components.keyboardAwareBottomPadding
 import com.ddgo.app.core.ui.theme.PretendardFamily
 
 @Composable
-fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, onBack: () -> Unit = {}) {
+fun LoginPasswordScreen(
+    viewModel: AuthViewModel,
+    onLoginComplete: () -> Unit,
+    onBack: () -> Unit = {},
+    onForgotPassword: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsState()
     val errorMessage = viewModel.errorMessage
 
@@ -107,10 +112,19 @@ fun LoginPasswordScreen(viewModel: AuthViewModel, onLoginComplete: () -> Unit, o
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
-                    text = "\uBE44\uBC00\uBC88\uD638\uB97C \uC78A\uC73C\uC168\uB098\uC694?",
-                    style = TextStyle(color = Color(0xFF6C7B8A), fontSize = 14.sp, fontFamily = PretendardFamily)
-                )
+                TextButton(
+                    onClick = onForgotPassword,
+                    enabled = uiState !is AuthUiState.Loading
+                ) {
+                    Text(
+                        text = AuthStrings.ForgotPasswordAction,
+                        style = TextStyle(
+                            color = Color(0xFF6C7B8A),
+                            fontSize = 14.sp,
+                            fontFamily = PretendardFamily
+                        )
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = { viewModel.login() },
