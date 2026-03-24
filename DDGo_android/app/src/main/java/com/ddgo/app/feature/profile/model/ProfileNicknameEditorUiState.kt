@@ -12,6 +12,9 @@ data class ProfileNicknameEditorUiState(
     val description: String,
     val submitLabel: String,
     val nicknameInput: String = "",
+    val nicknameFeedback: ProfileFieldFeedback? = null,
+    val isCheckingAvailability: Boolean = false,
+    val isNicknameAvailable: Boolean = false,
     val errorMessage: String? = null,
     val isSaving: Boolean = false
 )

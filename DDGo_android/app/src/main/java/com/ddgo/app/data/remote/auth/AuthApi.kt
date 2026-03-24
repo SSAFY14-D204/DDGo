@@ -7,6 +7,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Query
 
 /**
  * 회원/인증 관련 Retrofit API 정의입니다.
@@ -23,6 +24,16 @@ interface AuthApi {
     suspend fun register(
         @Body request: RegisterRequestDto
     ): ApiResponse<EmptyDto>
+
+    @GET("v1/users/check-username")
+    suspend fun checkUsernameAvailability(
+        @Query("username") username: String
+    ): ApiResponse<AvailabilityResponseDto>
+
+    @GET("v1/users/check-nickname")
+    suspend fun checkNicknameAvailability(
+        @Query("nickname") nickname: String
+    ): ApiResponse<AvailabilityResponseDto>
 
     /** Refresh Token으로 토큰을 재발급합니다. */
     @POST("v1/users/refresh")

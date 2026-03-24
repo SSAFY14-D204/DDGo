@@ -48,6 +48,52 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun checkUsernameAvailability(username: String): Result<Boolean> {
+        return try {
+            val response = authApi.checkUsernameAvailability(username = username)
+            if (response.success && response.data != null) {
+                Result.success(response.data.available)
+            } else {
+                Result.failure(Exception(response.message.ifBlank {
+                    "아이디 중복 확인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요."
+                }))
+            }
+        } catch (e: Exception) {
+            Result.failure(
+                Exception(
+                    resolveErrorMessage(
+                        e,
+                        "아이디 중복 확인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요."
+                    ),
+                    e
+                )
+            )
+        }
+    }
+
+    override suspend fun checkNicknameAvailability(nickname: String): Result<Boolean> {
+        return try {
+            val response = authApi.checkNicknameAvailability(nickname = nickname)
+            if (response.success && response.data != null) {
+                Result.success(response.data.available)
+            } else {
+                Result.failure(Exception(response.message.ifBlank {
+                    "닉네임 중복 확인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요."
+                }))
+            }
+        } catch (e: Exception) {
+            Result.failure(
+                Exception(
+                    resolveErrorMessage(
+                        e,
+                        "닉네임 중복 확인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요."
+                    ),
+                    e
+                )
+            )
+        }
+    }
+
     override suspend fun login(
         username: String,
         password: String

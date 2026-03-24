@@ -24,10 +24,21 @@ fun NavGraphBuilder.authGraph(
 ) {
     navigation(startDestination = ScreenRoutes.Auth.WELCOME, route = ScreenRoutes.Auth.route) {
 
-        composable(ScreenRoutes.Auth.WELCOME) {
+        composable(ScreenRoutes.Auth.WELCOME) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(ScreenRoutes.Auth.route)
+            }
+            val viewModel: AuthViewModel = hiltViewModel(parentEntry)
+
             AuthLandingScreen(
-                onLoginClick = { navController.navigate(ScreenRoutes.Auth.LOGIN_EMAIL) },
-                onRegisterClick = { navController.navigate(ScreenRoutes.Auth.REGISTER_EMAIL) }
+                onLoginClick = {
+                    viewModel.prepareLoginFlow()
+                    navController.navigate(ScreenRoutes.Auth.LOGIN_EMAIL)
+                },
+                onRegisterClick = {
+                    viewModel.prepareRegisterFlow()
+                    navController.navigate(ScreenRoutes.Auth.REGISTER_EMAIL)
+                }
             )
         }
 
@@ -42,7 +53,10 @@ fun NavGraphBuilder.authGraph(
                 viewModel = viewModel,
                 onNext = { navController.navigate(ScreenRoutes.Auth.LOGIN_PASSWORD) },
                 onLoginComplete = onLoginSuccess,
-                onRegisterClick = { navController.navigate(ScreenRoutes.Auth.REGISTER_EMAIL) }
+                onRegisterClick = {
+                    viewModel.prepareRegisterFlow()
+                    navController.navigate(ScreenRoutes.Auth.REGISTER_EMAIL)
+                }
             )
         }
 

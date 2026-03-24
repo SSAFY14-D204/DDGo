@@ -54,12 +54,15 @@ fun LoginEmailScreen(
 ) {
     val isImeVisible = WindowInsets.isImeVisible
     val uiState by viewModel.uiState.collectAsState()
-    val errorMessage = viewModel.errorMessage
+    val usernameFeedback = viewModel.loginUsernameFeedback
+    val isCheckingLoginUsername = viewModel.isCheckingLoginUsername
+    val globalError = viewModel.errorMessage
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.clearErrorState()
+        viewModel.refreshLoginUsernameFeedback()
     }
 
     LaunchedEffect(uiState) {
@@ -116,20 +119,24 @@ fun LoginEmailScreen(
 
             TextField(
                 value = viewModel.username,
-                onValueChange = viewModel::updateUsername,
-                placeholder = { Text(EMAIL_LABEL, color = Color(0xFF8391A1)) },
+                onValueChange = viewModel::updateLoginUsername,
+                placeholder = {
+                    Text(EMAIL_LABEL, color = Color(0xFF8391A1))
+                },
                 modifier = Modifier.fillMaxWidth(),
+                isError = usernameFeedback?.tone == AuthFieldFeedbackTone.Error,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color(0xFF1DA1F2),
-                    unfocusedIndicatorColor = Color(0xFF1DA1F2)
+                    unfocusedIndicatorColor = Color(0xFF1DA1F2),
+                    errorIndicatorColor = Color(0xFFD92D20)
                 )
             )
 
-            errorMessage?.let { message ->
+            usernameFeedback?.let { feedback ->
                 Spacer(modifier = Modifier.height(8.dp))
-                AuthInlineErrorMessage(message = message)
+                AuthInlineFeedbackMessage(feedback = feedback)
             }
         }
 
@@ -140,26 +147,37 @@ fun LoginEmailScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            globalError?.let { message ->
+                AuthInlineErrorMessage(message = message)
+            }
+
             if (isImeVisible) {
                 Button(
                     onClick = {
-                        if (viewModel.validateUsernameStep() == null) {
-                            onNext()
-                        }
+                        viewModel.submitLoginUsername(onVerified = onNext)
                     },
+                    enabled = viewModel.canProceedWithLoginUsername() && !isCheckingLoginUsername,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DA1F2))
                 ) {
-                    Text(
-                        NEXT_LABEL,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontFamily = PretendardFamily,
-                        fontSize = 16.sp
-                    )
+                    if (isCheckingLoginUsername) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            text = NEXT_LABEL,
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = PretendardFamily,
+                            fontSize = 16.sp
+                        )
+                    }
                 }
             } else {
                 Button(
@@ -185,7 +203,7 @@ fun LoginEmailScreen(
                         )
                     } else {
                         Text(
-                            KAKAO_LOGIN_LABEL,
+                            text = KAKAO_LOGIN_LABEL,
                             color = Color.Black,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = PretendardFamily
@@ -225,7 +243,7 @@ fun LoginEmailScreen(
                         )
                     } else {
                         Text(
-                            GOOGLE_LOGIN_LABEL,
+                            text = GOOGLE_LOGIN_LABEL,
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = PretendardFamily
@@ -237,7 +255,7 @@ fun LoginEmailScreen(
 
                 TextButton(onClick = onRegisterClick) {
                     Text(
-                        REGISTER_LABEL,
+                        text = REGISTER_LABEL,
                         color = Color(0xFF1DA1F2),
                         fontFamily = PretendardFamily,
                         fontWeight = FontWeight.SemiBold

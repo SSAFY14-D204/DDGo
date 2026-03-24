@@ -14,6 +14,10 @@ data class ProfilePasswordEditorUiState(
     val currentPasswordInput: String = "",
     val newPasswordInput: String = "",
     val confirmPasswordInput: String = "",
+    val currentPasswordFeedback: ProfileFieldFeedback? = null,
+    val newPasswordFeedback: ProfileFieldFeedback? = null,
+    val confirmPasswordFeedback: ProfileFieldFeedback? = null,
+    val canSubmit: Boolean = false,
     val errorMessage: String? = null,
     val isSaving: Boolean = false
 )
