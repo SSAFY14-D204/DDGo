@@ -13,16 +13,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,6 +29,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.core.ui.atom.DdgoFieldState
@@ -52,6 +52,8 @@ fun PasswordResetScreen(
     val hasIncomingToken = viewModel.passwordResetTokenOrLink.isNotBlank()
     val canResend = requestedEmail != null
     val showConfirmationSection = requestedEmail != null || hasIncomingToken
+    var isNewPasswordVisible by rememberSaveable { mutableStateOf(false) }
+    var isConfirmPasswordVisible by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(uiState) {
         if (uiState is AuthUiState.PasswordResetCompleted) {
@@ -73,12 +75,7 @@ fun PasswordResetScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "\uB4A4\uB85C\uAC00\uAE30"
-                )
-            }
+            AuthBackButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp))
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -245,7 +242,19 @@ fun PasswordResetScreen(
                     placeholder = AuthStrings.PasswordResetNewPasswordLabel,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    visualTransformation = PasswordVisualTransformation()
+                    visualTransformation = if (isNewPasswordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingContent = {
+                        AuthPasswordTrailingActions(
+                            value = viewModel.passwordResetNewPassword,
+                            isPasswordVisible = isNewPasswordVisible,
+                            onClear = { viewModel.updatePasswordResetNewPassword("") },
+                            onToggleVisibility = { isNewPasswordVisible = !isNewPasswordVisible }
+                        )
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -268,7 +277,19 @@ fun PasswordResetScreen(
                     placeholder = AuthStrings.PasswordResetConfirmPasswordLabel,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    visualTransformation = PasswordVisualTransformation()
+                    visualTransformation = if (isConfirmPasswordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingContent = {
+                        AuthPasswordTrailingActions(
+                            value = viewModel.passwordResetConfirmPassword,
+                            isPasswordVisible = isConfirmPasswordVisible,
+                            onClear = { viewModel.updatePasswordResetConfirmPassword("") },
+                            onToggleVisibility = { isConfirmPasswordVisible = !isConfirmPasswordVisible }
+                        )
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))

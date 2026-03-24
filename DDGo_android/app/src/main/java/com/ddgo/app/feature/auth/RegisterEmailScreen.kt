@@ -2,9 +2,7 @@ package com.ddgo.app.feature.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -42,9 +40,7 @@ fun RegisterEmailScreen(viewModel: AuthViewModel, onNext: () -> Unit, onBack: ()
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp)) {
-                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "\uB4A4\uB85C\uAC00\uAE30")
-            }
+            AuthBackButton(onClick = onBack, modifier = Modifier.offset(x = (-12).dp))
 
             Spacer(modifier = Modifier.height(20.dp))
 

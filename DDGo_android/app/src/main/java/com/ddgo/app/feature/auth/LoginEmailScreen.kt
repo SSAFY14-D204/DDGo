@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.R
 import com.ddgo.app.core.ui.atom.DdgoFieldState
 import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
 import com.ddgo.app.core.ui.atom.DdgoTextButton
@@ -159,7 +160,9 @@ fun LoginEmailScreen(
                     enabled = uiState !is AuthUiState.Loading,
                     isLoading = uiState is AuthUiState.Loading,
                     containerColor = Color(0xFFFFE812),
-                    contentColor = Color.Black
+                    contentColor = Color.Black,
+                    iconResId = R.drawable.ic_kakao_talk,
+                    iconTint = Color.Black
                 )
 
                 AuthActionButton(
@@ -183,7 +186,8 @@ fun LoginEmailScreen(
                     enabled = uiState !is AuthUiState.Loading,
                     isLoading = uiState is AuthUiState.Loading,
                     containerColor = Color(0xFF121212),
-                    contentColor = Color.White
+                    contentColor = Color.White,
+                    iconResId = R.drawable.ic_google
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
