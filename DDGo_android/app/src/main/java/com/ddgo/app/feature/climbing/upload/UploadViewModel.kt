@@ -781,7 +781,18 @@ class UploadViewModel @Inject constructor(
                     ?: attemptHoldAlignmentDelegate.alignedHoldSetFor(playbackUri)
             }
     internal val currentAttemptCropBounds: RawVerticalCropBounds?
-        get() = currentAttemptAlignedSelection?.rawCropBounds
+        get() {
+            val currentPlaybackUri = playbackAttemptUris.getOrNull(currentAttemptIndex)
+            val rawBounds = currentAttemptAlignedSelection?.rawCropBounds
+                ?: currentPlaybackUri
+                    ?.takeIf { playbackUri -> playbackUri == videoUri }
+                    ?.let { calculateRawVerticalCropBounds(allRawHolds) }
+
+            return resolveHybridVerticalCropBounds(
+                rawBounds = rawBounds,
+                selectedHolds = currentAttemptDisplayHolds
+            )
+        }
     val currentAttemptDisplayHolds: List<HoldNumbered>
         get() = currentAttemptAlignedSelection?.alignedHolds.orEmpty()
             .ifEmpty { numberedHolds }

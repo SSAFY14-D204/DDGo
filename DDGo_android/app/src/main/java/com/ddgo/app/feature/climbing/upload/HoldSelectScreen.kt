@@ -23,9 +23,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -56,9 +59,61 @@ private enum class SelectionPhase { START, END }
 @Composable
 fun HoldSelectScreen(
     viewModel: UploadViewModel = hiltViewModel(),
+    allowAdditionalUpload: Boolean = true,
+    onNavigateToAdditional: () -> Unit = {},
     onNavigateToNext: () -> Unit = {}
 ) {
     val bitmap = viewModel.bestFrameBitmap
+    var showAdditionalUploadDialog by remember { mutableStateOf(false) }
+
+    if (showAdditionalUploadDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = {
+                Text(
+                    text = "이 문제의 추가 시도 영상이 있나요?",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            },
+            text = {
+                Text(
+                    text = "시도 별로 비교해서 분석을 보여줄게요",
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            },
+            containerColor = Color(0xFF2E2E2E),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showAdditionalUploadDialog = false
+                        onNavigateToAdditional()
+                    }
+                ) {
+                    Text(
+                        text = "더 있어요!",
+                        color = Color(0xFF42A5F5),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAdditionalUploadDialog = false
+                        onNavigateToNext()
+                    }
+                ) {
+                    Text(
+                        text = "없어요",
+                        color = Color.White
+                    )
+                }
+            }
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -74,8 +129,12 @@ fun HoldSelectScreen(
             }
         } else {
             TwoPhaseHoldSelection(
-                viewModel        = viewModel,
-                onNavigateToNext = onNavigateToNext
+                viewModel = viewModel,
+                allowAdditionalUpload = allowAdditionalUpload,
+                onNavigateToNext = onNavigateToNext,
+                onShowAdditionalUploadDialog = {
+                    showAdditionalUploadDialog = true
+                }
             )
         }
     }
@@ -86,7 +145,9 @@ fun HoldSelectScreen(
 @Composable
 private fun TwoPhaseHoldSelection(
     viewModel: UploadViewModel,
-    onNavigateToNext: () -> Unit
+    allowAdditionalUpload: Boolean,
+    onNavigateToNext: () -> Unit,
+    onShowAdditionalUploadDialog: () -> Unit
 ) {
     var phase              by remember { mutableStateOf(SelectionPhase.START) }
     var selectedStartIndex by remember { mutableIntStateOf(-1) }
@@ -144,7 +205,11 @@ private fun TwoPhaseHoldSelection(
                             selectedHold
                         )
                         viewModel.resetState()
-                        onNavigateToNext()
+                        if (allowAdditionalUpload) {
+                            onShowAdditionalUploadDialog()
+                        } else {
+                            onNavigateToNext()
+                        }
                     }
                 }
             },
@@ -190,12 +255,13 @@ private fun HoldSelectionContent(
             StepBadgeRow(phase = phase)
             Spacer(Modifier.height(10.dp))
             Text(
-                text       = if (isStart) "시작 홀드를\n선택해주세요"
-                             else "끝 홀드를\n선택해주세요",
-                fontSize   = 26.sp,
-                fontWeight = FontWeight.Bold,
+                text       = if (isStart) "분석 정확도를 위해\n시작 홀드를 지정해주세요"
+                             else "목표 홀드를 선택해주세요",
                 color      = Color.White,
-                lineHeight = 34.sp
+                style      = MaterialTheme.typography.headlineMedium.copy(
+                    lineHeight = 28.6.sp,
+                    letterSpacing = (-0.22).sp
+                )
             )
             Spacer(Modifier.height(4.dp))
             Text(

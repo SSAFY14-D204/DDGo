@@ -741,10 +741,51 @@ private fun GymColorStep(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
+            val actionEnabled = when {
+                isEmbedded -> {
+                    selectedLevelSortOrder != null &&
+                        selectedPaletteKey != null &&
+                        challengeCreationUiState !is ChallengeCreationUiState.Loading
+                }
+
+                else -> {
+                    (canBypassChallengeCreationForDev || selectedLevelSortOrder != null) &&
+                        selectedPaletteKey != null &&
+                        challengeCreationUiState !is ChallengeCreationUiState.Loading
+                }
+            }
+
             ColorSelectionSheet(
                 selectedPaletteKey = selectedPaletteKey,
                 onSelect = viewModel::updateHoldColor,
-                modifier = Modifier.fillMaxWidth()
+                actionText = if (isEmbedded) {
+                    "촬영 준비 완료"
+                } else {
+                    "홀드 찾기"
+                },
+                actionEnabled = actionEnabled,
+                onAction = {
+                    when {
+                        isEmbedded -> viewModel.completeRealtimeChallengeSetup()
+                        else -> {
+                            viewModel.finalizeHoldDetectionColorSelection()
+                            when {
+                                canBypassChallengeCreationForDev -> onNext()
+                                else -> viewModel.createChallengeFromSelection()
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .then(
+                        if (isEmbedded) {
+                            Modifier
+                        } else {
+                            Modifier.navigationBarsPadding()
+                        }
+                    )
+                    .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
+                    .fillMaxWidth()
             )
 
             when {
@@ -793,7 +834,7 @@ private fun GymColorStep(
                 }
             }
 
-            GradientActionButton(
+            if (false) GradientActionButton(
                 text = if (isEmbedded) {
                     "촬영 준비 완료"
                 } else {
@@ -1161,11 +1202,14 @@ private fun HoldColorHero(
 private fun ColorSelectionSheet(
     selectedPaletteKey: String?,
     onSelect: (String) -> Unit,
+    actionText: String,
+    actionEnabled: Boolean,
+    onAction: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(Color.White)
             .padding(horizontal = 28.dp, vertical = 26.dp)
     ) {
@@ -1185,6 +1229,17 @@ private fun ColorSelectionSheet(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            AnalysisGradientButton(
+                text = actionText,
+                enabled = actionEnabled,
+                onClick = onAction,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp)
+            )
         }
     }
 }
@@ -1348,7 +1403,7 @@ private data class HoldPaletteSlot(
 )
 
 private val difficultyReferenceSlots = listOf(
-    HoldPaletteSlot(key = "slate", color = Color(0xFF20272D)),
+    HoldPaletteSlot(key = "black", color = Color(0xFF292929)),
     HoldPaletteSlot(key = "gray", color = Color(0xFF505050)),
     HoldPaletteSlot(key = "white", color = Color.White),
     HoldPaletteSlot(key = "brown", color = Color(0xFF6B3E1C)),

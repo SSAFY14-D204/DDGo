@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,7 +61,7 @@ fun AdditionalUploadScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 48.dp),
+                .padding(start = 23.dp, end = 23.dp, top = 78.dp, bottom = 48.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
@@ -69,10 +71,15 @@ fun AdditionalUploadScreen(
                     } else {
                         "이 문제의 추가 시도 영상을\n모두 선택해주세요"
                     },
+                    modifier = Modifier
+                        .width(279.dp)
+                        .height(60.dp),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
-                    lineHeight = 34.sp
+                    lineHeight = 30.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Clip
                 )
             }
 

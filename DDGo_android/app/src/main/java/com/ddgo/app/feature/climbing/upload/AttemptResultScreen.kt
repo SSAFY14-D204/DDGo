@@ -1,4 +1,4 @@
-﻿package com.ddgo.app.feature.climbing.upload
+package com.ddgo.app.feature.climbing.upload
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -270,8 +270,8 @@ fun AttemptResultScreen(
             event = "attempt_result_screen_rects_resolved",
             playbackUri = currentVideoUri,
             details = mapOf(
-                "cropSource" to "allRawHolds",
-                "rawCropBounds" to UploadAiTraceLogger.formatCropBounds(currentAttemptCropBounds),
+                "cropSource" to if (currentAttemptCropBounds != null) "hybridRawAndSelected" else "numberedHoldsFallback",
+                "resolvedCropBounds" to UploadAiTraceLogger.formatCropBounds(currentAttemptCropBounds),
                 "cropHoldCount" to allRawHolds.size,
                 "displayHoldCount" to numberedHolds.size,
                 "topSafeInsetDp" to VIDEO_FRAME_TOP_SAFE_INSET.value,

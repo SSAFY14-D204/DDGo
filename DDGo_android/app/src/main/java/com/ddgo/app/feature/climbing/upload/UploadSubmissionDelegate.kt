@@ -1847,7 +1847,7 @@ internal class UploadSubmissionDelegate(
         val analyses = attemptUris.map { uri ->
             analyzeSingleAttemptPoseAnalysis(
                 playbackUri = uri,
-                poses = terminalSnapshot.entriesByPlaybackUri[uri]?.poses.orEmpty(),
+                poses = terminalSnapshot.entriesByPlaybackUri[uri].filteredHoldContactPoses(),
                 holds = holds
             )
         }
@@ -1885,7 +1885,8 @@ internal class UploadSubmissionDelegate(
 
             analyzeSingleAttemptPoseAnalysis(
                 playbackUri = alignedHoldSet.playbackUri,
-                poses = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]?.poses.orEmpty(),
+                poses = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
+                    .filteredHoldContactPoses(),
                 holds = alignedHoldSet.alignedHolds
             )
         }
@@ -2327,6 +2328,23 @@ internal class UploadSubmissionDelegate(
 
 private fun TerminalPrePoseEntry?.preferredAiPoseSequence(): AiPoseSequence? {
     return this?.filteredAiPoseSequence ?: this?.aiPoseSequence
+}
+
+private fun TerminalPrePoseEntry?.filteredHoldContactPoses(): List<Pose> {
+    val entry = this ?: return emptyList()
+    val startTimeMs = entry.wallArrivalTimeMs ?: entry.personObservationStartTimeMs
+    val endTimeMs = entry.handPeakAnnotation?.endTimeMs
+
+    if (startTimeMs != null && endTimeMs != null && endTimeMs < startTimeMs) {
+        return emptyList()
+    }
+
+    return entry.poses.filter { pose ->
+        val timestampMs = pose.frameTimeMs
+        val afterStart = startTimeMs == null || timestampMs >= startTimeMs
+        val beforeEnd = endTimeMs == null || timestampMs <= endTimeMs
+        afterStart && beforeEnd
+    }
 }
 
 private data class AttemptPoseAnalysis(

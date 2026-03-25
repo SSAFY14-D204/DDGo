@@ -67,6 +67,7 @@ fun NavGraphBuilder.uploadGraph(
 
             HoldSelectScreen(
                 viewModel = viewModel,
+                allowAdditionalUpload = false,
                 onNavigateToNext = {
                     viewModel.prepareAttemptResultAnalysisLoading()
                     navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) {
@@ -223,7 +224,10 @@ fun NavGraphBuilder.uploadGraph(
             AdditionalUploadScreen(
                 viewModel = viewModel,
                 onNavigateToNext = {
-                    val nextRoute = if (viewModel.isAttemptOnlyUploadMode) {
+                    val nextRoute = if (
+                        viewModel.isAttemptOnlyUploadMode ||
+                        viewModel.numberedHolds.isNotEmpty()
+                    ) {
                         viewModel.prepareAttemptResultAnalysisLoading()
                         ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING
                     } else {
@@ -240,6 +244,10 @@ fun NavGraphBuilder.uploadGraph(
 
             HoldSelectScreen(
                 viewModel = viewModel,
+                allowAdditionalUpload = true,
+                onNavigateToAdditional = {
+                    navController.navigate(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD)
+                },
                 onNavigateToNext = {
                     viewModel.prepareAttemptResultAnalysisLoading()
                     navController.navigate(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING)
