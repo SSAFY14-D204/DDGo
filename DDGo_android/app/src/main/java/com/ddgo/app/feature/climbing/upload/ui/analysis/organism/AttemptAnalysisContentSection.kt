@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -83,6 +85,7 @@ internal fun AttemptAnalysisContentSection(
         )
     }
     val recoveryInsight = remember(
+        currentSummary.stabilityRecoveryScore,
         currentSummary.stabilityTimeline,
         currentSummary.isSuccess,
         durationMs,
@@ -95,11 +98,12 @@ internal fun AttemptAnalysisContentSection(
         )
     }
     val contributionInsight = remember(
+        currentSummary.lowerBodyDriveScore,
         currentSummary.loadFocusLabel,
         currentSummary.insideSupportRatio,
         currentSummary.isSuccess
     ) {
-        buildContributionInsight(currentSummary)
+        buildContributionScoreInsight(currentSummary)
     }
 
     Column(
@@ -112,57 +116,19 @@ internal fun AttemptAnalysisContentSection(
             reachedHoldsSuffix = reachedHoldsSuffix
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            AttemptMetricCard(
-                title = "안정성 유지율",
-                value = currentSummary.insideSupportRatioText,
-                caption = buildRetentionCaption(currentSummary.insideSupportRatio),
-                accentColor = AnalysisPrimary,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            )
-            AttemptMetricCard(
-                title = "안정성 회복력",
-                value = recoveryInsight.label,
-                caption = recoveryInsight.caption,
-                accentColor = recoveryInsight.accentColor,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            AttemptMetricCard(
-                title = "하체 주도성",
-                value = contributionInsight.driveLabel,
-                caption = contributionInsight.driveCaption,
-                accentColor = contributionInsight.driveAccentColor,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            )
-            AttemptMetricCard(
-                title = "부담 집중 부위",
-                value = contributionInsight.loadFocusValue,
-                caption = contributionInsight.loadFocusCaption,
-                accentColor = contributionInsight.loadFocusAccentColor,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            )
-        }
+        AttemptScoreSection(
+            retentionScore = currentSummary.stabilityRetentionScore ?: currentSummary.insideSupportRatio,
+            recoveryScore = currentSummary.stabilityRecoveryScore,
+            lowerBodyDriveScore = contributionInsight.lowerBodyScore,
+            retentionCaption = buildRetentionCaption(
+                currentSummary.stabilityRetentionScore ?: currentSummary.insideSupportRatio
+            ),
+            recoveryCaption = recoveryInsight.caption,
+            lowerBodyCaption = contributionInsight.driveCaption,
+            loadFocusValue = contributionInsight.loadFocusValue,
+            loadFocusCaption = contributionInsight.loadFocusCaption,
+            loadFocusAccentColor = contributionInsight.loadFocusAccentColor
+        )
 
         ChartPanel(
             title = "안정성 타임라인",
@@ -254,12 +220,11 @@ private fun AttemptResultOverviewCard(
     ) {
         null
     } else {
-        " / ${reachedHoldsSuffix.removePrefix("/")}번"
+        "/${reachedHoldsSuffix.removePrefix("/")}번"
     }
     val cruxValue = currentSummary.primaryCruxHoldNo
         ?.let { "${it}번 홀드" }
         ?: FinalAnalysisUnknownMetricText
-
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -273,6 +238,17 @@ private fun AttemptResultOverviewCard(
                 color = AnalysisText,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
+            )
+
+            AttemptOverallScoreCard(
+                score = currentSummary.overallMovementScore
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(AnalysisCardColor)
             )
 
             Row(
@@ -307,6 +283,7 @@ private fun AttemptResultOverviewCard(
                     modifier = Modifier.weight(1f)
                 )
             }
+
         }
     }
 }
@@ -320,7 +297,7 @@ private fun AttemptOverviewMetricBlock(
     accentColor: Color = AnalysisText
 ) {
     val primaryValueFontSize = when {
-        trailingValue != null -> 30.sp
+        trailingValue != null -> 22.sp
         value.length >= 5 -> 24.sp
         else -> 30.sp
     }
@@ -336,13 +313,16 @@ private fun AttemptOverviewMetricBlock(
         )
 
         if (trailingValue != null) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
                 Text(
                     text = value,
                     color = accentColor,
                     fontSize = primaryValueFontSize,
                     fontWeight = FontWeight.Bold,
-                    lineHeight = 30.sp,
+                    lineHeight = 28.sp,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Clip
@@ -350,7 +330,7 @@ private fun AttemptOverviewMetricBlock(
                 Text(
                     text = trailingValue,
                     color = AnalysisMuted,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     lineHeight = 20.sp,
                     maxLines = 1,
@@ -385,50 +365,231 @@ private fun AttemptOverviewMetricDivider() {
 }
 
 @Composable
-private fun AttemptMetricCard(
-    title: String,
-    value: String,
-    caption: String,
-    accentColor: Color,
+private fun AttemptOverallScoreCard(
+    score: Int?,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(AnalysisPanelColor)
-            .padding(horizontal = 16.dp, vertical = 16.dp)
+    val accentColor = scoreAccentColor(score)
+    val safeScore = score?.coerceIn(0, 100)
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "종합 점수",
+                color = AnalysisText,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = safeScore?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                color = accentColor,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold
+            )
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))
                     .background(accentColor.copy(alpha = 0.14f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
             ) {
                 Text(
-                    text = title,
+                    text = buildScoreGradeLabel(safeScore),
                     color = accentColor,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
+        }
 
+        Box(
+            modifier = Modifier.size(100.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                progress = { (safeScore ?: 0) / 100f },
+                modifier = Modifier.size(92.dp),
+                color = accentColor,
+                trackColor = AnalysisCardColor,
+                strokeWidth = 8.dp
+            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = safeScore?.toString() ?: "--",
+                    color = accentColor,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "100점 만점",
+                    color = AnalysisMuted,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttemptScoreSection(
+    retentionScore: Int?,
+    recoveryScore: Int?,
+    lowerBodyDriveScore: Int?,
+    retentionCaption: String,
+    recoveryCaption: String,
+    lowerBodyCaption: String,
+    loadFocusValue: String,
+    loadFocusCaption: String,
+    loadFocusAccentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val items = listOf(
+        AttemptScoreRowState("안정성 유지율", retentionScore, retentionCaption),
+        AttemptScoreRowState("안정성 회복력", recoveryScore, recoveryCaption),
+        AttemptScoreRowState("하체 주도성", lowerBodyDriveScore, lowerBodyCaption)
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(AnalysisPanelColor)
+            .padding(horizontal = 16.dp, vertical = 18.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(
-                text = value,
+                text = "항목별 점수",
                 color = AnalysisText,
-                fontSize = 24.sp,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            items.forEachIndexed { index, item ->
+                AttemptScoreRow(item = item)
+                if (index != items.lastIndex) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(AnalysisCardColor)
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(AnalysisCardColor)
+                    .padding(horizontal = 14.dp, vertical = 14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 4.dp, height = 40.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(loadFocusAccentColor)
+                    )
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "부담 집중 부위",
+                            color = AnalysisMuted,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = loadFocusValue,
+                            color = loadFocusAccentColor,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = loadFocusCaption,
+                            color = AnalysisMuted,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttemptScoreRow(
+    item: AttemptScoreRowState,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = scoreAccentColor(item.score)
+    val progress = ((item.score ?: 0).coerceIn(0, 100) / 100f)
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(accentColor)
+            )
+            Text(
+                text = item.title,
+                color = AnalysisText,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = item.score?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                color = accentColor,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
-
-            Text(
-                text = caption,
-                color = AnalysisMuted,
-                fontSize = 12.sp,
-                lineHeight = 18.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
         }
+
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(999.dp)),
+            color = accentColor,
+            trackColor = AnalysisCardColor
+        )
+
+        Text(
+            text = item.caption,
+            color = AnalysisMuted,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -699,6 +860,44 @@ private fun buildRetentionCaption(value: Int?): String {
     }
 }
 
+private fun buildOverallMovementCaption(score: Int?): String {
+    return when {
+        score == null -> "움직임 종합 점수를 준비하고 있어요."
+        score >= 82 -> "균형과 흐름이 모두 안정적이었어요."
+        score >= 70 -> "전반적인 움직임 흐름이 좋았어요."
+        score >= 58 -> "좋은 장면이 있었지만 보정도 보였어요."
+        score >= 46 -> "특정 구간의 균형과 연결을 더 다듬어 보세요."
+        else -> "핵심 구간에서 움직임 보정이 많이 필요해요."
+    }
+}
+
+private fun buildScoreGradeLabel(score: Int?): String {
+    return when {
+        score == null -> "분석 준비 중"
+        score >= 85 -> "매우 우수"
+        score >= 75 -> "우수함"
+        score >= 60 -> "안정적"
+        score >= 45 -> "보완 필요"
+        else -> "집중 점검"
+    }
+}
+
+private fun scoreAccentColor(score: Int?): Color {
+    return when {
+        score == null -> AnalysisMuted
+        score >= 80 -> AnalysisSuccess
+        score >= 65 -> AnalysisPrimary
+        score >= 50 -> Color(0xFFFFC271)
+        else -> AnalysisFailure
+    }
+}
+
+private data class AttemptScoreRowState(
+    val title: String,
+    val score: Int?,
+    val caption: String
+)
+
 private fun buildRecoveryInsight(
     summary: FinalAnalysisAttemptSummary,
     durationMs: Long,
@@ -740,6 +939,27 @@ private fun buildRecoveryInsight(
     } ?: "회복 신호 약함"
 
     val recoverySamples = recoveryIndex?.minus(lowestIndex)
+    val recoveryScore = summary.stabilityRecoveryScore ?: when {
+        recoverySamples == null && summary.isSuccess -> 56
+        recoverySamples == null -> 26
+        recoverySamples <= 2 -> 82
+        recoverySamples <= 3 -> 70
+        recoverySamples <= 6 -> 56
+        recoverySamples <= 8 -> 42
+        else -> 28
+    }
+    val recoveryCaption = when {
+        recoveryScore >= 76 -> "$lowestPointLabel 이후 바로 회복했어요."
+        recoveryScore >= 64 -> "$lowestPointLabel 이후 빠르게 안정됐어요."
+        recoveryScore >= 52 -> "흔들린 뒤 다시 세우는 흐름이 보였어요."
+        recoveryScore >= 40 -> "회복까지 시간이 조금 걸렸어요."
+        else -> "흔들린 뒤 회복이 오래 걸렸어요."
+    }
+    val recoveryAccentColor = when {
+        recoveryScore >= 68 -> AnalysisPrimary
+        recoveryScore >= 52 -> Color(0xFFFFC271)
+        else -> AnalysisFailure
+    }
     return when {
         recoverySamples == null && summary.isSuccess -> RecoveryInsight(
             label = "보통",
@@ -894,6 +1114,72 @@ private fun buildContributionInsight(summary: FinalAnalysisAttemptSummary): Cont
             isLegFocus -> "다리로 버티고 밀어 올리는 장면이 잘 보였어요."
             isCoreFocus -> "몸통으로 균형을 잡으며 이어간 장면이 보였어요."
             else -> "팔과 다리를 함께 썼지만 몇 장면에서는 팔로 버텼어요."
+        }
+    )
+}
+
+private fun buildContributionScoreInsight(summary: FinalAnalysisAttemptSummary): ContributionInsight {
+    val loadFocus = summary.loadFocusLabel
+    val isArmFocus = loadFocus.matchesAny("arm", "왼", "오")
+    val isLegFocus = loadFocus.matchesAny("leg", "다리", "발")
+    val isCoreFocus = loadFocus.matchesAny("core", "몸통", "코어")
+
+    val lowerBodyScore = (summary.lowerBodyDriveScore ?: run {
+        var fallbackScore = 54
+        when {
+            isArmFocus -> fallbackScore -= 16
+            isLegFocus -> fallbackScore += 16
+            isCoreFocus -> fallbackScore += 10
+        }
+        when {
+            (summary.insideSupportRatio ?: 0) >= 75 -> fallbackScore += 8
+            (summary.insideSupportRatio ?: 100) < 55 -> fallbackScore -= 6
+        }
+        if (summary.isSuccess) {
+            fallbackScore += 6
+        }
+        fallbackScore
+    }).coerceIn(0, 100)
+    val upperLimbScore = (100 - lowerBodyScore).coerceIn(0, 100)
+
+    val loadFocusValue = loadFocus ?: FinalAnalysisUnknownMetricText
+    val loadFocusCaption = when {
+        isArmFocus -> "팔 부담이 컸어요."
+        isLegFocus -> "발과 다리 사용이 컸어요."
+        isCoreFocus -> "몸통으로 버티는 장면이 많았어요."
+        else -> "부담 부위가 뚜렷하진 않았어요."
+    }
+    val loadFocusAccentColor = when {
+        isArmFocus -> AnalysisFailure
+        isLegFocus || isCoreFocus -> AnalysisPrimary
+        else -> AnalysisMuted
+    }
+
+    return ContributionInsight(
+        driveLabel = "${lowerBodyScore}점",
+        driveCaption = when {
+            lowerBodyScore >= 80 -> "다리와 골반이 먼저 버티는 흐름이 잘 보였어요."
+            lowerBodyScore >= 68 -> "하체로 밀어 올리는 장면이 비교적 잘 보였어요."
+            lowerBodyScore >= 56 -> "팔과 다리 사용이 섞여 있었어요."
+            lowerBodyScore >= 44 -> "팔이 먼저 버티는 장면이 꽤 있었어요."
+            else -> "팔에 힘이 먼저 들어가는 패턴이 자주 보였어요."
+        },
+        driveAccentColor = when {
+            lowerBodyScore >= 68 -> AnalysisPrimary
+            lowerBodyScore >= 52 -> Color(0xFFFFC271)
+            else -> AnalysisFailure
+        },
+        loadFocusValue = loadFocusValue,
+        loadFocusCaption = loadFocusCaption,
+        loadFocusAccentColor = loadFocusAccentColor,
+        lowerBodyScore = lowerBodyScore,
+        upperLimbScore = upperLimbScore,
+        lowerBodyBarLabel = "${lowerBodyScore}점",
+        upperLimbBarLabel = "${upperLimbScore}점",
+        summaryLine = when {
+            lowerBodyScore >= 72 -> "하체가 먼저 중심을 만들고 팔은 연결해 주는 흐름이 보였어요."
+            lowerBodyScore >= 56 -> "하체 사용은 있었지만 구간에 따라 팔 의존이 함께 보였어요."
+            else -> "이번 시도는 팔이 먼저 버티는 흐름이 비교적 자주 나타났어요."
         }
     )
 }

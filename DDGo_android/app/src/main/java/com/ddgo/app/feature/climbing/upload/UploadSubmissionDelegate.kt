@@ -2358,7 +2358,8 @@ internal class UploadSubmissionDelegate(
             attemptCount = playbackUris.size,
             totalHolds = totalHoldCount,
             aiResults = attemptAiAnalysisResults,
-            holdReachResults = attemptHoldReachResults
+            holdReachResults = attemptHoldReachResults,
+            contactDebugResults = attemptPolygonHoldContactDebugResults
         )
 
         uploadedVideos.forEachIndexed { index, uploadedVideo ->
@@ -2632,10 +2633,12 @@ private fun emptyAttemptCompletionSummary(attemptNo: Int): FinalAnalysisAttemptS
         highConfidenceRatioText = FinalAnalysisUnknownMetricText,
         insideSupportRatio = null,
         insideSupportRatioText = FinalAnalysisUnknownMetricText,
+        stabilityRetentionScore = null,
         stableContactFrameCount = null,
         stableContactFrameCountText = FinalAnalysisUnknownMetricText,
         stableContactRatio = null,
         stableContactRatioText = FinalAnalysisUnknownMetricText,
+        stabilityRecoveryScore = null,
         stabilityTimeline = DefaultFinalAnalysisTimeline,
         stabilityFocusFraction = null,
         stabilityHighlights = emptyList(),
@@ -2648,6 +2651,8 @@ private fun emptyAttemptCompletionSummary(attemptNo: Int): FinalAnalysisAttemptS
         dangerEventCount = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
+        lowerBodyDriveScore = null,
+        overallMovementScore = null,
         feedbackLine = "",
         coachingLine = "",
         effectiveModeLabel = "",

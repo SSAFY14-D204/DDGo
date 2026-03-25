@@ -15,7 +15,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -119,6 +123,7 @@ private val AttemptPreviewControlHeight = 132.dp
 @Composable
 internal fun AttemptPreviewHero(
     state: AttemptPreviewHeroState,
+    onShareClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -528,6 +533,26 @@ internal fun AttemptPreviewHero(
                                     }
                                 }
                             )
+                        }
+
+                        if (onShareClick != null) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 16.dp, bottom = 72.dp)
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF101114).copy(alpha = 0.82f))
+                                    .clickable(onClick = onShareClick),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Share,
+                                    contentDescription = "시도 분석 결과 공유",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 )
