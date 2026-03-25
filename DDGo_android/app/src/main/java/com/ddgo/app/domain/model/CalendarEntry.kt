@@ -9,10 +9,19 @@ data class CalendarEntry(
     val date: LocalDate,
     val title: String,
     val problemColor: String,
+    val result: CalendarEntryResult,
     val venue: String,
     val time: LocalTime?,
     val note: String
 )
+
+enum class CalendarEntryResult {
+    SUCCESS,
+    FAIL,
+    ACTIVE,
+    PENDING,
+    UNKNOWN
+}
 
 // 상단 요약 카드에 필요한 월간 집계 값이다.
 data class CalendarMonthSummary(

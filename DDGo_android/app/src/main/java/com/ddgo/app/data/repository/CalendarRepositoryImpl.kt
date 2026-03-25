@@ -5,6 +5,7 @@ import com.ddgo.app.data.remote.challenge.ChallengeListResponseDto
 import com.ddgo.app.data.remote.common.GymNameFormatter
 import com.ddgo.app.data.remote.common.RemoteDateTimeParser
 import com.ddgo.app.domain.model.CalendarEntry
+import com.ddgo.app.domain.model.CalendarEntryResult
 import com.ddgo.app.domain.repository.CalendarRepository
 import java.time.YearMonth
 import javax.inject.Inject
@@ -37,6 +38,7 @@ class CalendarRepositoryImpl @Inject constructor(
             date = startedAt.toLocalDate(),
             title = buildTitle(),
             problemColor = problemColor,
+            result = toCalendarEntryResult(),
             venue = GymNameFormatter.sanitize(gymName),
             time = startedAt.toLocalTime(),
             note = buildNote()
@@ -60,6 +62,19 @@ class CalendarRepositoryImpl @Inject constructor(
                 "진행 중"
             } else {
                 "결과 대기"
+            }
+        }
+    }
+
+    private fun ChallengeListResponseDto.toCalendarEntryResult(): CalendarEntryResult {
+        return when (challengeResult?.uppercase()) {
+            "SUCCESS" -> CalendarEntryResult.SUCCESS
+            "FAIL" -> CalendarEntryResult.FAIL
+            "PENDING" -> CalendarEntryResult.PENDING
+            else -> when {
+                challengeStatus.equals("ACTIVE", ignoreCase = true) -> CalendarEntryResult.ACTIVE
+                challengeStatus.equals("CLOSED", ignoreCase = true) -> CalendarEntryResult.PENDING
+                else -> CalendarEntryResult.UNKNOWN
             }
         }
     }

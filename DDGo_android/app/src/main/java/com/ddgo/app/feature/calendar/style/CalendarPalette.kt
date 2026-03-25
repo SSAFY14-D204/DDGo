@@ -25,6 +25,11 @@ internal object CalendarPalette {
     val MonthShadow = Color(0x1A6A707C)
     val MonthSelectorText = Color(0xFF1E232C)
     val MonthSelectorChevron = Color(0xFF505050)
+    val MonthMenuSurface = Color.White
+    val MonthMenuBorder = Color(0xFFE6EBF2)
+    val MonthMenuText = Color(0xFF1E232C)
+    val MonthMenuSelectedBackground = Color(0xFFF1F7FF)
+    val MonthMenuSelectedText = Color(0xFF4396FB)
     val ToggleShadow = Color(0x1A6A707C)
     val ToggleTrackBorder = Color(0xFF999999)
     val ToggleTrackBackground = Color.White
@@ -36,8 +41,12 @@ internal object CalendarPalette {
     val DayCellTextMuted = Color(0xFF8F9BB3)
     val DayCellSelected = Color(0xFF4396FB)
     val DayCellSelectedText = Color.White
+    val DayPlaceholder = Color(0xFF999999)
+    val DayPlaceholderMuted = Color(0xFF8F9BB3).copy(alpha = 0.25f)
     val GymMarkerBackground = Color(0xFF999999)
     val GymMarkerText = Color.White
+    val MarkerOutlineFill = Color.White
+    val MarkerOverflowDot = Color(0xFFFF5656)
 
     private val MarkerRed = Color(0xFFFF0000)
     private val MarkerOrange = Color(0xFFFF9F43)

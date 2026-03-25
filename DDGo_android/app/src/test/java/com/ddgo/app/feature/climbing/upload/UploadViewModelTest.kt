@@ -63,22 +63,15 @@ import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TestWatcher
-import org.junit.runner.Description
 import java.io.File
 import java.lang.reflect.Field
 import kotlin.io.path.createTempDirectory
@@ -2719,17 +2712,4 @@ class UploadViewModelTest {
         videoUri = videoUri,
         objectKey = "attempt/$attemptId"
     )
-}
-
-@OptIn(ExperimentalCoroutinesApi::class)
-class MainDispatcherRule(
-    val dispatcher: TestDispatcher = StandardTestDispatcher()
-) : TestWatcher() {
-    override fun starting(description: Description) {
-        Dispatchers.setMain(dispatcher)
-    }
-
-    override fun finished(description: Description) {
-        Dispatchers.resetMain()
-    }
 }

@@ -61,6 +61,11 @@ class CalendarViewModel @Inject constructor(
         loadMonth(targetMonth, defaultSelectedDateForMonth(targetMonth))
     }
 
+    fun selectMonth(targetMonth: YearMonth) {
+        if (targetMonth == _uiState.value.currentMonth) return
+        loadMonth(targetMonth, defaultSelectedDateForMonth(targetMonth))
+    }
+
     fun selectDate(date: LocalDate) {
         val targetMonth = YearMonth.from(date)
         if (targetMonth != _uiState.value.currentMonth) {
