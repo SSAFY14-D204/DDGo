@@ -15,10 +15,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.ddgo.app.domain.model.AiAnalysisResult
-import com.ddgo.app.domain.model.AiAnalysisVideoMetadata
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
@@ -29,6 +28,7 @@ import com.ddgo.app.feature.climbing.upload.UploadViewModel
 import com.ddgo.app.feature.climbing.upload.buildChallengeFinalAnalysisSummary
 import com.ddgo.app.feature.climbing.upload.buildFinalAnalysisAttemptSummaries
 import com.ddgo.app.feature.climbing.upload.formatAnalysisDate
+import com.ddgo.app.feature.climbing.upload.withAlignedDisplayCrux
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPage
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPageState
@@ -42,6 +42,7 @@ fun FinalAnalysisRoute(
     onNavigateToChallenge: () -> Unit = {},
     onNavigateToMain: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val attemptVideoUris = viewModel.playbackAttemptUris.ifEmpty { viewModel.allAttemptUris }
     val uploadedAttemptCount = attemptVideoUris.size
     val totalHolds = viewModel.totalSelectedHoldCount
@@ -60,13 +61,15 @@ fun FinalAnalysisRoute(
         attemptCount,
         totalHolds,
         viewModel.attemptAiAnalysisResults,
-        viewModel.attemptHoldReachResults
+        viewModel.attemptHoldReachResults,
+        viewModel.attemptPolygonHoldContactDebugResults
     ) {
         buildFinalAnalysisAttemptSummaries(
             attemptCount = attemptCount,
             totalHolds = totalHolds,
             aiResults = viewModel.attemptAiAnalysisResults,
-            holdReachResults = viewModel.attemptHoldReachResults
+            holdReachResults = viewModel.attemptHoldReachResults,
+            contactDebugResults = viewModel.attemptPolygonHoldContactDebugResults
         )
     }
     val challengeSummary = remember(attemptSummaries, totalHolds) {
@@ -168,7 +171,7 @@ fun FinalAnalysisRoute(
         currentAttemptAiAnalysisResult,
         currentAttemptContactDebugResult
     ) {
-        currentSummary.withDisplayCrux(
+        currentSummary.withAlignedDisplayCrux(
             aiAnalysisResult = currentAttemptAiAnalysisResult,
             contactDebugResult = currentAttemptContactDebugResult
         )
@@ -305,9 +308,47 @@ fun FinalAnalysisRoute(
             } else {
                 null
             },
+            onShareAction = if (isSingleUploadedAttempt) {
+                {
+                    shareAttemptAnalysis(
+                        context = context,
+                        videoUriString = selectedAttemptVideoUri,
+                        shareTitle = buildAttemptShareTitle(
+                            gymName = viewModel.gymName,
+                            attemptNo = safeSelectedAttempt
+                        ),
+                        shareText = buildAttemptShareText(
+                            gymName = viewModel.gymName,
+                            attemptNo = safeSelectedAttempt,
+                            summary = displaySummary,
+                            totalHolds = totalHolds
+                        )
+                    )
+                }
+            } else {
+                null
+            },
             onPrimaryAction = {
                 when {
-                    isSingleUploadedAttempt -> onNavigateToMain()
+                    isSingleUploadedAttempt -> {
+                        scope.launch {
+                            val hasChallengeToClose = viewModel.createdChallenge != null
+                            if (!hasChallengeToClose) {
+                                onNavigateToMain()
+                                return@launch
+                            }
+                            val closed = viewModel.closeChallengeForFinalAnalysis(
+                                challengeResult = challengeResult,
+                                averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                                mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                                maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                                finalComment = closeSummaryPayload.finalComment
+                            )
+                            if (closed) {
+                                onNavigateToMain()
+                            }
+                        }
+                    }
 
                     safeSelectedAttempt < attemptCount -> {
                         selectedAttempt = safeSelectedAttempt + 1
@@ -348,79 +389,37 @@ private data class ChallengeCloseRouteSummary(
     val finalComment: String?
 )
 
-private data class DisplayCruxSummary(
-    val holdNo: Int,
-    val durationMs: Int?,
-    val focusFraction: Float?
-)
-
-private fun FinalAnalysisAttemptSummary.withDisplayCrux(
-    aiAnalysisResult: AiAnalysisResult?,
-    contactDebugResult: PolygonHoldContactDebugResult?
-): FinalAnalysisAttemptSummary {
-    val displayCrux = resolveDisplayCruxSummary(
-        aiAnalysisResult = aiAnalysisResult,
-        contactDebugResult = contactDebugResult
-    ) ?: return this
-
-    if (
-        primaryCruxHoldNo == displayCrux.holdNo &&
-        primaryCruxDurationMs == displayCrux.durationMs &&
-        stabilityFocusFraction == displayCrux.focusFraction
-    ) {
-        return this
-    }
-
-    return copy(
-        primaryCruxHoldNo = displayCrux.holdNo,
-        primaryCruxDurationMs = displayCrux.durationMs,
-        stabilityFocusFraction = displayCrux.focusFraction ?: stabilityFocusFraction
-    )
+private fun buildAttemptShareTitle(
+    gymName: String,
+    attemptNo: Int
+): String {
+    val safeGymName = gymName.ifBlank { "DDGo" }
+    return "$safeGymName ${attemptNo}차 시도 분석 결과"
 }
 
-private fun resolveDisplayCruxSummary(
-    aiAnalysisResult: AiAnalysisResult?,
-    contactDebugResult: PolygonHoldContactDebugResult?
-): DisplayCruxSummary? {
-    val analysis = aiAnalysisResult ?: return null
-    val analysisStartTimeMs = contactDebugResult?.findClimbStartTimeMs()
-    val candidates = (analysis.cruxResult.topCandidates + analysis.cruxResult.allCandidates)
-        .filter { candidate ->
-            candidate.holdId > 1 && candidate.bestSegment != null
+private fun buildAttemptShareText(
+    gymName: String,
+    attemptNo: Int,
+    summary: FinalAnalysisAttemptSummary,
+    totalHolds: Int
+): String {
+    val resultLabel = if (summary.isSuccess) "성공" else "실패"
+    val reachedText = buildString {
+        append(summary.reachedHoldsText)
+        if (summary.reachedHolds != null && totalHolds > 0) {
+            append("/$totalHolds")
         }
-        .distinctBy { candidate ->
-            Triple(
-                candidate.holdId,
-                candidate.bestSegment?.startTimeMs,
-                candidate.bestSegment?.endTimeMs
-            )
-        }
-
-    val preferredCandidate = candidates.firstOrNull { candidate ->
-        val segment = candidate.bestSegment ?: return@firstOrNull false
-        analysisStartTimeMs == null || segment.startTimeMs >= analysisStartTimeMs
-    } ?: candidates.firstOrNull { candidate ->
-        val segment = candidate.bestSegment ?: return@firstOrNull false
-        analysisStartTimeMs == null || segment.endTimeMs >= analysisStartTimeMs
-    } ?: return null
-
-    val segment = preferredCandidate.bestSegment ?: return null
-    val effectiveStartTimeMs = max(segment.startTimeMs, analysisStartTimeMs ?: 0L)
-    val effectiveEndTimeMs = max(segment.endTimeMs, effectiveStartTimeMs)
-    val durationMs = (segment.endTimeMs - effectiveStartTimeMs)
-        .takeIf { it > 0L }
-        ?.coerceAtMost(Int.MAX_VALUE.toLong())
-        ?.toInt()
-    val focusFraction = analysis.calculateSegmentFocusFraction(
-        startTimeMs = effectiveStartTimeMs,
-        endTimeMs = effectiveEndTimeMs
-    )
-
-    return DisplayCruxSummary(
-        holdNo = preferredCandidate.holdId,
-        durationMs = durationMs,
-        focusFraction = focusFraction
-    )
+    }
+    val cruxText = summary.primaryCruxHoldNo?.let { "${it}번 홀드" } ?: "정보 없음"
+    val scoreText = summary.overallMovementScore?.let { "${it}점" } ?: "정보 없음"
+    val safeGymName = gymName.ifBlank { "DDGo" }
+    return buildString {
+        appendLine("$safeGymName ${attemptNo}차 시도 분석 결과")
+        appendLine("문제 풀이 여부: $resultLabel")
+        appendLine("종합 점수: $scoreText")
+        appendLine("도달 홀드: $reachedText")
+        append("대표 크럭스: $cruxText")
+    }
 }
 
 private fun buildAttemptFocusTimelinePoints(
@@ -770,33 +769,6 @@ private fun buildRiskLine(
     return "이번 시도는 핵심 구간에서 흐름이 한 번 끊겼어요."
 }
 
-private fun AiAnalysisResult.calculateSegmentFocusFraction(
-    startTimeMs: Long,
-    endTimeMs: Long
-): Float? {
-    val resolvedDurationMs = videoMetadata.durationMs()
-        ?: cruxResult.topCandidates.mapNotNull { it.bestSegment?.endTimeMs }.maxOrNull()
-        ?: cruxResult.allCandidates.mapNotNull { it.bestSegment?.endTimeMs }.maxOrNull()
-        ?: endTimeMs.takeIf { it > 0L }
-        ?: return null
-
-    if (resolvedDurationMs <= 0L) return null
-
-    val segmentMidMs = if (endTimeMs > startTimeMs) {
-        (startTimeMs + endTimeMs) / 2L
-    } else {
-        startTimeMs
-    }
-
-    return (segmentMidMs.toFloat() / resolvedDurationMs.toFloat()).coerceIn(0f, 1f)
-}
-
-private fun AiAnalysisVideoMetadata?.durationMs(): Long? {
-    val metadata = this ?: return null
-    val fpsValue = metadata.fps?.takeIf { it > 0f } ?: return null
-    if (metadata.totalFrames <= 0) return null
-    return ((metadata.totalFrames / fpsValue) * 1000f).toLong()
-}
 
 private fun toFocusReasonKeyword(type: String): String {
     return when (type) {

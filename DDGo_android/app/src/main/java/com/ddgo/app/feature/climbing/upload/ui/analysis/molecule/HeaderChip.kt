@@ -10,9 +10,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+internal data class HeaderChipTone(
+    val background: Color,
+    val content: Color,
+    val border: Color
+)
+
+internal fun buildHeaderChipTone(baseColor: Color): HeaderChipTone {
+    val contentColor = when {
+        baseColor.luminance() < 0.12f -> lerp(baseColor, Color.White, 0.72f)
+        baseColor.luminance() < 0.22f -> lerp(baseColor, Color.White, 0.52f)
+        baseColor.luminance() > 0.84f -> lerp(baseColor, Color.Black, 0.28f)
+        else -> baseColor
+    }
+
+    return HeaderChipTone(
+        background = baseColor.copy(alpha = 0.32f),
+        content = contentColor,
+        border = baseColor.copy(alpha = 0.62f)
+    )
+}
 
 @Composable
 internal fun HeaderChip(

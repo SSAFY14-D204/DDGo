@@ -30,6 +30,7 @@ internal data class ChallengeFinalAnalysisSummary(
     val attemptCount: Int,
     val overallSuccess: Boolean,
     val successAttemptCount: Int,
+    val overallMovementScore: Int?,
     val bestAttemptNo: Int?,
     val bestReachedHoldsText: String,
     val bestReachedHoldsSuffix: String?,
@@ -45,6 +46,15 @@ internal data class ChallengeFinalAnalysisSummary(
     val repeatedPatternLabels: List<String>,
     val repeatedCruxHoldLabel: String?,
     val repeatedLoadFocusLabel: String?,
+    val averageInsideSupportRatio: Int?,
+    val aggregateRecoveryScore: Int?,
+    val aggregateRecoveryLabel: String,
+    val aggregateRecoveryCaption: String,
+    val aggregateDriveScore: Int?,
+    val aggregateDriveLabel: String,
+    val aggregateDriveCaption: String,
+    val aggregateLoadFocusValue: String,
+    val aggregateLoadFocusCaption: String,
     val combinedTimeline: List<Float>,
     val focusFraction: Float?,
     val focusReasonText: String?,
@@ -79,7 +89,7 @@ internal fun buildChallengeFinalAnalysisSummary(
         ?.average()
         ?.roundToInt()
     val averageInsideSupportRatio = validAttemptSummaries
-        .mapNotNull { it.insideSupportRatio }
+        .mapNotNull { it.stabilityRetentionScore ?: it.insideSupportRatio }
         .takeIf { it.isNotEmpty() }
         ?.average()
         ?.roundToInt()
@@ -88,9 +98,7 @@ internal fun buildChallengeFinalAnalysisSummary(
         .takeIf { it.isNotEmpty() }
         ?.average()
         ?.roundToInt()
-    val repeatedCruxHoldNo = mostFrequentOrNull(
-        validAttemptSummaries.mapNotNull { it.primaryCruxHoldNo }
-    )
+    val repeatedCruxHoldNo = selectRepresentativeCruxHoldNo(validAttemptSummaries)
     val repeatedPatternLabels = mostFrequentList(
         values = validAttemptSummaries.flatMap { it.feedbackTypes },
         limit = 2
@@ -98,7 +106,25 @@ internal fun buildChallengeFinalAnalysisSummary(
     val repeatedLoadFocusLabel = mostFrequentOrNull(
         validAttemptSummaries.mapNotNull { it.loadFocusLabel }
     )
-        val repeatedCruxHoldLabel = repeatedCruxHoldNo?.let { "${it}번 홀드" }
+    val repeatedCruxHoldLabel = repeatedCruxHoldNo?.let { "${it}번 홀드" }
+    val aggregateRecoveryScore = validAttemptSummaries
+        .mapNotNull { it.stabilityRecoveryScore ?: calculateRecoveryScore(it) }
+        .takeIf { it.isNotEmpty() }
+        ?.average()
+        ?.roundToInt()
+    val aggregateDriveScore = validAttemptSummaries
+        .mapNotNull { it.lowerBodyDriveScore }
+        .takeIf { it.isNotEmpty() }
+        ?.average()
+        ?.roundToInt()
+    val overallMovementScore = calculateChallengeOverallMovementScore(
+        averageInsideSupportRatio = averageInsideSupportRatio,
+        aggregateRecoveryScore = aggregateRecoveryScore,
+        aggregateDriveScore = aggregateDriveScore,
+        averageStableContactRatio = averageStableContactRatio,
+        overallSuccess = overallSuccess
+    )
+    val aggregateLoadFocusValue = repeatedLoadFocusLabel ?: FinalAnalysisUnknownMetricText
     val attempts = validAttemptSummaries.map { summary ->
         ChallengeAttemptComparisonItem(
             attemptNo = summary.attemptNo,
@@ -126,7 +152,8 @@ internal fun buildChallengeFinalAnalysisSummary(
             } else {
                 null
             },
-            insideSupportPercent = summary.insideSupportRatio?.coerceIn(0, 100),
+            insideSupportPercent = (summary.stabilityRetentionScore ?: summary.insideSupportRatio)
+                ?.coerceIn(0, 100),
             stableContactPercent = summary.stableContactRatio?.coerceIn(0, 100)
         )
     }
@@ -147,6 +174,7 @@ internal fun buildChallengeFinalAnalysisSummary(
         attemptCount = attemptCount,
         overallSuccess = overallSuccess,
         successAttemptCount = successAttemptCount,
+        overallMovementScore = overallMovementScore,
         bestAttemptNo = bestAttempt?.attemptNo,
         bestReachedHoldsText = bestAttempt?.reachedHoldsText ?: FinalAnalysisUnknownMetricText,
         bestReachedHoldsSuffix = if (bestAttempt?.reachedHolds != null && totalHolds > 0) {
@@ -160,7 +188,7 @@ internal fun buildChallengeFinalAnalysisSummary(
         } else {
             null
         },
-        averageInsideSupportRatioText = averageInsideSupportRatio?.let { "$it%" }
+        averageInsideSupportRatioText = averageInsideSupportRatio?.let { "${it}점" }
             ?: FinalAnalysisUnknownMetricText,
         averageStableContactRatioText = averageStableContactRatio?.let { "$it%" }
             ?: FinalAnalysisUnknownMetricText,
@@ -198,6 +226,17 @@ internal fun buildChallengeFinalAnalysisSummary(
         repeatedPatternLabels = repeatedPatternLabels,
         repeatedCruxHoldLabel = repeatedCruxHoldLabel,
         repeatedLoadFocusLabel = repeatedLoadFocusLabel,
+        averageInsideSupportRatio = averageInsideSupportRatio,
+        aggregateRecoveryScore = aggregateRecoveryScore,
+        aggregateRecoveryLabel = aggregateRecoveryScore?.let { "${it}점" }
+            ?: FinalAnalysisUnknownMetricText,
+        aggregateRecoveryCaption = buildAggregateRecoveryCaption(aggregateRecoveryScore),
+        aggregateDriveScore = aggregateDriveScore,
+        aggregateDriveLabel = aggregateDriveScore?.let { "${it}점" }
+            ?: FinalAnalysisUnknownMetricText,
+        aggregateDriveCaption = buildAggregateDriveCaption(aggregateDriveScore),
+        aggregateLoadFocusValue = aggregateLoadFocusValue,
+        aggregateLoadFocusCaption = buildAggregateLoadFocusCaption(aggregateLoadFocusValue),
         combinedTimeline = buildCombinedTimeline(validAttemptSummaries),
         focusFraction = buildChallengeFocusFraction(
             attemptSummaries = validAttemptSummaries,
@@ -211,6 +250,34 @@ internal fun buildChallengeFinalAnalysisSummary(
         cruxDistribution = cruxDistribution,
         attempts = attempts
     )
+}
+
+private fun calculateChallengeOverallMovementScore(
+    averageInsideSupportRatio: Int?,
+    aggregateRecoveryScore: Int?,
+    aggregateDriveScore: Int?,
+    averageStableContactRatio: Int?,
+    overallSuccess: Boolean
+): Int? {
+    val weightedScores = buildList {
+        averageInsideSupportRatio?.coerceIn(0, 100)?.let { add(it to 0.32) }
+        aggregateRecoveryScore?.coerceIn(0, 100)?.let { add(it to 0.24) }
+        aggregateDriveScore?.coerceIn(0, 100)?.let { add(it to 0.26) }
+        averageStableContactRatio?.coerceIn(0, 100)?.let { add(it to 0.18) }
+    }
+
+    if (weightedScores.isEmpty()) {
+        return null
+    }
+
+    val totalWeight = weightedScores.sumOf { it.second }
+    if (totalWeight <= 0.0) {
+        return null
+    }
+
+    val baseScore = weightedScores.sumOf { (score, weight) -> score * weight } / totalWeight
+    val successBonus = if (overallSuccess) 3.0 else 0.0
+    return (baseScore + successBonus).roundToInt().coerceIn(0, 100)
 }
 
 internal fun displayFeedbackTypeLabel(type: String): String {
@@ -240,10 +307,12 @@ private fun fallbackAttemptSummary(
         highConfidenceRatioText = FinalAnalysisUnknownMetricText,
         insideSupportRatio = null,
         insideSupportRatioText = FinalAnalysisUnknownMetricText,
+        stabilityRetentionScore = null,
         stableContactFrameCount = null,
         stableContactFrameCountText = FinalAnalysisUnknownMetricText,
         stableContactRatio = null,
         stableContactRatioText = FinalAnalysisUnknownMetricText,
+        stabilityRecoveryScore = null,
         stabilityTimeline = DefaultFinalAnalysisTimeline,
         stabilityFocusFraction = null,
         stabilityHighlights = emptyList(),
@@ -256,6 +325,8 @@ private fun fallbackAttemptSummary(
         dangerEventCount = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
+        lowerBodyDriveScore = null,
+        overallMovementScore = null,
         feedbackLine = "분석 데이터가 충분하지 않아 종합 요약을 만들지 못했습니다.",
         coachingLine = "",
         effectiveModeLabel = "",
@@ -507,6 +578,117 @@ private fun <T> mostFrequentOrNull(values: List<T>): T? {
         .groupingBy { it }
         .eachCount()
         .maxByOrNull { it.value }
+        ?.key
+}
+
+private fun calculateLowerBodyDriveScore(summary: FinalAnalysisAttemptSummary): Int {
+    val loadFocus = summary.loadFocusLabel
+    val isArmFocus = loadFocus.matchesAny("arm", "팔", "손")
+    val isLegFocus = loadFocus.matchesAny("leg", "다리", "발")
+    val isCoreFocus = loadFocus.matchesAny("core", "몸통", "코어")
+
+    var lowerBodyScore = 54
+
+    when {
+        isArmFocus -> lowerBodyScore -= 16
+        isLegFocus -> lowerBodyScore += 16
+        isCoreFocus -> lowerBodyScore += 10
+    }
+
+    when {
+        (summary.insideSupportRatio ?: 0) >= 75 -> lowerBodyScore += 8
+        (summary.insideSupportRatio ?: 100) < 55 -> lowerBodyScore -= 6
+    }
+
+    if (summary.isSuccess) {
+        lowerBodyScore += 6
+    }
+
+    return lowerBodyScore.coerceIn(18, 82)
+}
+
+private fun buildAggregateRecoveryCaption(score: Int?): String {
+    return when {
+        score == null -> "아직 종합 회복 흐름을 계산하는 중이에요."
+        score >= 72 -> "흔들린 뒤 빠르게 다시 안정됐어요."
+        score >= 62 -> "회복 흐름이 비교적 빨랐어요."
+        score >= 50 -> "회복 속도는 보통이었어요."
+        score >= 38 -> "회복까지 시간이 조금 걸렸어요."
+        else -> "흔들린 뒤 회복이 느린 편이었어요."
+    }
+}
+
+private fun buildAggregateDriveCaption(score: Int?): String {
+    return when {
+        score == null -> "아직 종합 하체 사용 흐름을 계산하는 중이에요."
+        score >= 72 -> "다리로 밀어 올리는 흐름이 안정적으로 이어졌어요."
+        score >= 62 -> "다리 사용이 비교적 잘 보였어요."
+        score >= 50 -> "다리와 팔을 비슷하게 쓴 편이에요."
+        score >= 38 -> "팔로 먼저 버티는 장면이 조금 많았어요."
+        else -> "팔 힘에 먼저 의존한 장면이 반복됐어요."
+    }
+}
+
+private fun buildAggregateLoadFocusCaption(loadFocusValue: String): String {
+    return when {
+        loadFocusValue == FinalAnalysisUnknownMetricText -> "특정 부위 부담은 뚜렷하지 않았어요."
+        loadFocusValue.matchesAny("arm", "팔", "손") -> "팔 쪽 부담이 반복해서 컸어요."
+        loadFocusValue.matchesAny("leg", "다리", "발") -> "다리 쪽 부담이 반복해서 컸어요."
+        loadFocusValue.matchesAny("core", "몸통", "코어") -> "몸통으로 버틴 장면이 자주 보였어요."
+        else -> "${loadFocusValue} 쪽 부담이 반복해서 커졌어요."
+    }
+}
+
+private fun findRecoveryIndex(timeline: List<Float>, lowestIndex: Int): Int? {
+    if (lowestIndex >= timeline.lastIndex) return null
+
+    val lowestValue = timeline[lowestIndex]
+    val recoveryTarget = maxOf(0.58f, lowestValue + 0.18f)
+
+    for (index in lowestIndex + 1..timeline.lastIndex) {
+        val current = timeline[index]
+        val nextWindow = timeline.subList(index, minOf(index + 2, timeline.lastIndex) + 1)
+        val windowAverage = nextWindow.average().toFloat()
+        if (current >= recoveryTarget && windowAverage >= recoveryTarget - 0.04f) {
+            return index
+        }
+    }
+    return null
+}
+
+private fun String?.matchesAny(vararg keywords: String): Boolean {
+    val safeValue = this?.lowercase().orEmpty()
+    return keywords.any { keyword -> safeValue.contains(keyword.lowercase()) }
+}
+
+private fun fiveLevelLabel(score: Int): String {
+    return when {
+        score >= 72 -> "매우 높음"
+        score >= 62 -> "높음"
+        score >= 50 -> "보통"
+        score >= 38 -> "낮음"
+        else -> "매우 낮음"
+    }
+}
+
+private fun selectRepresentativeCruxHoldNo(
+    attemptSummaries: List<FinalAnalysisAttemptSummary>
+): Int? {
+    return attemptSummaries
+        .mapNotNull { summary ->
+            summary.primaryCruxHoldNo
+                ?.takeIf { it > 1 }
+                ?.let { holdNo ->
+                    Triple(holdNo, summary.primaryCruxDurationMs ?: 0, summary.attemptNo)
+                }
+        }
+        .groupBy { it.first }
+        .entries
+        .maxWithOrNull(
+            compareBy<Map.Entry<Int, List<Triple<Int, Int, Int>>>> { it.value.size }
+                .thenBy { entry -> entry.value.sumOf { item -> item.second } }
+                .thenBy { entry -> entry.key }
+        )
         ?.key
 }
 

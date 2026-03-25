@@ -73,6 +73,7 @@ internal fun FinalAnalysisPage(
     onNavigateBack: () -> Unit,
     onAnalysisPointSelected: (Long) -> Unit,
     onSecondaryAction: (() -> Unit)?,
+    onShareAction: (() -> Unit)?,
     onPrimaryAction: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -91,7 +92,10 @@ internal fun FinalAnalysisPage(
     ) {
         FinalAnalysisTopBar(onNavigateBack = onNavigateBack)
 
-        AttemptPreviewHero(state = state.heroState)
+        AttemptPreviewHero(
+            state = state.heroState,
+            onShareClick = onShareAction
+        )
 
         AttemptAnalysisTimelineRow(
             points = state.timelinePoints,

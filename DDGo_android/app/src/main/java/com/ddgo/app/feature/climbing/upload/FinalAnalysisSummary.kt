@@ -6,6 +6,8 @@ import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AiAnalysisVideoMetadata
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.usecase.AttemptHoldReachResult
+import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
+import com.ddgo.app.domain.usecase.PolygonTrackedLimb
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -16,6 +18,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 internal data class FinalAnalysisAttemptSummary(
     val attemptNo: Int,
@@ -31,10 +34,12 @@ internal data class FinalAnalysisAttemptSummary(
     val highConfidenceRatioText: String,
     val insideSupportRatio: Int?,
     val insideSupportRatioText: String,
+    val stabilityRetentionScore: Int?,
     val stableContactFrameCount: Int?,
     val stableContactFrameCountText: String,
     val stableContactRatio: Int?,
     val stableContactRatioText: String,
+    val stabilityRecoveryScore: Int?,
     val stabilityTimeline: List<Float>,
     val stabilityFocusFraction: Float?,
     val stabilityHighlights: List<String>,
@@ -47,6 +52,8 @@ internal data class FinalAnalysisAttemptSummary(
     val dangerEventCount: Int?,
     val feedbackTypes: List<String>,
     val loadFocusLabel: String?,
+    val lowerBodyDriveScore: Int?,
+    val overallMovementScore: Int?,
     val feedbackLine: String,
     val coachingLine: String,
     val effectiveModeLabel: String,
@@ -62,7 +69,8 @@ internal fun buildFinalAnalysisAttemptSummaries(
     attemptCount: Int,
     totalHolds: Int = 0,
     aiResults: List<AiAnalysisResult?> = emptyList(),
-    holdReachResults: List<AttemptHoldReachResult> = emptyList()
+    holdReachResults: List<AttemptHoldReachResult> = emptyList(),
+    contactDebugResults: List<PolygonHoldContactDebugResult> = emptyList()
 ): List<FinalAnalysisAttemptSummary> {
     val resolvedAttemptCount = max(
         max(attemptCount, aiResults.size),
@@ -70,7 +78,9 @@ internal fun buildFinalAnalysisAttemptSummaries(
     ).coerceAtLeast(1)
     return List(resolvedAttemptCount) { index ->
         val holdReachResult = holdReachResults.getOrNull(index)
-        aiResults.getOrNull(index)?.toFinalAnalysisAttemptSummary(
+        val aiAnalysisResult = aiResults.getOrNull(index)
+        val contactDebugResult = contactDebugResults.getOrNull(index)
+        val baseSummary = aiAnalysisResult?.toFinalAnalysisAttemptSummary(
             attemptNo = index + 1,
             totalHolds = totalHolds,
             holdReachResult = holdReachResult
@@ -80,7 +90,535 @@ internal fun buildFinalAnalysisAttemptSummaries(
                 totalHolds = totalHolds,
                 holdReachResult = holdReachResult
             )
+        baseSummary
+            .withAlignedDisplayCrux(
+                aiAnalysisResult = aiAnalysisResult,
+                contactDebugResult = contactDebugResult
+            )
+            .withComputedLowerBodyDriveScore(
+                aiAnalysisResult = aiAnalysisResult,
+                contactDebugResult = contactDebugResult
+            )
+            .withComputedStabilityRetentionScore(
+                aiAnalysisResult = aiAnalysisResult,
+                contactDebugResult = contactDebugResult
+            )
+            .withComputedStabilityRecoveryScore(
+                contactDebugResult = contactDebugResult
+            )
+            .withComputedOverallMovementScore()
     }
+}
+
+internal fun FinalAnalysisAttemptSummary.withAlignedDisplayCrux(
+    aiAnalysisResult: AiAnalysisResult?,
+    contactDebugResult: PolygonHoldContactDebugResult?
+): FinalAnalysisAttemptSummary {
+    val displayCrux = resolveAlignedDisplayCruxSummary(
+        aiAnalysisResult = aiAnalysisResult,
+        contactDebugResult = contactDebugResult
+    ) ?: return this
+
+    if (
+        primaryCruxHoldNo == displayCrux.holdNo &&
+        primaryCruxDurationMs == displayCrux.durationMs &&
+        stabilityFocusFraction == displayCrux.focusFraction
+    ) {
+        return this
+    }
+
+    return copy(
+        primaryCruxHoldNo = displayCrux.holdNo,
+        primaryCruxDurationMs = displayCrux.durationMs,
+        stabilityFocusFraction = displayCrux.focusFraction ?: stabilityFocusFraction
+    )
+}
+
+internal fun FinalAnalysisAttemptSummary.withComputedLowerBodyDriveScore(
+    aiAnalysisResult: AiAnalysisResult?,
+    contactDebugResult: PolygonHoldContactDebugResult?
+): FinalAnalysisAttemptSummary {
+    val computedScore = calculateAttemptLowerBodyDriveScore(
+        summary = this,
+        aiAnalysisResult = aiAnalysisResult,
+        contactDebugResult = contactDebugResult
+    ) ?: return this
+
+    return if (lowerBodyDriveScore == computedScore) {
+        this
+    } else {
+        copy(lowerBodyDriveScore = computedScore)
+    }
+}
+
+internal fun FinalAnalysisAttemptSummary.withComputedStabilityRetentionScore(
+    aiAnalysisResult: AiAnalysisResult?,
+    contactDebugResult: PolygonHoldContactDebugResult?
+): FinalAnalysisAttemptSummary {
+    val computedScore = calculateStabilityRetentionScore(
+        summary = this,
+        aiAnalysisResult = aiAnalysisResult,
+        contactDebugResult = contactDebugResult
+    ) ?: return this
+
+    return if (stabilityRetentionScore == computedScore) {
+        this
+    } else {
+        copy(
+            insideSupportRatio = computedScore,
+            insideSupportRatioText = "${computedScore}점",
+            stabilityRetentionScore = computedScore
+        )
+    }
+}
+
+internal fun FinalAnalysisAttemptSummary.withComputedStabilityRecoveryScore(
+    contactDebugResult: PolygonHoldContactDebugResult?
+): FinalAnalysisAttemptSummary {
+    val computedScore = calculateRecoveryScore(
+        summary = this,
+        contactDebugResult = contactDebugResult
+    ) ?: return this
+
+    return if (stabilityRecoveryScore == computedScore) {
+        this
+    } else {
+        copy(stabilityRecoveryScore = computedScore)
+    }
+}
+
+internal fun FinalAnalysisAttemptSummary.withComputedOverallMovementScore(): FinalAnalysisAttemptSummary {
+    val computedScore = calculateOverallMovementScore(this) ?: return this
+
+    return if (overallMovementScore == computedScore) {
+        this
+    } else {
+        copy(overallMovementScore = computedScore)
+    }
+}
+
+private data class AlignedDisplayCruxSummary(
+    val holdNo: Int,
+    val durationMs: Int?,
+    val focusFraction: Float?
+)
+
+private fun resolveAlignedDisplayCruxSummary(
+    aiAnalysisResult: AiAnalysisResult?,
+    contactDebugResult: PolygonHoldContactDebugResult?
+): AlignedDisplayCruxSummary? {
+    val analysis = aiAnalysisResult ?: return null
+    val analysisStartTimeMs = contactDebugResult?.findFourPointContactStartTimeMs()
+    val candidates = (analysis.cruxResult.topCandidates + analysis.cruxResult.allCandidates)
+        .filter { candidate ->
+            candidate.holdId > 1 && candidate.bestSegment != null
+        }
+        .distinctBy { candidate ->
+            Triple(
+                candidate.holdId,
+                candidate.bestSegment?.startTimeMs,
+                candidate.bestSegment?.endTimeMs
+            )
+        }
+
+    val preferredCandidate = candidates.firstOrNull { candidate ->
+        val segment = candidate.bestSegment ?: return@firstOrNull false
+        analysisStartTimeMs == null || segment.startTimeMs >= analysisStartTimeMs
+    } ?: candidates.firstOrNull { candidate ->
+        val segment = candidate.bestSegment ?: return@firstOrNull false
+        analysisStartTimeMs == null || segment.endTimeMs >= analysisStartTimeMs
+    } ?: return null
+
+    val segment = preferredCandidate.bestSegment ?: return null
+    val effectiveStartTimeMs = max(segment.startTimeMs, analysisStartTimeMs ?: 0L)
+    val effectiveEndTimeMs = max(segment.endTimeMs, effectiveStartTimeMs)
+    val durationMs = (segment.endTimeMs - effectiveStartTimeMs)
+        .takeIf { it > 0L }
+        ?.coerceAtMost(Int.MAX_VALUE.toLong())
+        ?.toInt()
+    val focusFraction = analysis.calculateDisplayCruxFocusFraction(
+        startTimeMs = effectiveStartTimeMs,
+        endTimeMs = effectiveEndTimeMs
+    )
+
+    return AlignedDisplayCruxSummary(
+        holdNo = preferredCandidate.holdId,
+        durationMs = durationMs,
+        focusFraction = focusFraction
+    )
+}
+
+private fun PolygonHoldContactDebugResult.findFourPointContactStartTimeMs(): Long? {
+    return frames.firstOrNull { frame ->
+        val limbStatesByLimb = frame.limbStates.associateBy { it.limb }
+        listOf(
+            PolygonTrackedLimb.LEFT_HAND,
+            PolygonTrackedLimb.RIGHT_HAND,
+            PolygonTrackedLimb.LEFT_FOOT,
+            PolygonTrackedLimb.RIGHT_FOOT
+        ).all { limb ->
+            limbStatesByLimb[limb]?.activeHoldNo != null
+        }
+    }?.frameTimeMs
+}
+
+private data class StabilityRetentionFrame(
+    val insideSupport: Boolean?,
+    val stabilityMarginM: Float?,
+    val confidence: Float?,
+    val comProjXz: Pair<Float, Float>?
+)
+
+private data class StabilityRetentionSignal(
+    val insideSupportScore: Int,
+    val marginReserveScore: Int,
+    val comJitterScore: Int?,
+    val marginJitterScore: Int?,
+    val lowMarginRatio: Float,
+    val negativeMarginRatio: Float
+)
+
+internal fun calculateStabilityRetentionScore(
+    summary: FinalAnalysisAttemptSummary,
+    aiAnalysisResult: AiAnalysisResult?,
+    contactDebugResult: PolygonHoldContactDebugResult? = null
+): Int? {
+    val signal = aiAnalysisResult?.extractStabilityRetentionSignal(
+        summary = summary,
+        contactDebugResult = contactDebugResult
+    )
+
+    if (signal == null) {
+        return summary.insideSupportRatio?.coerceIn(0, 100)
+    }
+
+    val jitterScore = signal.comJitterScore ?: signal.marginJitterScore ?: signal.insideSupportScore
+    val retentionScore = (
+        24f +
+            signal.insideSupportScore * 0.60f +
+            signal.marginReserveScore * 0.12f +
+            jitterScore * 0.05f +
+            stabilityRetentionSuccessBonus(
+                isSuccess = summary.isSuccess,
+                insideSupportScore = signal.insideSupportScore,
+                marginReserveScore = signal.marginReserveScore
+            ) -
+            stabilityRetentionSeverePenalty(
+                lowMarginRatio = signal.lowMarginRatio,
+                negativeMarginRatio = signal.negativeMarginRatio
+            )
+        ).roundToInt()
+
+    return applyStabilityRetentionFloor(
+        isSuccess = summary.isSuccess,
+        insideSupportScore = signal.insideSupportScore,
+        score = retentionScore
+    ).coerceIn(0, 100)
+}
+
+private fun AiAnalysisResult.extractStabilityRetentionSignal(
+    summary: FinalAnalysisAttemptSummary,
+    contactDebugResult: PolygonHoldContactDebugResult?
+): StabilityRetentionSignal? {
+    val frames = physicsResult
+        ?.getArrayOrNull("frames")
+        ?.mapNotNull { frame ->
+            frame.asObjectOrNull()
+                ?.getObjectOrNull("support_stability")
+                ?.toStabilityRetentionFrame()
+        }
+        .orEmpty()
+
+    if (frames.isEmpty()) {
+        return null
+    }
+
+    val durationMs = estimateRecoveryDurationMs(summary)
+    val analysisStartFraction = contactDebugResult
+        ?.findFourPointContactStartTimeMs()
+        ?.takeIf { durationMs > 0L }
+        ?.let { (it.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) }
+    val startIndex = if (analysisStartFraction == null) {
+        0
+    } else {
+        (analysisStartFraction * (frames.lastIndex.coerceAtLeast(0)).toFloat())
+            .roundToInt()
+            .coerceIn(0, frames.lastIndex)
+    }
+    val scopedFrames = frames.drop(startIndex)
+        .filter { frame -> frame.confidence == null || frame.confidence >= 0.35f }
+
+    if (scopedFrames.size < 3) {
+        return null
+    }
+
+    val insideSupportFrames = scopedFrames.mapNotNull { it.insideSupport }
+    val insideSupportScore = if (insideSupportFrames.isNotEmpty()) {
+        ((insideSupportFrames.count { it } * 100f) / insideSupportFrames.size.toFloat())
+            .roundToInt()
+            .coerceIn(0, 100)
+    } else {
+        summary.insideSupportRatio ?: return null
+    }
+
+    val margins = scopedFrames.mapNotNull { it.stabilityMarginM }
+    val marginReserveScore = if (margins.isNotEmpty()) {
+        (margins.map { margin ->
+            (margin / 0.020f).coerceIn(0f, 1f)
+        }.average() * 100.0).roundToInt().coerceIn(0, 100)
+    } else {
+        insideSupportScore
+    }
+
+    val comJitterScore = scopedFrames
+        .mapNotNull { it.comProjXz }
+        .takeIf { it.size >= 5 }
+        ?.let(::calculateComJitterScore)
+
+    val marginJitterScore = margins
+        .takeIf { it.size >= 4 }
+        ?.let(::calculateMarginJitterScore)
+
+    val lowMarginRatio = if (margins.isNotEmpty()) {
+        margins.count { it < 0.010f }.toFloat() / margins.size.toFloat()
+    } else {
+        0f
+    }
+
+    val negativeMarginRatio = if (margins.isNotEmpty()) {
+        margins.count { it < -0.005f }.toFloat() / margins.size.toFloat()
+    } else {
+        0f
+    }
+
+    return StabilityRetentionSignal(
+        insideSupportScore = insideSupportScore,
+        marginReserveScore = marginReserveScore,
+        comJitterScore = comJitterScore,
+        marginJitterScore = marginJitterScore,
+        lowMarginRatio = lowMarginRatio,
+        negativeMarginRatio = negativeMarginRatio
+    )
+}
+
+internal fun calculateRecoveryScore(
+    summary: FinalAnalysisAttemptSummary,
+    contactDebugResult: PolygonHoldContactDebugResult? = null
+): Int? {
+    val timeline = summary.stabilityTimeline
+    if (timeline.size < 3) return null
+
+    val durationMs = estimateRecoveryDurationMs(summary)
+    val analysisStartFraction = contactDebugResult
+        ?.findFourPointContactStartTimeMs()
+        ?.takeIf { durationMs > 0L }
+        ?.let { (it.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) }
+    val startIndex = timeline.startIndex(analysisStartFraction)
+    if (timeline.size - startIndex < 3) return null
+
+    val lowestIndex = (startIndex..timeline.lastIndex).minByOrNull { timeline[it] } ?: return null
+    val recoveryIndex = findRecoveryIndex(timeline, lowestIndex)
+    val recoverySamples = recoveryIndex?.minus(lowestIndex)
+
+    return when {
+        recoverySamples == null && summary.isSuccess -> 56
+        recoverySamples == null -> 26
+        recoverySamples <= 2 -> 82
+        recoverySamples <= 3 -> 70
+        recoverySamples <= 6 -> 56
+        recoverySamples <= 8 -> 42
+        else -> 28
+    }
+}
+
+private fun calculateAttemptLowerBodyDriveScore(
+    summary: FinalAnalysisAttemptSummary,
+    aiAnalysisResult: AiAnalysisResult?,
+    contactDebugResult: PolygonHoldContactDebugResult?
+): Int? {
+    var score = 54
+    var signalCount = 0
+
+    summary.insideSupportRatio?.let { insideSupportRatio ->
+        signalCount += 1
+        score += when {
+            insideSupportRatio >= 78 -> 7
+            insideSupportRatio >= 62 -> 3
+            insideSupportRatio < 48 -> -4
+            else -> 0
+        }
+    }
+
+    summary.stableContactRatio?.let { stableContactRatio ->
+        signalCount += 1
+        score += when {
+            stableContactRatio >= 78 -> 4
+            stableContactRatio >= 62 -> 1
+            stableContactRatio < 50 -> -3
+            else -> 0
+        }
+    }
+
+    aiAnalysisResult?.let { analysis ->
+        val topCandidate = analysis.cruxResult.topCandidates.firstOrNull()
+            ?: analysis.cruxResult.allCandidates.firstOrNull()
+        val dominantLimbTokens = topCandidate?.bestSegment?.dominantLimbs.orEmpty()
+            .map { it.lowercase() }
+        val dominantModeTokens = topCandidate?.bestSegment?.dominantModes.orEmpty()
+            .map { it.lowercase() }
+        val feedbackTypes = analysis.buildFeedbackTypes(
+            insideSupportRatio = summary.insideSupportRatio,
+            stableContactRatio = summary.stableContactRatio
+        )
+        val peakLoadGroup = analysis.extractPeakBodyLoadGroupToken()
+
+        if (dominantLimbTokens.isNotEmpty()) {
+            signalCount += 1
+            val hasFootDominance = dominantLimbTokens.any { it.contains("foot") }
+            val hasHandDominance = dominantLimbTokens.any { it.contains("hand") }
+            score += when {
+                hasFootDominance && !hasHandDominance -> 11
+                hasFootDominance -> 5
+                hasHandDominance -> -7
+                else -> 0
+            }
+        }
+
+        if (dominantModeTokens.isNotEmpty()) {
+            signalCount += 1
+            val hasStepOrPush = dominantModeTokens.any { it.contains("step") || it.contains("push") }
+            val hasGripOrPull = dominantModeTokens.any { it.contains("grip") || it.contains("pull") }
+            score += when {
+                hasStepOrPush && !hasGripOrPull -> 8
+                hasStepOrPush -> 4
+                hasGripOrPull -> -4
+                else -> 0
+            }
+        }
+
+        if (peakLoadGroup != null) {
+            signalCount += 1
+            score += when (peakLoadGroup.lowercase()) {
+                "left_leg", "right_leg" -> 11
+                "core" -> 7
+                "left_arm", "right_arm" -> -7
+                else -> 0
+            }
+        }
+
+        if (feedbackTypes.isNotEmpty()) {
+            signalCount += 1
+            if ("발 사용 부족" in feedbackTypes) score -= 8
+            if ("팔 사용 과다" in feedbackTypes) score -= 6
+            if ("중심 흔들림" in feedbackTypes) score -= 2
+        }
+    }
+
+    contactDebugResult?.buildLowerBodyDriveContactSignal()?.let { contactSignal ->
+        signalCount += 1
+        score += contactSignal.scoreDelta
+    }
+
+    if (summary.isSuccess) {
+        score += 5
+    }
+
+    return if (signalCount == 0) null else score.coerceIn(0, 100)
+}
+
+private data class LowerBodyDriveContactSignal(
+    val scoreDelta: Int
+)
+
+private fun PolygonHoldContactDebugResult.buildLowerBodyDriveContactSignal(): LowerBodyDriveContactSignal? {
+    val analysisStartTimeMs = findFourPointContactStartTimeMs()
+    val analyzedFrames = frames.filter { frame ->
+        frame.activeContacts.isNotEmpty() &&
+            (analysisStartTimeMs == null || frame.frameTimeMs >= analysisStartTimeMs)
+    }
+    if (analyzedFrames.isEmpty()) {
+        return null
+    }
+
+    val totalFrames = analyzedFrames.size.toFloat()
+    val bothFeetRatio = analyzedFrames.count { frame ->
+        val activeFeet = frame.activeContacts.map { it.limb }.filterNot(PolygonTrackedLimb::isHand).toSet()
+        activeFeet.containsAll(setOf(PolygonTrackedLimb.LEFT_FOOT, PolygonTrackedLimb.RIGHT_FOOT))
+    } / totalFrames
+    val anyFootRatio = analyzedFrames.count { frame ->
+        frame.activeContacts.any { !it.limb.isHand }
+    } / totalFrames
+    val handOnlyRatio = analyzedFrames.count { frame ->
+        val hasHand = frame.activeContacts.any { it.limb.isHand }
+        val hasFoot = frame.activeContacts.any { !it.limb.isHand }
+        hasHand && !hasFoot
+    } / totalFrames
+
+    val footEngageCount = analyzedFrames.sumOf { frame ->
+        frame.limbStates.count { state ->
+            state.transition == "engage" && !state.limb.isHand
+        }
+    }
+    val handEngageCount = analyzedFrames.sumOf { frame ->
+        frame.limbStates.count { state ->
+            state.transition == "engage" && state.limb.isHand
+        }
+    }
+
+    var scoreDelta = 0
+    scoreDelta += when {
+        bothFeetRatio >= 0.42f -> 11
+        bothFeetRatio >= 0.28f -> 7
+        bothFeetRatio < 0.12f -> -4
+        else -> 0
+    }
+    scoreDelta += when {
+        anyFootRatio >= 0.78f -> 9
+        anyFootRatio >= 0.60f -> 4
+        anyFootRatio < 0.38f -> -5
+        else -> 0
+    }
+    scoreDelta += when {
+        handOnlyRatio >= 0.30f -> -8
+        handOnlyRatio >= 0.18f -> -5
+        handOnlyRatio <= 0.06f -> 4
+        else -> 0
+    }
+
+    val totalEngageCount = footEngageCount + handEngageCount
+    if (totalEngageCount >= 3) {
+        val footEngageShare = footEngageCount / totalEngageCount.toFloat()
+        scoreDelta += when {
+            footEngageShare >= 0.46f -> 9
+            footEngageShare >= 0.36f -> 4
+            footEngageShare < 0.22f -> -6
+            footEngageShare < 0.30f -> -3
+            else -> 0
+        }
+    }
+
+    return LowerBodyDriveContactSignal(scoreDelta = scoreDelta)
+}
+
+private fun AiAnalysisResult.calculateDisplayCruxFocusFraction(
+    startTimeMs: Long,
+    endTimeMs: Long
+): Float? {
+    val resolvedDurationMs = videoMetadata.durationMs()
+        ?: cruxResult.topCandidates.mapNotNull { it.bestSegment?.endTimeMs }.maxOrNull()
+        ?: cruxResult.allCandidates.mapNotNull { it.bestSegment?.endTimeMs }.maxOrNull()
+        ?: endTimeMs.takeIf { it > 0L }
+        ?: return null
+
+    if (resolvedDurationMs <= 0L) return null
+
+    val segmentMidMs = if (endTimeMs > startTimeMs) {
+        (startTimeMs + endTimeMs) / 2L
+    } else {
+        startTimeMs
+    }
+
+    return (segmentMidMs.toFloat() / resolvedDurationMs.toFloat()).coerceIn(0f, 1f)
 }
 
 private fun emptyFinalAnalysisAttemptSummary(
@@ -106,10 +644,12 @@ private fun emptyFinalAnalysisAttemptSummary(
         highConfidenceRatioText = FinalAnalysisUnknownMetricText,
         insideSupportRatio = null,
         insideSupportRatioText = FinalAnalysisUnknownMetricText,
+        stabilityRetentionScore = null,
         stableContactFrameCount = null,
         stableContactFrameCountText = FinalAnalysisUnknownMetricText,
         stableContactRatio = null,
         stableContactRatioText = FinalAnalysisUnknownMetricText,
+        stabilityRecoveryScore = null,
         stabilityTimeline = DefaultFinalAnalysisTimeline,
         stabilityFocusFraction = null,
         stabilityHighlights = listOf(NoAiNarrative),
@@ -122,6 +662,8 @@ private fun emptyFinalAnalysisAttemptSummary(
         dangerEventCount = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
+        lowerBodyDriveScore = null,
+        overallMovementScore = null,
         feedbackLine = buildFallbackFeedbackLine(
             isSuccess = isSuccess,
             reachedHolds = reachedHolds,
@@ -187,10 +729,12 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         highConfidenceRatioText = highConfidenceRatio?.let { "$it%" } ?: FinalAnalysisUnknownMetricText,
         insideSupportRatio = insideSupportRatio,
         insideSupportRatioText = insideSupportRatio?.let { "$it%" } ?: FinalAnalysisUnknownMetricText,
+        stabilityRetentionScore = null,
         stableContactFrameCount = stableContactFrameCount,
         stableContactFrameCountText = stableContactFrameCount?.toString() ?: FinalAnalysisUnknownMetricText,
         stableContactRatio = stableContactRatio,
         stableContactRatioText = stableContactRatio?.let { "$it%" } ?: FinalAnalysisUnknownMetricText,
+        stabilityRecoveryScore = null,
         stabilityTimeline = extractStabilityTimeline(),
         stabilityFocusFraction = extractStabilityFocusFraction(),
         stabilityHighlights = stabilityHighlights,
@@ -203,6 +747,8 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         dangerEventCount = dangerEventCount,
         feedbackTypes = feedbackTypes,
         loadFocusLabel = loadFocusLabel,
+        lowerBodyDriveScore = null,
+        overallMovementScore = null,
         feedbackLine = buildFeedbackLine(
             isSuccess = isSuccess,
             reachedHolds = reachedHolds,
@@ -217,6 +763,32 @@ private fun AiAnalysisResult.toFinalAnalysisAttemptSummary(
         effectiveModeLabel = mode.toDisplayLabel(),
         fallbackLabel = if (requestedMode != mode) "${mode.toDisplayLabel()} 대체" else null
     )
+}
+
+internal fun calculateOverallMovementScore(summary: FinalAnalysisAttemptSummary): Int? {
+    val weightedScores = buildList<Pair<Int, Float>> {
+        (summary.stabilityRetentionScore ?: summary.insideSupportRatio)
+            ?.let { add(it.coerceIn(0, 100) to 0.32f) }
+        summary.stabilityRecoveryScore
+            ?.let { add(it.coerceIn(0, 100) to 0.24f) }
+        summary.lowerBodyDriveScore
+            ?.let { add(it.coerceIn(0, 100) to 0.26f) }
+        summary.stableContactRatio
+            ?.let { add(it.coerceIn(0, 100) to 0.18f) }
+    }
+
+    if (weightedScores.isEmpty()) return null
+
+    val totalWeight = weightedScores.sumOf { it.second.toDouble() }.toFloat().coerceAtLeast(0.01f)
+    var score = weightedScores.sumOf { (value, weight) ->
+        value.toDouble() * weight.toDouble()
+    }.toFloat() / totalWeight
+
+    if (summary.isSuccess) {
+        score += 3f
+    }
+
+    return score.roundToInt().coerceIn(0, 100)
 }
 
 private fun buildFallbackFeedbackLine(
@@ -924,6 +1496,126 @@ private fun List<Float>.downsampleTo(targetSize: Int): List<Float> {
     }
 }
 
+private fun estimateRecoveryDurationMs(summary: FinalAnalysisAttemptSummary): Long {
+    val latestPointMs = summary.analysisPoints.maxOfOrNull { it.timeMs }
+    return summary.videoDurationMs
+        ?.takeIf { it > 0L }
+        ?: listOfNotNull(
+            latestPointMs?.plus(5_000L),
+            summary.primaryCruxDurationMs?.toLong()?.times(3L),
+            30_000L
+        ).maxOrNull()
+        ?: 30_000L
+}
+
+private fun List<Float>.startIndex(startFraction: Float?): Int {
+    if (isEmpty()) return 0
+    val fraction = startFraction ?: return 0
+    return (fraction.coerceIn(0f, 1f) * lastIndex.toFloat())
+        .roundToInt()
+        .coerceIn(0, lastIndex)
+}
+
+private fun findRecoveryIndex(timeline: List<Float>, lowestIndex: Int): Int? {
+    if (lowestIndex >= timeline.lastIndex) return null
+
+    val lowestValue = timeline[lowestIndex]
+    val recoveryTarget = maxOf(0.58f, lowestValue + 0.18f)
+
+    for (index in lowestIndex + 1..timeline.lastIndex) {
+        val current = timeline[index]
+        val nextWindow = timeline.subList(index, minOf(index + 2, timeline.lastIndex) + 1)
+        val windowAverage = nextWindow.average().toFloat()
+        if (current >= recoveryTarget && windowAverage >= recoveryTarget - 0.04f) {
+            return index
+        }
+    }
+    return null
+}
+
+private fun calculateComJitterScore(points: List<Pair<Float, Float>>): Int {
+    val smoothedPoints = points.movingAverage(windowRadius = 2)
+    val residualSquares = points.zip(smoothedPoints).map { (raw, smoothed) ->
+        val dx = raw.first - smoothed.first
+        val dz = raw.second - smoothed.second
+        (dx * dx) + (dz * dz)
+    }
+    val jitterRms = sqrt(residualSquares.average().toFloat())
+    return (100f * (1f - (jitterRms / 0.075f).coerceIn(0f, 1f)))
+        .roundToInt()
+        .coerceIn(0, 100)
+}
+
+private fun calculateMarginJitterScore(margins: List<Float>): Int {
+    val deltas = margins.zipWithNext { previous, current -> abs(current - previous) }
+    if (deltas.isEmpty()) return 100
+
+    val meanDelta = deltas.average().toFloat()
+    return (100f * (1f - (meanDelta / 0.065f).coerceIn(0f, 1f)))
+        .roundToInt()
+        .coerceIn(0, 100)
+}
+
+private fun stabilityRetentionSuccessBonus(
+    isSuccess: Boolean,
+    insideSupportScore: Int,
+    marginReserveScore: Int
+): Float {
+    if (!isSuccess) return 0f
+
+    val successBonus = when {
+        insideSupportScore >= 70 -> 12f
+        insideSupportScore >= 55 -> 10f
+        insideSupportScore >= 45 -> 8f
+        else -> 4f
+    }
+
+    val reserveBonus = when {
+        marginReserveScore >= 35 -> 4f
+        marginReserveScore >= 25 -> 3f
+        else -> 0f
+    }
+
+    return successBonus + reserveBonus
+}
+
+private fun stabilityRetentionSeverePenalty(
+    lowMarginRatio: Float,
+    negativeMarginRatio: Float
+): Float {
+    return when {
+        negativeMarginRatio >= 0.35f -> 6f
+        negativeMarginRatio >= 0.20f -> 4f
+        lowMarginRatio >= 0.45f -> 2f
+        else -> 0f
+    }
+}
+
+private fun applyStabilityRetentionFloor(
+    isSuccess: Boolean,
+    insideSupportScore: Int,
+    score: Int
+): Int {
+    if (!isSuccess) return score
+
+    return when {
+        insideSupportScore >= 55 -> max(score, 65)
+        insideSupportScore >= 45 -> max(score, 60)
+        else -> score
+    }
+}
+
+private fun List<Pair<Float, Float>>.movingAverage(windowRadius: Int): List<Pair<Float, Float>> {
+    return indices.map { index ->
+        val start = max(0, index - windowRadius)
+        val end = minOf(lastIndex, index + windowRadius)
+        val window = subList(start, end + 1)
+        val meanX = window.map { it.first }.average().toFloat()
+        val meanZ = window.map { it.second }.average().toFloat()
+        meanX to meanZ
+    }
+}
+
 private fun AiAnalysisVideoMetadata?.durationMs(): Long? {
     val metadata = this ?: return null
     val fpsValue = metadata.fps?.takeIf { it > 0f } ?: return null
@@ -940,6 +1632,8 @@ private fun JsonObject.getDoubleOrNull(key: String): Double? = this[key].asDoubl
 private fun JsonObject.getIntOrNull(key: String): Int? = this[key].asIntOrNull()
 
 private fun JsonObject.getStringOrNull(key: String): String? = this[key].asStringOrNull()
+
+private fun JsonObject.getBooleanOrNull(key: String): Boolean? = this[key].asBooleanOrNull()
 
 private fun JsonObject.maxCountKeyOrNull(): String? {
     return entries
@@ -961,6 +1655,19 @@ private fun JsonElement?.asDoubleOrNull(): Double? = asPrimitiveOrNull()?.double
 
 private fun JsonElement?.asIntOrNull(): Int? = asPrimitiveOrNull()?.intOrNull
 
+private fun JsonElement?.asBooleanOrNull(): Boolean? {
+    return asPrimitiveOrNull()
+        ?.contentOrNull
+        ?.lowercase()
+        ?.let { value ->
+            when (value) {
+                "true" -> true
+                "false" -> false
+                else -> null
+            }
+        }
+}
+
 private fun JsonObject?.analysisConfidence(): String? = this?.getStringOrNull("analysis_confidence")
 
 private fun JsonObject?.contactForceStatus(): String? {
@@ -980,3 +1687,15 @@ private fun JsonObject.extractActiveHoldIds(): List<Int> {
 private fun JsonElement?.asStringOrNull(): String? = asPrimitiveOrNull()?.contentOrNull
 
 private fun Double.formatOneDecimal(): String = String.format("%.1f", this)
+
+private fun JsonObject.toStabilityRetentionFrame(): StabilityRetentionFrame {
+    return StabilityRetentionFrame(
+        insideSupport = getBooleanOrNull("inside_support"),
+        stabilityMarginM = getDoubleOrNull("stability_margin_m")?.toFloat(),
+        confidence = getDoubleOrNull("confidence")?.toFloat(),
+        comProjXz = getArrayOrNull("com_proj_xz")
+            ?.mapNotNull { element -> element.asDoubleOrNull()?.toFloat() }
+            ?.takeIf { it.size >= 2 }
+            ?.let { values -> values[0] to values[1] }
+    )
+}
