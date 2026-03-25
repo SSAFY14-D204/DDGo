@@ -167,7 +167,7 @@ public class UserController {
     private final UserService userService;
     private final UserPasswordResetService userPasswordResetService;
 
-    @Operation(summary = "회원가입", description = "이메일, 비밀번호, 닉네임으로 DDGo 계정을 생성합니다.")
+    @Operation(summary = "회원가입", description = "이메일과 비밀번호로 DDGo 계정을 생성하며, 닉네임은 서버가 자동 생성합니다.")
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<Void>> registerUser(@RequestBody @Valid UserRegisterRequest request) {
         userService.registerUser(request);

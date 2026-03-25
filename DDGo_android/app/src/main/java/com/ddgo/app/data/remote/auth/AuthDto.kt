@@ -7,8 +7,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class RegisterRequestDto(
     @SerialName("username") val username: String,
-    @SerialName("password") val password: String,
-    @SerialName("nickname") val nickname: String
+    @SerialName("password") val password: String
 )
 
 /** 로그인 요청 DTO입니다. */

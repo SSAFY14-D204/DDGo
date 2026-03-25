@@ -8,19 +8,19 @@ import lombok.Getter;
 
 @Getter
 @Builder
-@Schema(description = "내 정보 조회 응답")
+@Schema(description = "사용자 정보 응답")
 public class UserInfoResponse {
 
     @Schema(description = "사용자 ID", example = "1")
     private Long id;
 
-    @Schema(description = "사용자 식별자", example = "kakao_123456789")
+    @Schema(description = "로그인 식별자", example = "kakao_123456789")
     private String username;
 
-    @Schema(description = "사용자 이메일", example = "user@example.com")
+    @Schema(description = "이메일", example = "user@example.com", nullable = true)
     private String email;
 
-    @Schema(description = "닉네임", example = "디디고")
+    @Schema(description = "닉네임", example = "맑은하늘")
     private String nickname;
 
     @Schema(description = "성별", example = "M", nullable = true)

@@ -81,17 +81,17 @@ class UserControllerTest {
     @Test
     @DisplayName("닉네임 중복 확인 성공 시 사용 가능 여부를 응답한다")
     void checkNicknameAvailability_returnsAvailability() throws Exception {
-        when(userService.checkNicknameAvailability("DDGoUser"))
+        when(userService.checkNicknameAvailability("맑은하늘"))
                 .thenReturn(DuplicateCheckResponse.builder().available(true).build());
 
         mockMvc.perform(get("/v1/users/check-nickname")
-                        .param("nickname", "DDGoUser"))
+                        .param("nickname", "맑은하늘"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").isNotEmpty())
                 .andExpect(jsonPath("$.data.available").value(true));
 
-        verify(userService).checkNicknameAvailability("DDGoUser");
+        verify(userService).checkNicknameAvailability("맑은하늘");
     }
 
     @Test

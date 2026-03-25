@@ -20,11 +20,25 @@ class AuthInputPolicyTest {
     }
 
     @Test
+    fun validateNickname_trimsInput() {
+        val result = AuthInputPolicy.validateNickname("  차분한바다  ")
+
+        assertTrue(result == ValidationResult.Valid("차분한바다"))
+    }
+
+    @Test
+    fun validateNickname_rejectsBlankInput() {
+        val result = AuthInputPolicy.validateNickname("   ")
+
+        assertTrue(result is ValidationResult.Invalid)
+    }
+
+    @Test
     fun validatePassword_rejectsEmailLocalPart() {
         val result = AuthInputPolicy.validatePassword(
             rawPassword = "climber12!",
             normalizedUsername = "climber@example.com",
-            nickname = "climber000001"
+            nickname = null
         )
 
         assertTrue(result is ValidationResult.Invalid)
@@ -35,7 +49,7 @@ class AuthInputPolicyTest {
         val result = AuthInputPolicy.validatePassword(
             rawPassword = "Abcd1234!",
             normalizedUsername = "user@example.com",
-            nickname = "user000001"
+            nickname = null
         )
 
         assertTrue(result is ValidationResult.Invalid)
@@ -46,18 +60,20 @@ class AuthInputPolicyTest {
         val result = AuthInputPolicy.validatePassword(
             rawPassword = "WallMove!92",
             normalizedUsername = "user@example.com",
-            nickname = "ddgo123456"
+            nickname = null
         )
 
         assertTrue(result is ValidationResult.Valid)
     }
 
     @Test
-    fun buildProvisionalNickname_staysWithinBackendLimit() {
-        repeat(20) {
-            val nickname = AuthInputPolicy.buildProvisionalNickname("very.long.email.address@example.com")
-            assertTrue(nickname.isNotBlank())
-            assertTrue(nickname.length <= 20)
-        }
+    fun validatePassword_rejectsCurrentNickname_caseInsensitively() {
+        val result = AuthInputPolicy.validatePassword(
+            rawPassword = "coolnickname!1",
+            normalizedUsername = "user@example.com",
+            nickname = "CoolNickName"
+        )
+
+        assertTrue(result is ValidationResult.Invalid)
     }
 }

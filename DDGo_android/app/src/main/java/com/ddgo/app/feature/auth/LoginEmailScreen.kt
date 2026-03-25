@@ -171,10 +171,9 @@ fun LoginEmailScreen(
                         coroutineScope.launch {
                             startGoogleLogin(context)
                                 .onSuccess { result ->
-                                    viewModel.loginWithGoogleIdToken(
-                                        idToken = result.idToken,
-                                        displayName = result.displayName
-                                    )
+                        viewModel.loginWithGoogleIdToken(
+                            idToken = result.idToken
+                        )
                                 }
                                 .onFailure { throwable ->
                                     viewModel.reportExternalLoginError(

@@ -19,7 +19,6 @@ import com.ddgo.app.domain.usecase.LoginUseCase
 import com.ddgo.app.domain.usecase.RegisterUseCase
 import com.ddgo.app.domain.usecase.RequestPasswordResetUseCase
 import com.ddgo.app.domain.usecase.SocialLoginUseCase
-import com.ddgo.app.domain.usecase.UpdateNicknameUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.Locale
 import javax.inject.Inject
@@ -28,7 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-private const val NICKNAME_KEYWORD = "\uB2C9\uB124\uC784"
 private const val TAG = "AuthViewModel"
 
 @HiltViewModel
@@ -38,16 +36,9 @@ class AuthViewModel @Inject constructor(
     private val registerUseCase: RegisterUseCase,
     private val socialLoginUseCase: SocialLoginUseCase,
     private val getMyInfoUseCase: GetMyInfoUseCase,
-    private val updateNicknameUseCase: UpdateNicknameUseCase,
     private val requestPasswordResetUseCase: RequestPasswordResetUseCase,
     private val confirmPasswordResetUseCase: ConfirmPasswordResetUseCase
 ) : ViewModel() {
-
-    private companion object {
-        const val PROVISIONAL_NICKNAME_PREFIX = "DDGoUser"
-        const val KAKAO_USERNAME_PREFIX = "kakao_"
-        const val GOOGLE_USERNAME_PREFIX = "google_"
-    }
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState = _uiState.asStateFlow()
@@ -220,7 +211,6 @@ class AuthViewModel @Inject constructor(
             )
                 .onSuccess { authToken ->
                     Log.d(TAG, "Kakao social login succeeded")
-                    syncKakaoNicknameIfNeeded()
                     clearErrorState()
                     _uiState.value = AuthUiState.Success(resolveSuccessDestination(authToken))
                 }
@@ -231,7 +221,7 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun loginWithGoogleIdToken(idToken: String, displayName: String?) {
+    fun loginWithGoogleIdToken(idToken: String) {
         if (idToken.isBlank()) {
             setError(AuthStrings.GoogleLoginFailed)
             return
@@ -247,7 +237,6 @@ class AuthViewModel @Inject constructor(
             )
                 .onSuccess { authToken ->
                     Log.d(TAG, "Google social login succeeded")
-                    syncGoogleNicknameIfNeeded(displayName)
                     clearErrorState()
                     _uiState.value = AuthUiState.Success(resolveSuccessDestination(authToken))
                 }
@@ -269,12 +258,11 @@ class AuthViewModel @Inject constructor(
         }
         username = normalizedUsername
 
-        val provisionalNickname = AuthInputPolicy.buildProvisionalNickname(normalizedUsername)
         when (
             val validation = AuthInputPolicy.validatePassword(
                 rawPassword = password,
                 normalizedUsername = normalizedUsername,
-                nickname = provisionalNickname
+                nickname = null
             )
         ) {
             is ValidationResult.Invalid -> {
@@ -289,7 +277,7 @@ class AuthViewModel @Inject constructor(
             clearErrorState()
             _uiState.value = AuthUiState.Loading
 
-            registerWithGeneratedNickname(normalizedUsername, password)
+            registerUseCase(normalizedUsername, password)
                 .onSuccess {
                     loginUseCase(normalizedUsername, password)
                         .onSuccess { authToken ->
@@ -437,67 +425,6 @@ class AuthViewModel @Inject constructor(
     private fun setError(message: String) {
         errorMessage = message
         _uiState.value = AuthUiState.Error(message)
-    }
-
-    private suspend fun registerWithGeneratedNickname(
-        normalizedUsername: String,
-        rawPassword: String
-    ): Result<Unit> {
-        repeat(3) {
-            val provisionalNickname = AuthInputPolicy.buildProvisionalNickname(normalizedUsername)
-            val result = registerUseCase(
-                username = normalizedUsername,
-                password = rawPassword,
-                nickname = provisionalNickname
-            )
-
-            if (result.isSuccess) {
-                return result
-            }
-
-            val message = result.exceptionOrNull()?.message.orEmpty()
-            if (!message.contains(NICKNAME_KEYWORD)) {
-                return result
-            }
-        }
-
-        return Result.failure(Exception(AuthStrings.RegisterFailed))
-    }
-
-    private suspend fun syncKakaoNicknameIfNeeded() {
-        val currentUser = getMyInfoUseCase().getOrNull() ?: return
-        if (!shouldSyncKakaoNickname(currentUser)) return
-
-        val kakaoNickname = loadKakaoProfile()
-            .getOrNull()
-            ?.nickname
-            ?.trim()
-            ?.takeUnless { it.isBlank() }
-            ?: return
-
-        updateNicknameUseCase(kakaoNickname)
-    }
-
-    private suspend fun syncGoogleNicknameIfNeeded(displayName: String?) {
-        val googleNickname = displayName
-            ?.trim()
-            ?.takeUnless { it.isBlank() }
-            ?: return
-
-        val currentUser = getMyInfoUseCase().getOrNull() ?: return
-        if (!shouldSyncGoogleNickname(currentUser)) return
-
-        updateNicknameUseCase(googleNickname)
-    }
-
-    private fun shouldSyncKakaoNickname(user: User): Boolean {
-        return user.username.startsWith(KAKAO_USERNAME_PREFIX) &&
-            user.nickname.startsWith(PROVISIONAL_NICKNAME_PREFIX)
-    }
-
-    private fun shouldSyncGoogleNickname(user: User): Boolean {
-        return user.username.startsWith(GOOGLE_USERNAME_PREFIX) &&
-            user.nickname.startsWith(PROVISIONAL_NICKNAME_PREFIX)
     }
 
     private fun normalizeEmail(email: String): String = email.trim().lowercase(Locale.ROOT)
