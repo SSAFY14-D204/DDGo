@@ -21,6 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,10 +36,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MyLocation
@@ -76,6 +80,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.SpanStyle
@@ -84,6 +89,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -110,6 +117,15 @@ enum class ChallengeCreateEntryStep {
     LEVEL,
     COLOR
 }
+
+private val EmbeddedStageMaxHeight = 415.dp
+private val EmbeddedDifficultyRailHeight = 401.dp
+private val EmbeddedStageHorizontalPadding = 22.dp
+private val EmbeddedStageSpacing = 18.dp
+private val EmbeddedSelectionPanelMaxWidth = 244.dp
+private const val EmbeddedCompactHeightThresholdDp = 820
+private const val EmbeddedVeryCompactHeightThresholdDp = 740
+private const val EmbeddedScrollFallbackHeightThresholdDp = 0
 
 @Composable
 fun ChallengeCreateScreen(
@@ -525,8 +541,38 @@ private fun GymLevelStep(
     presentationMode: ChallengeCreatePresentationMode = ChallengeCreatePresentationMode.UploadFullScreen
 ) {
     val isEmbedded = presentationMode == ChallengeCreatePresentationMode.RealtimeEmbedded
+    val configuration = LocalConfiguration.current
+    val isCompactEmbedded = isEmbedded && configuration.screenHeightDp <= EmbeddedCompactHeightThresholdDp
+    val isVeryCompactEmbedded = isEmbedded && configuration.screenHeightDp <= EmbeddedVeryCompactHeightThresholdDp
+    val shouldFallbackScroll = isEmbedded && configuration.screenHeightDp <= EmbeddedScrollFallbackHeightThresholdDp
     val screenModifier = if (isEmbedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
     val contentModifier = if (isEmbedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
+    val contentScrollModifier = if (shouldFallbackScroll) {
+        Modifier.verticalScroll(rememberScrollState())
+    } else {
+        Modifier
+    }
+    val titleStartPadding = if (isCompactEmbedded) 22.dp else 25.dp
+    val titleTopSpacing = if (isVeryCompactEmbedded) 18.dp else if (isCompactEmbedded) 22.dp else 27.dp
+    val titleBottomSpacing = if (isCompactEmbedded) 6.dp else 8.dp
+    val sectionSpacing = if (isVeryCompactEmbedded) 24.dp else if (isCompactEmbedded) 28.dp else 37.dp
+    val titleFontSize = if (isCompactEmbedded) 20.sp else 22.sp
+    val titleLineHeight = if (isCompactEmbedded) 24.sp else 28.sp
+    val stageMaxHeight = if (isVeryCompactEmbedded) 320.dp else if (isCompactEmbedded) 352.dp else EmbeddedStageMaxHeight
+    val stageRailHeight = if (isVeryCompactEmbedded) 308.dp else if (isCompactEmbedded) 338.dp else EmbeddedDifficultyRailHeight
+    val stageHorizontalPadding = if (isCompactEmbedded) 18.dp else EmbeddedStageHorizontalPadding
+    val stageItemSpacing = if (isCompactEmbedded) 14.dp else EmbeddedStageSpacing
+    val summaryFontSize = if (isCompactEmbedded) 16.sp else 18.sp
+    val stageFooterSpacing = if (isCompactEmbedded) 10.dp else 16.dp
+    val actionButtonHeight = if (isCompactEmbedded) 54.dp else 58.dp
+    val actionButtonBottomPadding = if (isCompactEmbedded) 18.dp else 22.dp
+    val selectionPanelMaxWidth = if (isCompactEmbedded) 220.dp else EmbeddedSelectionPanelMaxWidth
+    val panelHorizontalPadding = if (isCompactEmbedded) 20.dp else 26.dp
+    val panelVerticalPadding = if (isCompactEmbedded) 22.dp else 28.dp
+    val panelRowSpacing = if (isCompactEmbedded) 10.dp else 12.dp
+    val minTileSize = if (isCompactEmbedded) 36.dp else 42.dp
+    val maxTileSize = if (isCompactEmbedded) 44.dp else 50.dp
+    val maxTileGap = if (isCompactEmbedded) 24.dp else 30.dp
     val grades = viewModel.resolvedGymGrades
     val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
     val availableGradesByKey = remember(grades) { buildAvailableLevelGradeMap(grades) }
@@ -550,8 +596,8 @@ private fun GymLevelStep(
             presentationMode = presentationMode
         )
 
-        Column(modifier = contentModifier) {
-            Spacer(modifier = Modifier.height(27.dp))
+        Column(modifier = contentModifier.then(contentScrollModifier)) {
+            Spacer(modifier = Modifier.height(titleTopSpacing))
 
             Text(
                 text = if (isEmbedded) {
@@ -559,51 +605,94 @@ private fun GymLevelStep(
                 } else {
                     "볼더링 문제의\n레벨을 선택해주세요"
                 },
-                modifier = Modifier.padding(start = 25.dp),
-                fontSize = 22.sp,
+                modifier = Modifier.padding(start = titleStartPadding),
+                fontSize = titleFontSize,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
-                lineHeight = 28.sp
+                lineHeight = titleLineHeight
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(titleBottomSpacing))
 
             GymReferenceSubtitle(
                 gymName = formatGymDisplayName(viewModel.gymName),
-                modifier = Modifier.padding(start = 25.dp)
+                modifier = Modifier.padding(start = titleStartPadding)
             )
 
-            Spacer(modifier = Modifier.height(37.dp))
+            Spacer(modifier = Modifier.height(sectionSpacing))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(415.dp)
-            ) {
-                DifficultyReferenceBar(
-                    selectedPaletteKey = selectedPaletteKey,
+            if (isEmbedded) {
+                BoxWithConstraints(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(x = 22.dp)
-                )
+                        .fillMaxWidth()
+                        .heightIn(max = stageMaxHeight)
+                        .padding(horizontal = stageHorizontalPadding)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(stageItemSpacing),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        DifficultyReferenceBar(
+                            selectedPaletteKey = selectedPaletteKey,
+                            stageHeight = stageRailHeight,
+                            spacing = if (isCompactEmbedded) 14.dp else 18.dp,
+                            labelFontSize = if (isCompactEmbedded) 13.sp else 14.sp,
+                            barWidth = if (isCompactEmbedded) 30.dp else 35.dp
+                        )
 
-                HoldColorSelectionPanel(
-                    availableGradesByKey = availableGradesByKey,
-                    selectedPaletteKey = selectedPaletteKey,
-                    onSelect = { grade ->
-                        viewModel.selectGymLevel(grade.sortOrder)
-                        if (isEmbedded) {
-                            onNext()
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            HoldColorSelectionPanel(
+                                availableGradesByKey = availableGradesByKey,
+                                selectedPaletteKey = selectedPaletteKey,
+                                onSelect = { grade ->
+                                    viewModel.selectGymLevel(grade.sortOrder)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .widthIn(max = selectionPanelMaxWidth),
+                                responsive = true,
+                                horizontalPadding = panelHorizontalPadding,
+                                verticalPadding = panelVerticalPadding,
+                                rowSpacing = panelRowSpacing,
+                                minTileSize = minTileSize,
+                                maxTileSize = maxTileSize,
+                                maxTileGap = maxTileGap
+                            )
                         }
-                    },
+                    }
+                }
+            } else {
+                Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(x = 191.dp)
-                )
+                        .fillMaxWidth()
+                        .height(415.dp)
+                ) {
+                    DifficultyReferenceBar(
+                        selectedPaletteKey = selectedPaletteKey,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset(x = 22.dp)
+                    )
+
+                    HoldColorSelectionPanel(
+                        availableGradesByKey = availableGradesByKey,
+                        selectedPaletteKey = selectedPaletteKey,
+                        onSelect = { grade ->
+                            viewModel.selectGymLevel(grade.sortOrder)
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset(x = 191.dp)
+                    )
+                }
             }
 
             if (isEmbedded) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(stageFooterSpacing))
             } else {
                 Spacer(modifier = Modifier.weight(1f))
             }
@@ -618,7 +707,7 @@ private fun GymLevelStep(
                     )
                 }
 
-                selectedLevelGrade != null -> {
+                selectedLevelGrade != null && !isEmbedded -> {
                     Text(
                         text = if (isEmbedded) {
                             "${resolveHoldColorDisplayName(selectedLevelGrade.colorName, selectedLevelGrade.colorHex)} 난이도로 준비할게요"
@@ -627,7 +716,7 @@ private fun GymLevelStep(
                         },
                         modifier = Modifier.padding(horizontal = 22.dp),
                         color = resolveGymGradeAccentColor(selectedLevelGrade),
-                        fontSize = 18.sp,
+                        fontSize = summaryFontSize,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -658,6 +747,19 @@ private fun GymLevelStep(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+            } else {
+                Spacer(modifier = Modifier.height(if (isCompactEmbedded) 10.dp else 16.dp))
+
+                SolidPrimaryActionButton(
+                    text = "다음",
+                    enabled = selectedLevelSortOrder != null,
+                    useSolidPrimary = true,
+                    onClick = onNext,
+                    modifier = Modifier
+                        .padding(start = 22.dp, end = 22.dp, bottom = actionButtonBottomPadding)
+                        .fillMaxWidth()
+                        .height(actionButtonHeight)
+                )
             }
         }
     }
@@ -671,8 +773,34 @@ private fun GymColorStep(
     presentationMode: ChallengeCreatePresentationMode = ChallengeCreatePresentationMode.UploadFullScreen
 ) {
     val isEmbedded = presentationMode == ChallengeCreatePresentationMode.RealtimeEmbedded
+    val configuration = LocalConfiguration.current
+    val isCompactEmbedded = isEmbedded && configuration.screenHeightDp <= EmbeddedCompactHeightThresholdDp
+    val isVeryCompactEmbedded = isEmbedded && configuration.screenHeightDp <= EmbeddedVeryCompactHeightThresholdDp
+    val shouldFallbackScroll = isEmbedded && configuration.screenHeightDp <= EmbeddedScrollFallbackHeightThresholdDp
     val screenModifier = if (isEmbedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
     val contentModifier = if (isEmbedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()
+    val contentScrollModifier = if (shouldFallbackScroll) {
+        Modifier.verticalScroll(rememberScrollState())
+    } else {
+        Modifier
+    }
+    val titleStartPadding = if (isCompactEmbedded) 22.dp else 25.dp
+    val titleTopSpacing = if (isVeryCompactEmbedded) 18.dp else if (isCompactEmbedded) 22.dp else 27.dp
+    val titleLineHeight = if (isCompactEmbedded) 24.sp else 28.sp
+    val titleFontSize = if (isCompactEmbedded) 20.sp else 22.sp
+    val previewSpacing = if (isCompactEmbedded) 10.dp else 14.dp
+    val previewMaxHeight = if (isVeryCompactEmbedded) 136.dp else if (isCompactEmbedded) 152.dp else 188.dp
+    val previewWidthFraction = if (isVeryCompactEmbedded) 0.42f else if (isCompactEmbedded) 0.46f else 0.5f
+    val colorSheetHorizontalPadding = if (isCompactEmbedded) 22.dp else 28.dp
+    val colorSheetVerticalPadding = if (isCompactEmbedded) 20.dp else 26.dp
+    val colorSheetRowSpacing = if (isCompactEmbedded) 14.dp else 18.dp
+    val colorButtonMinSize = if (isCompactEmbedded) 42.dp else 48.dp
+    val colorButtonMaxSize = if (isCompactEmbedded) 52.dp else 60.dp
+    val colorButtonMaxGap = if (isCompactEmbedded) 12.dp else 16.dp
+    val feedbackVerticalPadding = if (isCompactEmbedded) 8.dp else 12.dp
+    val feedbackFontSize = if (isCompactEmbedded) 13.sp else 14.sp
+    val actionButtonHeight = if (isCompactEmbedded) 54.dp else 58.dp
+    val actionButtonBottomPadding = if (isCompactEmbedded) 18.dp else 22.dp
     val challengeCreationUiState by viewModel.challengeCreationUiState.collectAsState()
     val canBypassChallengeCreationForDev = viewModel.canBypassChallengeCreationForDev
     val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
@@ -705,8 +833,8 @@ private fun GymColorStep(
             presentationMode = presentationMode
         )
 
-        Column(modifier = contentModifier) {
-            Spacer(modifier = Modifier.height(27.dp))
+        Column(modifier = contentModifier.then(contentScrollModifier)) {
+            Spacer(modifier = Modifier.height(titleTopSpacing))
 
             Text(
                 text = if (isEmbedded) {
@@ -714,22 +842,24 @@ private fun GymColorStep(
                 } else {
                     "문제 홀드의 컬러를 골라주세요"
                 },
-                modifier = Modifier.padding(start = 25.dp),
-                fontSize = 22.sp,
+                modifier = Modifier.padding(start = titleStartPadding),
+                fontSize = titleFontSize,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
-                lineHeight = 28.sp
+                lineHeight = titleLineHeight
             )
 
-            Spacer(modifier = Modifier.height(if (isEmbedded) 14.dp else 22.dp))
+            Spacer(modifier = Modifier.height(if (isEmbedded) previewSpacing else 22.dp))
 
             HoldColorHero(
                 previewSlot = selectedHoldSlot,
                 isEmbedded = isEmbedded,
+                embeddedWidthFraction = previewWidthFraction,
+                embeddedMaxHeight = previewMaxHeight,
                 modifier = if (isEmbedded) {
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 188.dp)
+                        .heightIn(max = previewMaxHeight)
                 } else {
                     Modifier
                         .fillMaxWidth()
@@ -738,54 +868,20 @@ private fun GymColorStep(
             )
 
             if (isEmbedded) {
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            val actionEnabled = when {
-                isEmbedded -> {
-                    selectedLevelSortOrder != null &&
-                        selectedPaletteKey != null &&
-                        challengeCreationUiState !is ChallengeCreationUiState.Loading
-                }
-
-                else -> {
-                    (canBypassChallengeCreationForDev || selectedLevelSortOrder != null) &&
-                        selectedPaletteKey != null &&
-                        challengeCreationUiState !is ChallengeCreationUiState.Loading
-                }
+                Spacer(modifier = Modifier.height(if (isCompactEmbedded) 10.dp else 12.dp))
             }
 
             ColorSelectionSheet(
                 selectedPaletteKey = selectedPaletteKey,
                 onSelect = viewModel::updateHoldColor,
-                actionText = if (isEmbedded) {
-                    "촬영 준비 완료"
-                } else {
-                    "홀드 찾기"
-                },
-                actionEnabled = actionEnabled,
-                onAction = {
-                    when {
-                        isEmbedded -> viewModel.completeRealtimeChallengeSetup()
-                        else -> {
-                            viewModel.finalizeHoldDetectionColorSelection()
-                            when {
-                                canBypassChallengeCreationForDev -> onNext()
-                                else -> viewModel.createChallengeFromSelection()
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .then(
-                        if (isEmbedded) {
-                            Modifier
-                        } else {
-                            Modifier.navigationBarsPadding()
-                        }
-                    )
-                    .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
-                    .fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                isEmbedded = isEmbedded,
+                horizontalPadding = colorSheetHorizontalPadding,
+                verticalPadding = colorSheetVerticalPadding,
+                rowSpacing = colorSheetRowSpacing,
+                minButtonSize = colorButtonMinSize,
+                maxButtonSize = colorButtonMaxSize,
+                maxButtonGap = colorButtonMaxGap
             )
 
             when {
@@ -796,18 +892,18 @@ private fun GymColorStep(
                         } else {
                             "먼저 레벨을 선택해주세요."
                         },
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = feedbackVerticalPadding),
                         color = Color(0xFFFF8A8A),
-                        fontSize = 14.sp
+                        fontSize = feedbackFontSize
                     )
                 }
 
                 false -> {
                     Text(
                         text = "선택한 레벨에 연결된 홀드 컬러가 없습니다.",
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = feedbackVerticalPadding),
                         color = Color(0xFFFF8A8A),
-                        fontSize = 14.sp
+                        fontSize = feedbackFontSize
                     )
                 }
 
@@ -818,23 +914,23 @@ private fun GymColorStep(
                         } else {
                             "챌린지를 생성하고 있습니다..."
                         },
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = feedbackVerticalPadding),
                         color = Color(0xFF999999),
-                        fontSize = 14.sp
+                        fontSize = feedbackFontSize
                     )
                 }
 
                 challengeCreationUiState is ChallengeCreationUiState.Error -> {
                     Text(
                         text = (challengeCreationUiState as ChallengeCreationUiState.Error).message,
-                        modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+                        modifier = Modifier.padding(horizontal = 22.dp, vertical = feedbackVerticalPadding),
                         color = Color(0xFFFF8A8A),
-                        fontSize = 14.sp
+                        fontSize = feedbackFontSize
                     )
                 }
             }
 
-            if (false) GradientActionButton(
+            GradientActionButton(
                 text = if (isEmbedded) {
                     "촬영 준비 완료"
                 } else {
@@ -873,9 +969,9 @@ private fun GymColorStep(
                             Modifier.navigationBarsPadding()
                         }
                     )
-                    .padding(start = 22.dp, end = 22.dp, bottom = 22.dp)
+                    .padding(start = 22.dp, end = 22.dp, bottom = actionButtonBottomPadding)
                     .fillMaxWidth()
-                    .height(58.dp)
+                    .height(actionButtonHeight)
             )
         }
     }
@@ -975,36 +1071,40 @@ private fun GymReferenceSubtitle(
 @Composable
 private fun DifficultyReferenceBar(
     selectedPaletteKey: String? = null,
+    stageHeight: Dp = 401.dp,
+    spacing: Dp = 18.dp,
+    labelFontSize: TextUnit = 14.sp,
+    barWidth: Dp = 35.dp,
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.height(401.dp),
+        modifier = modifier.height(stageHeight),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(18.dp)
+        horizontalArrangement = Arrangement.spacedBy(spacing)
     ) {
         Column(
-            modifier = Modifier.height(401.dp),
+            modifier = Modifier.height(stageHeight),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "어려움",
                 color = Color(0xFF999999),
-                fontSize = 14.sp,
+                fontSize = labelFontSize,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = "쉬움",
                 color = Color(0xFF999999),
-                fontSize = 14.sp,
+                fontSize = labelFontSize,
                 fontWeight = FontWeight.Bold
             )
         }
 
         Column(
             modifier = Modifier
-                .width(35.dp)
-                .height(401.dp)
+                .width(barWidth)
+                .height(stageHeight)
         ) {
             difficultyReferenceSlots.forEach { slot ->
                 Box(
@@ -1179,10 +1279,12 @@ private fun LevelSummaryCard(
 private fun HoldColorHero(
     previewSlot: HoldPaletteSlot,
     isEmbedded: Boolean,
+    embeddedWidthFraction: Float = 0.5f,
+    embeddedMaxHeight: Dp = 180.dp,
     modifier: Modifier = Modifier
 ) {
-    val previewWidthFraction = if (isEmbedded) 0.5f else 0.72f
-    val previewMaxHeight = if (isEmbedded) 180.dp else 280.dp
+    val previewWidthFraction = if (isEmbedded) embeddedWidthFraction else 0.72f
+    val previewMaxHeight = if (isEmbedded) embeddedMaxHeight else 280.dp
 
     Box(
         modifier = modifier,
@@ -1202,44 +1304,67 @@ private fun HoldColorHero(
 private fun ColorSelectionSheet(
     selectedPaletteKey: String?,
     onSelect: (String) -> Unit,
-    actionText: String,
-    actionEnabled: Boolean,
-    onAction: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isEmbedded: Boolean = false,
+    horizontalPadding: Dp = 28.dp,
+    verticalPadding: Dp = 26.dp,
+    rowSpacing: Dp = 18.dp,
+    minButtonSize: Dp = 48.dp,
+    maxButtonSize: Dp = 60.dp,
+    maxButtonGap: Dp = 16.dp
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
             .background(Color.White)
-            .padding(horizontal = 28.dp, vertical = 26.dp)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            holdPickerRows.forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    row.forEach { slot ->
-                        ColorCircleButton(
-                            slot = slot,
-                            selected = slot.key == selectedPaletteKey,
-                            enabled = true,
-                            onClick = { onSelect(slot.key) }
-                        )
+        if (isEmbedded) {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val minimumGap = 8.dp
+                val buttonSize = ((maxWidth - (minimumGap * 3)) / 4).coerceIn(minButtonSize, maxButtonSize)
+                val buttonGap = ((maxWidth - (buttonSize * 4)) / 3).coerceIn(minimumGap, maxButtonGap)
+
+                Column(verticalArrangement = Arrangement.spacedBy(rowSpacing)) {
+                    holdPickerRows.forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(
+                                space = buttonGap,
+                                alignment = Alignment.CenterHorizontally
+                            )
+                        ) {
+                            row.forEach { slot ->
+                                ColorCircleButton(
+                                    slot = slot,
+                                    selected = slot.key == selectedPaletteKey,
+                                    enabled = true,
+                                    onClick = { onSelect(slot.key) },
+                                    buttonSize = buttonSize
+                                )
+                            }
+                        }
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            AnalysisGradientButton(
-                text = actionText,
-                enabled = actionEnabled,
-                onClick = onAction,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp)
-            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                holdPickerRows.forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        row.forEach { slot ->
+                            ColorCircleButton(
+                                slot = slot,
+                                selected = slot.key == selectedPaletteKey,
+                                enabled = true,
+                                onClick = { onSelect(slot.key) }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1249,11 +1374,12 @@ private fun ColorCircleButton(
     slot: HoldPaletteSlot,
     selected: Boolean,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    buttonSize: Dp = 60.dp
 ) {
     Box(
         modifier = Modifier
-            .size(60.dp)
+            .size(buttonSize)
             .alpha(if (enabled) 1f else 0.28f)
             .clip(CircleShape)
             .then(
@@ -1327,15 +1453,57 @@ private fun GradientActionButton(
 }
 
 @Composable
+private fun SolidPrimaryActionButton(
+    text: String,
+    enabled: Boolean,
+    useSolidPrimary: Boolean = false,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val enabledContainerColor = if (useSolidPrimary) Color(0xFF1D9BF0) else Color(0xFF1D9BF0)
+    val buttonColors = ButtonDefaults.buttonColors(
+        containerColor = enabledContainerColor,
+        contentColor = Color.White,
+        disabledContainerColor = Color(0xFF505050).copy(alpha = 0.55f),
+        disabledContentColor = Color.White.copy(alpha = 0.6f)
+    )
+
+    androidx.compose.material3.Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        colors = buttonColors
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
 private fun HoldColorSelectionPanel(
     availableGradesByKey: Map<String, GymGrade>,
     selectedPaletteKey: String?,
     onSelect: (GymGrade) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    responsive: Boolean = false,
+    horizontalPadding: Dp = 26.dp,
+    verticalPadding: Dp = 28.dp,
+    rowSpacing: Dp = 12.dp,
+    minTileSize: Dp = 42.dp,
+    maxTileSize: Dp = 50.dp,
+    maxTileGap: Dp = 30.dp
 ) {
     Box(
-        modifier = modifier
-            .size(width = 244.dp, height = 415.dp)
+        modifier = if (responsive) {
+            modifier
+        } else {
+            modifier.size(width = EmbeddedSelectionPanelMaxWidth, height = EmbeddedStageMaxHeight)
+        }
             .shadow(
                 elevation = 16.dp,
                 shape = RoundedCornerShape(16.dp),
@@ -1344,19 +1512,49 @@ private fun HoldColorSelectionPanel(
             )
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
-            .padding(horizontal = 26.dp, vertical = 28.dp)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            holdPaletteRows.forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
-                    row.forEach { slot ->
-                        val grade = availableGradesByKey[slot.key]
-                        HoldColorTile(
-                            slot = slot,
-                            enabled = grade != null,
-                            selected = slot.key == selectedPaletteKey,
-                            onClick = { grade?.let(onSelect) }
-                        )
+        if (responsive) {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val tileSize = ((maxWidth / 2) - 8.dp).coerceIn(minTileSize, maxTileSize)
+                val tileGap = (maxWidth - (tileSize * 2)).coerceIn(12.dp, maxTileGap)
+
+                Column(verticalArrangement = Arrangement.spacedBy(rowSpacing)) {
+                    holdPaletteRows.forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(
+                                space = tileGap,
+                                alignment = Alignment.CenterHorizontally
+                            )
+                        ) {
+                            row.forEach { slot ->
+                                val grade = availableGradesByKey[slot.key]
+                                HoldColorTile(
+                                    slot = slot,
+                                    enabled = grade != null,
+                                    selected = slot.key == selectedPaletteKey,
+                                    onClick = { grade?.let(onSelect) },
+                                    tileSize = tileSize
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                holdPaletteRows.forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
+                        row.forEach { slot ->
+                            val grade = availableGradesByKey[slot.key]
+                            HoldColorTile(
+                                slot = slot,
+                                enabled = grade != null,
+                                selected = slot.key == selectedPaletteKey,
+                                onClick = { grade?.let(onSelect) }
+                            )
+                        }
                     }
                 }
             }
@@ -1369,7 +1567,8 @@ private fun HoldColorTile(
     slot: HoldPaletteSlot,
     enabled: Boolean,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    tileSize: Dp = 50.dp
 ) {
     val shape = RoundedCornerShape(5.dp)
     val borderWidth = if (selected) 2.dp else if (slot.borderColor != null) 1.dp else 0.dp
@@ -1381,7 +1580,7 @@ private fun HoldColorTile(
 
     Box(
         modifier = Modifier
-            .size(50.dp)
+            .size(tileSize)
             .alpha(if (enabled) 1f else 0.28f)
             .clip(shape)
             .background(slot.color)
@@ -1403,7 +1602,7 @@ private data class HoldPaletteSlot(
 )
 
 private val difficultyReferenceSlots = listOf(
-    HoldPaletteSlot(key = "black", color = Color(0xFF292929)),
+    HoldPaletteSlot(key = "slate", color = Color(0xFF20272D)),
     HoldPaletteSlot(key = "gray", color = Color(0xFF505050)),
     HoldPaletteSlot(key = "white", color = Color.White),
     HoldPaletteSlot(key = "brown", color = Color(0xFF6B3E1C)),

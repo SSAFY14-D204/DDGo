@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -62,6 +63,8 @@ import com.ddgo.app.feature.climbing.upload.GymSearchUiState
 import com.ddgo.app.feature.climbing.upload.RealtimeSetupStep
 import com.ddgo.app.feature.climbing.upload.UploadRealtimeOverlayUiState
 import kotlin.math.roundToInt
+
+private val RealtimeSheetMaxWidth = 560.dp
 
 @Composable
 fun RealtimeRecordPage(
@@ -507,17 +510,24 @@ private fun ChallengeCreateSheet(
         contentAlignment = Alignment.BottomCenter
     ) {
         val sheetMaxHeight = maxHeight * 0.86f
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = sheetMaxHeight)
-                .navigationBarsPadding()
                 .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(28.dp),
-            color = Color(0xFF0B0B0E)
+            contentAlignment = Alignment.BottomCenter
         ) {
-            key("embedded-challenge-create") {
-                content()
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = RealtimeSheetMaxWidth)
+                    .heightIn(max = sheetMaxHeight)
+                    .navigationBarsPadding(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color(0xFF0B0B0E)
+            ) {
+                key("embedded-challenge-create") {
+                    content()
+                }
             }
         }
     }
@@ -565,50 +575,58 @@ private fun CenterCard(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Surface(
-            shape = RoundedCornerShape(30.dp),
-            color = RecordSurface.copy(alpha = 0.98f)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Surface(
                 modifier = Modifier
-                    .width(320.dp)
-                    .padding(horizontal = 24.dp, vertical = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .widthIn(max = 320.dp),
+                shape = RoundedCornerShape(30.dp),
+                color = RecordSurface.copy(alpha = 0.98f)
             ) {
-                Text(
-                    text = title,
-                    color = RecordTextPrimary,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Text(
-                    text = body,
-                    color = RecordTextSecondary,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
-                    textAlign = TextAlign.Center
-                )
-                if (!footer.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                        text = footer,
-                        color = RecordTextHint,
-                        fontSize = 13.sp,
+                        text = title,
+                        color = RecordTextPrimary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
-                }
-                Spacer(modifier = Modifier.height(22.dp))
-                Button(
-                    onClick = onAction,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = RecordAccent,
-                        contentColor = RecordOnAccent
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(text = actionLabel, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        text = body,
+                        color = RecordTextSecondary,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    if (!footer.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = footer,
+                            color = RecordTextHint,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(22.dp))
+                    Button(
+                        onClick = onAction,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RecordAccent,
+                            contentColor = RecordOnAccent
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(text = actionLabel, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -624,18 +642,25 @@ private fun BottomSheet(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter
     ) {
-        Surface(
+        Box(
             modifier = modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
                 .padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(28.dp),
-            color = RecordSurface.copy(alpha = 0.98f)
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = RealtimeSheetMaxWidth)
+                    .navigationBarsPadding(),
+                shape = RoundedCornerShape(28.dp),
+                color = RecordSurface.copy(alpha = 0.98f)
             ) {
-                content()
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
+                ) {
+                    content()
+                }
             }
         }
     }
