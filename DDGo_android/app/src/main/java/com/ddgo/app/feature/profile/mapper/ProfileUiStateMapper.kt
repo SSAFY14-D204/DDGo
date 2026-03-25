@@ -29,7 +29,6 @@ internal object ProfileUiStateMapper {
 
     private const val KakaoUsernamePrefix = "kakao_"
     private const val GoogleUsernamePrefix = "google_"
-    private const val ProvisionalNicknamePrefix = "DDGoUser"
 
     /**
      * 프로필 화면 전체 상태를 조립합니다.
@@ -102,14 +101,13 @@ internal object ProfileUiStateMapper {
         nicknameSnapshot: String?
     ): ProfileNicknameEditorUiState {
         val resolvedNickname = resolveNickname(user, nicknameSnapshot).orEmpty()
-        val isProvisionalNickname = isProvisionalSocialNickname(user, resolvedNickname)
-        val hasNickname = resolvedNickname.isNotBlank() && !isProvisionalNickname
+        val hasNickname = resolvedNickname.isNotBlank()
 
         return ProfileNicknameEditorUiState(
             title = ProfileStrings.nicknameEditorTitle(hasNickname),
             description = ProfileStrings.nicknameEditorDescription(hasNickname),
             submitLabel = ProfileStrings.ActionSave,
-            nicknameInput = if (isProvisionalNickname) "" else resolvedNickname
+            nicknameInput = resolvedNickname
         )
     }
 
@@ -277,7 +275,7 @@ internal object ProfileUiStateMapper {
         user: User?,
         resolvedNickname: String?
     ): String? {
-        if (!resolvedNickname.isNullOrBlank() && !isProvisionalSocialNickname(user, resolvedNickname)) {
+        if (!resolvedNickname.isNullOrBlank()) {
             return resolvedNickname
         }
 
@@ -370,9 +368,5 @@ internal object ProfileUiStateMapper {
 
     private fun isGoogleUser(user: User?): Boolean {
         return user?.username?.startsWith(GoogleUsernamePrefix) == true
-    }
-
-    private fun isProvisionalSocialNickname(user: User?, nickname: String): Boolean {
-        return isSocialUser(user) && nickname.startsWith(ProvisionalNicknamePrefix)
     }
 }

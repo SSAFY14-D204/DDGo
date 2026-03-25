@@ -1,7 +1,6 @@
 package com.ddgo.app.core.validation
 
 import java.util.Locale
-import kotlin.random.Random
 
 object AuthInputPolicy {
 
@@ -120,20 +119,6 @@ object AuthInputPolicy {
 
     fun buildChangePasswordGuide(): String {
         return "새 비밀번호는 8~64자이며, 영문/숫자/특수문자 중 2종 이상을 포함해야 해요. 이메일·닉네임·연속 패턴은 사용할 수 없어요."
-    }
-
-    fun buildProvisionalNickname(normalizedUsername: String): String {
-        val localPart = normalizedUsername.substringBefore('@', normalizedUsername)
-        val sanitizedBase = localPart
-            .trim()
-            .replace(Regex("\\s+"), "")
-            .replace(Regex("[^\\p{L}\\p{N}]"), "")
-            .ifBlank { "ddgo" }
-
-        val suffix = Random.nextInt(0, 1_000_000).toString().padStart(6, '0')
-        val maxBaseLength = (NICKNAME_MAX_LENGTH - suffix.length).coerceAtLeast(1)
-        val base = sanitizedBase.take(maxBaseLength).ifBlank { "d".repeat(maxBaseLength) }
-        return base + suffix
     }
 
     private fun isAsciiPrintablePassword(password: String): Boolean {

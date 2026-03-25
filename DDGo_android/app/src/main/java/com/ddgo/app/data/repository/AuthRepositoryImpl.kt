@@ -34,11 +34,10 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun register(
         username: String,
-        password: String,
-        nickname: String
+        password: String
     ): Result<Unit> {
         return try {
-            val response = authApi.register(RegisterRequestDto(username, password, nickname))
+            val response = authApi.register(RegisterRequestDto(username, password))
             if (response.success) {
                 Result.success(Unit)
             } else {

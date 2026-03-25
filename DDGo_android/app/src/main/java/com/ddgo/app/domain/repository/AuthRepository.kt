@@ -9,8 +9,7 @@ interface AuthRepository {
 
     suspend fun register(
         username: String,
-        password: String,
-        nickname: String
+        password: String
     ): Result<Unit>
 
     suspend fun checkUsernameAvailability(username: String): Result<Boolean>
