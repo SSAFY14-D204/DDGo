@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.community.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -404,43 +405,169 @@ private fun CommunityWriteButton(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CommunityFeedListItem(
+private fun CommunityFeedCardItem(
     post: CommunityPostSummary,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    val likeColor = CommunityPalette.Danger
+    val commentColor = Color(0xFF58AFC2)
+    val metaColor = CommunityPalette.TextSecondary
+    val createdAtDisplay = formatCommunityFeedTimestamp(post.createdAt)
+    val authorDisplay = post.authorNickname.ifBlank { "익명" }
+
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .background(CommunityPalette.Surface)
-            .padding(horizontal = 22.dp, vertical = 28.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = CommunityPalette.Surface,
+        border = BorderStroke(1.dp, CommunityPalette.Border.copy(alpha = 0.7f)),
+        shadowElevation = 3.dp
     ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = post.title,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
+                fontWeight = FontWeight.Bold,
+                color = CommunityPalette.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = post.contentPreview.ifBlank { "내용이 없습니다." },
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                color = CommunityPalette.TextPrimary.copy(alpha = 0.74f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                CommunityFeedMetricChip(
+                    icon = if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    value = post.likeCount.toString(),
+                    tint = likeColor
+                )
+                CommunityFeedMetricChip(
+                    icon = Icons.AutoMirrored.Filled.Comment,
+                    value = post.commentCount.toString(),
+                    tint = commentColor
+                )
+                CommunityFeedMetaText(
+                    text = createdAtDisplay,
+                    color = metaColor
+                )
+                CommunityFeedMetaText(
+                    text = authorDisplay,
+                    color = metaColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommunityFeedMetricChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    tint: Color
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+            color = tint,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun CommunityFeedMetaText(
+    text: String,
+    color: Color
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+        color = color
+    )
+}
+
+@Composable
+private fun CommunityFeedListItemCard(
+    post: CommunityPostSummary,
+    modifier: Modifier = Modifier
+) {
+    CommunityFeedCardItem(
+        post = post,
+        modifier = modifier
+    )
+    return
+}
+
+    /*
+
+    val likeColor = CommunityPalette.Danger
+    val commentColor = Color(0xFF58AFC2)
+    val metaColor = CommunityPalette.TextSecondary
+    val createdAtDisplay = formatCommunityFeedTimestamp(post.createdAt)
+    val authorDisplay = post.authorNickname.ifBlank { "익명" }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = CommunityPalette.Surface,
+        border = BorderStroke(1.dp, CommunityPalette.Border.copy(alpha = 0.7f)),
+        shadowElevation = 3.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Text(
             text = post.title,
-            style = MaterialTheme.typography.headlineSmall.copy(fontSize = 18.sp),
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
             fontWeight = FontWeight.Bold,
             color = CommunityPalette.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = post.contentPreview.ifBlank { "내용이 없습니다." },
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
-            color = CommunityPalette.TextPrimary.copy(alpha = 0.9f),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+            color = CommunityPalette.TextPrimary.copy(alpha = 0.74f),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.height(42.dp))
+        Spacer(Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "${post.createdAt} 조회 ${post.viewCount}",
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp),
-                color = CommunityPalette.TextPrimary.copy(alpha = 0.82f)
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                color = metaColor
             )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -467,6 +594,69 @@ private fun CommunityFeedListItem(
                     value = post.commentCount.toString()
                 )
             }
+        }
+    }
+}
+
+    */
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CommunityFeedListItem(
+    post: CommunityPostSummary,
+    modifier: Modifier = Modifier
+) {
+    val likeColor = CommunityPalette.Danger
+    val commentColor = Color(0xFF58AFC2)
+    val metaColor = CommunityPalette.TextSecondary
+    val createdAtDisplay = formatCommunityFeedTimestamp(post.createdAt)
+    val authorDisplay = post.authorNickname.ifBlank { "익명" }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(CommunityPalette.Surface)
+            .padding(horizontal = 22.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = post.title,
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
+            fontWeight = FontWeight.Bold,
+            color = CommunityPalette.TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = post.contentPreview.ifBlank { "내용이 없습니다." },
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+            color = CommunityPalette.TextPrimary.copy(alpha = 0.74f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            CommunityFeedMetricChip(
+                icon = if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                value = post.likeCount.toString(),
+                tint = likeColor
+            )
+            CommunityFeedMetricChip(
+                icon = Icons.AutoMirrored.Filled.Comment,
+                value = post.commentCount.toString(),
+                tint = commentColor
+            )
+            CommunityFeedMetaText(
+                text = createdAtDisplay,
+                color = metaColor
+            )
+            CommunityFeedMetaText(
+                text = authorDisplay,
+                color = metaColor
+            )
         }
     }
 }
