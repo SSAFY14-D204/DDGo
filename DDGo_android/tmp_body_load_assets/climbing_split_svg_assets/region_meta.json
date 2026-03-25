@@ -1,0 +1,163 @@
+{
+  "source_image": "/mnt/data/864220dd-98d0-45c8-9ae9-0e61a9108230.png",
+  "naming": "좌우는 이미지에 보이는 기준(screen-left/right)입니다.",
+  "front_canvas": {
+    "x": 27,
+    "y": 29,
+    "width": 315,
+    "height": 734
+  },
+  "back_canvas": {
+    "x": 348,
+    "y": 29,
+    "width": 316,
+    "height": 735
+  },
+  "regions": {
+    "front_left_arm": {
+      "canvas": "front",
+      "source_component_ids": [
+        3
+      ],
+      "full_canvas_file": "front/full_canvas/front_left_arm.svg",
+      "cropped_file": "front/cropped/front_left_arm.svg",
+      "full_canvas_bbox": {
+        "x": 33,
+        "y": 123,
+        "width": 78,
+        "height": 223
+      }
+    },
+    "front_torso": {
+      "canvas": "front",
+      "source_component_ids": [
+        2
+      ],
+      "full_canvas_file": "front/full_canvas/front_torso.svg",
+      "cropped_file": "front/cropped/front_torso.svg",
+      "full_canvas_bbox": {
+        "x": 95,
+        "y": 120,
+        "width": 125,
+        "height": 261
+      }
+    },
+    "front_right_arm": {
+      "canvas": "front",
+      "source_component_ids": [
+        4
+      ],
+      "full_canvas_file": "front/full_canvas/front_right_arm.svg",
+      "cropped_file": "front/cropped/front_right_arm.svg",
+      "full_canvas_bbox": {
+        "x": 204,
+        "y": 123,
+        "width": 78,
+        "height": 223
+      }
+    },
+    "front_left_leg": {
+      "canvas": "front",
+      "source_component_ids": [
+        84,
+        139
+      ],
+      "full_canvas_file": "front/full_canvas/front_left_leg.svg",
+      "cropped_file": "front/cropped/front_left_leg.svg",
+      "full_canvas_bbox": {
+        "x": 87,
+        "y": 327,
+        "width": 63,
+        "height": 352
+      }
+    },
+    "front_right_leg": {
+      "canvas": "front",
+      "source_component_ids": [
+        85,
+        140
+      ],
+      "full_canvas_file": "front/full_canvas/front_right_leg.svg",
+      "cropped_file": "front/cropped/front_right_leg.svg",
+      "full_canvas_bbox": {
+        "x": 165,
+        "y": 327,
+        "width": 63,
+        "height": 352
+      }
+    },
+    "back_left_arm": {
+      "canvas": "back",
+      "source_component_ids": [
+        5
+      ],
+      "full_canvas_file": "back/full_canvas/back_left_arm.svg",
+      "cropped_file": "back/cropped/back_left_arm.svg",
+      "full_canvas_bbox": {
+        "x": 34,
+        "y": 123,
+        "width": 78,
+        "height": 223
+      }
+    },
+    "back_torso": {
+      "canvas": "back",
+      "source_component_ids": [
+        1,
+        83
+      ],
+      "full_canvas_file": "back/full_canvas/back_torso.svg",
+      "cropped_file": "back/cropped/back_torso.svg",
+      "full_canvas_bbox": {
+        "x": 90,
+        "y": 105,
+        "width": 136,
+        "height": 283
+      }
+    },
+    "back_right_arm": {
+      "canvas": "back",
+      "source_component_ids": [
+        6
+      ],
+      "full_canvas_file": "back/full_canvas/back_right_arm.svg",
+      "cropped_file": "back/cropped/back_right_arm.svg",
+      "full_canvas_bbox": {
+        "x": 205,
+        "y": 123,
+        "width": 78,
+        "height": 223
+      }
+    },
+    "back_left_leg": {
+      "canvas": "back",
+      "source_component_ids": [
+        86,
+        137
+      ],
+      "full_canvas_file": "back/full_canvas/back_left_leg.svg",
+      "cropped_file": "back/cropped/back_left_leg.svg",
+      "full_canvas_bbox": {
+        "x": 87,
+        "y": 373,
+        "width": 63,
+        "height": 308
+      }
+    },
+    "back_right_leg": {
+      "canvas": "back",
+      "source_component_ids": [
+        87,
+        138
+      ],
+      "full_canvas_file": "back/full_canvas/back_right_leg.svg",
+      "cropped_file": "back/cropped/back_right_leg.svg",
+      "full_canvas_bbox": {
+        "x": 166,
+        "y": 373,
+        "width": 63,
+        "height": 308
+      }
+    }
+  }
+}

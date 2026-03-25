@@ -325,6 +325,8 @@ private fun fallbackAttemptSummary(
         dangerEventCount = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
+        bodyLoadDistribution = null,
+        topJointLoads = emptyList(),
         lowerBodyDriveScore = null,
         overallMovementScore = null,
         feedbackLine = "분석 데이터가 충분하지 않아 종합 요약을 만들지 못했습니다.",

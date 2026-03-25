@@ -216,6 +216,19 @@ fun FinalAnalysisRoute(
             focusReasonText = focusReasonText
         )
     }
+    val feedbackLine = remember(displaySummary) {
+        buildDisplayFeedbackLine(summary = displaySummary)
+    }
+    val coachingLine = remember(displaySummary) {
+        buildDisplayCoachingLine(summary = displaySummary)
+    }
+    val displayRiskLine = remember(displaySummary, focusReasonText, riskLine) {
+        buildDisplayRiskLine(
+            summary = displaySummary,
+            focusReasonText = focusReasonText,
+            fallback = riskLine
+        )
+    }
     val displayDate = remember(viewModel.createdChallenge?.startedAt) {
         formatAnalysisDate(viewModel.createdChallenge?.startedAt)
     }
@@ -241,7 +254,9 @@ fun FinalAnalysisRoute(
         seekRequestId,
         pendingSeekTimeMs,
         reachedHoldsSuffix,
-        riskLine,
+        feedbackLine,
+        displayRiskLine,
+        coachingLine,
         isSingleUploadedAttempt
     ) {
         FinalAnalysisPageState(
@@ -276,9 +291,9 @@ fun FinalAnalysisRoute(
             timelinePoints = timelinePoints,
             reachedHoldsText = displaySummary.reachedHoldsText,
             reachedHoldsSuffix = reachedHoldsSuffix,
-            feedbackLine = displaySummary.feedbackLine,
-            riskLine = riskLine,
-            coachingLine = displaySummary.coachingLine,
+            feedbackLine = feedbackLine,
+            riskLine = displayRiskLine,
+            coachingLine = coachingLine,
             previousActionText = if (safeSelectedAttempt > 1) {
                 "이전 시도 분석 결과 보기"
             } else {
@@ -431,6 +446,36 @@ private fun buildAttemptFocusTimelinePoints(
 ): List<AnalysisPoint> {
     val sourcePoints = summary.analysisPoints.ifEmpty {
         fallbackPoints.filter { it.kind == AnalysisPointKind.GENERIC }
+    }
+
+    val hasRefinedFocusPoints = sourcePoints.any { point ->
+        point.kind == AnalysisPointKind.STALL || point.kind == AnalysisPointKind.CLIMB_END
+    }
+    if (hasRefinedFocusPoints) {
+        return sourcePoints
+            .filter { point ->
+                point.timeMs >= 0L &&
+                    (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs) &&
+                    (point.kind == AnalysisPointKind.STALL ||
+                        point.kind == AnalysisPointKind.GENERIC ||
+                        point.kind == AnalysisPointKind.CLIMB_END)
+            }
+            .sortedBy { point -> point.timeMs }
+            .distinctBy { point ->
+                point.kind to refinedTimelineDescription(
+                    description = point.description,
+                    kind = point.kind
+                )
+            }
+            .mapIndexed { index, point ->
+                point.copy(
+                    index = index + 1,
+                    description = refinedTimelineDescription(
+                        description = point.description,
+                        kind = point.kind
+                    )
+                )
+            }
     }
 
     val keyPoints = buildImportantTimelinePoints(
@@ -769,6 +814,69 @@ private fun buildRiskLine(
     return "이번 시도는 핵심 구간에서 흐름이 한 번 끊겼어요."
 }
 
+
+private fun buildDisplayFeedbackLine(summary: FinalAnalysisAttemptSummary): String {
+    val cruxHoldNo = summary.primaryCruxHoldNo
+    val reachedHolds = summary.reachedHolds
+
+    return when {
+        summary.isSuccess && cruxHoldNo != null ->
+            "완등에 성공했고, 대표 크럭스는 ${cruxHoldNo}번 홀드 부근이었어요."
+
+        summary.isSuccess ->
+            "완등에 성공했고, 전체 흐름도 비교적 안정적으로 이어졌어요."
+
+        cruxHoldNo != null && reachedHolds != null ->
+            "${cruxHoldNo}번 홀드 부근에서 흐름이 끊겼고, 최고 ${reachedHolds}번 홀드까지 도달했어요."
+
+        reachedHolds != null ->
+            "최고 ${reachedHolds}번 홀드까지 도달했고, 그 이후 구간에서 흐름이 무너졌어요."
+
+        else -> summary.feedbackLine
+    }
+}
+
+private fun buildDisplayRiskLine(
+    summary: FinalAnalysisAttemptSummary,
+    focusReasonText: String?,
+    fallback: String
+): String {
+    val cruxHoldNo = summary.primaryCruxHoldNo
+    val recoveryScore = summary.stabilityRecoveryScore
+
+    return when {
+        cruxHoldNo != null && recoveryScore != null && recoveryScore < 55 ->
+            "${cruxHoldNo}번 홀드 부근에서 흔들린 뒤 회복이 늦어 흐름이 끊겼어요."
+
+        cruxHoldNo != null && !focusReasonText.isNullOrBlank() ->
+            "${cruxHoldNo}번 홀드 부근에서 ${focusReasonText.removeSuffix(".")} 패턴이 반복됐어요."
+
+        !focusReasonText.isNullOrBlank() ->
+            focusReasonText.removeSuffix(".") + " 장면이 반복됐어요."
+
+        else -> fallback
+    }
+}
+
+private fun buildDisplayCoachingLine(summary: FinalAnalysisAttemptSummary): String {
+    val cruxHoldNo = summary.primaryCruxHoldNo
+    val lowerBodyDriveScore = summary.lowerBodyDriveScore
+    val recoveryScore = summary.stabilityRecoveryScore
+    val loadFocusLabel = summary.loadFocusLabel
+
+    return when {
+        cruxHoldNo != null && lowerBodyDriveScore != null && lowerBodyDriveScore < 55 ->
+            "${cruxHoldNo}번 홀드 전후에서는 손보다 발과 몸통을 먼저 세팅해 보세요."
+
+        recoveryScore != null && recoveryScore < 55 ->
+            "흔들린 직후 바로 이어가기보다, 한 박자 안정권을 회복한 뒤 다음 동작으로 넘어가 보세요."
+
+        !loadFocusLabel.isNullOrBlank() ->
+            "$loadFocusLabel 부담이 커지기 전에 쉬운 구간에서 자세를 다시 정리해 보세요."
+
+        else -> summary.coachingLine
+    }
+}
 
 private fun toFocusReasonKeyword(type: String): String {
     return when (type) {

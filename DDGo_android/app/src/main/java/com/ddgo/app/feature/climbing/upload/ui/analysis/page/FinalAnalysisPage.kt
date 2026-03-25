@@ -27,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,7 +47,6 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptAnalysis
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptAnalysisTimelineRow
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHero
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
-import kotlinx.coroutines.launch
 
 internal data class FinalAnalysisPageState(
     val heroState: AttemptPreviewHeroState,
@@ -78,7 +76,6 @@ internal fun FinalAnalysisPage(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
-    val scope = rememberCoroutineScope()
     var selectedTimelinePointMs by rememberSaveable(state.selectedAttempt) {
         mutableLongStateOf(-1L)
     }
@@ -122,20 +119,6 @@ internal fun FinalAnalysisPage(
             feedbackLine = state.feedbackLine,
             riskLine = state.riskLine,
             coachingLine = state.coachingLine,
-            onLowestPointSelected = { timeMs ->
-                selectedTimelinePointMs = timeMs
-                scope.launch {
-                    scrollState.animateScrollTo(0)
-                    onAnalysisPointSelected(timeMs)
-                }
-            },
-            onRecoveryPointSelected = { timeMs ->
-                selectedTimelinePointMs = timeMs
-                scope.launch {
-                    scrollState.animateScrollTo(0)
-                    onAnalysisPointSelected(timeMs)
-                }
-            },
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp)
         )
 

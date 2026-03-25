@@ -1,24 +1,18 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.molecule
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
@@ -40,7 +34,8 @@ internal fun FootUpperLimbContributionChart(
             title = "다리로 밀기",
             valueLabel = lowerBodyLabel,
             progress = lowerBodyScore / 100f,
-            fillColor = AnalysisPrimary
+            fillColor = AnalysisPrimary,
+            accentValue = true
         )
         ContributionBar(
             title = "팔로 버티기",
@@ -57,6 +52,7 @@ private fun ContributionBar(
     valueLabel: String,
     progress: Float,
     fillColor: Color,
+    accentValue: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -76,25 +72,18 @@ private fun ContributionBar(
             )
             Text(
                 text = valueLabel,
-                color = AnalysisMuted,
-                fontSize = 12.sp
+                color = if (accentValue) AnalysisText else AnalysisMuted,
+                fontSize = 12.sp,
+                fontWeight = if (accentValue) FontWeight.SemiBold else FontWeight.Normal
             )
         }
 
-        Box(
+        AnalysisAccentLinearProgressBar(
+            progress = progress.coerceIn(0.08f, 1f),
+            accentColor = fillColor,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(12.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(AnalysisCardColor)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress.coerceIn(0.08f, 1f))
-                    .height(12.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(fillColor)
-            )
-        }
+        )
     }
 }

@@ -617,11 +617,11 @@ private fun DrawScope.drawHoldNumbers(
             numbered.isStart -> COLOR_START
             numbered.isEnd -> COLOR_END
             else -> holdLabelToComposeColor(numbered.hold.colorLabel)
-        }.copy(alpha = 0.92f)
+        }.copy(alpha = 0.58f)
         val textColor = if (fillColor.luminance() < 0.45f) Color.White else Color.Black
 
         drawCircle(
-            color = Color.Black.copy(alpha = 0.45f),
+            color = Color.Black.copy(alpha = 0.22f),
             radius = badgeRadius + 3.dp.toPx(),
             center = center
         )
@@ -631,10 +631,10 @@ private fun DrawScope.drawHoldNumbers(
             center = center
         )
         drawCircle(
-            color = Color.White.copy(alpha = 0.95f),
+            color = Color.White.copy(alpha = 0.72f),
             radius = badgeRadius,
             center = center,
-            style = Stroke(width = 1.5.dp.toPx())
+            style = Stroke(width = 1.2.dp.toPx())
         )
 
         drawIntoCanvas { canvas ->
