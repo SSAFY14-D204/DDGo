@@ -13,6 +13,8 @@ CONFIDENCE_WEIGHT = {
     "low": 0.4,
 }
 
+PHYSICS_START_HOLD_SCORE_SCALE = 0.45
+
 
 @dataclass(slots=True)
 class HoldSegment:
@@ -31,6 +33,9 @@ class HoldSegment:
     mean_load_shift_proxy: float
     mean_confidence_weight: float
     ok_fraction: float
+    is_start_hold: bool
+    is_end_hold: bool
+    route_roles: list[str]
     score: float | None = None
     reason_tags: list[str] | None = None
 
@@ -105,8 +110,8 @@ def enrich_frames_for_crux(frames: list[dict[str, Any]]) -> list[dict[str, Any]]
     return enriched
 
 
-def _frame_hold_membership(frame: dict[str, Any]) -> dict[int, dict[str, set[str]]]:
-    membership: dict[int, dict[str, set[str]]] = {}
+def _frame_hold_membership(frame: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    membership: dict[int, dict[str, Any]] = {}
     active_hold_ids = frame.get("active_hold_ids") or {}
     limb_states = frame.get("limb_states") or {}
     for limb_name, hold_id in active_hold_ids.items():
@@ -114,12 +119,27 @@ def _frame_hold_membership(frame: dict[str, Any]) -> dict[int, dict[str, set[str
             hold_id_int = int(hold_id)
         except (TypeError, ValueError):
             continue
-        payload = membership.setdefault(hold_id_int, {"limbs": set(), "modes": set()})
+        payload = membership.setdefault(
+            hold_id_int,
+            {
+                "limbs": set(),
+                "modes": set(),
+                "route_roles": set(),
+                "is_start": False,
+                "is_end": False,
+            },
+        )
         payload["limbs"].add(str(limb_name))
-        state = limb_states.get(limb_name, {}).get("state")
+        limb_payload = limb_states.get(limb_name, {}) or {}
+        state = limb_payload.get("state")
         if state is None:
             state = "GRIP" if "hand" in str(limb_name) else "STEP"
         payload["modes"].add(str(state))
+        route_role = limb_payload.get("route_role")
+        if route_role is not None:
+            payload["route_roles"].add(str(route_role))
+        payload["is_start"] = bool(payload["is_start"] or limb_payload.get("is_start"))
+        payload["is_end"] = bool(payload["is_end"] or limb_payload.get("is_end"))
     return membership
 
 
@@ -141,9 +161,11 @@ def build_hold_segments(frames: list[dict[str, Any]], fps: float) -> dict[int, l
         ) / 1000.0
         limb_counts: Counter[str] = Counter()
         mode_counts: Counter[str] = Counter()
+        route_roles: set[str] = set()
         for item in segment_frames:
             limb_counts.update(item["limbs"])
             mode_counts.update(item["modes"])
+            route_roles.update(item["route_roles"])
         closed_segments[hold_id].append(
             HoldSegment(
                 hold_id=hold_id,
@@ -161,6 +183,9 @@ def build_hold_segments(frames: list[dict[str, Any]], fps: float) -> dict[int, l
                 mean_load_shift_proxy=float(np.mean([item["load_shift_proxy"] for item in segment_frames])),
                 mean_confidence_weight=float(np.mean([item["confidence_weight"] for item in segment_frames])),
                 ok_fraction=float(np.mean([item["ok"] for item in segment_frames])),
+                is_start_hold=bool(any(bool(item["is_start"]) for item in segment_frames)),
+                is_end_hold=bool(any(bool(item["is_end"]) for item in segment_frames)),
+                route_roles=sorted(route_roles),
             )
         )
 
@@ -190,6 +215,9 @@ def build_hold_segments(frames: list[dict[str, Any]], fps: float) -> dict[int, l
                     "load_shift_proxy": float(frame.get("_crux_load_shift_proxy", 0.0)),
                     "confidence_weight": float(frame.get("_crux_confidence_weight", 0.4)),
                     "ok": float(frame.get("_crux_ok", 0.0)),
+                    "is_start": bool(payload["is_start"]),
+                    "is_end": bool(payload["is_end"]),
+                    "route_roles": sorted(payload["route_roles"]),
                 }
             )
 
@@ -207,9 +235,11 @@ def summarize_hold_candidates(
         best_segment = max(segments, key=lambda item: item.duration_s)
         limb_counts: Counter[str] = Counter()
         mode_counts: Counter[str] = Counter()
+        route_roles: set[str] = set()
         for segment in segments:
             limb_counts.update(segment.limb_counts)
             mode_counts.update(segment.mode_counts)
+            route_roles.update(segment.route_roles)
         candidates.append(
             {
                 "hold_id": int(hold_id),
@@ -223,15 +253,14 @@ def summarize_hold_candidates(
                     "start_time_ms": best_segment.start_time_ms,
                     "end_time_ms": best_segment.end_time_ms,
                     "duration_s": float(best_segment.duration_s),
-                    "dominant_limbs": [
-                        limb for limb, _ in Counter(best_segment.limb_counts).most_common()
-                    ],
-                    "dominant_modes": [
-                        mode for mode, _ in Counter(best_segment.mode_counts).most_common()
-                    ],
+                    "dominant_limbs": [limb for limb, _ in Counter(best_segment.limb_counts).most_common()],
+                    "dominant_modes": [mode for mode, _ in Counter(best_segment.mode_counts).most_common()],
                 },
                 "limb_counts": dict(limb_counts),
                 "mode_counts": dict(mode_counts),
+                "is_start_hold": bool(any(segment.is_start_hold for segment in segments)),
+                "is_end_hold": bool(any(segment.is_end_hold for segment in segments)),
+                "route_roles": sorted(route_roles),
                 "_segments": segments,
             }
         )
@@ -265,22 +294,37 @@ def score_fast_crux_candidates(
     candidates: list[dict[str, Any]],
     top_k: int = 3,
 ) -> dict[str, Any]:
+    eligible_candidates = [candidate for candidate in candidates if not bool(candidate.get("is_start_hold"))]
+    if not eligible_candidates:
+        eligible_candidates = list(candidates)
+
     longest_lookup = {
         candidate["hold_id"]: float(candidate["longest_continuous_dwell_s"])
-        for candidate in candidates
+        for candidate in eligible_candidates
     }
     total_lookup = {
         candidate["hold_id"]: float(candidate["total_active_time_s"])
-        for candidate in candidates
+        for candidate in eligible_candidates
     }
     longest_norm = _max_normalize_lookup(longest_lookup)
     total_norm = _max_normalize_lookup(total_lookup)
 
     scored: list[dict[str, Any]] = []
+    excluded_start_candidates: list[dict[str, Any]] = []
     for candidate in candidates:
         hold_id = int(candidate["hold_id"])
-        score = 0.7 * longest_norm.get(hold_id, 0.0) + 0.3 * total_norm.get(hold_id, 0.0)
         reason_tags: list[str] = []
+        if bool(candidate.get("is_start_hold")) and len(eligible_candidates) != len(candidates):
+            excluded_start_candidates.append(
+                {
+                    **{key: value for key, value in candidate.items() if key != "_segments"},
+                    "fast_crux_score": 0.0,
+                    "reason_tags": ["start_hold_excluded"],
+                }
+            )
+            continue
+
+        score = 0.7 * longest_norm.get(hold_id, 0.0) + 0.3 * total_norm.get(hold_id, 0.0)
         if longest_norm.get(hold_id, 0.0) >= 0.6:
             reason_tags.append("longest_dwell")
         if total_norm.get(hold_id, 0.0) >= 0.6:
@@ -305,11 +349,13 @@ def score_fast_crux_candidates(
     return {
         "logic": {
             "score_formula": "0.7 * longest_continuous_dwell_norm + 0.3 * total_active_time_norm",
-            "why": "빠른 크럭스 후보는 가장 오래 막힌 연속 체류를 우선 보고, 반복 접촉 총시간으로 보정한다.",
+            "why": "Fast crux ranks holds by dwell time, favoring the longest continuous stay and then total active time.",
+            "start_hold_policy": "start_hold_excluded_from_fast_ranking",
         },
         "candidate_count": len(ranked),
         "top_candidates": ranked[:top_k],
         "all_candidates": ranked,
+        "excluded_start_hold_candidates": excluded_start_candidates,
     }
 
 
@@ -339,7 +385,11 @@ def score_physics_crux_candidates(
         )
         quality_weight = 0.7 * float(segment.mean_confidence_weight) + 0.3 * float(segment.ok_fraction)
         rest_penalty = 0.0
-        if dwell_norm.get(idx, 0.0) >= 0.6 and load_norm.get(idx, 0.0) < 0.3 and instability_norm.get(idx, 0.0) < 0.25:
+        if (
+            dwell_norm.get(idx, 0.0) >= 0.6
+            and load_norm.get(idx, 0.0) < 0.3
+            and instability_norm.get(idx, 0.0) < 0.25
+        ):
             rest_penalty = 0.15
         score = max(0.0, quality_weight * base_score - rest_penalty)
         reason_tags: list[str] = []
@@ -368,6 +418,10 @@ def score_physics_crux_candidates(
             continue
         best_segment = max(segments, key=lambda item: float(item.score or 0.0))
         hold_score = 0.85 * float(best_segment.score or 0.0) + 0.15 * total_dwell_norm.get(hold_id, 0.0)
+        reason_tags = list(best_segment.reason_tags or [])
+        if bool(candidate.get("is_start_hold")):
+            hold_score *= PHYSICS_START_HOLD_SCORE_SCALE
+            reason_tags.append("start_hold_penalty")
         scored.append(
             {
                 **{key: value for key, value in candidate.items() if key != "_segments"},
@@ -383,7 +437,7 @@ def score_physics_crux_candidates(
                     "segment_crux_score": float(best_segment.score or 0.0),
                     "reason_tags": list(best_segment.reason_tags or []),
                 },
-                "reason_tags": list(best_segment.reason_tags or []),
+                "reason_tags": reason_tags,
             }
         )
 
@@ -399,7 +453,8 @@ def score_physics_crux_candidates(
     return {
         "logic": {
             "score_formula": "quality_weight * (0.35*dwell + 0.35*load + 0.15*instability + 0.15*load_shift) - rest_penalty",
-            "why": "설명형 크럭스는 오래 버틴 구간뿐 아니라 몸 부하, 지지 불안정, 하중 이동을 함께 본다. 휴식 홀드는 rest_penalty로 일부 감점한다.",
+            "why": "Physics crux combines dwell, load, instability, and load shift, then discounts low-load resting segments.",
+            "start_hold_policy": f"start_hold_score_scaled_by_{PHYSICS_START_HOLD_SCORE_SCALE:.2f}",
         },
         "candidate_count": len(ranked),
         "top_candidates": ranked[:top_k],
