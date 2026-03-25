@@ -2,6 +2,7 @@ package com.ddgo.app.feature.community
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityDraftVideoStatus
@@ -251,7 +252,7 @@ class CommunityViewModel @Inject constructor(
                         }
                     }
                     .onFailure { throwable ->
-                        emitMessage(throwable.message ?: "선택한 영상을 준비하지 못했어요.")
+                        emitMessage(throwable.orNetworkMessage("선택한 영상을 준비하지 못했어요."))
                     }
             }
         }
@@ -350,7 +351,7 @@ class CommunityViewModel @Inject constructor(
                 }
                 refreshFeed()
             }.onFailure { throwable ->
-                val message = throwable.message ?: "게시글을 저장하지 못했어요."
+                val message = throwable.orNetworkMessage("게시글을 저장하지 못했어요.")
                 _uiState.update {
                     it.copy(
                         composeState = it.composeState.copy(
@@ -384,7 +385,7 @@ class CommunityViewModel @Inject constructor(
                     refreshFeed()
                 }
                 .onFailure { throwable ->
-                    emitMessage(throwable.message ?: "게시글을 삭제하지 못했어요.")
+                    emitMessage(throwable.orNetworkMessage("게시글을 삭제하지 못했어요."))
                 }
         }
     }
@@ -439,7 +440,7 @@ class CommunityViewModel @Inject constructor(
                 updateComments(postId, comments)
                 cancelCommentDraft()
             }.onFailure { throwable ->
-                emitMessage(throwable.message ?: "댓글을 저장하지 못했어요.")
+                emitMessage(throwable.orNetworkMessage("댓글을 저장하지 못했어요."))
             }
         }
     }
@@ -453,7 +454,7 @@ class CommunityViewModel @Inject constructor(
                     cancelCommentDraft()
                 }
                 .onFailure { throwable ->
-                    emitMessage(throwable.message ?: "댓글을 삭제하지 못했어요.")
+                    emitMessage(throwable.orNetworkMessage("댓글을 삭제하지 못했어요."))
                 }
         }
     }
@@ -466,7 +467,7 @@ class CommunityViewModel @Inject constructor(
                     applyPostLikeResult(result.targetId, result.liked, result.likeCount)
                 }
                 .onFailure { throwable ->
-                    emitMessage(throwable.message ?: "게시글 좋아요를 반영하지 못했어요.")
+                    emitMessage(throwable.orNetworkMessage("게시글 좋아요를 반영하지 못했어요."))
                 }
         }
     }
@@ -483,7 +484,7 @@ class CommunityViewModel @Inject constructor(
                     )
                 }
                 .onFailure { throwable ->
-                    emitMessage(throwable.message ?: "댓글 좋아요를 반영하지 못했어요.")
+                    emitMessage(throwable.orNetworkMessage("댓글 좋아요를 반영하지 못했어요."))
                 }
         }
     }
@@ -506,7 +507,7 @@ class CommunityViewModel @Inject constructor(
                 }
                 .onFailure { throwable ->
                     _uiState.update { it.copy(isLoadingChallengeReferences = false) }
-                    emitMessage(throwable.message ?: "챌린지 참고 목록을 불러오지 못했어요.")
+                    emitMessage(throwable.orNetworkMessage("챌린지 참고 목록을 불러오지 못했어요."))
                 }
         }
     }
@@ -584,13 +585,13 @@ class CommunityViewModel @Inject constructor(
             }.onFailure { throwable ->
                 if (append) {
                     _uiState.update { it.copy(isLoadingMoreFeed = false) }
-                    emitMessage(throwable.message ?: "게시글을 더 불러오지 못했어요.")
+                    emitMessage(throwable.orNetworkMessage("게시글을 더 불러오지 못했어요."))
                 } else {
                     _uiState.update {
                         it.copy(
                             isLoadingFeed = false,
                             isLoadingMoreFeed = false,
-                            feedError = throwable.message ?: "커뮤니티 게시글을 불러오지 못했어요."
+                            feedError = throwable.orNetworkMessage("커뮤니티 게시글을 불러오지 못했어요.")
                         )
                     }
                 }
@@ -615,7 +616,7 @@ class CommunityViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             isLoadingDetail = false,
-                            detailError = throwable.message ?: "게시글 상세를 불러오지 못했어요."
+                            detailError = throwable.orNetworkMessage("게시글 상세를 불러오지 못했어요.")
                         )
                     }
                 }
@@ -689,7 +690,7 @@ class CommunityViewModel @Inject constructor(
                     when {
                         draft.id == throwable.draftId -> draft.copy(
                             status = CommunityDraftVideoStatus.FAILED,
-                            errorMessage = throwable.message
+                            errorMessage = throwable.orNetworkMessage(defaultMessage)
                         )
 
                         draft.objectKey == null && draft.status == CommunityDraftVideoStatus.UPLOADING -> draft.copy(
@@ -719,6 +720,10 @@ class CommunityViewModel @Inject constructor(
 
     private fun emitMessage(message: String) {
         _uiState.update { it.copy(message = message) }
+    }
+
+    private fun Throwable.orNetworkMessage(fallback: String): String {
+        return toUserFacingNetworkMessageOrNull() ?: message ?: fallback
     }
 
     private fun buildGymOptions(posts: List<com.ddgo.app.domain.model.CommunityPostSummary>): List<Pair<Long, String>> {

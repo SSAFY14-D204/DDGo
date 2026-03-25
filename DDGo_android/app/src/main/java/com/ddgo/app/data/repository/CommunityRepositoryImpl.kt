@@ -5,6 +5,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.ddgo.app.BuildConfig
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.CommunityMapper.toDomain
 import com.ddgo.app.data.mapper.CommunityMapper.toDto
 import com.ddgo.app.data.mapper.CommunityMapper.toPayload
@@ -26,7 +27,6 @@ import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityDraftVideoStatus
 import com.ddgo.app.domain.model.CommunityFeedPage
 import com.ddgo.app.domain.model.CommunityLikeResult
-import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.CommunityPostDetail
 import com.ddgo.app.domain.model.CommunityPostUpsertRequest
 import com.ddgo.app.domain.model.CommunitySort
@@ -34,6 +34,7 @@ import com.ddgo.app.domain.model.CommunityVideoDraft
 import com.ddgo.app.domain.model.CommunityVideoUploadFailureException
 import com.ddgo.app.domain.model.CommunityVideoUploadRequest
 import com.ddgo.app.domain.model.CommunityVideoUploadTicket
+import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.repository.CommunityRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -313,7 +314,9 @@ class CommunityRepositoryImpl @Inject constructor(
             uploadVideo(ticket, draft).getOrElse { throwable ->
                 throw CommunityVideoUploadFailureException(
                     draftId = draft.id,
-                    message = throwable.message ?: "영상 업로드에 실패했어요."
+                    message = throwable.toUserFacingNetworkMessageOrNull()
+                        ?: throwable.message
+                        ?: "영상 업로드에 실패했어요."
                 )
             }
         }

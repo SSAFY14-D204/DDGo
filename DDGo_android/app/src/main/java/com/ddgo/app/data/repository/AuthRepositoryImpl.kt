@@ -2,6 +2,7 @@ package com.ddgo.app.data.repository
 
 import android.util.Log
 import com.ddgo.app.core.datastore.TokenDataStore
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.AuthMapper.toDomain
 import com.ddgo.app.data.remote.auth.AuthApi
 import com.ddgo.app.data.remote.auth.LoginRequestDto
@@ -337,6 +338,8 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     private fun resolveErrorMessage(throwable: Exception, fallbackMessage: String): String {
+        throwable.toUserFacingNetworkMessageOrNull()?.let { return it }
+
         if (throwable is HttpException) {
             val parsedMessage = throwable.response()
                 ?.errorBody()

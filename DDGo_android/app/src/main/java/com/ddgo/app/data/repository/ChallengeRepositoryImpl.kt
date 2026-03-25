@@ -1,6 +1,7 @@
 package com.ddgo.app.data.repository
 
 import android.util.Log
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.ChallengeMapper.toDomain
 import com.ddgo.app.data.mapper.ChallengeMapper.toRequestDto
 import com.ddgo.app.data.remote.challenge.ChallengeApi
@@ -54,7 +55,12 @@ class ChallengeRepositoryImpl @Inject constructor(
                 Result.failure(Exception(response.message.ifBlank { "Failed to create challenge." }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(
+                IllegalStateException(
+                    e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "챌린지를 생성하지 못했어요.",
+                    e
+                )
+            )
         }
     }
 
@@ -91,7 +97,12 @@ class ChallengeRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(HOLD_API_TAG, "PATCH /v1/challenges/$challengeId/holds exception", e)
-            Result.failure(e)
+            Result.failure(
+                IllegalStateException(
+                    e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "홀드 정보를 저장하지 못했어요.",
+                    e
+                )
+            )
         }
     }
 
@@ -123,7 +134,12 @@ class ChallengeRepositoryImpl @Inject constructor(
                 Result.failure(Exception(response.message.ifBlank { "Failed to close challenge." }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(
+                IllegalStateException(
+                    e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "챌린지를 종료하지 못했어요.",
+                    e
+                )
+            )
         }
     }
 }

@@ -2,6 +2,7 @@ package com.ddgo.app.feature.calendar
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.domain.model.CalendarEntry
 import com.ddgo.app.domain.model.CalendarMonthSummary
 import com.ddgo.app.domain.usecase.GetCalendarEntriesUseCase
@@ -27,7 +28,6 @@ class CalendarViewModel @Inject constructor(
 
     private val today = LocalDate.now()
     private val initialMonth = YearMonth.from(today)
-    // 날짜만 바뀔 때는 다시 조회하지 않도록 현재 월 데이터를 메모리에 유지한다.
     private var currentEntries: List<CalendarEntry> = emptyList()
     private var currentSummary = CalendarMonthSummary()
     private var loadMonthJob: Job? = null
@@ -46,7 +46,6 @@ class CalendarViewModel @Inject constructor(
     val uiState: StateFlow<CalendarUiState> = _uiState.asStateFlow()
 
     init {
-        // 화면 진입 시 현재 월을 기본값으로 먼저 불러온다.
         loadMonth(initialMonth, today)
     }
 
@@ -80,7 +79,6 @@ class CalendarViewModel @Inject constructor(
     }
 
     private fun loadMonth(targetMonth: YearMonth, selectedDate: LocalDate) {
-        // 월이 바뀌면 이전 월 데이터가 잠깐 보이지 않도록 상태를 먼저 초기화한다.
         val requestId = latestLoadRequestId + 1
         latestLoadRequestId = requestId
         loadMonthJob?.cancel()
@@ -119,14 +117,14 @@ class CalendarViewModel @Inject constructor(
                         selectedDate = selectedDate,
                         entries = emptyList(),
                         summary = currentSummary,
-                        errorMessage = throwable.message
-                            ?: "캘린더 기록을 불러오지 못했습니다."
+                        errorMessage = throwable.toUserFacingNetworkMessageOrNull()
+                            ?: throwable.message
+                            ?: "캘린더 기록을 불러오지 못했어요."
                     )
                 }
         }
     }
 
-    // 다른 월로 이동하면 그 달의 1일을 기본 선택값으로 사용한다.
     private fun defaultSelectedDateForMonth(targetMonth: YearMonth): LocalDate {
         return if (targetMonth == initialMonth) {
             today
