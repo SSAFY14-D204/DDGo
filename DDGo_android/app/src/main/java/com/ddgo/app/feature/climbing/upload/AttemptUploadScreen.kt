@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,20 +55,19 @@ fun AttemptUploadScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 48.dp),
+                .padding(start = 23.dp, end = 23.dp, top = 78.dp, bottom = 48.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
                 Text(
-                    text = "Upload a climbing video for analysis.",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = "Pick a saved attempt video, or continue automatically with the video you just recorded.",
-                    fontSize = 16.sp,
-                    color = Color(0xFFB8B8B8)
+                    text = "분석하고 싶은 문제의\n첫번째 시도 영상을 골라주세요",
+                    modifier = Modifier
+                        .width(279.dp),
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        lineHeight = 28.6.sp,
+                        letterSpacing = (-0.22).sp
+                    ),
+                    color = Color(0xFFFFFFFF)
                 )
             }
 
@@ -86,7 +87,7 @@ fun AttemptUploadScreen(
                 )
             ) {
                 Text(
-                    text = "Choose video",
+                    text = "동영상 선택",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )

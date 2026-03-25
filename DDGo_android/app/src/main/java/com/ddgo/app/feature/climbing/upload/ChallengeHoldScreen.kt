@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -95,7 +96,7 @@ fun ChallengeHoldScreen(
         mutableStateOf(SystemClock.elapsedRealtime())
     }
 
-    if (showDialog) {
+    if (false && showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
             title = {
@@ -189,11 +190,7 @@ fun ChallengeHoldScreen(
                 HoldReviewContent(
                     viewModel = viewModel,
                     onProceed = {
-                        if (allowAdditionalUpload) {
-                            showDialog = true
-                        } else {
-                            onNavigateToHoldSelect()
-                        }
+                        onNavigateToHoldSelect()
                     }
                 )
             } else {
@@ -236,18 +233,19 @@ private fun HoldReviewContent(
                 .padding(horizontal = 24.dp, vertical = 20.dp)
         ) {
             Text(
-                text = "탐지된 홀드를\n확인해주세요",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
+                text = "AI가 놓친 홀드가 있다면 추가해주세요",
                 color = Color.White,
-                lineHeight = 34.sp
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    lineHeight = 28.6.sp,
+                    letterSpacing = (-0.22).sp
+                )
             )
             Spacer(Modifier.height(6.dp))
-            Text(
-                text = "${holds.size}개의 홀드가 감지됐어요",
-                fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.5f)
-            )
+//            Text(
+//                text = "${holds.size}개의 홀드가 감지됐어요",
+//                fontSize = 13.sp,
+//                color = Color.White.copy(alpha = 0.5f)
+//            )
             if (allRawHolds.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -423,7 +421,7 @@ private fun HoldReviewContent(
                     text = if (holds.isEmpty()) {
                         "먼저 홀드를 한 개 이상 추가해주세요"
                     } else {
-                        "다음"
+                        "완료되었어요!"
                     },
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold

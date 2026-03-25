@@ -384,15 +384,10 @@ internal fun calculateVerticalVideoViewportCropSpecFromRawHolds(
         return uncroppedSpec
     }
 
-    val topmostHoldTopFraction = holds.minOf { hold ->
-        hold.boundingBox.top.coerceIn(0f, 1f)
-    }
-    val bottommostHoldBottomFraction = holds.maxOf { hold ->
-        hold.boundingBox.bottom.coerceIn(0f, 1f)
-    }
+    val rawBounds = calculateRawVerticalCropBounds(holds) ?: return uncroppedSpec
     return calculateVerticalVideoViewportCropSpecFromBounds(
-        topFraction = topmostHoldTopFraction,
-        bottomFraction = bottommostHoldBottomFraction,
+        topFraction = rawBounds.topFraction,
+        bottomFraction = rawBounds.bottomFraction,
         videoAspectRatio = videoAspectRatio,
         fullVideoHeightPx = fullVideoHeightPx,
         topSafeInsetPx = topSafeInsetPx,
@@ -400,6 +395,61 @@ internal fun calculateVerticalVideoViewportCropSpecFromRawHolds(
     )
 }
 
+internal fun calculateRawVerticalCropBounds(rawHolds: List<Hold>): RawVerticalCropBounds? {
+    if (rawHolds.isEmpty()) return null
+
+    val topFractions = rawHolds
+        .map { hold -> hold.boundingBox.top.coerceIn(0f, 1f) }
+        .sorted()
+        .take(RAW_CROP_SAMPLE_COUNT)
+    val bottomFractions = rawHolds
+        .map { hold -> hold.boundingBox.bottom.coerceIn(0f, 1f) }
+        .sortedDescending()
+        .take(RAW_CROP_SAMPLE_COUNT)
+    if (topFractions.isEmpty() || bottomFractions.isEmpty()) {
+        return null
+    }
+
+    val topFraction = topFractions.average().toFloat()
+    val bottomFraction = bottomFractions.average().toFloat()
+    if (bottomFraction <= topFraction) {
+        return null
+    }
+
+    return RawVerticalCropBounds(
+        topFraction = topFraction,
+        bottomFraction = bottomFraction
+    )
+}
+
+internal fun resolveHybridVerticalCropBounds(
+    rawBounds: RawVerticalCropBounds?,
+    selectedHolds: List<HoldNumbered>
+): RawVerticalCropBounds? {
+    if (rawBounds == null) return null
+    if (selectedHolds.isEmpty()) return rawBounds
+
+    val selectedTopFraction = selectedHolds.minOf { hold ->
+        hold.hold.boundingBox.top.coerceIn(0f, 1f)
+    }
+    val selectedBottomFraction = selectedHolds.maxOf { hold ->
+        hold.hold.boundingBox.bottom.coerceIn(0f, 1f)
+    }
+    val resolvedTopFraction = maxOf(rawBounds.topFraction, selectedTopFraction)
+    val resolvedBottomFraction = minOf(rawBounds.bottomFraction, selectedBottomFraction)
+
+    return if (resolvedBottomFraction > resolvedTopFraction) {
+        RawVerticalCropBounds(
+            topFraction = resolvedTopFraction,
+            bottomFraction = resolvedBottomFraction
+        )
+    } else {
+        RawVerticalCropBounds(
+            topFraction = selectedTopFraction,
+            bottomFraction = selectedBottomFraction
+        ).takeIf { bounds -> bounds.bottomFraction > bounds.topFraction }
+    }
+}
 internal fun calculateCroppedVideoViewportPlacement(
     fullVideoHeightPx: Int,
     cropSpec: VideoViewportCropSpec,
@@ -818,6 +868,7 @@ internal fun PoseVideoScrubber(
 
 private const val DEFAULT_VIDEO_ASPECT_RATIO = 9f / 16f
 private const val FULL_VIDEO_VISIBLE_HEIGHT_EPSILON = 0.999f
+private const val RAW_CROP_SAMPLE_COUNT = 5
 private const val MIN_VIDEO_ASPECT_RATIO = 0.0001f
 private const val CROPPED_VIDEO_VIEWPORT_TRANSFORMED_LAYER_ID = "cropped_video_viewport_transformed"
 private const val CROPPED_VIDEO_VIEWPORT_OVERLAY_LAYER_ID = "cropped_video_viewport_overlay"

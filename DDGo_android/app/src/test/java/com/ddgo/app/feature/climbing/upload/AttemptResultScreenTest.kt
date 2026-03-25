@@ -195,6 +195,43 @@ class AttemptResultScreenTest {
     }
 
     @Test
+    fun `raw vertical crop bounds use average of top and bottom five detections`() {
+        val rawBounds = calculateRawVerticalCropBounds(
+            listOf(
+                rawHold(top = 0.05f, bottom = 0.95f),
+                rawHold(top = 0.10f, bottom = 0.92f),
+                rawHold(top = 0.15f, bottom = 0.89f),
+                rawHold(top = 0.20f, bottom = 0.86f),
+                rawHold(top = 0.25f, bottom = 0.83f),
+                rawHold(top = 0.30f, bottom = 0.80f),
+                rawHold(top = 0.35f, bottom = 0.77f)
+            )
+        )
+
+        assertTrue(rawBounds != null)
+        assertEquals(0.15f, rawBounds!!.topFraction, 0.0001f)
+        assertEquals(0.89f, rawBounds.bottomFraction, 0.0001f)
+    }
+
+    @Test
+    fun `hybrid crop bounds prefer tighter selected hold window over raw averages`() {
+        val resolvedBounds = resolveHybridVerticalCropBounds(
+            rawBounds = RawVerticalCropBounds(
+                topFraction = 0.18f,
+                bottomFraction = 0.84f
+            ),
+            selectedHolds = listOf(
+                holdNumbered(top = 0.52f, bottom = 0.58f),
+                holdNumbered(top = 0.60f, bottom = 0.74f)
+            )
+        )
+
+        assertTrue(resolvedBounds != null)
+        assertEquals(0.52f, resolvedBounds!!.topFraction, 0.0001f)
+        assertEquals(0.74f, resolvedBounds.bottomFraction, 0.0001f)
+    }
+
+    @Test
     fun `cropped viewport placement uses the intended middle segment`() {
         val placement = calculateCroppedVideoViewportPlacement(
             fullVideoHeightPx = 10,
@@ -489,5 +526,19 @@ class AttemptResultScreenTest {
         progress = 0f,
         axisDistance = 0f,
         role = HoldRole.NORMAL
+    )
+
+    private fun rawHold(
+        top: Float,
+        bottom: Float
+    ): Hold = Hold(
+        holdNo = 0,
+        boundingBox = Hold.BoundingBox(
+            left = 0.10f,
+            top = top,
+            right = 0.20f,
+            bottom = bottom
+        ),
+        confidence = 1f
     )
 }
