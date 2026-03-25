@@ -1,15 +1,18 @@
 package com.ddgo.app.feature.calendar.mapper
 
 import com.ddgo.app.domain.model.CalendarEntry
+import com.ddgo.app.domain.model.CalendarEntryResult
 import com.ddgo.app.domain.model.CalendarMonthSummary
 import com.ddgo.app.feature.calendar.model.CalendarDayUiModel
 import com.ddgo.app.feature.calendar.model.CalendarDayMarkerUiModel
 import com.ddgo.app.feature.calendar.model.CalendarEntryUiModel
 import com.ddgo.app.feature.calendar.model.CalendarMarkerFilterUiModel
+import com.ddgo.app.feature.calendar.model.CalendarMarkerRenderStyleUiModel
 import com.ddgo.app.feature.calendar.model.CalendarMarkerToneUiModel
 import com.ddgo.app.feature.calendar.model.CalendarMonthSummaryUiModel
 import com.ddgo.app.feature.calendar.model.CalendarUiState
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -84,16 +87,19 @@ internal object CalendarUiStateMapper {
         }
     }
 
-    // 달력은 6주 고정 그리드로 만들고 이전/다음 달 날짜도 함께 보여준다.
+    // 달력은 현재 달을 감싸는 데 필요한 주차만 계산해 이전/다음 달 날짜를 함께 보여준다.
     private fun buildCalendarWeeks(
         currentMonth: YearMonth,
         entriesByDate: Map<LocalDate, List<CalendarEntry>>
     ): List<List<CalendarDayUiModel>> {
         val firstDay = currentMonth.atDay(1)
+        val lastDay = currentMonth.atEndOfMonth()
         val leadingDays = firstDay.dayOfWeek.value % 7
+        val trailingDays = 6 - (lastDay.dayOfWeek.value % 7)
         val gridStart = firstDay.minusDays(leadingDays.toLong())
+        val totalDays = leadingDays + currentMonth.lengthOfMonth() + trailingDays
 
-        return List(42) { index ->
+        return List(totalDays) { index ->
             val date = gridStart.plusDays(index.toLong())
             val dayEntries = entriesByDate[date].orEmpty()
             CalendarDayUiModel(
@@ -108,14 +114,17 @@ internal object CalendarUiStateMapper {
 
     private fun buildColorMarkers(entries: List<CalendarEntry>): List<CalendarDayMarkerUiModel> {
         return entries
-            .map { it.problemColor }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .mapIndexed { index, colorLabel ->
+            .filter { it.problemColor.isNotBlank() }
+            .sortedWith(
+                compareByDescending<CalendarEntry> { it.time ?: LocalTime.MIN }
+                    .thenByDescending { it.id }
+            )
+            .map { entry ->
                 CalendarDayMarkerUiModel(
-                    key = "color-$index-$colorLabel",
-                    label = colorLabel,
-                    tone = colorLabel.toMarkerTone()
+                    key = "color-${entry.id}",
+                    label = entry.problemColor,
+                    tone = entry.problemColor.toMarkerTone(),
+                    renderStyle = entry.result.toMarkerRenderStyle()
                 )
             }
     }
@@ -129,7 +138,8 @@ internal object CalendarUiStateMapper {
                 CalendarDayMarkerUiModel(
                     key = "gym-$index-$venue",
                     label = abbreviateVenue(venue),
-                    tone = CalendarMarkerToneUiModel.GRAY
+                    tone = CalendarMarkerToneUiModel.GRAY,
+                    renderStyle = CalendarMarkerRenderStyleUiModel.FILLED
                 )
             }
     }
@@ -159,6 +169,16 @@ internal object CalendarUiStateMapper {
             "검정", "검은색", "블랙", "black" -> CalendarMarkerToneUiModel.BLACK
             "하양", "흰색", "화이트", "white" -> CalendarMarkerToneUiModel.WHITE
             else -> CalendarMarkerToneUiModel.UNKNOWN
+        }
+    }
+
+    private fun CalendarEntryResult.toMarkerRenderStyle(): CalendarMarkerRenderStyleUiModel {
+        return when (this) {
+            CalendarEntryResult.SUCCESS -> CalendarMarkerRenderStyleUiModel.FILLED
+            CalendarEntryResult.FAIL,
+            CalendarEntryResult.ACTIVE,
+            CalendarEntryResult.PENDING,
+            CalendarEntryResult.UNKNOWN -> CalendarMarkerRenderStyleUiModel.OUTLINED
         }
     }
 }

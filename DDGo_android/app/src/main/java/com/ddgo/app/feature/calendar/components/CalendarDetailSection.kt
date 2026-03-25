@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -22,10 +23,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ddgo.app.feature.calendar.model.CalendarEntryUiModel
+import com.ddgo.app.feature.calendar.model.CalendarMarkerToneUiModel
 import com.ddgo.app.feature.calendar.style.CalendarPalette
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -42,72 +47,102 @@ internal fun SelectedDateSection(
     isToday: Boolean,
     onEntrySelected: (Long) -> Unit
 ) {
-    Surface(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        color = CalendarPalette.Surface,
-        border = BorderStroke(1.dp, CalendarPalette.Border),
-        shadowElevation = 4.dp
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
+        DetailSectionHeader(
+            date = date,
+            entryCount = entries.size,
+            isToday = isToday
+        )
+
+        if (entries.isEmpty()) {
+            EmptyCalendarState()
+        } else {
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = date.format(FullDateFormatter),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = CalendarPalette.TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = if (entries.isEmpty()) {
-                            "선택한 날짜에 기록된 세션이 없어요."
-                        } else {
-                            "${entries.size}개의 기록이 있어요."
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = CalendarPalette.TextSecondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                entries.forEach { entry ->
+                    CalendarEntryRow(
+                        entry = entry,
+                        onClick = { onEntrySelected(entry.challengeId) }
                     )
                 }
+            }
+        }
+    }
+}
 
-                if (isToday) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = CalendarPalette.AccentSoft
-                    ) {
-                        Text(
-                            text = "TODAY",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = CalendarPalette.AccentStrong
-                        )
-                    }
+@Composable
+private fun DetailSectionHeader(
+    date: LocalDate,
+    entryCount: Int,
+    isToday: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = if (isToday) "오늘의 기록" else "기록 리스트",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                ),
+                color = CalendarPalette.TextPrimary
+            )
+            Text(
+                text = date.format(FullDateFormatter),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                ),
+                color = CalendarPalette.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isToday) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = CalendarPalette.AccentSoft
+                ) {
+                    Text(
+                        text = "TODAY",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Medium,
+                            platformStyle = PlatformTextStyle(includeFontPadding = false)
+                        ),
+                        color = CalendarPalette.AccentStrong
+                    )
                 }
             }
 
-            if (entries.isEmpty()) {
-                EmptyCalendarState()
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    entries.forEach { entry ->
-                        CalendarEntryRow(
-                            entry = entry,
-                            onClick = { onEntrySelected(entry.challengeId) }
-                        )
-                    }
-                }
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (entryCount == 0) CalendarPalette.SurfaceMuted else CalendarPalette.AccentSoft
+            ) {
+                Text(
+                    text = "${entryCount}개",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Medium,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    ),
+                    color = if (entryCount == 0) CalendarPalette.TextSecondary else CalendarPalette.AccentStrong
+                )
             }
         }
     }
@@ -117,8 +152,9 @@ internal fun SelectedDateSection(
 @Composable
 private fun EmptyCalendarState() {
     Surface(
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = CalendarPalette.SurfaceMuted,
+        color = CalendarPalette.Surface,
         border = BorderStroke(1.dp, CalendarPalette.Border)
     ) {
         Column(
@@ -143,12 +179,17 @@ private fun EmptyCalendarState() {
             }
             Text(
                 text = "아직 기록이 없어요",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                ),
                 color = CalendarPalette.TextPrimary
             )
             Text(
                 text = "선택한 날짜에 활동 기록이 있으면 여기에 표시됩니다.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                ),
                 color = CalendarPalette.TextSecondary,
                 textAlign = TextAlign.Center
             )
@@ -162,15 +203,19 @@ private fun CalendarEntryRow(
     entry: CalendarEntryUiModel,
     onClick: () -> Unit
 ) {
+    val toneColor = CalendarPalette.markerToneColor(entry.problemColorTone)
+
     Surface(
         modifier = Modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
-        color = CalendarPalette.SurfaceMuted
+        color = CalendarPalette.Surface,
+        border = BorderStroke(1.dp, CalendarPalette.Border),
+        shadowElevation = 2.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(horizontal = 18.dp, vertical = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -178,31 +223,60 @@ private fun CalendarEntryRow(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(CalendarPalette.AccentSoft),
+                    .background(CalendarPalette.SurfaceMuted),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Schedule,
-                    contentDescription = "기록",
-                    tint = CalendarPalette.AccentStrong
-                )
+                Surface(
+                    modifier = Modifier.size(22.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = toneColor,
+                    border = if (entry.problemColorTone == CalendarMarkerToneUiModel.WHITE) {
+                        BorderStroke(1.dp, CalendarPalette.Border)
+                    } else {
+                        null
+                    }
+                ) {}
             }
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = entry.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    ),
                     color = CalendarPalette.TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DetailMetaChip(
+                        text = if (entry.problemColorLabel.isBlank()) "문제" else entry.problemColorLabel,
+                        backgroundColor = CalendarPalette.AccentSoft,
+                        textColor = CalendarPalette.AccentStrong
+                    )
+                    if (entry.venueLabel.isNotBlank()) {
+                        DetailMetaChip(
+                            text = entry.venueLabel,
+                            backgroundColor = CalendarPalette.SurfaceMuted,
+                            textColor = CalendarPalette.TextSecondary
+                        )
+                    }
+                }
+
                 if (entry.secondaryText.isNotBlank()) {
                     Text(
                         text = entry.secondaryText,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            platformStyle = PlatformTextStyle(includeFontPadding = false)
+                        ),
                         color = CalendarPalette.TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -212,7 +286,7 @@ private fun CalendarEntryRow(
 
             Column(
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (entry.timeLabel.isNotBlank()) {
                     Surface(
@@ -222,19 +296,47 @@ private fun CalendarEntryRow(
                         Text(
                             text = entry.timeLabel,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.Medium,
+                                platformStyle = PlatformTextStyle(includeFontPadding = false)
+                            ),
                             color = CalendarPalette.AccentStrong,
                             maxLines = 1
                         )
                     }
-                } else {
-                    Text(
-                        text = "기록",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = CalendarPalette.TextSecondary
-                    )
                 }
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = "상세 이동",
+                    tint = CalendarPalette.TextSecondary
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun DetailMetaChip(
+    text: String,
+    backgroundColor: androidx.compose.ui.graphics.Color,
+    textColor: androidx.compose.ui.graphics.Color
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = backgroundColor
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                platformStyle = PlatformTextStyle(includeFontPadding = false)
+            ),
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

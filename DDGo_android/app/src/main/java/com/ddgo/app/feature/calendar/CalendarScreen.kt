@@ -45,6 +45,7 @@ fun CalendarScreen(
         uiState = uiState,
         onPreviousMonth = viewModel::showPreviousMonth,
         onNextMonth = viewModel::showNextMonth,
+        onMonthSelected = viewModel::selectMonth,
         onMarkerFilterSelected = viewModel::selectMarkerFilter,
         onDateSelected = handleDateSelected
     )
@@ -55,6 +56,7 @@ private fun CalendarContent(
     uiState: CalendarUiState,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
+    onMonthSelected: (YearMonth) -> Unit,
     onMarkerFilterSelected: (com.ddgo.app.feature.calendar.model.CalendarMarkerFilterUiModel) -> Unit,
     onDateSelected: (LocalDate) -> Unit
 ) {
@@ -97,6 +99,7 @@ private fun CalendarContent(
                     weeks = uiState.weeks,
                     today = uiState.today,
                     activeMarkerFilter = uiState.activeMarkerFilter,
+                    onMonthSelected = onMonthSelected,
                     onMarkerFilterSelected = onMarkerFilterSelected,
                     onDateSelected = onDateSelected
                 )
@@ -134,6 +137,7 @@ private fun CalendarScreenPreview() {
             ),
             onPreviousMonth = {},
             onNextMonth = {},
+            onMonthSelected = {},
             onMarkerFilterSelected = {},
             onDateSelected = {}
         )

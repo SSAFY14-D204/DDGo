@@ -37,10 +37,16 @@ enum class CalendarMarkerToneUiModel {
     UNKNOWN
 }
 
+enum class CalendarMarkerRenderStyleUiModel {
+    FILLED,
+    OUTLINED
+}
+
 data class CalendarDayMarkerUiModel(
     val key: String,
     val label: String,
-    val tone: CalendarMarkerToneUiModel
+    val tone: CalendarMarkerToneUiModel,
+    val renderStyle: CalendarMarkerRenderStyleUiModel
 )
 
 // 날짜 타일은 날짜 자체와 현재 달 포함 여부, 기록 수, 필터별 마커 정보를 함께 가진다.
