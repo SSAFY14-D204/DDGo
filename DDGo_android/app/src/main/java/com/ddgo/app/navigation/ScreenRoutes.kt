@@ -32,6 +32,11 @@ sealed class ScreenRoutes(val route: String) {
 
     object MainGraph : ScreenRoutes("main_graph")
 
+    object CalendarDetail : ScreenRoutes("calendar_detail") {
+        const val ARG_SELECTED_DATE = "selectedDate"
+        val ROUTE_WITH_ARG = "$route?$ARG_SELECTED_DATE={$ARG_SELECTED_DATE}"
+    }
+
     object Climbing : ScreenRoutes("climbing_graph") {
         object Upload : ScreenRoutes("upload_graph") {
             const val REALTIME_SETUP = "realtime_setup"

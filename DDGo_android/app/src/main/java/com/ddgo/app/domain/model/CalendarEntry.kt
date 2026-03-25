@@ -8,6 +8,7 @@ data class CalendarEntry(
     val id: Long,
     val date: LocalDate,
     val title: String,
+    val problemColor: String,
     val venue: String,
     val time: LocalTime?,
     val note: String
