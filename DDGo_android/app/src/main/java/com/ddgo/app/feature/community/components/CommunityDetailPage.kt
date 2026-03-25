@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -61,18 +64,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import coil.request.videoFrameMillis
 import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityPostDetail
 import com.ddgo.app.domain.model.CommunityVideoAttachment
 import com.ddgo.app.feature.community.CommunityPalette
 import com.ddgo.app.feature.community.CommunityUiState
 import com.ddgo.app.feature.main.MainChromeDefaults
+import androidx.compose.foundation.Image as FoundationImage
 
 private val DetailPagePadding = 20.dp
 private val DetailSectionSpacing = 24.dp
@@ -314,14 +317,7 @@ private fun CommunityDetailMediaCard(
     video: CommunityVideoAttachment,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val previewRequest = remember(video.playbackUrl) {
-        ImageRequest.Builder(context)
-            .data(video.playbackUrl)
-            .crossfade(true)
-            .videoFrameMillis(1_000)
-            .build()
-    }
+    val thumbnailState = rememberCommunityVideoThumbnailState(video.playbackUrl)
 
     CommunityDetailMediaSurface(modifier = modifier) {
         Box(
@@ -329,20 +325,21 @@ private fun CommunityDetailMediaCard(
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
         ) {
-            AsyncImage(
-                model = previewRequest,
+            CommunityDetailVideoThumbnailContent(
+                thumbnailState = thumbnailState,
                 contentDescription = video.originalFileName,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                modifier = Modifier.fillMaxSize()
             )
-            Icon(
+            if (thumbnailState !is CommunityVideoThumbnailState.Loading) {
+                Icon(
                 imageVector = Icons.Default.PlayCircle,
                 contentDescription = "동영상 미리보기",
                 tint = CommunityPalette.OnAccent.copy(alpha = 0.92f),
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(72.dp)
-            )
+                )
+            }
         }
     }
 }
@@ -354,12 +351,11 @@ private fun CommunityDetailPlayableMediaCard(
 ) {
     val context = LocalContext.current
     var isPlaying by remember(video.playbackUrl) { mutableStateOf(false) }
-    val previewRequest = remember(video.playbackUrl) {
-        ImageRequest.Builder(context)
-            .data(video.playbackUrl)
-            .crossfade(true)
-            .videoFrameMillis(1_000)
-            .build()
+    val thumbnailState = rememberCommunityVideoThumbnailState(video.playbackUrl)
+    var isPortraitVideo by remember(video.playbackUrl) { mutableStateOf(false) }
+
+    LaunchedEffect(thumbnailState) {
+        thumbnailState.isPortrait?.let { isPortraitVideo = it }
     }
     val player = remember(context, video.playbackUrl, isPlaying) {
         if (!isPlaying) {
@@ -374,8 +370,20 @@ private fun CommunityDetailPlayableMediaCard(
     }
 
     DisposableEffect(player) {
-        onDispose {
-            player?.release()
+        if (player == null) {
+            onDispose { }
+        } else {
+            resolveCommunityVideoIsPortrait(player.videoSize)?.let { isPortraitVideo = it }
+            val listener = object : Player.Listener {
+                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                    resolveCommunityVideoIsPortrait(videoSize)?.let { isPortraitVideo = it }
+                }
+            }
+            player.addListener(listener)
+            onDispose {
+                player.removeListener(listener)
+                player.release()
+            }
         }
     }
 
@@ -391,20 +399,21 @@ private fun CommunityDetailPlayableMediaCard(
                         .fillMaxSize()
                         .clickable { isPlaying = true }
                 ) {
-                    AsyncImage(
-                        model = previewRequest,
+                    CommunityDetailVideoThumbnailContent(
+                        thumbnailState = thumbnailState,
                         contentDescription = video.originalFileName,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier.fillMaxSize()
                     )
-                    Icon(
+                    if (thumbnailState !is CommunityVideoThumbnailState.Loading) {
+                        Icon(
                         imageVector = Icons.Default.PlayCircle,
                         contentDescription = "동영상 재생",
                         tint = CommunityPalette.OnAccent.copy(alpha = 0.92f),
                         modifier = Modifier
                             .align(Alignment.Center)
                             .size(72.dp)
-                    )
+                        )
+                    }
                 }
             } else {
                 AndroidView(
@@ -412,14 +421,64 @@ private fun CommunityDetailPlayableMediaCard(
                     factory = { viewContext ->
                         PlayerView(viewContext).apply {
                             useController = true
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            resizeMode = if (isPortraitVideo) {
+                                AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            } else {
+                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            }
                             setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                            setShutterBackgroundColor(CommunityPalette.SurfaceMuted.toArgb())
                             this.player = player
                         }
                     },
-                    update = { it.player = player }
+                    update = {
+                        it.player = player
+                        it.resizeMode = if (isPortraitVideo) {
+                            AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        } else {
+                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        }
+                        it.setShutterBackgroundColor(CommunityPalette.SurfaceMuted.toArgb())
+                    }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun CommunityDetailVideoThumbnailContent(
+    thumbnailState: CommunityVideoThumbnailState,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.background(CommunityPalette.SurfaceMuted),
+        contentAlignment = Alignment.Center
+    ) {
+        when (thumbnailState) {
+            CommunityVideoThumbnailState.Loading -> {
+                CircularProgressIndicator(
+                    color = CommunityPalette.AccentStrong,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            is CommunityVideoThumbnailState.Success -> {
+                FoundationImage(
+                    bitmap = thumbnailState.bitmap.asImageBitmap(),
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = if (thumbnailState.isPortrait) {
+                        ContentScale.Fit
+                    } else {
+                        ContentScale.Crop
+                    }
+                )
+            }
+
+            is CommunityVideoThumbnailState.Error -> Unit
         }
     }
 }
