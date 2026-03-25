@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.toPoseSequenceDto
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
 import com.ddgo.app.domain.model.AiAnalysisMode
@@ -32,8 +33,10 @@ import com.ddgo.app.domain.usecase.toHolds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +49,8 @@ private const val HOLD_CONTACT_ANALYSIS_TAG = "HoldContactAnalysis"
 private const val HOLD_CONTACT_LOG_PREFIX = "[DDGO_HOLD_CONTACT]"
 private const val ATTEMPT_ALIGNMENT_LOG_PREFIX = "[DDGO_ATTEMPT_HOLD_ALIGN]"
 private const val DEFAULT_AI_REQUEST_FRAME_STEP = 1
+private const val HOLD_REACH_ANALYSIS_PARALLELISM = 2
+private const val AI_ANALYSIS_PARALLELISM = 2
 
 internal data class UploadSubmissionRequest(
     val selectionGeneration: Long,
@@ -348,6 +353,7 @@ internal class UploadSubmissionDelegate(
                 val throwable = analysisResult.exceptionOrNull()
                 _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
                     throwable?.extractHttpErrorDetail()
+                        ?: throwable?.toUserFacingNetworkMessageOrNull()
                         ?: throwable?.message
                         ?: "업로드 분석을 완료하지 못했습니다."
                 )
@@ -477,6 +483,7 @@ internal class UploadSubmissionDelegate(
             _finalAnalysisPreparationUiState.value =
                 FinalAnalysisPreparationUiState.Error(
                     throwable?.extractHttpErrorDetail()
+                        ?: throwable?.toUserFacingNetworkMessageOrNull()
                         ?: throwable?.message
                         ?: "최종 분석 결과를 준비하지 못했습니다."
                 )
@@ -706,7 +713,7 @@ internal class UploadSubmissionDelegate(
             _uploadSubmissionUiState.value =
                 UploadSubmissionUiState.Loading("최고 도달 홀드를 분석하고 있습니다.")
 
-            analyzeAllAttemptHoldReach(
+            analyzeAllAttemptHoldReachParallel(
                 alignedHoldSets = alignedHoldSets,
                 terminalSnapshot = terminalSnapshot
             )
@@ -724,7 +731,7 @@ internal class UploadSubmissionDelegate(
                 return
             }
 
-            analyzeAllAttemptsWithAi(
+            analyzeAllAttemptsWithAiParallel(
                 alignedHoldSets = alignedHoldSets,
                 referenceFrameBitmap = bitmapForAi,
                 mode = request.aiMode,
@@ -904,6 +911,7 @@ internal class UploadSubmissionDelegate(
             val throwable = analysisResult.exceptionOrNull()
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
                 throwable?.extractHttpErrorDetail()
+                    ?: throwable?.toUserFacingNetworkMessageOrNull()
                     ?: throwable?.message
                     ?: "업로드 분석을 완료하지 못했습니다."
             )
@@ -1235,7 +1243,7 @@ internal class UploadSubmissionDelegate(
                     )
                 )
             )
-            analyzeAllAttemptHoldReach(
+            analyzeAllAttemptHoldReachParallel(
                 alignedHoldSets = alignedHoldSets,
                 terminalSnapshot = terminalSnapshot
             )
@@ -1309,7 +1317,7 @@ internal class UploadSubmissionDelegate(
         }
 
         if (alignedHoldSets.any { it.alignedHolds.isNotEmpty() }) {
-            analyzeAllAttemptHoldReach(
+            analyzeAllAttemptHoldReachParallel(
                 alignedHoldSets = alignedHoldSets,
                 terminalSnapshot = terminalSnapshot
             )
@@ -1332,7 +1340,7 @@ internal class UploadSubmissionDelegate(
         val profileForAi = aiProfile
             ?: return Result.failure(IllegalStateException("AI 분석용 프로필이 없습니다."))
 
-        return analyzeAllAttemptsWithAi(
+        return analyzeAllAttemptsWithAiParallel(
             alignedHoldSets = alignedHoldSets,
             referenceFrameBitmap = bitmapForAi,
             mode = request.aiMode,
@@ -1396,7 +1404,7 @@ internal class UploadSubmissionDelegate(
             )
         }
 
-        val aiResults = analyzeAllAttemptsWithAiResult(
+        val aiResults = analyzeAllAttemptsWithAiResultParallel(
             alignedHoldSets = alignedHoldSets,
             referenceFrameBitmap = currentBitmap,
             mode = request.aiMode,
@@ -2081,6 +2089,202 @@ internal class UploadSubmissionDelegate(
         return Result.success(results)
     }
 
+    private suspend fun analyzeAllAttemptHoldReachParallel(
+        alignedHoldSets: List<AttemptAlignedHoldSet>,
+        terminalSnapshot: TerminalPrePoseSnapshot
+    ) = coroutineScope {
+        if (alignedHoldSets.isEmpty()) {
+            attemptHoldReachResults = emptyList()
+            attemptPoseDtos = emptyList()
+            attemptAnalyzedPoses = emptyList()
+            attemptPolygonHoldContactDebugResults = emptyList()
+            overallHoldReachSummary = null
+            return@coroutineScope
+        }
+
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
+            "최고 도달 홀드 분석을 준비하고 있어요. (${alignedHoldSets.size}개 시도)"
+        )
+
+        val holdReachDispatcher =
+            Dispatchers.Default.limitedParallelism(HOLD_REACH_ANALYSIS_PARALLELISM)
+        val analyses = alignedHoldSets.map { alignedHoldSet ->
+            async(holdReachDispatcher) {
+                analyzeSingleAttemptPoseAnalysis(
+                    playbackUri = alignedHoldSet.playbackUri,
+                    poses = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]?.poses.orEmpty(),
+                    holds = alignedHoldSet.alignedHolds
+                )
+            }
+        }.awaitAll()
+
+        attemptHoldReachResults = analyses.map(AttemptPoseAnalysis::holdReachResult)
+        attemptPoseDtos = analyses.map(AttemptPoseAnalysis::poseSequenceDto)
+        attemptAnalyzedPoses = analyses.map(AttemptPoseAnalysis::poses)
+        attemptPolygonHoldContactDebugResults =
+            analyses.map(AttemptPoseAnalysis::polygonHoldContactDebugResult)
+        overallHoldReachSummary = summarizeHoldReachResults(
+            results = attemptHoldReachResults,
+            totalHoldCount = alignedHoldSets.firstOrNull()?.alignedHolds?.size ?: 0
+        )
+    }
+
+    private suspend fun analyzeAllAttemptsWithAiResultParallel(
+        alignedHoldSets: List<AttemptAlignedHoldSet>,
+        referenceFrameBitmap: Bitmap,
+        mode: AiAnalysisMode,
+        profile: ResolvedAiProfile,
+        terminalSnapshot: TerminalPrePoseSnapshot,
+        seedAiResults: List<AiAnalysisResult?> = emptyList(),
+        emitLoading: Boolean
+    ): Result<List<AiAnalysisResult>> = coroutineScope {
+        if (alignedHoldSets.isEmpty()) {
+            return@coroutineScope Result.success(emptyList())
+        }
+
+        if (emitLoading) {
+            _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
+                "AI ${mode.pathSegment} 분석을 준비하고 있어요. (${alignedHoldSets.size}개 시도)"
+            )
+        }
+
+        val aiDispatcher = Dispatchers.IO.limitedParallelism(AI_ANALYSIS_PARALLELISM)
+        val tasks = alignedHoldSets.mapIndexed { index, alignedHoldSet ->
+            val uri = alignedHoldSet.playbackUri
+            val analysisHolds = alignedHoldSet.alignedHolds.toHolds()
+            val frameWidthPx = alignedHoldSet.frameWidthPx.takeIf { it > 0 } ?: referenceFrameBitmap.width
+            val frameHeightPx = alignedHoldSet.frameHeightPx.takeIf { it > 0 } ?: referenceFrameBitmap.height
+            val attemptStartedAt = UploadAiTraceLogger.now()
+            UploadAiTraceLogger.log(
+                event = "FINAL_AI_ATTEMPT_BEGIN",
+                playbackUri = uri,
+                phase = "FinalAnalysisPreparation",
+                status = "running",
+                details = mapOf(
+                    "attemptIndex" to index,
+                    "attemptCount" to alignedHoldSets.size,
+                    "mode" to mode.name
+                )
+            )
+
+            val seededResult = seedAiResults.getOrNull(index)
+            if (seededResult != null) {
+                async(aiDispatcher) {
+                    IndexedAiResult(index = index, result = seededResult)
+                }
+            } else {
+                val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[uri].preferredAiPoseSequence()
+                    ?: return@coroutineScope Result.failure(
+                        IllegalStateException("Missing cached pre-pose AI sequence for $uri")
+                    )
+                async(aiDispatcher) {
+                    val result = analyzeAttemptWithBatchAi(
+                        mode = mode,
+                        videoUri = uri,
+                        holds = analysisHolds,
+                        frameWidthPx = frameWidthPx,
+                        frameHeightPx = frameHeightPx,
+                        profile = profile,
+                        cachedPoseSequence = cachedPoseSequence
+                    )
+                    if (result.isFailure) {
+                        throw result.exceptionOrNull()
+                            ?: IllegalStateException("AI 분석 결과를 가져오지 못했습니다.")
+                    }
+
+                    UploadAiTraceLogger.log(
+                        event = "FINAL_AI_ATTEMPT_DONE",
+                        playbackUri = uri,
+                        phase = "FinalAnalysisPreparation",
+                        status = "success",
+                        elapsedMs = UploadAiTraceLogger.elapsedSince(attemptStartedAt),
+                        details = mapOf(
+                            "attemptIndex" to index,
+                            "attemptCount" to alignedHoldSets.size
+                        )
+                    )
+
+                    IndexedAiResult(index = index, result = result.getOrThrow())
+                }
+            }
+        }
+
+        return@coroutineScope try {
+            val results = tasks.awaitAll()
+                .sortedBy(IndexedAiResult::index)
+                .map(IndexedAiResult::result)
+            Result.success(results)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (throwable: Throwable) {
+            Result.failure(throwable)
+        }
+    }
+
+    private suspend fun analyzeAllAttemptsWithAiParallel(
+        alignedHoldSets: List<AttemptAlignedHoldSet>,
+        referenceFrameBitmap: Bitmap,
+        mode: AiAnalysisMode,
+        profile: ResolvedAiProfile,
+        terminalSnapshot: TerminalPrePoseSnapshot,
+        callbacks: UploadSubmissionCallbacks
+    ): Result<List<AiAnalysisResult>> = coroutineScope {
+        if (alignedHoldSets.isEmpty()) {
+            clearAiAnalysisState(callbacks)
+            return@coroutineScope Result.success(emptyList())
+        }
+
+        _uploadSubmissionUiState.value = UploadSubmissionUiState.Loading(
+            "AI ${mode.pathSegment} 분석을 준비하고 있어요. (${alignedHoldSets.size}개 시도)"
+        )
+
+        val aiDispatcher = Dispatchers.IO.limitedParallelism(AI_ANALYSIS_PARALLELISM)
+        val tasks = alignedHoldSets.mapIndexed { index, alignedHoldSet ->
+            val analysisHolds = alignedHoldSet.alignedHolds.toHolds()
+            val frameWidthPx = alignedHoldSet.frameWidthPx.takeIf { it > 0 } ?: referenceFrameBitmap.width
+            val frameHeightPx = alignedHoldSet.frameHeightPx.takeIf { it > 0 } ?: referenceFrameBitmap.height
+            val cachedPoseSequence = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
+                .preferredAiPoseSequence()
+                ?: return@coroutineScope Result.failure(
+                    IllegalStateException(
+                        "Missing cached pre-pose AI sequence for ${alignedHoldSet.playbackUri}"
+                    )
+                )
+
+            async(aiDispatcher) {
+                val result = analyzeAttemptWithBatchAi(
+                    mode = mode,
+                    videoUri = alignedHoldSet.playbackUri,
+                    holds = analysisHolds,
+                    frameWidthPx = frameWidthPx,
+                    frameHeightPx = frameHeightPx,
+                    profile = profile,
+                    cachedPoseSequence = cachedPoseSequence
+                )
+                if (result.isFailure) {
+                    throw result.exceptionOrNull()
+                        ?: IllegalStateException("AI 분석 결과를 가져오지 못했습니다.")
+                }
+
+                IndexedAiResult(index = index, result = result.getOrThrow())
+            }
+        }
+
+        val results = try {
+            tasks.awaitAll()
+                .sortedBy(IndexedAiResult::index)
+                .map(IndexedAiResult::result)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (throwable: Throwable) {
+            return@coroutineScope Result.failure(throwable)
+        }
+
+        attemptAiAnalysisResults = results
+        callbacks.syncDisplayedAnalysisPoints()
+        return@coroutineScope Result.success(results)
+    }
+
     private suspend fun analyzeAttemptWithBatchAi(
         mode: AiAnalysisMode,
         videoUri: String,
@@ -2303,6 +2507,7 @@ internal class UploadSubmissionDelegate(
     }
 
     private fun Throwable.extractHttpErrorDetail(): String? {
+        toUserFacingNetworkMessageOrNull()?.let { return it }
         val httpException = this as? HttpException ?: return null
         return runCatching {
             httpException.response()
@@ -2352,6 +2557,11 @@ private data class AttemptPoseAnalysis(
     val poseSequenceDto: PoseSequenceDto,
     val poses: List<Pose>,
     val polygonHoldContactDebugResult: PolygonHoldContactDebugResult
+)
+
+private data class IndexedAiResult(
+    val index: Int,
+    val result: AiAnalysisResult
 )
 
 private data class HoldReachAnalysisBundle(

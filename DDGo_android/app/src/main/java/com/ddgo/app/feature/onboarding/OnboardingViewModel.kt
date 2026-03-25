@@ -8,13 +8,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.core.datastore.OnboardingPreferenceDataStore
 import com.ddgo.app.core.datastore.PreferredGymPreferenceDataStore
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.ResolvedGym
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
 import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
 import com.ddgo.app.domain.usecase.UpdateProfileUseCase
-import com.ddgo.app.feature.profile.ProfileStrings
 import com.ddgo.app.feature.profile.model.ProfileBodyProfileEditorUiState
 import com.ddgo.app.feature.profile.model.ProfileSexOption
 import com.ddgo.app.feature.profile.state.ProfileInputValidator
@@ -143,7 +143,7 @@ class OnboardingViewModel @Inject constructor(
                 gymSearchUiState = OnboardingGymSearchUiState.Success(places)
             }.onFailure { throwable ->
                 gymSearchUiState = OnboardingGymSearchUiState.Error(
-                    throwable.message ?: "암장 검색에 실패했어요."
+                    throwable.orNetworkMessage("암장 검색에 실패했어요.")
                 )
             }
         }
@@ -162,7 +162,7 @@ class OnboardingViewModel @Inject constructor(
                 }
                 .onFailure { throwable ->
                     gymResolveUiState = OnboardingGymResolveUiState.Error(
-                        throwable.message ?: "선택한 암장 정보를 확인하지 못했어요."
+                        throwable.orNetworkMessage("선택한 암장 정보를 확인하지 못했어요.")
                     )
                 }
         }
@@ -249,7 +249,7 @@ class OnboardingViewModel @Inject constructor(
                     ).onSuccess {
                         onCompleted()
                     }.onFailure { throwable ->
-                        profileErrorMessage = throwable.message ?: "신체 정보를 저장하지 못했어요."
+                        profileErrorMessage = throwable.orNetworkMessage("신체 정보를 저장하지 못했어요.")
                     }
 
                     isSubmittingProfile = false
@@ -324,6 +324,10 @@ class OnboardingViewModel @Inject constructor(
         }.onFailure { throwable ->
             Log.e(TAG, "Failed to persist onboarding completion", throwable)
         }
+    }
+
+    private fun Throwable.orNetworkMessage(fallback: String): String {
+        return toUserFacingNetworkMessageOrNull() ?: message ?: fallback
     }
 }
 

@@ -2,6 +2,7 @@ package com.ddgo.app.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.core.validation.AuthInputPolicy
 import com.ddgo.app.core.validation.ValidationResult
 import com.ddgo.app.domain.model.LogoutResult
@@ -301,13 +302,13 @@ class ProfileViewModel @Inject constructor(
                     )
                 }
 
-                // 입력이 잠시 멈췄을 때만 서버에 중복 확인을 보내서 타이핑 중 호출을 줄입니다.
+                // ??낆젾???醫롫뻻 筌롫뜆??????춸 ??뺤쒔??餓λ쵎???類ㅼ뵥??癰귣?沅??????꾨릅 餓??紐꾪뀱??餓κ쑴???덈뼄.
                 nicknameAvailabilityJob = viewModelScope.launch {
                     delay(NICKNAME_CHECK_DEBOUNCE_MS)
 
                     checkNicknameAvailabilityUseCase(nickname)
                         .onSuccess { available ->
-                            // 이전 요청 응답이 늦게 도착해도 현재 입력값과 다르면 화면을 덮어쓰지 않습니다.
+                            // ??곸읈 ?遺욧퍕 ?臾먮뼗????苡??袁⑷컩??猷??袁⑹삺 ??낆젾揶쏅?????삘뀮筌??遺얇늺????堉?怨? ??녿뮸??덈뼄.
                             val currentInput = featureState.nicknameEditor?.nicknameInput?.trim()
                             if (currentInput != nickname) return@launch
 
@@ -333,7 +334,7 @@ class ProfileViewModel @Inject constructor(
                             updateState {
                                 it.updateNicknameFeedback(
                                     feedback = errorFeedback(
-                                        throwable.message ?: ProfileStrings.NicknameCheckFailed
+                                        throwable.orNetworkMessage(ProfileStrings.NicknameCheckFailed)
                                     ),
                                     isCheckingAvailability = false,
                                     isNicknameAvailable = false
@@ -438,7 +439,7 @@ class ProfileViewModel @Inject constructor(
                 }
                 .onFailure { throwable ->
                     emitMessage(
-                        throwable.message ?: ProfileStrings.DeleteAccountFailed
+                        throwable.orNetworkMessage(ProfileStrings.DeleteAccountFailed)
                     )
                 }
 
@@ -466,7 +467,7 @@ class ProfileViewModel @Inject constructor(
             }
             .onFailure { throwable ->
                 if (!suppressErrorMessage) {
-                    emitMessage(throwable.message ?: ProfileStrings.LoadProfileFailed)
+                    emitMessage(throwable.orNetworkMessage(ProfileStrings.LoadProfileFailed))
                 }
             }
 
@@ -493,7 +494,7 @@ class ProfileViewModel @Inject constructor(
                 .onFailure { throwable ->
                     featureState = featureState.restoreNicknameEditor(nickname)
                         .showNicknameEditorError(
-                            throwable.message ?: ProfileStrings.NicknameSaveFailed
+                            throwable.orNetworkMessage(ProfileStrings.NicknameSaveFailed)
                         )
                     publishState()
                     refreshNicknameFeedback()
@@ -528,7 +529,7 @@ class ProfileViewModel @Inject constructor(
             }.onFailure { throwable ->
                 featureState = featureState.restoreBodyProfileEditor(originalEditor)
                     .showBodyProfileEditorError(
-                        throwable.message ?: ProfileStrings.BodyProfileSaveFailed
+                        throwable.orNetworkMessage(ProfileStrings.BodyProfileSaveFailed)
                     )
                 publishState()
             }
@@ -553,7 +554,7 @@ class ProfileViewModel @Inject constructor(
             }.onFailure { throwable ->
                 featureState = featureState.restorePasswordEditor(originalEditor)
                     .showPasswordEditorError(
-                        throwable.message ?: ProfileStrings.PasswordChangeFailed
+                        throwable.orNetworkMessage(ProfileStrings.PasswordChangeFailed)
                     )
                 publishState()
                 refreshPasswordFeedbacks(showRequired = true)
@@ -597,6 +598,10 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    private fun Throwable.orNetworkMessage(fallback: String): String {
+        return toUserFacingNetworkMessageOrNull() ?: message ?: fallback
+    }
+
     private fun cancelNicknameAvailabilityCheck() {
         nicknameAvailabilityJob?.cancel()
         nicknameAvailabilityJob = null
@@ -629,3 +634,4 @@ class ProfileViewModel @Inject constructor(
         )
     }
 }
+

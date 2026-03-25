@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.AttemptMapper.toDomain
 import com.ddgo.app.data.mapper.AttemptMapper.toUploadedAttemptVideo
 import com.ddgo.app.data.remote.common.ApiErrorResponse
@@ -155,7 +156,12 @@ class AttemptRepositoryImpl @Inject constructor(
                     )
                 )
             } catch (e: Exception) {
-                Result.failure(e)
+                Result.failure(
+                    IllegalStateException(
+                        e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "영상 업로드에 실패했어요.",
+                        e
+                    )
+                )
             }
         }
     }
@@ -219,7 +225,12 @@ class AttemptRepositoryImpl @Inject constructor(
                 )
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(
+                IllegalStateException(
+                    e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "시도 결과 저장에 실패했어요.",
+                    e
+                )
+            )
         }
     }
 

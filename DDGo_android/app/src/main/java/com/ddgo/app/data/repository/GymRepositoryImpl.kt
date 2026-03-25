@@ -1,5 +1,6 @@
 package com.ddgo.app.data.repository
 
+import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.GymMapper.toDomain
 import com.ddgo.app.data.mapper.GymMapper.toDomainOrNull
 import com.ddgo.app.data.remote.gym.GymApi
@@ -73,7 +74,12 @@ class GymRepositoryImpl @Inject constructor(
                     .mapNotNull { it.toDomainOrNull() }
             )
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(
+                IllegalStateException(
+                    e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "암장 검색에 실패했어요.",
+                    e
+                )
+            )
         }
     }
 
@@ -100,7 +106,12 @@ class GymRepositoryImpl @Inject constructor(
                 Result.failure(Exception(response.message.ifBlank { "Failed to resolve gym." }))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(
+                IllegalStateException(
+                    e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "암장 정보를 확인하지 못했어요.",
+                    e
+                )
+            )
         }
     }
 
