@@ -2651,6 +2651,8 @@ private fun emptyAttemptCompletionSummary(attemptNo: Int): FinalAnalysisAttemptS
         dangerEventCount = null,
         feedbackTypes = emptyList(),
         loadFocusLabel = null,
+        bodyLoadDistribution = null,
+        topJointLoads = emptyList(),
         lowerBodyDriveScore = null,
         overallMovementScore = null,
         feedbackLine = "",

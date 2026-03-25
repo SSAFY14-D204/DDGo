@@ -34,6 +34,7 @@ import com.ddgo.app.feature.climbing.upload.AnalysisFailure
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
 import com.ddgo.app.feature.climbing.upload.AnalysisText
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisBrandAccentBrush
 import kotlin.math.roundToInt
 
 @Composable
@@ -151,7 +152,7 @@ internal fun StabilityInsightTimelineChart(
 
                 drawPath(
                     path = linePath,
-                    color = AnalysisPrimary,
+                    brush = AnalysisBrandAccentBrush,
                     style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
                 )
 

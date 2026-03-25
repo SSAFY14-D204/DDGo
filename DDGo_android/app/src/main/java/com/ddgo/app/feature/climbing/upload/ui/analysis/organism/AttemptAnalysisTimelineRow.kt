@@ -34,6 +34,9 @@ import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
 import com.ddgo.app.feature.climbing.upload.AnalysisText
 import com.ddgo.app.feature.climbing.upload.toVideoTimeString
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisAccentText
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.analysisAccentBrushFor
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.analysisSurfaceBrushFor
 
 @Composable
 internal fun AttemptAnalysisTimelineRow(
@@ -112,20 +115,31 @@ private fun AttemptTimelineCard(
     } else {
         AnalysisPrimary
     }
+    val accentBrush = analysisAccentBrushFor(accentColor)
 
     Column(
         modifier = modifier
             .then(if (useFixedWidth) Modifier.width(148.dp) else Modifier)
             .clip(RoundedCornerShape(18.dp))
             .background(AnalysisCardColor)
-            .border(
-                width = if (isSelected) 1.5.dp else 1.dp,
-                color = if (isSelected) {
-                    accentColor.copy(alpha = 0.72f)
+            .then(
+                if (isSelected && accentBrush != null) {
+                    Modifier.border(
+                        width = 1.5.dp,
+                        brush = accentBrush,
+                        shape = RoundedCornerShape(18.dp)
+                    )
                 } else {
-                    Color.White.copy(alpha = 0.05f)
-                },
-                shape = RoundedCornerShape(18.dp)
+                    Modifier.border(
+                        width = if (isSelected) 1.5.dp else 1.dp,
+                        color = if (isSelected) {
+                            accentColor.copy(alpha = 0.72f)
+                        } else {
+                            Color.White.copy(alpha = 0.05f)
+                        },
+                        shape = RoundedCornerShape(18.dp)
+                    )
+                }
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 14.dp),
@@ -138,14 +152,24 @@ private fun AttemptTimelineCard(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(accentColor.copy(alpha = if (isSelected) 0.26f else 0.14f))
+                    .background(
+                        brush = analysisSurfaceBrushFor(accentColor)
+                            ?: androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                colors = listOf(
+                                    accentColor.copy(alpha = if (isSelected) 0.26f else 0.18f),
+                                    accentColor.copy(alpha = if (isSelected) 0.16f else 0.10f)
+                                )
+                            )
+                    )
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Text(
+                AnalysisAccentText(
                     text = point.timeMs.toVideoTimeString(),
-                    color = accentColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    accentColor = accentColor,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge.copy(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 )
             }
 
@@ -153,7 +177,13 @@ private fun AttemptTimelineCard(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(RoundedCornerShape(999.dp))
-                    .background(if (isSelected) accentColor else Color.Transparent)
+                    .then(
+                        if (isSelected && accentBrush != null) {
+                            Modifier.background(brush = accentBrush)
+                        } else {
+                            Modifier.background(if (isSelected) accentColor else Color.Transparent)
+                        }
+                    )
                     .border(
                         width = if (isSelected) 0.dp else 1.dp,
                         color = if (isSelected) Color.Transparent else AnalysisMuted.copy(alpha = 0.35f),

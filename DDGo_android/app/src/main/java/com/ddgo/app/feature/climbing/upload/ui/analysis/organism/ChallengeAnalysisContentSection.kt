@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,6 +41,12 @@ import com.ddgo.app.feature.climbing.upload.ChallengeAttemptComparisonItem
 import com.ddgo.app.feature.climbing.upload.ChallengeFinalAnalysisSummary
 import com.ddgo.app.feature.climbing.upload.ChallengeTrendPoint
 import com.ddgo.app.feature.climbing.upload.FinalAnalysisUnknownMetricText
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisAccentCircularProgressIndicator
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisAccentLinearProgressBar
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisAccentText
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.analysisAccentBrushFor
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.analysisSurfaceBrushFor
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.hasAnalysisGradientAccent
 
 @Composable
 internal fun ChallengeAnalysisContentSection(
@@ -101,12 +108,25 @@ private fun ChallengeContentTabs(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            text = title,
-                            color = if (isSelected) AnalysisPrimary else AnalysisMuted,
-                            fontSize = 15.sp,
-                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.SemiBold
-                        )
+                        if (isSelected) {
+                            AnalysisAccentText(
+                                text = title,
+                                accentColor = AnalysisPrimary,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        } else {
+                            Text(
+                                text = title,
+                                color = AnalysisMuted,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        }
                     }
 
                     if (isSelected) {
@@ -116,7 +136,7 @@ private fun ChallengeContentTabs(
                                 .width(34.dp)
                                 .height(3.dp)
                                 .clip(RoundedCornerShape(topStart = 100.dp, topEnd = 100.dp))
-                                .background(AnalysisPrimary)
+                                .background(brush = requireNotNull(analysisAccentBrushFor(AnalysisPrimary)))
                         )
                     }
                 }
@@ -154,8 +174,9 @@ private fun ChallengeResultOverviewCard(
             Text(
                 text = "챌린지 결과",
                 color = AnalysisText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                )
             )
 
             ChallengeOverallScoreCard(score = summary.overallMovementScore)
@@ -209,6 +230,7 @@ private fun ChallengeOverallScoreCard(
 ) {
     val accentColor = challengeScoreAccentColor(score)
     val safeScore = score?.coerceIn(0, 100)
+    val useBrandAccent = hasAnalysisGradientAccent(accentColor)
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -222,27 +244,57 @@ private fun ChallengeOverallScoreCard(
             Text(
                 text = "종합 점수",
                 color = AnalysisText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                )
             )
-            Text(
-                text = safeScore?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
-                color = accentColor,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (useBrandAccent) {
+                AnalysisAccentText(
+                    text = safeScore?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                    accentColor = accentColor,
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontSize = 34.sp,
+                        lineHeight = 40.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            } else {
+                Text(
+                    text = safeScore?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                    color = accentColor,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(accentColor.copy(alpha = 0.14f))
+                    .then(
+                        if (useBrandAccent) {
+                            Modifier.background(brush = requireNotNull(analysisSurfaceBrushFor(accentColor)))
+                        } else {
+                            Modifier.background(accentColor.copy(alpha = 0.14f))
+                        }
+                    )
                     .padding(horizontal = 10.dp, vertical = 5.dp)
             ) {
-                Text(
-                    text = challengeScoreGradeLabel(safeScore),
-                    color = accentColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                if (useBrandAccent) {
+                    AnalysisAccentText(
+                        text = challengeScoreGradeLabel(safeScore),
+                        accentColor = accentColor,
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                } else {
+                    Text(
+                        text = challengeScoreGradeLabel(safeScore),
+                        color = accentColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
 
@@ -252,25 +304,49 @@ private fun ChallengeOverallScoreCard(
                 .height(100.dp),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(
-                progress = { (safeScore ?: 0) / 100f },
-                modifier = Modifier
-                    .width(92.dp)
-                    .height(92.dp),
-                color = accentColor,
-                trackColor = AnalysisCardColor,
-                strokeWidth = 8.dp
-            )
+            if (useBrandAccent) {
+                AnalysisAccentCircularProgressIndicator(
+                    progress = (safeScore ?: 0) / 100f,
+                    accentColor = accentColor,
+                    modifier = Modifier
+                        .width(92.dp)
+                        .height(92.dp),
+                    trackColor = AnalysisCardColor,
+                    strokeWidth = 8.dp
+                )
+            } else {
+                CircularProgressIndicator(
+                    progress = { (safeScore ?: 0) / 100f },
+                    modifier = Modifier
+                        .width(92.dp)
+                        .height(92.dp),
+                    color = accentColor,
+                    trackColor = AnalysisCardColor,
+                    strokeWidth = 8.dp
+                )
+            }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text(
-                    text = safeScore?.toString() ?: "--",
-                    color = accentColor,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (useBrandAccent) {
+                    AnalysisAccentText(
+                        text = safeScore?.toString() ?: "--",
+                        accentColor = accentColor,
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontSize = 28.sp,
+                            lineHeight = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                } else {
+                    Text(
+                        text = safeScore?.toString() ?: "--",
+                        color = accentColor,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
                     text = "100점 만점",
                     color = AnalysisMuted,
@@ -288,6 +364,7 @@ private fun ChallengeOverviewMetricBlock(
     modifier: Modifier = Modifier,
     accentColor: Color = AnalysisText
 ) {
+    val useBrandAccent = hasAnalysisGradientAccent(accentColor)
     val valueFontSize = when {
         value.length >= 10 -> 18.sp
         value.length >= 6 -> 22.sp
@@ -304,15 +381,29 @@ private fun ChallengeOverviewMetricBlock(
             fontSize = 12.sp
         )
 
-        Text(
-            text = value,
-            color = accentColor,
-            fontSize = valueFontSize,
-            fontWeight = FontWeight.Bold,
-            lineHeight = valueFontSize,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (useBrandAccent) {
+            AnalysisAccentText(
+                text = value,
+                accentColor = accentColor,
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontSize = valueFontSize,
+                    lineHeight = valueFontSize,
+                    fontWeight = FontWeight.Bold
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        } else {
+            Text(
+                text = value,
+                color = accentColor,
+                fontSize = valueFontSize,
+                fontWeight = FontWeight.Bold,
+                lineHeight = valueFontSize,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -366,8 +457,9 @@ private fun ChallengeScoreSection(
             Text(
                 text = "항목별 점수",
                 color = AnalysisText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                )
             )
 
             items.forEachIndexed { index, item ->
@@ -404,6 +496,7 @@ private fun ChallengeScoreRow(
 ) {
     val score = item.score?.coerceIn(0, 100)
     val accentColor = challengeScoreAccentColor(score)
+    val useBrandAccent = hasAnalysisGradientAccent(accentColor)
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -420,23 +513,44 @@ private fun ChallengeScoreRow(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
-            Text(
-                text = score?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
-                color = accentColor,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (useBrandAccent) {
+                AnalysisAccentText(
+                    text = score?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                    accentColor = accentColor,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            } else {
+                Text(
+                    text = score?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                    color = accentColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
-        LinearProgressIndicator(
-            progress = { (score ?: 0) / 100f },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(999.dp)),
-            color = accentColor,
-            trackColor = Color.White.copy(alpha = 0.08f)
-        )
+        if (useBrandAccent) {
+            AnalysisAccentLinearProgressBar(
+                progress = (score ?: 0) / 100f,
+                accentColor = accentColor,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+                trackColor = Color.White.copy(alpha = 0.08f)
+            )
+        } else {
+            LinearProgressIndicator(
+                progress = { (score ?: 0) / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(999.dp)),
+                color = accentColor,
+                trackColor = Color.White.copy(alpha = 0.08f)
+            )
+        }
 
         Text(
             text = item.caption,
@@ -527,8 +641,9 @@ private fun ChallengeStabilityTrendPanel(
             Text(
                 text = "시도별 안정성 흐름",
                 color = AnalysisText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                )
             )
             Text(
                 text = "시도마다 안정성이 어떻게 달라졌는지 한눈에 비교할 수 있어요.",
@@ -569,8 +684,9 @@ private fun ChallengeAttemptRecapSection(
             Text(
                 text = "시도별 요약",
                 color = AnalysisText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                )
             )
 
             attempts.forEach { item ->
@@ -659,8 +775,9 @@ private fun ChallengeKeySummaryCard(
             Text(
                 text = "챌린지 핵심",
                 color = AnalysisText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                )
             )
 
             ChallengeSummaryLineRow(
@@ -689,6 +806,7 @@ private fun ChallengeSummaryLineRow(
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
+    val useBrandAccent = hasAnalysisGradientAccent(accentColor)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -702,19 +820,36 @@ private fun ChallengeSummaryLineRow(
                 .width(4.dp)
                 .height(42.dp)
                 .clip(RoundedCornerShape(999.dp))
-                .background(accentColor)
+                .then(
+                    if (useBrandAccent) {
+                        Modifier.background(brush = requireNotNull(analysisAccentBrushFor(accentColor)))
+                    } else {
+                        Modifier.background(accentColor)
+                    }
+                )
         )
 
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = label,
-                color = accentColor,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            if (useBrandAccent) {
+                AnalysisAccentText(
+                    text = label,
+                    accentColor = accentColor,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            } else {
+                Text(
+                    text = label,
+                    color = accentColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             Text(
                 text = text,
                 color = AnalysisText,
@@ -820,6 +955,7 @@ private fun ChallengeStabilityProgressRow(
     row: ChallengeStabilityRowUi,
     modifier: Modifier = Modifier
 ) {
+    val useBrandAccent = row.score != null
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -839,12 +975,23 @@ private fun ChallengeStabilityProgressRow(
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
-            Text(
-                text = row.valueText,
-                color = if (row.score != null) AnalysisPrimary else AnalysisMuted,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            if (useBrandAccent) {
+                AnalysisAccentText(
+                    text = row.valueText,
+                    accentColor = AnalysisPrimary,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            } else {
+                Text(
+                    text = row.valueText,
+                    color = AnalysisMuted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
 
         Box(
@@ -860,7 +1007,7 @@ private fun ChallengeStabilityProgressRow(
                         .fillMaxWidth(score.coerceIn(0, 100) / 100f)
                         .height(8.dp)
                         .clip(RoundedCornerShape(999.dp))
-                        .background(AnalysisPrimary)
+                        .background(brush = requireNotNull(analysisAccentBrushFor(AnalysisPrimary)))
                 )
             }
         }
