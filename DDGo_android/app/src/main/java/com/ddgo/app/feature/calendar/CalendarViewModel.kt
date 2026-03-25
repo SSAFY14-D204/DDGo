@@ -8,13 +8,13 @@ import com.ddgo.app.domain.model.CalendarMonthSummary
 import com.ddgo.app.domain.usecase.GetCalendarEntriesUseCase
 import com.ddgo.app.domain.usecase.GetCalendarMonthSummaryUseCase
 import com.ddgo.app.feature.calendar.mapper.CalendarUiStateMapper
+import com.ddgo.app.feature.calendar.model.CalendarMarkerFilterUiModel
 import com.ddgo.app.feature.calendar.model.CalendarUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -30,6 +30,7 @@ class CalendarViewModel @Inject constructor(
     private val initialMonth = YearMonth.from(today)
     private var currentEntries: List<CalendarEntry> = emptyList()
     private var currentSummary = CalendarMonthSummary()
+    private var activeMarkerFilter = CalendarMarkerFilterUiModel.COLOR
     private var loadMonthJob: Job? = null
     private var latestLoadRequestId = 0L
 
@@ -40,6 +41,7 @@ class CalendarViewModel @Inject constructor(
             selectedDate = today,
             entries = emptyList(),
             summary = currentSummary,
+            activeMarkerFilter = activeMarkerFilter,
             isLoading = true
         )
     )
@@ -66,16 +68,22 @@ class CalendarViewModel @Inject constructor(
             return
         }
 
-        _uiState.update { currentState ->
-            CalendarUiStateMapper.createCalendarUiState(
-                today = today,
-                currentMonth = targetMonth,
-                selectedDate = date,
-                entries = currentEntries,
-                summary = currentSummary,
-                errorMessage = currentState.errorMessage
-            )
-        }
+        publishUiState(
+            currentMonth = targetMonth,
+            selectedDate = date,
+            errorMessage = _uiState.value.errorMessage
+        )
+    }
+
+    fun selectMarkerFilter(filter: CalendarMarkerFilterUiModel) {
+        if (filter == activeMarkerFilter) return
+        activeMarkerFilter = filter
+        publishUiState(
+            currentMonth = _uiState.value.currentMonth,
+            selectedDate = _uiState.value.selectedDate,
+            isLoading = _uiState.value.isLoading,
+            errorMessage = _uiState.value.errorMessage
+        )
     }
 
     private fun loadMonth(targetMonth: YearMonth, selectedDate: LocalDate) {
@@ -84,12 +92,9 @@ class CalendarViewModel @Inject constructor(
         loadMonthJob?.cancel()
         currentEntries = emptyList()
         currentSummary = CalendarMonthSummary()
-        _uiState.value = CalendarUiStateMapper.createCalendarUiState(
-            today = today,
+        publishUiState(
             currentMonth = targetMonth,
             selectedDate = selectedDate,
-            entries = emptyList(),
-            summary = currentSummary,
             isLoading = true
         )
 
@@ -99,24 +104,18 @@ class CalendarViewModel @Inject constructor(
                     if (requestId != latestLoadRequestId) return@onSuccess
                     currentEntries = entries
                     currentSummary = getCalendarMonthSummaryUseCase(targetMonth, entries)
-                    _uiState.value = CalendarUiStateMapper.createCalendarUiState(
-                        today = today,
+                    publishUiState(
                         currentMonth = targetMonth,
-                        selectedDate = selectedDate,
-                        entries = entries,
-                        summary = currentSummary
+                        selectedDate = selectedDate
                     )
                 }
                 .onFailure { throwable ->
                     if (requestId != latestLoadRequestId) return@onFailure
                     currentEntries = emptyList()
                     currentSummary = CalendarMonthSummary()
-                    _uiState.value = CalendarUiStateMapper.createCalendarUiState(
-                        today = today,
+                    publishUiState(
                         currentMonth = targetMonth,
                         selectedDate = selectedDate,
-                        entries = emptyList(),
-                        summary = currentSummary,
                         errorMessage = throwable.toUserFacingNetworkMessageOrNull()
                             ?: throwable.message
                             ?: "캘린더 기록을 불러오지 못했어요."
@@ -125,6 +124,25 @@ class CalendarViewModel @Inject constructor(
         }
     }
 
+    private fun publishUiState(
+        currentMonth: YearMonth,
+        selectedDate: LocalDate,
+        isLoading: Boolean = false,
+        errorMessage: String? = null
+    ) {
+        _uiState.value = CalendarUiStateMapper.createCalendarUiState(
+            today = today,
+            currentMonth = currentMonth,
+            selectedDate = selectedDate,
+            entries = currentEntries,
+            summary = currentSummary,
+            activeMarkerFilter = activeMarkerFilter,
+            isLoading = isLoading,
+            errorMessage = errorMessage
+        )
+    }
+
+    // 다른 월로 이동하면 그 달의 1일을 기본 선택값으로 사용한다.
     private fun defaultSelectedDateForMonth(targetMonth: YearMonth): LocalDate {
         return if (targetMonth == initialMonth) {
             today

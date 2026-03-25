@@ -1,9 +1,15 @@
 package com.ddgo.app.feature.main
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
+import com.ddgo.app.feature.calendar.CALENDAR_DETAIL_RESULT_CHALLENGE_ID
+import com.ddgo.app.feature.calendar.calendarDetailRoute
+import com.ddgo.app.feature.calendar.navigateToCalendarDetail
+import com.ddgo.app.feature.calendar.rememberSharedCalendarViewModel
 import com.ddgo.app.feature.climbing.record.recordGraph
 import com.ddgo.app.feature.climbing.upload.uploadGraph
 import com.ddgo.app.navigation.ScreenRoutes
@@ -29,7 +35,12 @@ fun NavGraphBuilder.mainGraph(
         startDestination = ScreenRoutes.Main.route,
         route = ScreenRoutes.MainGraph.route
     ) {
-        composable(route = ScreenRoutes.Main.route) {
+        composable(route = ScreenRoutes.Main.route) { backStackEntry ->
+            val calendarViewModel = rememberSharedCalendarViewModel(navController, backStackEntry)
+            val pendingCalendarChallengeId by backStackEntry.savedStateHandle
+                .getStateFlow<Long?>(CALENDAR_DETAIL_RESULT_CHALLENGE_ID, null)
+                .collectAsState()
+
             MainScreen(
                 onNavigateToUpload = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.route)
@@ -37,7 +48,13 @@ fun NavGraphBuilder.mainGraph(
                 onNavigateToRecord = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_SETUP)
                 },
+                onNavigateToCalendarDetail = navController::navigateToCalendarDetail,
                 onNavigateToAuth = onNavigateToAuth,
+                calendarViewModel = calendarViewModel,
+                pendingCalendarChallengeId = pendingCalendarChallengeId,
+                onPendingCalendarChallengeHandled = {
+                    backStackEntry.savedStateHandle[CALENDAR_DETAIL_RESULT_CHALLENGE_ID] = null
+                },
                 onNavigateToDebug = onNavigateToDebug
             )
         }
@@ -47,5 +64,15 @@ fun NavGraphBuilder.mainGraph(
 
         // 실시간 기록 서브 그래프 (카메라 → 기록 → 결과)
         recordGraph(navController = navController)
+
+        calendarDetailRoute(
+            navController = navController,
+            onEntrySelected = { challengeId ->
+                navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.set(CALENDAR_DETAIL_RESULT_CHALLENGE_ID, challengeId)
+                navController.popBackStack()
+            }
+        )
     }
 }

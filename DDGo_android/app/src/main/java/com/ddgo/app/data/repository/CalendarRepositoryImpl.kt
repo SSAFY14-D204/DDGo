@@ -36,6 +36,7 @@ class CalendarRepositoryImpl @Inject constructor(
             id = id,
             date = startedAt.toLocalDate(),
             title = buildTitle(),
+            problemColor = problemColor,
             venue = GymNameFormatter.sanitize(gymName),
             time = startedAt.toLocalTime(),
             note = buildNote()

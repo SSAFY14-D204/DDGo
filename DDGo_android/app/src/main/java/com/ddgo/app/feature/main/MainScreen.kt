@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -18,23 +19,37 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.zIndex
+import com.ddgo.app.feature.calendar.CalendarViewModel
 import com.ddgo.app.feature.analysis.AnalysisScreen
 import com.ddgo.app.feature.calendar.CalendarScreen
 import com.ddgo.app.feature.climbing.ClimbingMenuOverlay
 import com.ddgo.app.feature.community.CommunityScreen
 import com.ddgo.app.feature.profile.ProfileScreen
+import java.time.LocalDate
 
 @Composable
 fun MainScreen(
     onNavigateToUpload: () -> Unit,
     onNavigateToRecord: () -> Unit,
+    onNavigateToCalendarDetail: (LocalDate) -> Unit,
     onNavigateToAuth: () -> Unit,
+    calendarViewModel: CalendarViewModel,
+    pendingCalendarChallengeId: Long? = null,
+    onPendingCalendarChallengeHandled: () -> Unit = {},
     onNavigateToDebug: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
     var lastActiveTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
     var analysisTargetChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
     val isClimbing = selectedTab == MainTab.CLIMBING
+
+    LaunchedEffect(pendingCalendarChallengeId) {
+        if (pendingCalendarChallengeId == null) return@LaunchedEffect
+        analysisTargetChallengeId = pendingCalendarChallengeId
+        lastActiveTab = MainTab.ANALYSIS
+        selectedTab = MainTab.ANALYSIS
+        onPendingCalendarChallengeHandled()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -44,11 +59,8 @@ fun MainScreen(
         ) {
             when (lastActiveTab) {
                 MainTab.CALENDAR -> CalendarScreen(
-                    onEntrySelected = { challengeId ->
-                        analysisTargetChallengeId = challengeId
-                        lastActiveTab = MainTab.ANALYSIS
-                        selectedTab = MainTab.ANALYSIS
-                    }
+                    onDateSelected = onNavigateToCalendarDetail,
+                    viewModel = calendarViewModel
                 )
                 MainTab.COMMUNITY -> CommunityScreen()
                 MainTab.ANALYSIS -> AnalysisScreen(

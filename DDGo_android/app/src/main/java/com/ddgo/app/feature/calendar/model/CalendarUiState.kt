@@ -11,15 +11,45 @@ data class CalendarUiState(
     val weeks: List<List<CalendarDayUiModel>>,
     val summary: CalendarMonthSummaryUiModel,
     val selectedEntries: List<CalendarEntryUiModel>,
+    val activeMarkerFilter: CalendarMarkerFilterUiModel,
     val isLoading: Boolean,
     val errorMessage: String?
 )
 
-// 날짜 타일은 날짜 자체와 현재 달 포함 여부, 기록 개수만 가진다.
+enum class CalendarMarkerFilterUiModel {
+    COLOR,
+    GYM
+}
+
+enum class CalendarMarkerToneUiModel {
+    RED,
+    ORANGE,
+    YELLOW,
+    GREEN,
+    BLUE,
+    NAVY,
+    PURPLE,
+    PINK,
+    BROWN,
+    GRAY,
+    BLACK,
+    WHITE,
+    UNKNOWN
+}
+
+data class CalendarDayMarkerUiModel(
+    val key: String,
+    val label: String,
+    val tone: CalendarMarkerToneUiModel
+)
+
+// 날짜 타일은 날짜 자체와 현재 달 포함 여부, 기록 수, 필터별 마커 정보를 함께 가진다.
 data class CalendarDayUiModel(
     val date: LocalDate,
     val isInCurrentMonth: Boolean,
-    val entryCount: Int
+    val entryCount: Int,
+    val colorMarkers: List<CalendarDayMarkerUiModel>,
+    val gymMarkers: List<CalendarDayMarkerUiModel>
 )
 
 // 상단 요약 카드에서 다루는 월간 집계 값이다.
@@ -33,6 +63,9 @@ data class CalendarMonthSummaryUiModel(
 data class CalendarEntryUiModel(
     val challengeId: Long,
     val title: String,
+    val problemColorLabel: String,
+    val problemColorTone: CalendarMarkerToneUiModel,
+    val venueLabel: String,
     val secondaryText: String,
     val timeLabel: String
 )
