@@ -73,7 +73,7 @@ class CommunityRepositoryImpl @Inject constructor(
         if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "커뮤니티 게시글을 불러오지 못했어요." })
         }
-        response.data.toDomain()
+        response.data.toDomain().toEmulatorAccessibleFeedPage()
     }
 
     override suspend fun getPostDetail(postId: Long): Result<CommunityPostDetail> = runCatching {
@@ -555,4 +555,13 @@ class CommunityRepositoryImpl @Inject constructor(
 
     private fun CommunityPostDetail.toEmulatorAccessibleDetail(): CommunityPostDetail =
         copy(videos = videos.map { it.copy(playbackUrl = toEmulatorAccessibleUrl(it.playbackUrl)) })
+
+    private fun CommunityFeedPage.toEmulatorAccessibleFeedPage(): CommunityFeedPage =
+        copy(
+            items = items.map { post ->
+                post.copy(
+                    thumbnailUrl = post.thumbnailUrl?.let(::toEmulatorAccessibleUrl)
+                )
+            }
+        )
 }

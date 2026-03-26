@@ -32,6 +32,7 @@ data class CommunityPostSummary(
     val likeCount: Int,
     val commentCount: Int,
     val videoCount: Int,
+    val thumbnailUrl: String? = null,
     val isLiked: Boolean,
     val isMine: Boolean
 )

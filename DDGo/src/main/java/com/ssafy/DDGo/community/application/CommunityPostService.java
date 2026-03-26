@@ -32,7 +32,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -81,6 +84,7 @@ public class CommunityPostService {
         Set<Long> likedPostIds = postIds.isEmpty()
                 ? Set.of()
                 : communityPostLikeRepository.findLikedPostIds(user.getId(), postIds);
+        Map<Long, String> thumbnailUrls = resolveThumbnailUrls(postIds);
 
         List<CommunityPostSummaryResponse> items = result.getContent().stream()
                 .map(post -> CommunityPostSummaryResponse.builder()
@@ -95,6 +99,7 @@ public class CommunityPostService {
                         .likeCount(post.getLikeCount())
                         .commentCount(post.getCommentCount())
                         .videoCount(post.getVideoCount())
+                        .thumbnailUrl(thumbnailUrls.get(post.getId()))
                         .liked(likedPostIds.contains(post.getId()))
                         .mine(post.getUser().getId().equals(user.getId()))
                         .build())
@@ -226,8 +231,28 @@ public class CommunityPostService {
                 .toList();
         if (!entities.isEmpty()) {
             communityPostVideoRepository.saveAll(entities);
+            entities.stream()
+                    .min(Comparator.comparingInt(CommunityPostVideo::getSortOrder))
+                    .ifPresent(video -> communityMediaService.prepareThumbnail(video.getObjectKey()));
         }
         post.syncVideoCount(entities.size());
+    }
+
+    private Map<Long, String> resolveThumbnailUrls(List<Long> postIds) {
+        if (postIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, String> thumbnailUrls = new HashMap<>();
+        List<CommunityPostVideo> videos = communityPostVideoRepository.findAllByPostIdInOrderByPostIdAscSortOrderAsc(postIds);
+        for (CommunityPostVideo video : videos) {
+            Long postId = video.getPost().getId();
+            if (thumbnailUrls.containsKey(postId)) {
+                continue;
+            }
+            thumbnailUrls.put(postId, communityMediaService.getThumbnailUrl(video.getObjectKey()));
+        }
+        return thumbnailUrls;
     }
 
     private void validateVideos(Long userId, List<CommunityPostVideoItemRequest> videos) {

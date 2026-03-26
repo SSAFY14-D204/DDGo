@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,11 +42,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,6 +60,10 @@ import com.ddgo.app.feature.community.CommunityFeedTab
 import com.ddgo.app.feature.community.CommunityPalette
 import com.ddgo.app.feature.community.CommunityUiState
 import com.ddgo.app.feature.main.MainChromeDefaults
+import androidx.compose.foundation.Image as FoundationImage
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -610,16 +620,22 @@ private fun CommunityFeedListItem(
     val commentColor = Color(0xFF58AFC2)
     val metaColor = CommunityPalette.TextSecondary
     val createdAtDisplay = formatCommunityFeedTimestamp(post.createdAt)
+    val thumbnailUrl = post.thumbnailUrl?.takeIf { it.isNotBlank() }
     val authorDisplay = post.authorNickname.ifBlank { "익명" }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .background(CommunityPalette.Surface)
             .padding(horizontal = 22.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = if (thumbnailUrl != null) 110.dp else 0.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
             text = post.title,
             style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
             fontWeight = FontWeight.Bold,
@@ -657,6 +673,66 @@ private fun CommunityFeedListItem(
                 text = authorDisplay,
                 color = metaColor
             )
+        }
+        }
+        if (thumbnailUrl != null) {
+            CommunityFeedThumbnail(
+                thumbnailUrl = thumbnailUrl,
+                contentDescription = post.title,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CommunityFeedThumbnail(
+    thumbnailUrl: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val request = remember(thumbnailUrl) {
+        ImageRequest.Builder(context)
+            .data(thumbnailUrl)
+            .crossfade(true)
+            .build()
+    }
+    val painter = rememberAsyncImagePainter(model = request)
+
+    Box(
+        modifier = modifier
+            .size(width = 96.dp, height = 72.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(CommunityPalette.SurfaceMuted),
+        contentAlignment = Alignment.Center
+    ) {
+        when (painter.state) {
+            is AsyncImagePainter.State.Success -> {
+                FoundationImage(
+                    painter = painter,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            is AsyncImagePainter.State.Error -> {
+                Icon(
+                    imageVector = Icons.Default.PlayCircle,
+                    contentDescription = null,
+                    tint = CommunityPalette.TextSecondary.copy(alpha = 0.84f),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            else -> {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = CommunityPalette.AccentStrong,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

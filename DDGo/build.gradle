@@ -41,6 +41,8 @@ dependencies {
     
     // MinIO
     implementation 'io.minio:minio:8.5.7'
+    implementation 'org.jcodec:jcodec:0.2.5'
+    implementation 'org.jcodec:jcodec-javase:0.2.5'
     
     // Lombok
     compileOnly 'org.projectlombok:lombok'
