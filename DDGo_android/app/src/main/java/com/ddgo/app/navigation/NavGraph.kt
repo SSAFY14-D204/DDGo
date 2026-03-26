@@ -84,9 +84,16 @@ fun NavGraph(
         ) {
             composable(ScreenRoutes.Splash.route) {
                 SplashScreen(
-                    onNavigateToAuth = {
-                        navController.navigate(ScreenRoutes.Auth.route) {
+                    onNavigateToWelcome = {
+                        navController.navigate(ScreenRoutes.Auth.WELCOME) {
                             popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
+                    onNavigateToLoginEmail = {
+                        navController.navigate(ScreenRoutes.Auth.LOGIN_EMAIL) {
+                            popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
+                            launchSingleTop = true
                         }
                     },
                     onNavigateToMain = {
@@ -166,7 +173,7 @@ fun NavGraph(
             mainGraph(
                 navController = navController,
                 onNavigateToAuth = {
-                    navController.navigate(ScreenRoutes.Auth.route) {
+                    navController.navigate(ScreenRoutes.Auth.LOGIN_EMAIL) {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true
                     }
@@ -185,7 +192,7 @@ fun NavGraph(
             SessionExpiredDialog(
                 onConfirm = {
                     showSessionExpiredDialog = false
-                    navController.navigate(ScreenRoutes.Auth.route) {
+                    navController.navigate(ScreenRoutes.Auth.LOGIN_EMAIL) {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true
                     }

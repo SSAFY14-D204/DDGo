@@ -8,6 +8,16 @@ internal object AuthStrings {
     const val WelcomeRegister = "시작하기"
     const val WelcomeLoginQuestion = "이미 계정이 있나요?"
     const val WelcomeLoginAction = "로그인"
+    const val WelcomeIntroTitle =
+        "반가워요,\n디디고와 함께 기록하면\n클라이밍이 쉬워져요"
+    const val WelcomeFeatureAnalysis = "클라이밍 영상을 데이터로 분석해요"
+    const val WelcomeFeatureRealtime = "실시간으로 등반을 촬영하고 맞춤 피드백 받아요"
+    const val WelcomeFeatureVideo = "과거 등반 영상도 맞춤 분석 받을 수 있어요"
+    const val WelcomeFeatureGrowth = "쌓이는 기록과 분석을 통해 성장하는 실력을 확인해요"
+    const val WelcomeHighlightAnalysis = "분석"
+    const val WelcomeHighlightRealtime = "실시간"
+    const val WelcomeHighlightVideo = "과거"
+    const val WelcomeHighlightGrowth = "기록"
     const val LoginToRegisterPrefix = "처음 오셨나요?"
 
     const val UsernameLabel = "아이디"

@@ -31,6 +31,7 @@ fun NavGraphBuilder.authGraph(
             val viewModel: AuthViewModel = hiltViewModel(parentEntry)
 
             AuthLandingScreen(
+                viewModel = viewModel,
                 onLoginClick = {
                     viewModel.prepareLoginFlow()
                     navController.navigate(ScreenRoutes.Auth.LOGIN_EMAIL)

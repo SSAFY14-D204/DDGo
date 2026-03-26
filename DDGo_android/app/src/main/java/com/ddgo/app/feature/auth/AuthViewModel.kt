@@ -97,6 +97,12 @@ class AuthViewModel @Inject constructor(
         resetUiState()
     }
 
+    fun markWelcomeSeen() {
+        viewModelScope.launch {
+            onboardingPreferenceDataStore.setWelcomeSeen()
+        }
+    }
+
     fun preparePasswordResetFlow() {
         preparePasswordResetFlow(tokenOrLink = null)
     }

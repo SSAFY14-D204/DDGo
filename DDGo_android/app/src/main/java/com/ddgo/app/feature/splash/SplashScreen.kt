@@ -65,7 +65,8 @@ private val SplashWordmarkBlack = Color(0xFF111319)
 
 @Composable
 fun SplashScreen(
-    onNavigateToAuth: () -> Unit,
+    onNavigateToWelcome: () -> Unit,
+    onNavigateToLoginEmail: () -> Unit,
     onNavigateToMain: () -> Unit,
     onNavigateToOnboarding: (String, OnboardingMode) -> Unit,
     viewModel: SplashViewModel = hiltViewModel()
@@ -110,7 +111,8 @@ fun SplashScreen(
 
         hasNavigated = true
         when (destination) {
-            is SplashNavigationEvent.NavigateToAuth -> onNavigateToAuth()
+            is SplashNavigationEvent.NavigateToWelcome -> onNavigateToWelcome()
+            is SplashNavigationEvent.NavigateToLoginEmail -> onNavigateToLoginEmail()
             is SplashNavigationEvent.NavigateToMain -> onNavigateToMain()
             is SplashNavigationEvent.NavigateToOnboarding -> {
                 onNavigateToOnboarding(destination.nextRoute, destination.mode)
