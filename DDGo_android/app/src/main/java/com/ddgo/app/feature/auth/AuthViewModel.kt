@@ -97,12 +97,6 @@ class AuthViewModel @Inject constructor(
         resetUiState()
     }
 
-    fun markWelcomeSeen() {
-        viewModelScope.launch {
-            onboardingPreferenceDataStore.setWelcomeSeen()
-        }
-    }
-
     fun preparePasswordResetFlow() {
         preparePasswordResetFlow(tokenOrLink = null)
     }
@@ -459,6 +453,7 @@ class AuthViewModel @Inject constructor(
         authToken: AuthToken,
         forceProfileOnboarding: Boolean = false
     ): AuthSuccessDestination {
+        onboardingPreferenceDataStore.setHasAuthenticatedOnce()
         val hasCompletedIntroOnboarding = onboardingPreferenceDataStore.hasCompletedOnboarding.first()
         val shouldOpenOnboarding = forceProfileOnboarding ||
             authToken.needsOnboarding == true ||

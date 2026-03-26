@@ -155,7 +155,6 @@ fun AuthLandingScreen(
     var transitionDirection by remember { mutableStateOf(WelcomeTransitionDirection.Forward) }
 
     LaunchedEffect(Unit) {
-        viewModel.markWelcomeSeen()
         delay(IntroHoldDurationMs)
         showIntro = false
     }

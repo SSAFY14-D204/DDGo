@@ -51,19 +51,21 @@ class SplashViewModel @Inject constructor(
             delay(SPLASH_DELAY_MS)
 
             val hasCompletedOnboarding = onboardingPreferenceDataStore.hasCompletedOnboarding.first()
-            val hasSeenWelcome = onboardingPreferenceDataStore.hasSeenWelcome.first()
+            val hasAuthenticatedOnce = onboardingPreferenceDataStore.hasAuthenticatedOnce.first()
             val resolvedDestination = resolveAuthenticatedDestination()
 
             val navigationEvent = when (resolvedDestination) {
                 ResolvedDestination.Auth -> {
-                    if (hasSeenWelcome) {
+                    if (hasAuthenticatedOnce) {
                         SplashNavigationEvent.NavigateToLoginEmail
                     } else {
                         SplashNavigationEvent.NavigateToWelcome
                     }
                 }
 
-                is ResolvedDestination.Main -> when {
+                is ResolvedDestination.Main -> {
+                    onboardingPreferenceDataStore.setHasAuthenticatedOnce()
+                    when {
                     !hasCompletedOnboarding && resolvedDestination.requiresProfileOnboarding -> {
                         SplashNavigationEvent.NavigateToOnboarding(
                             nextRoute = ScreenRoutes.MainGraph.route,
@@ -86,6 +88,7 @@ class SplashViewModel @Inject constructor(
                     }
 
                     else -> SplashNavigationEvent.NavigateToMain
+                    }
                 }
             }
 
