@@ -1,9 +1,11 @@
 package com.ddgo.app.feature.auth
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -69,7 +71,6 @@ import com.ddgo.app.core.ui.theme.PretendardFamily
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 
-private const val IntroSlideState = -1
 private const val IntroHoldDurationMs = 1_500L
 private const val FeatureAutoAdvanceDurationMs = 2_800L
 
@@ -80,6 +81,7 @@ private enum class WelcomeTransitionDirection {
 
 private data class WelcomeFeatureSlide(
     @DrawableRes val iconResId: Int,
+    @DrawableRes val screenResId: Int,
     val headline: String,
     val highlight: String,
     val accentColor: Color
@@ -98,6 +100,7 @@ private data class WelcomeLayoutProfile(
     val featureTitleFontSize: TextUnit,
     val featureTitleLineHeight: TextUnit,
     val featureTitleMinHeight: Dp,
+    val featureHeaderHeight: Dp,
     val phoneWidth: Dp,
     val phoneHeight: Dp,
     val phoneShadowElevation: Dp
@@ -115,24 +118,28 @@ fun AuthLandingScreen(
         listOf(
             WelcomeFeatureSlide(
                 iconResId = R.drawable.ic_records,
+                screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureAnalysis,
                 highlight = AuthStrings.WelcomeHighlightAnalysis,
                 accentColor = Color(0xFF53A6FF)
             ),
             WelcomeFeatureSlide(
                 iconResId = R.drawable.ic_climbing,
+                screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureRealtime,
                 highlight = AuthStrings.WelcomeHighlightRealtime,
                 accentColor = Color(0xFF8A4E20)
             ),
             WelcomeFeatureSlide(
                 iconResId = R.drawable.ic_record,
+                screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureVideo,
                 highlight = AuthStrings.WelcomeHighlightVideo,
                 accentColor = Color(0xFFFF4D73)
             ),
             WelcomeFeatureSlide(
                 iconResId = R.drawable.ic_calendar,
+                screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureGrowth,
                 highlight = AuthStrings.WelcomeHighlightGrowth,
                 accentColor = Color(0xFF65B969)
@@ -218,37 +225,22 @@ fun AuthLandingScreen(
                 }
 
                 AnimatedContent(
-                    targetState = if (showIntro) IntroSlideState else currentSlideIndex,
+                    targetState = showIntro,
                     transitionSpec = {
-                        if (initialState == IntroSlideState || targetState == IntroSlideState) {
-                            fadeIn(animationSpec = tween(durationMillis = 300)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 220))
-                        } else {
-                            val isForward = transitionDirection == WelcomeTransitionDirection.Forward
-                            (
-                                slideInHorizontally(
-                                    animationSpec = tween(durationMillis = 420)
-                                ) { fullWidth -> if (isForward) fullWidth else -fullWidth } +
-                                    fadeIn(animationSpec = tween(durationMillis = 320))
-                                ).togetherWith(
-                                    slideOutHorizontally(
-                                        animationSpec = tween(durationMillis = 320)
-                                    ) { fullWidth -> if (isForward) -fullWidth else fullWidth } +
-                                        fadeOut(animationSpec = tween(durationMillis = 220))
-                                    )
-                                .using(SizeTransform(clip = false))
-                        }
+                        fadeIn(animationSpec = tween(durationMillis = 300)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 220))
                     },
                     label = "welcome_content"
-                ) { targetState ->
-                    if (targetState == IntroSlideState) {
+                ) { isIntroVisible ->
+                    if (isIntroVisible) {
                         WelcomeIntroContent(layoutProfile = layoutProfile)
                     } else {
-                        WelcomeFeatureContent(
-                            slide = slides[targetState],
-                            activeIndex = targetState,
+                        WelcomeFeatureStage(
+                            slide = slides[currentSlideIndex],
+                            activeIndex = currentSlideIndex,
                             slideCount = slides.size,
-                            layoutProfile = layoutProfile
+                            layoutProfile = layoutProfile,
+                            transitionDirection = transitionDirection
                         )
                     }
                 }
@@ -301,16 +293,118 @@ private fun WelcomeIntroContent(
 }
 
 @Composable
-private fun WelcomeFeatureContent(
+private fun WelcomeFeatureStage(
     slide: WelcomeFeatureSlide,
     activeIndex: Int,
     slideCount: Int,
-    layoutProfile: WelcomeLayoutProfile
+    layoutProfile: WelcomeLayoutProfile,
+    transitionDirection: WelcomeTransitionDirection
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = layoutProfile.featureTopPadding),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = layoutProfile.featureHeaderHeight),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            AnimatedContent(
+                targetState = slide,
+                transitionSpec = {
+                    val isForward = transitionDirection == WelcomeTransitionDirection.Forward
+                    (
+                        slideInHorizontally(
+                            animationSpec = tween(durationMillis = 420)
+                        ) { fullWidth -> if (isForward) fullWidth else -fullWidth } +
+                            fadeIn(animationSpec = tween(durationMillis = 320))
+                        ).togetherWith(
+                            slideOutHorizontally(
+                                animationSpec = tween(durationMillis = 320)
+                            ) { fullWidth -> if (isForward) -fullWidth else fullWidth } +
+                                fadeOut(animationSpec = tween(durationMillis = 220))
+                            )
+                        .using(SizeTransform(clip = false))
+                },
+                label = "welcome_feature_header"
+            ) { currentSlide ->
+                WelcomeFeatureHeader(
+                    slide = currentSlide,
+                    layoutProfile = layoutProfile
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
+        WelcomePhoneMockup(
+            layoutProfile = layoutProfile,
+            slide = slide
+        )
+        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
+        WelcomeIndicator(
+            activeIndex = activeIndex,
+            slideCount = slideCount
+        )
+    }
+}
+
+@Composable
+private fun WelcomePhoneMockup(
+    layoutProfile: WelcomeLayoutProfile,
+    slide: WelcomeFeatureSlide
+) {
+    Box(
+        modifier = Modifier
+            .width(layoutProfile.phoneWidth)
+            .height(layoutProfile.phoneHeight)
+            .shadow(
+                elevation = layoutProfile.phoneShadowElevation,
+                shape = RoundedCornerShape(48.dp),
+                ambientColor = Color(0x1A6A707C),
+                spotColor = Color(0x1A6A707C)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 10.dp)
+                .clip(RoundedCornerShape(40.dp))
+        ) {
+            AnimatedContent(
+                targetState = slide.screenResId,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(durationMillis = 320)) togetherWith
+                        fadeOut(animationSpec = tween(durationMillis = 220))
+                },
+                label = "welcome_phone_screen"
+            ) { screenResId ->
+                Image(
+                    painter = painterResource(id = screenResId),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        Image(
+            painter = painterResource(id = R.drawable.welcome_phone_shell_frame),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+private fun WelcomeFeatureHeader(
+    slide: WelcomeFeatureSlide,
+    layoutProfile: WelcomeLayoutProfile
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
@@ -335,55 +429,11 @@ private fun WelcomeFeatureContent(
                 color = Color(0xFF0B0B0E),
                 textAlign = TextAlign.Center
             ),
+            maxLines = 2,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = layoutProfile.featureTitleMinHeight)
                 .padding(horizontal = 18.dp)
-        )
-        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
-        WelcomePhoneMockup(layoutProfile = layoutProfile)
-        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
-        WelcomeIndicator(
-            activeIndex = activeIndex,
-            slideCount = slideCount
-        )
-    }
-}
-
-@Composable
-private fun WelcomePhoneMockup(
-    layoutProfile: WelcomeLayoutProfile
-) {
-    val context = LocalContext.current
-
-    Box(
-        modifier = Modifier
-            .width(layoutProfile.phoneWidth)
-            .height(layoutProfile.phoneHeight)
-            .shadow(
-                elevation = layoutProfile.phoneShadowElevation,
-                shape = RoundedCornerShape(48.dp),
-                ambientColor = Color(0x1A6A707C),
-                spotColor = Color(0x1A6A707C)
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.welcome_phone_screen),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 10.dp)
-                .clip(RoundedCornerShape(40.dp))
-        )
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(R.raw.welcome_phone_shell)
-                .decoderFactory(SvgDecoder.Factory())
-                .build(),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -406,6 +456,7 @@ private fun resolveWelcomeLayoutProfile(
             featureTitleFontSize = 24.sp,
             featureTitleLineHeight = 34.sp,
             featureTitleMinHeight = 68.dp,
+            featureHeaderHeight = 112.dp,
             phoneWidth = 154.dp,
             phoneHeight = 319.dp,
             phoneShadowElevation = 18.dp
@@ -424,6 +475,7 @@ private fun resolveWelcomeLayoutProfile(
             featureTitleFontSize = 26.sp,
             featureTitleLineHeight = 36.sp,
             featureTitleMinHeight = 72.dp,
+            featureHeaderHeight = 120.dp,
             phoneWidth = 170.dp,
             phoneHeight = 352.dp,
             phoneShadowElevation = 22.dp
@@ -442,6 +494,7 @@ private fun resolveWelcomeLayoutProfile(
             featureTitleFontSize = 28.sp,
             featureTitleLineHeight = 39.sp,
             featureTitleMinHeight = 78.dp,
+            featureHeaderHeight = 132.dp,
             phoneWidth = 186.dp,
             phoneHeight = 385.dp,
             phoneShadowElevation = 24.dp
@@ -460,6 +513,7 @@ private fun resolveWelcomeLayoutProfile(
             featureTitleFontSize = 28.sp,
             featureTitleLineHeight = 39.sp,
             featureTitleMinHeight = 78.dp,
+            featureHeaderHeight = 138.dp,
             phoneWidth = 200.dp,
             phoneHeight = 414.dp,
             phoneShadowElevation = 28.dp
@@ -477,14 +531,22 @@ private fun WelcomeIndicator(
         verticalAlignment = Alignment.CenterVertically
     ) {
         repeat(slideCount) { index ->
+            val width by animateDpAsState(
+                targetValue = if (index == activeIndex) 18.dp else 6.dp,
+                animationSpec = tween(durationMillis = 220),
+                label = "welcome_indicator_width"
+            )
+            val color by animateColorAsState(
+                targetValue = if (index == activeIndex) Color(0xFF19191C) else Color(0xFFD5D5D5),
+                animationSpec = tween(durationMillis = 220),
+                label = "welcome_indicator_color"
+            )
             Box(
                 modifier = Modifier
-                    .width(if (index == activeIndex) 18.dp else 6.dp)
+                    .width(width)
                     .height(6.dp)
                     .clip(RoundedCornerShape(percent = 50))
-                    .background(
-                        if (index == activeIndex) Color(0xFF19191C) else Color(0xFFD5D5D5)
-                    )
+                    .background(color)
             )
         }
     }
