@@ -8,7 +8,6 @@ import com.ddgo.app.data.remote.common.ApiResponse
 import com.ddgo.app.domain.model.AuthToken
 import com.ddgo.app.domain.repository.AuthRepository
 import com.ddgo.app.feature.climbing.upload.MainDispatcherRule
-import com.ddgo.app.feature.onboarding.OnboardingMode
 import com.ddgo.app.navigation.ScreenRoutes
 import io.mockk.Runs
 import io.mockk.coEvery
@@ -16,7 +15,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import java.io.IOException
 import java.util.Base64
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -27,8 +25,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import retrofit2.HttpException
@@ -46,17 +42,18 @@ class SplashViewModelTest {
     }
 
     @Test
-    fun `valid access token and successful user me routes to main`() = runTest {
+    fun `valid access token and complete onboarding routes to main`() = runTest {
         val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
+        val onboardingPreferenceDataStore = onboardingStore(
+            hasCompletedOnboarding = true,
+            hasAuthenticatedOnce = true
+        )
         val authRepository = mockk<AuthRepository>()
         val splashAuthApi = mockk<AuthApi>()
         val accessToken = jwtToken(expiresAtEpochSeconds = 4_102_444_800L)
 
         every { tokenDataStore.accessToken } returns flowOf(accessToken)
         every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
-        coEvery { tokenDataStore.clearTokens() } just Runs
         coEvery {
             splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
         } returns successfulMyInfoResponse()
@@ -72,24 +69,50 @@ class SplashViewModelTest {
         advanceSplash()
 
         assertEquals(SplashNavigationEvent.NavigateToMain, navigation.await())
-        coVerify(exactly = 1) {
-            splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
-        }
-        coVerify(exactly = 0) { tokenDataStore.clearTokens() }
+        coVerify(exactly = 1) { onboardingPreferenceDataStore.setHasAuthenticatedOnce() }
         coVerify(exactly = 0) { authRepository.refreshToken(any()) }
     }
 
     @Test
-    fun `user me 403 clears tokens and routes to auth`() = runTest {
+    fun `no session and no previous auth routes to welcome`() = runTest {
         val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
+        val onboardingPreferenceDataStore = onboardingStore(
+            hasCompletedOnboarding = false,
+            hasAuthenticatedOnce = false
+        )
+        val authRepository = mockk<AuthRepository>(relaxed = true)
+        val splashAuthApi = mockk<AuthApi>(relaxed = true)
+
+        every { tokenDataStore.accessToken } returns flowOf(null)
+        every { tokenDataStore.refreshToken } returns flowOf(null)
+        coEvery { tokenDataStore.clearTokens() } just Runs
+
+        val viewModel = createViewModel(
+            tokenDataStore = tokenDataStore,
+            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
+            authRepository = authRepository,
+            splashAuthApi = splashAuthApi
+        )
+        val navigation = backgroundScope.async { viewModel.navigationEvent.first() }
+
+        advanceSplash()
+
+        assertEquals(SplashNavigationEvent.NavigateToWelcome, navigation.await())
+    }
+
+    @Test
+    fun `invalid server session routes to login when user authenticated before`() = runTest {
+        val tokenDataStore = mockk<TokenDataStore>()
+        val onboardingPreferenceDataStore = onboardingStore(
+            hasCompletedOnboarding = true,
+            hasAuthenticatedOnce = true
+        )
         val authRepository = mockk<AuthRepository>()
         val splashAuthApi = mockk<AuthApi>()
         val accessToken = jwtToken(expiresAtEpochSeconds = 4_102_444_800L)
 
         every { tokenDataStore.accessToken } returns flowOf(accessToken)
         every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
         coEvery { tokenDataStore.clearTokens() } just Runs
         coEvery {
             splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
@@ -105,27 +128,66 @@ class SplashViewModelTest {
 
         advanceSplash()
 
-        assertEquals(SplashNavigationEvent.NavigateToAuth, navigation.await())
+        assertEquals(SplashNavigationEvent.NavigateToLoginEmail, navigation.await())
         coVerify(exactly = 1) { tokenDataStore.clearTokens() }
     }
 
     @Test
-    fun `user me 404 with U001 clears tokens and routes to auth`() = runTest {
+    fun `not completed onboarding routes to full onboarding with guide`() = runTest {
         val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
+        val onboardingPreferenceDataStore = onboardingStore(
+            hasCompletedOnboarding = false,
+            hasAuthenticatedOnce = true
+        )
         val authRepository = mockk<AuthRepository>()
         val splashAuthApi = mockk<AuthApi>()
         val accessToken = jwtToken(expiresAtEpochSeconds = 4_102_444_800L)
 
         every { tokenDataStore.accessToken } returns flowOf(accessToken)
         every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
-        coEvery { tokenDataStore.clearTokens() } just Runs
         coEvery {
             splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
-        } throws httpException(
-            code = 404,
-            body = apiErrorBody(code = "U001", message = "User Not Found")
+        } returns successfulMyInfoResponse()
+
+        val viewModel = createViewModel(
+            tokenDataStore = tokenDataStore,
+            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
+            authRepository = authRepository,
+            splashAuthApi = splashAuthApi
+        )
+        val navigation = backgroundScope.async { viewModel.navigationEvent.first() }
+
+        advanceSplash()
+
+        assertEquals(
+            SplashNavigationEvent.NavigateToOnboarding(
+                nextRoute = ScreenRoutes.MainGraph.route,
+                showEntryGuide = true
+            ),
+            navigation.await()
+        )
+    }
+
+    @Test
+    fun `all body metrics missing after onboarding routes to recovery onboarding without guide`() = runTest {
+        val tokenDataStore = mockk<TokenDataStore>()
+        val onboardingPreferenceDataStore = onboardingStore(
+            hasCompletedOnboarding = true,
+            hasAuthenticatedOnce = true
+        )
+        val authRepository = mockk<AuthRepository>()
+        val splashAuthApi = mockk<AuthApi>()
+        val accessToken = jwtToken(expiresAtEpochSeconds = 4_102_444_800L)
+
+        every { tokenDataStore.accessToken } returns flowOf(accessToken)
+        every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
+        coEvery {
+            splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
+        } returns successfulMyInfoResponse(
+            sex = null,
+            heightCm = null,
+            weightKg = null,
+            wingspanCm = null
         )
 
         val viewModel = createViewModel(
@@ -138,27 +200,35 @@ class SplashViewModelTest {
 
         advanceSplash()
 
-        assertEquals(SplashNavigationEvent.NavigateToAuth, navigation.await())
-        coVerify(exactly = 1) { tokenDataStore.clearTokens() }
+        assertEquals(
+            SplashNavigationEvent.NavigateToOnboarding(
+                nextRoute = ScreenRoutes.MainGraph.route,
+                showEntryGuide = false
+            ),
+            navigation.await()
+        )
     }
 
     @Test
-    fun `user me 500 keeps session and routes to main`() = runTest {
+    fun `partially missing body profile still routes to main`() = runTest {
         val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
+        val onboardingPreferenceDataStore = onboardingStore(
+            hasCompletedOnboarding = true,
+            hasAuthenticatedOnce = true
+        )
         val authRepository = mockk<AuthRepository>()
         val splashAuthApi = mockk<AuthApi>()
         val accessToken = jwtToken(expiresAtEpochSeconds = 4_102_444_800L)
 
         every { tokenDataStore.accessToken } returns flowOf(accessToken)
         every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
-        coEvery { tokenDataStore.clearTokens() } just Runs
         coEvery {
             splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
-        } throws httpException(
-            code = 500,
-            body = apiErrorBody(code = "C003", message = "Server Error")
+        } returns successfulMyInfoResponse(
+            sex = "M",
+            heightCm = 175f,
+            weightKg = null,
+            wingspanCm = 180f
         )
 
         val viewModel = createViewModel(
@@ -172,13 +242,15 @@ class SplashViewModelTest {
         advanceSplash()
 
         assertEquals(SplashNavigationEvent.NavigateToMain, navigation.await())
-        coVerify(exactly = 0) { tokenDataStore.clearTokens() }
     }
 
     @Test
-    fun `expired access token refresh success then user me success routes to main`() = runTest {
+    fun `refresh token success validates refreshed session`() = runTest {
         val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
+        val onboardingPreferenceDataStore = onboardingStore(
+            hasCompletedOnboarding = true,
+            hasAuthenticatedOnce = true
+        )
         val authRepository = mockk<AuthRepository>()
         val splashAuthApi = mockk<AuthApi>()
         val expiredAccessToken = jwtToken(expiresAtEpochSeconds = 946684800L)
@@ -189,8 +261,6 @@ class SplashViewModelTest {
             flowOf(refreshedAccessToken)
         )
         every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
-        coEvery { tokenDataStore.clearTokens() } just Runs
         coEvery { authRepository.refreshToken("refresh-token") } returns Result.success(
             AuthToken(
                 accessToken = refreshedAccessToken,
@@ -213,220 +283,17 @@ class SplashViewModelTest {
 
         assertEquals(SplashNavigationEvent.NavigateToMain, navigation.await())
         coVerify(exactly = 1) { authRepository.refreshToken("refresh-token") }
-        coVerify(exactly = 0) { tokenDataStore.clearTokens() }
     }
 
-    @Test
-    fun `refresh failure clears tokens and routes to auth`() = runTest {
-        val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
-        val authRepository = mockk<AuthRepository>()
-        val splashAuthApi = mockk<AuthApi>(relaxed = true)
-        val expiredAccessToken = jwtToken(expiresAtEpochSeconds = 946684800L)
-
-        every { tokenDataStore.accessToken } returns flowOf(expiredAccessToken)
-        every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
-        coEvery { tokenDataStore.clearTokens() } just Runs
-        coEvery { authRepository.refreshToken("refresh-token") } returns Result.failure(
-            IllegalStateException("refresh failed")
-        )
-
-        val viewModel = createViewModel(
-            tokenDataStore = tokenDataStore,
-            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
-            authRepository = authRepository,
-            splashAuthApi = splashAuthApi
-        )
-        val navigation = backgroundScope.async { viewModel.navigationEvent.first() }
-
-        advanceSplash()
-
-        assertEquals(SplashNavigationEvent.NavigateToAuth, navigation.await())
-        coVerify(exactly = 2) { authRepository.refreshToken("refresh-token") }
-        coVerify(exactly = 1) { tokenDataStore.clearTokens() }
-        coVerify(exactly = 0) { splashAuthApi.getMyInfoWithAuthorization(any()) }
-    }
-
-    @Test
-    fun `first launch without onboarding completion routes to onboarding before auth`() = runTest {
-        val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
-        val authRepository = mockk<AuthRepository>()
-        val splashAuthApi = mockk<AuthApi>(relaxed = true)
-
-        every { tokenDataStore.accessToken } returns flowOf(null)
-        every { tokenDataStore.refreshToken } returns flowOf(null)
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(false)
-        coEvery { tokenDataStore.clearTokens() } just Runs
-
-        val viewModel = createViewModel(
-            tokenDataStore = tokenDataStore,
-            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
-            authRepository = authRepository,
-            splashAuthApi = splashAuthApi
-        )
-        val navigation = backgroundScope.async { viewModel.navigationEvent.first() }
-
-        advanceSplash()
-
-        assertEquals(
-            SplashNavigationEvent.NavigateToOnboarding(
-                ScreenRoutes.Auth.route,
-                OnboardingMode.INTRO
-            ),
-            navigation.await()
-        )
-    }
-
-    @Test
-    fun `first launch with valid session routes to onboarding before main`() = runTest {
-        val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
-        val authRepository = mockk<AuthRepository>()
-        val splashAuthApi = mockk<AuthApi>()
-        val accessToken = jwtToken(expiresAtEpochSeconds = 4_102_444_800L)
-
-        every { tokenDataStore.accessToken } returns flowOf(accessToken)
-        every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(false)
-        coEvery { tokenDataStore.clearTokens() } just Runs
-        coEvery {
-            splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
-        } returns successfulMyInfoResponse()
-
-        val viewModel = createViewModel(
-            tokenDataStore = tokenDataStore,
-            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
-            authRepository = authRepository,
-            splashAuthApi = splashAuthApi
-        )
-        val navigation = backgroundScope.async { viewModel.navigationEvent.first() }
-
-        advanceSplash()
-
-        assertEquals(
-            SplashNavigationEvent.NavigateToOnboarding(
-                ScreenRoutes.MainGraph.route,
-                OnboardingMode.INTRO
-            ),
-            navigation.await()
-        )
-    }
-
-    @Test
-    fun `completed intro with incomplete profile routes to profile onboarding`() = runTest {
-        val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
-        val authRepository = mockk<AuthRepository>()
-        val splashAuthApi = mockk<AuthApi>()
-        val accessToken = jwtToken(expiresAtEpochSeconds = 4_102_444_800L)
-
-        every { tokenDataStore.accessToken } returns flowOf(accessToken)
-        every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
-        coEvery { tokenDataStore.clearTokens() } just Runs
-        coEvery {
-            splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
-        } returns successfulMyInfoResponse(hasCompleteProfile = false)
-
-        val viewModel = createViewModel(
-            tokenDataStore = tokenDataStore,
-            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
-            authRepository = authRepository,
-            splashAuthApi = splashAuthApi
-        )
-        val navigation = backgroundScope.async { viewModel.navigationEvent.first() }
-
-        advanceSplash()
-
-        assertEquals(
-            SplashNavigationEvent.NavigateToOnboarding(
-                ScreenRoutes.MainGraph.route,
-                OnboardingMode.PROFILE
-            ),
-            navigation.await()
-        )
-    }
-
-    @Test
-    fun `first launch with incomplete profile routes to intro and profile onboarding`() = runTest {
-        val tokenDataStore = mockk<TokenDataStore>()
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
-        val authRepository = mockk<AuthRepository>()
-        val splashAuthApi = mockk<AuthApi>()
-        val accessToken = jwtToken(expiresAtEpochSeconds = 4_102_444_800L)
-
-        every { tokenDataStore.accessToken } returns flowOf(accessToken)
-        every { tokenDataStore.refreshToken } returns flowOf("refresh-token")
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(false)
-        coEvery { tokenDataStore.clearTokens() } just Runs
-        coEvery {
-            splashAuthApi.getMyInfoWithAuthorization("Bearer $accessToken")
-        } returns successfulMyInfoResponse(hasCompleteProfile = false)
-
-        val viewModel = createViewModel(
-            tokenDataStore = tokenDataStore,
-            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
-            authRepository = authRepository,
-            splashAuthApi = splashAuthApi
-        )
-        val navigation = backgroundScope.async { viewModel.navigationEvent.first() }
-
-        advanceSplash()
-
-        assertEquals(
-            SplashNavigationEvent.NavigateToOnboarding(
-                ScreenRoutes.MainGraph.route,
-                OnboardingMode.INTRO_AND_PROFILE
-            ),
-            navigation.await()
-        )
-    }
-
-    @Test
-    fun `invalid session helper matches status codes and backend error codes`() {
-        assertTrue(httpException(401).isInvalidSessionValidationFailure(json))
-        assertTrue(httpException(403).isInvalidSessionValidationFailure(json))
-        assertTrue(
-            httpException(
-                code = 400,
-                body = apiErrorBody(code = "A001", message = "Unauthorized")
-            ).isInvalidSessionValidationFailure(json)
-        )
-        assertTrue(
-            httpException(
-                code = 400,
-                body = apiErrorBody(code = "A002", message = "Invalid Token")
-            ).isInvalidSessionValidationFailure(json)
-        )
-        assertTrue(
-            httpException(
-                code = 400,
-                body = apiErrorBody(code = "A003", message = "Expired Token")
-            ).isInvalidSessionValidationFailure(json)
-        )
-        assertTrue(
-            httpException(
-                code = 404,
-                body = apiErrorBody(code = "U001", message = "User Not Found")
-            ).isInvalidSessionValidationFailure(json)
-        )
-        assertTrue(
-            Exception("wrapped", httpException(401)).isInvalidSessionValidationFailure(json)
-        )
-    }
-
-    @Test
-    fun `invalid session helper ignores non auth failures`() {
-        assertFalse(
-            httpException(
-                code = 500,
-                body = apiErrorBody(code = "C003", message = "Server Error")
-            ).isInvalidSessionValidationFailure(json)
-        )
-        assertFalse(IOException("network down").isInvalidSessionValidationFailure(json))
-        assertFalse(httpException(code = 404, body = "not-json").isInvalidSessionValidationFailure(json))
+    private fun onboardingStore(
+        hasCompletedOnboarding: Boolean,
+        hasAuthenticatedOnce: Boolean
+    ): OnboardingPreferenceDataStore {
+        return mockk(relaxed = true) {
+            every { this@mockk.hasCompletedOnboarding } returns flowOf(hasCompletedOnboarding)
+            every { this@mockk.hasAuthenticatedOnce } returns flowOf(hasAuthenticatedOnce)
+            coEvery { this@mockk.setHasAuthenticatedOnce(any()) } just Runs
+        }
     }
 
     private fun createViewModel(
@@ -443,7 +310,10 @@ class SplashViewModelTest {
     )
 
     private fun successfulMyInfoResponse(
-        hasCompleteProfile: Boolean = true
+        sex: String? = "M",
+        heightCm: Float? = 175f,
+        weightKg: Float? = 68f,
+        wingspanCm: Float? = 178f
     ): ApiResponse<UserResponseDto> = ApiResponse(
         success = true,
         message = "success",
@@ -451,10 +321,10 @@ class SplashViewModelTest {
             id = 1L,
             username = "tester",
             nickname = "Tester",
-            sex = if (hasCompleteProfile) "M" else null,
-            heightCm = if (hasCompleteProfile) 175f else null,
-            weightKg = if (hasCompleteProfile) 68f else null,
-            wingspanCm = if (hasCompleteProfile) 178f else null
+            sex = sex,
+            heightCm = heightCm,
+            weightKg = weightKg,
+            wingspanCm = wingspanCm
         )
     )
 
@@ -470,10 +340,6 @@ class SplashViewModelTest {
                 body.toResponseBody("application/json".toMediaType())
             )
         )
-    }
-
-    private fun apiErrorBody(code: String, message: String): String {
-        return """{"success":false,"code":"$code","message":"$message"}"""
     }
 
     private fun jwtToken(expiresAtEpochSeconds: Long): String {

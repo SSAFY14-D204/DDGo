@@ -69,6 +69,7 @@ import com.ddgo.app.feature.onboarding.OnboardingClimbingStyle
 import com.ddgo.app.feature.onboarding.OnboardingGoal
 import com.ddgo.app.feature.onboarding.OnboardingGymResolveUiState
 import com.ddgo.app.feature.onboarding.OnboardingGymSearchUiState
+import com.ddgo.app.feature.onboarding.ui.molecule.OnboardingHeightRulerField
 import com.ddgo.app.feature.onboarding.OnboardingMode
 import com.ddgo.app.feature.onboarding.ui.molecule.OnboardingChoiceGroup
 import com.ddgo.app.feature.onboarding.ui.molecule.OnboardingChoiceOption
@@ -468,13 +469,11 @@ fun BodyProfileStageSection(
                     onSelect = onSelectSex
                 )
 
-                NumericInputField(
-                    label = ProfileStrings.BodyProfileFieldLabelHeight,
+                OnboardingHeightRulerField(
                     value = heightCmInput,
                     onValueChange = onHeightChange,
-                    unit = "cm",
-                    icon = Icons.Rounded.Height,
-                    enabled = !isSubmittingProfile
+                    enabled = !isSubmittingProfile,
+                    initializeIfBlank = !isLoadingProfileDefaults
                 )
 
                 NumericInputField(

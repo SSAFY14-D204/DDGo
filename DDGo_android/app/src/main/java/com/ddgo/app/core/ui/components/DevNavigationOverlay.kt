@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.core.dev.DevOptions
 import com.ddgo.app.domain.model.AiAnalysisMode
-import com.ddgo.app.feature.onboarding.OnboardingMode
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import com.ddgo.app.navigation.ScreenRoutes
@@ -142,17 +141,17 @@ private val devRoutes = listOf(
 
     // ── Onboarding ──
     DevRoute(
-        "Onboarding Intro",
+        "Onboarding",
         ScreenRoutes.Onboarding.createRoute(
             nextRoute = ScreenRoutes.MainGraph.route,
-            mode = OnboardingMode.INTRO.name
+            showEntryGuide = true
         )
     ),
     DevRoute(
-        "Onboarding Full",
+        "Onboarding Recovery",
         ScreenRoutes.Onboarding.createRoute(
             nextRoute = ScreenRoutes.MainGraph.route,
-            mode = OnboardingMode.INTRO_AND_PROFILE.name
+            showEntryGuide = false
         )
     ),
 
