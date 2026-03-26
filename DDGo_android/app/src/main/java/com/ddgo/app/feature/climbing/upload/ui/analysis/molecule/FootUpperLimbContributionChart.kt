@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
-import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
 import com.ddgo.app.feature.climbing.upload.AnalysisText
 
@@ -34,8 +33,7 @@ internal fun FootUpperLimbContributionChart(
             title = "다리로 밀기",
             valueLabel = lowerBodyLabel,
             progress = lowerBodyScore / 100f,
-            fillColor = AnalysisPrimary,
-            accentValue = true
+            fillColor = AnalysisPrimary
         )
         ContributionBar(
             title = "팔로 버티기",
@@ -52,7 +50,6 @@ private fun ContributionBar(
     valueLabel: String,
     progress: Float,
     fillColor: Color,
-    accentValue: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -67,14 +64,14 @@ private fun ContributionBar(
             Text(
                 text = title,
                 color = AnalysisText,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = valueLabel,
-                color = if (accentValue) AnalysisText else AnalysisMuted,
-                fontSize = 12.sp,
-                fontWeight = if (accentValue) FontWeight.SemiBold else FontWeight.Normal
+                color = AnalysisText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
             )
         }
 
@@ -83,7 +80,8 @@ private fun ContributionBar(
             accentColor = fillColor,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(12.dp)
+                .height(8.dp),
+            trackColor = Color.White.copy(alpha = 0.08f)
         )
     }
 }

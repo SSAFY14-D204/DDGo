@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint
 import com.ddgo.app.feature.climbing.upload.AnalysisBgColor
 import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
 import com.ddgo.app.feature.climbing.upload.AnalysisGradientButton
@@ -56,6 +57,7 @@ internal data class FinalAnalysisPageState(
     val currentSummary: FinalAnalysisAttemptSummary,
     val previousSummary: FinalAnalysisAttemptSummary?,
     val analysisStartTimeMs: Long?,
+    val heartRateSeries: List<HeartRatePoint>,
     val timelinePoints: List<AnalysisPoint>,
     val reachedHoldsText: String,
     val reachedHoldsSuffix: String?,
@@ -116,6 +118,7 @@ internal fun FinalAnalysisPage(
             currentSummary = state.currentSummary,
             previousSummary = state.previousSummary,
             analysisStartTimeMs = state.analysisStartTimeMs,
+            heartRateSeries = state.heartRateSeries,
             reachedHoldsText = state.reachedHoldsText,
             reachedHoldsSuffix = state.reachedHoldsSuffix,
             isSuccess = state.currentSummary.isSuccess,

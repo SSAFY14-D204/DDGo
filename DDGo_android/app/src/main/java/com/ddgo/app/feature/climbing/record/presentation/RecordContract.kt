@@ -13,11 +13,17 @@ data class RecordThumbnailFrame(
     val rotationDegrees: Int
 )
 
+data class HeartRatePoint(
+    val timestampMs: Long,
+    val bpm: Int
+)
+
 data class RecordedAttemptDraft(
     val videoUri: String,
     val thumbnailFrame: RecordThumbnailFrame? = null,
     val frameWidthPx: Int? = null,
-    val frameHeightPx: Int? = null
+    val frameHeightPx: Int? = null,
+    val heartRateSeries: List<HeartRatePoint> = emptyList()
 )
 
 data class RecordWatchStatus(

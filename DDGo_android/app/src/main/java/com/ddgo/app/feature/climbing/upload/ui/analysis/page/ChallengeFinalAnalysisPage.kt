@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -180,6 +181,9 @@ private fun ChallengePreviewHero(
     onAttemptVideoShare: ((attemptNo: Int) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
+    var showHoldOverviewDialog by remember(state.previewBitmap, state.previewHolds) {
+        mutableStateOf(false)
+    }
     val difficultyChipTone = remember(state.difficultyLabel) {
         buildHeaderChipTone(holdColorToUiColor(state.difficultyLabel))
     }
@@ -227,14 +231,14 @@ private fun ChallengePreviewHero(
                     HeaderChip(
                         text = if (state.overallSuccess) "완등 성공" else "미완등",
                         background = statusChipTone.background,
-                        contentColor = statusChipTone.content,
+                        contentColor = Color.White,
                         borderColor = statusChipTone.border
                     )
                     if (state.difficultyLabel.isNotBlank()) {
                         HeaderChip(
                             text = "난이도 ${state.difficultyLabel}",
                             background = difficultyChipTone.background,
-                            contentColor = difficultyChipTone.content,
+                            contentColor = Color.White,
                             borderColor = difficultyChipTone.border
                         )
                     }
@@ -242,18 +246,48 @@ private fun ChallengePreviewHero(
                         HeaderChip(
                             text = "홀드 ${state.holdColorLabel}",
                             background = holdChipTone.background,
-                            contentColor = holdChipTone.content,
+                            contentColor = Color.White,
                             borderColor = holdChipTone.border
                         )
                     }
                 }
             }
 
-            HoldOverviewPreview(
-                bitmap = state.previewBitmap,
-                holds = state.previewHolds,
-                modifier = Modifier.size(width = 116.dp, height = 96.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(width = 116.dp, height = 96.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable(
+                        enabled = state.previewBitmap != null || state.previewHolds.isNotEmpty()
+                    ) { showHoldOverviewDialog = true }
+            ) {
+                HoldOverviewPreview(
+                    bitmap = state.previewBitmap,
+                    holds = state.previewHolds,
+                    modifier = Modifier.fillMaxSize(),
+                    showZoomBadge = true
+                )
+            }
+        }
+
+        if (showHoldOverviewDialog) {
+            Dialog(onDismissRequest = { showHoldOverviewDialog = false }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color(0xFF17181C))
+                        .padding(16.dp)
+                ) {
+                    HoldOverviewPreview(
+                        bitmap = state.previewBitmap,
+                        holds = state.previewHolds,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(360.dp)
+                    )
+                }
+            }
         }
 
         if (state.attemptVideoUris.isNotEmpty()) {

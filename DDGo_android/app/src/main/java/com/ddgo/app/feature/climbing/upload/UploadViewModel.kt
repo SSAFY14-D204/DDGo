@@ -50,6 +50,8 @@ import com.ddgo.app.domain.usecase.SearchNearbyClimbingGymsUseCase
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint
+import com.ddgo.app.feature.climbing.record.presentation.RecordedAttemptDraft
 import java.time.LocalDateTime
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -140,6 +142,8 @@ class UploadViewModel @Inject constructor(
         holdColorClassifier = holdColorClassifier,
         scope = viewModelScope
     )
+    private var pendingRealtimeHeartRateSeriesBySourceUri by mutableStateOf<Map<String, List<HeartRatePoint>>>(emptyMap())
+    private var realtimeHeartRateSeriesByPlaybackUri by mutableStateOf<Map<String, List<HeartRatePoint>>>(emptyMap())
     private var closedChallengeId by mutableStateOf<Long?>(null)
     private var closingChallengeId by mutableStateOf<Long?>(null)
 
@@ -1306,6 +1310,21 @@ class UploadViewModel @Inject constructor(
         updateVideoUri(uri = uri)
     }
 
+    fun registerRealtimeRecordedAttempt(draft: RecordedAttemptDraft) {
+        if (draft.heartRateSeries.isEmpty()) {
+            pendingRealtimeHeartRateSeriesBySourceUri =
+                pendingRealtimeHeartRateSeriesBySourceUri - draft.videoUri
+            return
+        }
+        pendingRealtimeHeartRateSeriesBySourceUri =
+            pendingRealtimeHeartRateSeriesBySourceUri + (draft.videoUri to draft.heartRateSeries)
+    }
+
+    fun heartRateSeriesForPlaybackUri(playbackUri: String?): List<HeartRatePoint> {
+        val uri = playbackUri?.takeIf { it.isNotBlank() } ?: return emptyList()
+        return realtimeHeartRateSeriesByPlaybackUri[uri].orEmpty()
+    }
+
     fun needsRealtimeHoldSelection(): Boolean {
         return isRealtimeEntryMode &&
             (numberedHolds.isEmpty() || bestFrameBitmap == null)
@@ -1371,6 +1390,15 @@ class UploadViewModel @Inject constructor(
     ) {
         if (generation != selectionGeneration || uploadFlowMode != UploadFlowMode.FullChallenge) {
             return
+        }
+
+        primaryManagedVideo?.sourceUri?.let { sourceUri ->
+            pendingRealtimeHeartRateSeriesBySourceUri[sourceUri]?.let { series ->
+                realtimeHeartRateSeriesByPlaybackUri =
+                    realtimeHeartRateSeriesByPlaybackUri + (playbackUri to series)
+                pendingRealtimeHeartRateSeriesBySourceUri =
+                    pendingRealtimeHeartRateSeriesBySourceUri - sourceUri
+            }
         }
 
         videoUri = playbackUri
@@ -2054,6 +2082,8 @@ class UploadViewModel @Inject constructor(
         attemptOnlyManagedVideos = emptyList()
         additionalManagedVideos = emptyList()
         primaryManagedVideo = null
+        pendingRealtimeHeartRateSeriesBySourceUri = emptyMap()
+        realtimeHeartRateSeriesByPlaybackUri = emptyMap()
         videoUri = null
         resultPlaybackUris = emptyList()
         uploadedAttemptVideos = emptyList()

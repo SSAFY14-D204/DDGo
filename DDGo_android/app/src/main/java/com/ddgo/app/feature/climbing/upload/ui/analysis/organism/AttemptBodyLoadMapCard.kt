@@ -28,12 +28,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
+import com.ddgo.app.R
 import com.ddgo.app.core.ui.tokens.DdgoColorTokens
 import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
@@ -45,7 +47,6 @@ import com.ddgo.app.feature.climbing.upload.FinalAnalysisBodyLoadDistribution
 import com.ddgo.app.feature.climbing.upload.FinalAnalysisJointLoadSummary
 import com.ddgo.app.feature.climbing.upload.FinalAnalysisUnknownMetricText
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisAccentText
-import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.analysisSurfaceBrushFor
 
 @Composable
 internal fun AttemptBodyLoadMapCard(
@@ -157,12 +158,16 @@ internal fun AttemptBodyLoadMapCard(
                     Text(
                         text = "상위 관절 부하",
                         color = AnalysisText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold
+                        )
                     )
 
-                    displayJointLoads.forEach { joint ->
-                        JointLoadRow(joint = joint)
+                    displayJointLoads.forEachIndexed { index, joint ->
+                        JointLoadRow(
+                            joint = joint,
+                            rank = index + 1
+                        )
                     }
                 }
             }
@@ -177,18 +182,11 @@ private fun BodyLoadFocusInset(
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val surfaceBrush = analysisSurfaceBrushFor(accentColor)
-
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(brush = surfaceBrush ?: androidx.compose.ui.graphics.Brush.horizontalGradient(
-                colors = listOf(
-                    accentColor.copy(alpha = 0.18f),
-                    accentColor.copy(alpha = 0.08f)
-                )
-            ))
+            .background(AnalysisCardColor)
             .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -206,7 +204,7 @@ private fun BodyLoadFocusInset(
         ) {
             Text(
                 text = "부담 집중 부위",
-                color = AnalysisMuted,
+                color = accentColor,
                 fontSize = 12.sp
             )
             Text(
@@ -219,7 +217,7 @@ private fun BodyLoadFocusInset(
             )
             Text(
                 text = caption,
-                color = AnalysisText.copy(alpha = 0.86f),
+                color = AnalysisMuted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp
             )
@@ -347,7 +345,7 @@ private fun BodyLoadLegendItem(
         ) {
             Text(
                 text = title,
-                color = AnalysisMuted,
+                color = AnalysisText.copy(alpha = 0.64f),
                 fontSize = 12.sp
             )
             if (value != null) {
@@ -374,6 +372,7 @@ private fun BodyLoadLegendItem(
 @Composable
 private fun JointLoadRow(
     joint: DisplayJointLoad,
+    rank: Int,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -385,20 +384,12 @@ private fun JointLoadRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(18.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(jointLoadTint(joint.intensityPercent))
-        ) {
-            Text(
-                text = joint.displayNumber.toString(),
-                color = Color.Black,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.Center)
-            )
-        }
+        Text(
+            text = "$rank.",
+            color = AnalysisFailure,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
 
         Text(
             text = joint.label,
@@ -831,28 +822,21 @@ private fun JointMarkerDot(
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(modifier = modifier) {
-        val dotSize = when {
-            marker.intensityPercent >= 80 -> 18.dp
-            marker.intensityPercent >= 60 -> 16.dp
-            else -> 14.dp
+        val markerSize = when {
+            marker.intensityPercent >= 80 -> 20.dp
+            marker.intensityPercent >= 60 -> 18.dp
+            else -> 16.dp
         }
         val xOffset = maxWidth * marker.xFraction
         val yOffset = maxHeight * marker.yFraction
 
-        Box(
+        Image(
+            painter = painterResource(id = R.drawable.ic_joint_warning_marker),
+            contentDescription = null,
             modifier = Modifier
-                .offset(x = xOffset - dotSize / 2, y = yOffset - dotSize / 2)
-                .size(dotSize)
-                .clip(RoundedCornerShape(999.dp))
-                .background(DdgoColorTokens.Warning.copy(alpha = 0.98f))
-        ) {
-            Text(
-                text = marker.displayNumber.toString(),
-                color = Color.Black,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.Center)
-            )
-        }
+                .offset(x = xOffset - markerSize / 2, y = yOffset - markerSize / 2)
+                .size(markerSize),
+            contentScale = ContentScale.Fit
+        )
     }
 }

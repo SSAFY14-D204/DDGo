@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint
 import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
@@ -61,6 +62,7 @@ internal fun AttemptAnalysisContentSection(
     currentSummary: FinalAnalysisAttemptSummary,
     previousSummary: FinalAnalysisAttemptSummary?,
     analysisStartTimeMs: Long?,
+    heartRateSeries: List<HeartRatePoint>,
     reachedHoldsText: String,
     reachedHoldsSuffix: String?,
     isSuccess: Boolean,
@@ -153,6 +155,7 @@ internal fun AttemptAnalysisContentSection(
                 cruxStartFraction = cruxRange?.first,
                 cruxEndFraction = cruxRange?.second,
                 failureFraction = null,
+                heartRateSeries = heartRateSeries,
                 modifier = Modifier.fillMaxWidth()
             )
 /*
@@ -252,25 +255,18 @@ private fun AttemptContentTabs(
                         .fillMaxHeight(),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isSelected) {
-                        AnalysisAccentText(
-                            text = title,
-                            accentColor = AnalysisPrimary,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                    Text(
+                        text = title,
+                        color = if (isSelected) {
+                            AnalysisText
+                        } else {
+                            AnalysisText.copy(alpha = 0.64f)
+                        },
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
-                    } else {
-                        Text(
-                            text = title,
-                            color = AnalysisMuted,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        )
-                    }
+                    )
 
                     if (isSelected) {
                         Box(
@@ -335,7 +331,8 @@ private fun AttemptResultOverviewCard(
             )
 
             AttemptOverallScoreCard(
-                score = currentSummary.overallMovementScore
+                score = currentSummary.overallMovementScore,
+                isSuccess = currentSummary.isSuccess
             )
 
             Box(
@@ -364,7 +361,7 @@ private fun AttemptResultOverviewCard(
                     label = "도달 홀드",
                     value = reachedHoldValue,
                     trailingValue = reachedHoldSuffix,
-                    accentColor = AnalysisPrimary,
+                    accentColor = if (currentSummary.isSuccess) AnalysisPrimary else AnalysisFailure,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -403,7 +400,7 @@ private fun AttemptOverviewMetricBlock(
     ) {
         Text(
             text = label,
-            color = AnalysisMuted,
+            color = AnalysisText,
             fontSize = 12.sp
         )
 
@@ -492,9 +489,10 @@ private fun AttemptOverviewMetricDivider() {
 @Composable
 private fun AttemptOverallScoreCard(
     score: Int?,
+    isSuccess: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val accentColor = scoreAccentColor(score)
+    val accentColor = if (isSuccess) scoreAccentColor(score) else AnalysisFailure
     val safeScore = score?.coerceIn(0, 100)
     val useBrandAccent = hasAnalysisGradientAccent(accentColor)
 
@@ -544,23 +542,12 @@ private fun AttemptOverallScoreCard(
                     )
                     .padding(horizontal = 10.dp, vertical = 5.dp)
             ) {
-                if (useBrandAccent) {
-                    AnalysisAccentText(
-                        text = buildScoreGradeLabel(safeScore),
-                        accentColor = accentColor,
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                } else {
-                    Text(
-                        text = buildScoreGradeLabel(safeScore),
-                        color = accentColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = buildScoreGradeLabel(safeScore),
+                    color = AnalysisText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
 
@@ -830,48 +817,26 @@ private fun AttemptScoreRow(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .then(
-                        if (useBrandAccent) {
-                            Modifier.background(brush = requireNotNull(analysisAccentBrushFor(accentColor)))
-                        } else {
-                            Modifier.background(accentColor)
-                        }
-                    )
-            )
             Text(
                 text = item.title,
                 color = AnalysisText,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f)
             )
-            if (useBrandAccent) {
-                AnalysisAccentText(
-                    text = item.score?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
-                    accentColor = accentColor,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-            } else {
-                Text(
-                    text = item.score?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
-                    color = accentColor,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Text(
+                text = item.score?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                color = AnalysisText,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
 
         if (useBrandAccent) {
@@ -880,18 +845,18 @@ private fun AttemptScoreRow(
                 accentColor = accentColor,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp),
-                trackColor = AnalysisCardColor
+                    .height(6.dp),
+                trackColor = Color.White.copy(alpha = 0.08f)
             )
         } else {
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
+                    .height(6.dp)
                     .clip(RoundedCornerShape(999.dp)),
                 color = accentColor,
-                trackColor = AnalysisCardColor
+                trackColor = Color.White.copy(alpha = 0.08f)
             )
         }
 
@@ -982,36 +947,12 @@ private fun SummaryLineRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .then(
-                        if (useBrandAccent) {
-                            Modifier.background(brush = requireNotNull(analysisSurfaceBrushFor(accentColor)))
-                        } else {
-                            Modifier.background(accentColor.copy(alpha = 0.16f))
-                        }
-                    )
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                if (useBrandAccent) {
-                    AnalysisAccentText(
-                        text = label,
-                        accentColor = accentColor,
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                } else {
-                    Text(
-                        text = label,
-                        color = accentColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+            Text(
+                text = label,
+                color = AnalysisText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
             Text(
                 text = text,
                 color = AnalysisText,
@@ -1194,10 +1135,10 @@ private fun buildResultCaption(
 
 private fun buildRetentionCaption(value: Int?): String {
     return when {
-        value == null -> "아직 계산 중이에요."
-        value >= 75 -> "안정권 안에 머문 시간이 길었어요."
-        value >= 60 -> "불안정한 구간이 조금 있었어요."
-        else -> "안정권 밖으로 벗어난 구간이 많았어요."
+        value == null -> "집계할 안정성 데이터가 아직 부족해요."
+        value >= 75 -> "중심을 비교적 안정적으로 유지한 시도가 많았어요."
+        value >= 60 -> "대체로 안정적이었지만 몇 구간은 흔들렸어요."
+        else -> "흔들리거나 중심이 무너진 구간이 자주 나타났어요."
     }
 }
 
@@ -1214,21 +1155,20 @@ private fun buildOverallMovementCaption(score: Int?): String {
 
 private fun buildScoreGradeLabel(score: Int?): String {
     return when {
-        score == null -> "분석 준비 중"
-        score >= 85 -> "매우 우수"
-        score >= 75 -> "우수함"
-        score >= 60 -> "안정적"
-        score >= 45 -> "보완 필요"
-        else -> "집중 점검"
+        score == null -> FinalAnalysisUnknownMetricText
+        score >= 85 -> "우수함"
+        score >= 70 -> "좋음"
+        score >= 55 -> "보통"
+        else -> "보완 필요"
     }
 }
 
 private fun scoreAccentColor(score: Int?): Color {
     return when {
         score == null -> AnalysisMuted
-        score >= 80 -> AnalysisSuccess
-        score >= 65 -> AnalysisPrimary
-        score >= 50 -> Color(0xFFFFC271)
+        score >= 85 -> AnalysisSuccess
+        score >= 70 -> AnalysisPrimary
+        score >= 55 -> Color(0xFFFFC857)
         else -> AnalysisFailure
     }
 }
@@ -1290,11 +1230,11 @@ private fun buildRecoveryInsight(
         else -> 28
     }
     val recoveryCaption = when {
-        recoveryScore >= 76 -> "$lowestPointLabel 이후 바로 회복했어요."
-        recoveryScore >= 64 -> "$lowestPointLabel 이후 빠르게 안정됐어요."
-        recoveryScore >= 52 -> "흔들린 뒤 다시 세우는 흐름이 보였어요."
-        recoveryScore >= 40 -> "회복까지 시간이 조금 걸렸어요."
-        else -> "흔들린 뒤 회복이 오래 걸렸어요."
+        recoveryScore >= 76 -> "$lowestPointLabel 이후 자세를 빠르게 다시 세웠어요."
+        recoveryScore >= 64 -> "$lowestPointLabel 이후 비교적 빠르게 안정됐어요."
+        recoveryScore >= 52 -> "흔들린 뒤 다시 흐름을 회복하는 장면이 보였어요."
+        recoveryScore >= 40 -> "회복은 했지만 안정권으로 돌아오는 데 시간이 걸렸어요."
+        else -> "흔들린 뒤 자세를 다시 회복하는 데 오래 걸렸어요."
     }
     val recoveryAccentColor = when {
         recoveryScore >= 68 -> AnalysisPrimary
@@ -1304,7 +1244,7 @@ private fun buildRecoveryInsight(
     return when {
         recoverySamples == null && summary.isSuccess -> RecoveryInsight(
             label = "보통",
-            caption = "회복 장면이 또렷하진 않았어요.",
+            caption = "완등은 했지만 회복 장면이 또렷하게 읽히진 않았어요.",
             accentColor = Color(0xFFFFC271),
             lowestPointLabel = lowestPointLabel,
             recoveryPointLabel = recoveryPointLabel,
@@ -1314,7 +1254,7 @@ private fun buildRecoveryInsight(
 
         recoverySamples == null -> RecoveryInsight(
             label = "매우 느림",
-            caption = "흔들린 뒤 회복이 더뎠어요.",
+            caption = "흔들린 뒤 자세를 다시 세우는 흐름이 약했어요.",
             accentColor = AnalysisFailure,
             lowestPointLabel = lowestPointLabel,
             recoveryPointLabel = recoveryPointLabel,
@@ -1324,7 +1264,7 @@ private fun buildRecoveryInsight(
 
         recoverySamples <= 2 -> RecoveryInsight(
             label = "매우 빠름",
-            caption = "$lowestPointLabel 뒤 바로 회복했어요.",
+            caption = "$lowestPointLabel 뒤 바로 안정권으로 회복했어요.",
             accentColor = AnalysisPrimary,
             lowestPointLabel = lowestPointLabel,
             recoveryPointLabel = recoveryPointLabel,
@@ -1334,7 +1274,7 @@ private fun buildRecoveryInsight(
 
         recoverySamples <= 3 -> RecoveryInsight(
             label = "빠름",
-            caption = "$lowestPointLabel 뒤 금방 회복했어요.",
+            caption = "$lowestPointLabel 뒤 비교적 빠르게 안정됐어요.",
             accentColor = AnalysisPrimary,
             lowestPointLabel = lowestPointLabel,
             recoveryPointLabel = recoveryPointLabel,
@@ -1344,7 +1284,7 @@ private fun buildRecoveryInsight(
 
         recoverySamples <= 6 -> RecoveryInsight(
             label = "보통",
-            caption = "회복까지 조금 시간이 걸렸어요.",
+            caption = "흔들린 뒤 자세를 다시 세우는 데 조금 시간이 걸렸어요.",
             accentColor = Color(0xFFFFC271),
             lowestPointLabel = lowestPointLabel,
             recoveryPointLabel = recoveryPointLabel,
@@ -1354,7 +1294,7 @@ private fun buildRecoveryInsight(
 
         recoverySamples <= 8 -> RecoveryInsight(
             label = "느림",
-            caption = "회복은 했지만 느렸어요.",
+            caption = "회복은 했지만 안정권으로 돌아오는 속도가 느렸어요.",
             accentColor = AnalysisFailure,
             lowestPointLabel = lowestPointLabel,
             recoveryPointLabel = recoveryPointLabel,
@@ -1364,7 +1304,7 @@ private fun buildRecoveryInsight(
 
         else -> RecoveryInsight(
             label = "매우 느림",
-            caption = "회복 구간이 길게 이어졌어요.",
+            caption = "흔들린 뒤 회복 구간이 길게 이어졌어요.",
             accentColor = AnalysisFailure,
             lowestPointLabel = lowestPointLabel,
             recoveryPointLabel = recoveryPointLabel,
@@ -1485,10 +1425,10 @@ private fun buildContributionScoreInsight(summary: FinalAnalysisAttemptSummary):
 
     val loadFocusValue = loadFocus ?: FinalAnalysisUnknownMetricText
     val loadFocusCaption = when {
-        isArmFocus -> "팔 부담이 컸어요."
-        isLegFocus -> "발과 다리 사용이 컸어요."
-        isCoreFocus -> "몸통으로 버티는 장면이 많았어요."
-        else -> "부담 부위가 뚜렷하진 않았어요."
+        isArmFocus -> "팔과 손에 부담이 몰린 장면이 비교적 많았어요."
+        isLegFocus -> "발과 다리로 지지한 장면이 비교적 많이 보였어요."
+        isCoreFocus -> "몸통과 코어로 버티며 연결한 장면이 많았어요."
+        else -> "특정 부위로 부담이 뚜렷하게 쏠리진 않았어요."
     }
     val loadFocusAccentColor = when {
         isArmFocus -> AnalysisFailure
@@ -1499,11 +1439,11 @@ private fun buildContributionScoreInsight(summary: FinalAnalysisAttemptSummary):
     return ContributionInsight(
         driveLabel = "${lowerBodyScore}점",
         driveCaption = when {
-            lowerBodyScore >= 80 -> "다리와 골반이 먼저 버티는 흐름이 잘 보였어요."
-            lowerBodyScore >= 68 -> "하체로 밀어 올리는 장면이 비교적 잘 보였어요."
-            lowerBodyScore >= 56 -> "팔과 다리 사용이 섞여 있었어요."
-            lowerBodyScore >= 44 -> "팔이 먼저 버티는 장면이 꽤 있었어요."
-            else -> "팔에 힘이 먼저 들어가는 패턴이 자주 보였어요."
+            lowerBodyScore >= 80 -> "다리와 골반이 먼저 버티며 중심을 만든 장면이 잘 보였어요."
+            lowerBodyScore >= 68 -> "하체로 밀어 올리며 동작을 이어가는 흐름이 비교적 잘 보였어요."
+            lowerBodyScore >= 56 -> "하체 사용은 있었지만 구간에 따라 팔 의존이 함께 보였어요."
+            lowerBodyScore >= 44 -> "팔이 먼저 버티고 하체가 늦게 따라오는 장면이 꽤 있었어요."
+            else -> "팔에 힘이 먼저 들어가고 하체 연결이 늦는 패턴이 자주 보였어요."
         },
         driveAccentColor = when {
             lowerBodyScore >= 68 -> AnalysisPrimary
@@ -1518,9 +1458,9 @@ private fun buildContributionScoreInsight(summary: FinalAnalysisAttemptSummary):
         lowerBodyBarLabel = "${lowerBodyScore}점",
         upperLimbBarLabel = "${upperLimbScore}점",
         summaryLine = when {
-            lowerBodyScore >= 72 -> "하체가 먼저 중심을 만들고 팔은 연결해 주는 흐름이 보였어요."
-            lowerBodyScore >= 56 -> "하체 사용은 있었지만 구간에 따라 팔 의존이 함께 보였어요."
-            else -> "이번 시도는 팔이 먼저 버티는 흐름이 비교적 자주 나타났어요."
+            lowerBodyScore >= 72 -> "하체가 먼저 중심을 만들고 팔은 연결해 주는 흐름이 비교적 안정적으로 이어졌어요."
+            lowerBodyScore >= 56 -> "하체 사용은 있었지만 구간에 따라 팔 의존이 함께 나타난 시도였어요."
+            else -> "이번 시도는 팔이 먼저 버티고 하체 연결이 늦는 장면이 비교적 자주 나타났어요."
         }
     )
 }

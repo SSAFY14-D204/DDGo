@@ -163,9 +163,9 @@ private fun AttemptTimelineCard(
                     )
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                AnalysisAccentText(
+                Text(
                     text = point.timeMs.toVideoTimeString(),
-                    accentColor = accentColor,
+                    color = AnalysisText,
                     style = androidx.compose.material3.MaterialTheme.typography.labelLarge.copy(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
