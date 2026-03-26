@@ -15,4 +15,10 @@ class CalendarPaletteTest {
         assertEquals(DdgoHoldColorTokens.Navy.color, CalendarPalette.markerToneColor(CalendarMarkerToneUiModel.NAVY))
         assertEquals(DdgoHoldColorTokens.White.color, CalendarPalette.markerToneColor(CalendarMarkerToneUiModel.WHITE))
     }
+
+    @Test
+    fun `calendar placeholders use figma light gray tones`() {
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFF0F3F5), CalendarPalette.DayPlaceholder)
+        assertEquals(CalendarPalette.DayPlaceholder.copy(alpha = 0.25f), CalendarPalette.DayPlaceholderMuted)
+    }
 }
