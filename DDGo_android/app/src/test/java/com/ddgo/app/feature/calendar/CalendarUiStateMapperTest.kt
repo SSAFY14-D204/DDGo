@@ -6,6 +6,7 @@ import com.ddgo.app.domain.model.CalendarMonthSummary
 import com.ddgo.app.feature.calendar.mapper.CalendarUiStateMapper
 import com.ddgo.app.feature.calendar.model.CalendarMarkerFilterUiModel
 import com.ddgo.app.feature.calendar.model.CalendarMarkerRenderStyleUiModel
+import com.ddgo.app.feature.calendar.model.CalendarMarkerToneUiModel
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -107,6 +108,37 @@ class CalendarUiStateMapperTest {
                 CalendarMarkerRenderStyleUiModel.OUTLINED
             ),
             day.colorMarkers.map { it.renderStyle }
+        )
+    }
+
+    @Test
+    fun `calendar marker tones follow shared hold difficulty aliases`() {
+        val targetDate = LocalDate.of(2026, 3, 2)
+
+        val state = CalendarUiStateMapper.createCalendarUiState(
+            today = targetDate,
+            currentMonth = YearMonth.from(targetDate),
+            selectedDate = targetDate,
+            entries = listOf(
+                entry(1L, targetDate, "더클라임 강남", "skyblue", time = LocalTime.of(20, 0)),
+                entry(2L, targetDate, "더클라임 강남", "blue", time = LocalTime.of(19, 0)),
+                entry(3L, targetDate, "더클라임 강남", "navy", time = LocalTime.of(18, 0)),
+                entry(4L, targetDate, "더클라임 강남", "white", time = LocalTime.of(17, 0))
+            ),
+            summary = CalendarMonthSummary(totalSessions = 4),
+            activeMarkerFilter = CalendarMarkerFilterUiModel.COLOR
+        )
+
+        val day = state.weeks.flatten().first { it.date == targetDate }
+
+        assertEquals(
+            listOf(
+                CalendarMarkerToneUiModel.BLUE,
+                CalendarMarkerToneUiModel.BLUE,
+                CalendarMarkerToneUiModel.NAVY,
+                CalendarMarkerToneUiModel.WHITE
+            ),
+            day.colorMarkers.map { it.tone }
         )
     }
 

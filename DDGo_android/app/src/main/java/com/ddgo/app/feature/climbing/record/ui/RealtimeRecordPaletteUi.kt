@@ -1,6 +1,5 @@
 package com.ddgo.app.feature.climbing.record.ui
 
-import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.tokens.DdgoHoldColorTokens
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.feature.climbing.upload.ChallengeCreationUiState
 import com.ddgo.app.feature.climbing.upload.RealtimeHoldColorOption
@@ -501,99 +501,23 @@ private fun difficultyReferenceSlots(selectedGrade: GymGrade?): List<DifficultyR
 }
 
 internal fun resolveGymGradeAccentColor(grade: GymGrade): Color {
-    colorOverrideByName(grade.colorName)?.let { return it }
-
-    val colorHex = grade.colorHex?.takeIf { it.isNotBlank() }
-    if (colorHex != null) {
-        return runCatching { Color(AndroidColor.parseColor(colorHex)) }
-            .getOrElse { fallbackColorByName(grade.colorName) }
-    }
-
-    return fallbackColorByName(grade.colorName)
+    return DdgoHoldColorTokens.resolveColor(
+        colorName = grade.colorName,
+        colorHex = grade.colorHex
+    )
 }
 
 internal fun resolveHoldColorDisplayName(
     colorName: String,
     colorHex: String?
 ): String {
-    val normalized = colorName.trim()
-    if (normalized.isNotBlank()) {
-        realtimeHoldColorDisplayNameByKey(normalized)?.let { return it }
-        if (normalized.any { it in '가'..'힣' }) {
-            return normalized
-        }
-    }
-    return when (colorHex?.trim()?.uppercase()) {
-        "#FFFF0000", "#FF0000" -> "빨강"
-        "#FFFF7700" -> "주황"
-        "#FFFED500" -> "노랑"
-        "#FF65B969" -> "초록"
-        "#FF4396FB" -> "하늘"
-        "#FF373FD7" -> "남색"
-        "#FF876FFF" -> "보라"
-        "#FF6B3E1C" -> "갈색"
-        "#FFFF56A8" -> "분홍"
-        "#FFFFFFFF" -> "흰색"
-        "#FF505050" -> "회색"
-        "#FF292929" -> "검정"
-        else -> "색상"
-    }
+    return DdgoHoldColorTokens.resolveDisplayName(
+        colorName = colorName,
+        colorHex = colorHex
+    )
 }
 
 private fun resolveRealtimeHoldColorTileDisplayName(option: RealtimeHoldColorOption): String {
-    return realtimeHoldColorDisplayNameByKey(option.key) ?: resolveHoldColorDisplayName(option.key, null)
-}
-
-private fun realtimeHoldColorDisplayNameByKey(colorKey: String): String? {
-    return when (colorKey.trim().lowercase()) {
-        "red" -> "빨강"
-        "orange" -> "주황"
-        "yellow" -> "노랑"
-        "green" -> "초록"
-        "skyblue", "sky", "cyan" -> "하늘"
-        "navy", "blue" -> "남색"
-        "purple" -> "보라"
-        "brown" -> "갈색"
-        "pink" -> "분홍"
-        "white" -> "흰색"
-        "gray", "grey" -> "회색"
-        "black" -> "검정"
-        else -> null
-    }
-}
-
-private fun colorOverrideByName(colorName: String): Color? {
-    return when (colorName.trim().lowercase()) {
-        "red" -> Color(0xFFFF0000)
-        "orange" -> Color(0xFFFF7700)
-        "yellow" -> Color(0xFFFED500)
-        "green" -> Color(0xFF65B969)
-        "skyblue", "cyan" -> Color(0xFF4396FB)
-        "blue", "navy" -> Color(0xFF373FD7)
-        "purple" -> Color(0xFF876FFF)
-        "brown" -> Color(0xFF6B3E1C)
-        "pink" -> Color(0xFFFF56A8)
-        "white" -> Color.White
-        "gray", "grey" -> Color(0xFF505050)
-        "black" -> Color(0xFF292929)
-        else -> null
-    }
-}
-
-private fun fallbackColorByName(colorName: String): Color {
-    return when (colorName.trim().lowercase()) {
-        "red" -> Color(0xFFFF0000)
-        "orange" -> Color(0xFFFF7700)
-        "yellow" -> Color(0xFFFED500)
-        "green" -> Color(0xFF65B969)
-        "skyblue", "cyan" -> Color(0xFF4396FB)
-        "blue", "navy" -> Color(0xFF373FD7)
-        "purple" -> Color(0xFF876FFF)
-        "brown" -> Color(0xFF6B3E1C)
-        "pink" -> Color(0xFFFF56A8)
-        "white" -> Color.White
-        "gray", "grey" -> Color(0xFF505050)
-        "black" -> Color(0xFF292929)
-        else -> RecordAccent
-    }
+    return DdgoHoldColorTokens.resolveDisplayNameByKey(option.key)
+        ?: resolveHoldColorDisplayName(option.key, null)
 }

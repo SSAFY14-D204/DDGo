@@ -1,6 +1,8 @@
 package com.ddgo.app.feature.climbing.upload
 
 import androidx.annotation.ColorInt
+import androidx.compose.ui.graphics.toArgb
+import com.ddgo.app.core.ui.tokens.DdgoHoldColorTokens
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
@@ -97,20 +99,14 @@ data class UploadRealtimeOverlayUiState(
     val lastSearchLongitude: Double? = null
 )
 
-internal val realtimeHoldColorOptions = listOf(
-    RealtimeHoldColorOption("red", "Red", 0xFFFF1208.toInt()),
-    RealtimeHoldColorOption("orange", "Orange", 0xFFFF7A00.toInt()),
-    RealtimeHoldColorOption("yellow", "Yellow", 0xFFFFCB12.toInt()),
-    RealtimeHoldColorOption("green", "Green", 0xFF48BE5C.toInt()),
-    RealtimeHoldColorOption("skyblue", "Sky", 0xFF1FC4E2.toInt()),
-    RealtimeHoldColorOption("navy", "Navy", 0xFF3F43DB.toInt()),
-    RealtimeHoldColorOption("purple", "Purple", 0xFF8265EE.toInt()),
-    RealtimeHoldColorOption("brown", "Brown", 0xFF8A4B16.toInt()),
-    RealtimeHoldColorOption("pink", "Pink", 0xFFFF43AC.toInt()),
-    RealtimeHoldColorOption("white", "White", 0xFFF5F1F1.toInt(), 0xFFE0D9D9.toInt()),
-    RealtimeHoldColorOption("gray", "Gray", 0xFF5C5C5C.toInt()),
-    RealtimeHoldColorOption("black", "Black", 0xFF0A0A12.toInt())
-)
+internal val realtimeHoldColorOptions = DdgoHoldColorTokens.All.map { token ->
+    RealtimeHoldColorOption(
+        key = token.key,
+        label = token.displayName,
+        colorInt = token.color.toArgb(),
+        borderColorInt = token.borderColor?.toArgb()
+    )
+}
 
 enum class AnalysisLoadingPhase {
     AttemptResultPreparation,
