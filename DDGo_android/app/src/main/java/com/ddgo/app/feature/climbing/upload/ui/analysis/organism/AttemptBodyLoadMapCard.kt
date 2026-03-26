@@ -2,13 +2,17 @@ package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
+import com.ddgo.app.core.ui.tokens.DdgoColorTokens
 import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
@@ -52,6 +57,10 @@ internal fun AttemptBodyLoadMapCard(
     loadFocusAccentColor: Color,
     modifier: Modifier = Modifier
 ) {
+    val displayJointLoads = remember(topJointLoads) {
+        topJointLoads.mapNotNull(::toDisplayJointLoad).take(3)
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -79,12 +88,14 @@ internal fun AttemptBodyLoadMapCard(
                     title = "전면",
                     view = BodyLoadView.FRONT,
                     distribution = distribution,
+                    topJointLoads = displayJointLoads,
                     modifier = Modifier.weight(1f)
                 )
                 BodyLoadFigure(
                     title = "후면",
                     view = BodyLoadView.BACK,
                     distribution = distribution,
+                    topJointLoads = displayJointLoads,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -138,7 +149,7 @@ internal fun AttemptBodyLoadMapCard(
                 accentColor = loadFocusAccentColor
             )
 
-            if (topJointLoads.isNotEmpty()) {
+            if (displayJointLoads.isNotEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -150,7 +161,7 @@ internal fun AttemptBodyLoadMapCard(
                         fontWeight = FontWeight.SemiBold
                     )
 
-                    topJointLoads.take(3).forEach { joint ->
+                    displayJointLoads.forEach { joint ->
                         JointLoadRow(joint = joint)
                     }
                 }
@@ -221,6 +232,7 @@ private fun BodyLoadFigure(
     title: String,
     view: BodyLoadView,
     distribution: FinalAnalysisBodyLoadDistribution?,
+    topJointLoads: List<DisplayJointLoad>,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -254,6 +266,25 @@ private fun BodyLoadFigure(
                 assetPath = view.guidesAssetPath,
                 modifier = Modifier.matchParentSize()
             )
+
+            val markers = remember(topJointLoads, view) {
+                topJointLoads
+                    .map { joint ->
+                        jointMarkerFor(
+                            descriptor = joint.descriptor,
+                            intensityPercent = joint.intensityPercent,
+                            view = view
+                        )
+                    }
+                    .sortedBy { it.displayNumber }
+            }
+
+            markers.forEach { marker ->
+                JointMarkerDot(
+                    marker = marker,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
         Text(
@@ -342,7 +373,7 @@ private fun BodyLoadLegendItem(
 
 @Composable
 private fun JointLoadRow(
-    joint: FinalAnalysisJointLoadSummary,
+    joint: DisplayJointLoad,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -356,10 +387,18 @@ private fun JointLoadRow(
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(18.dp)
                 .clip(RoundedCornerShape(999.dp))
                 .background(jointLoadTint(joint.intensityPercent))
-        )
+        ) {
+            Text(
+                text = joint.displayNumber.toString(),
+                color = Color.Black,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
 
         Text(
             text = joint.label,
@@ -522,13 +561,298 @@ private fun FinalAnalysisBodyLoadDistribution.toRankedRegions(): List<Pair<BodyL
 
 private fun bodyLoadTint(value: Int?): Color {
     if (value == null || value <= 0) return Color.Transparent
+    return steppedLoadColor(value)
+}
 
-    val ratio = (value.coerceIn(0, 100) / 100f)
-    val alpha = 0.16f + (0.76f * ratio)
-    return Color(0xFFFF5E73).copy(alpha = alpha)
+private enum class JointSide {
+    LEFT,
+    RIGHT
+}
+
+private enum class JointKind {
+    SHOULDER,
+    ELBOW,
+    HIP,
+    KNEE,
+    ANKLE
+}
+
+private data class JointDescriptor(
+    val side: JointSide,
+    val kind: JointKind,
+    val displayNumber: Int
+)
+
+private data class DisplayJointLoad(
+    val label: String,
+    val intensityPercent: Int,
+    val descriptor: JointDescriptor
+) {
+    val displayNumber: Int = descriptor.displayNumber
+}
+
+private data class JointAnchor(
+    val xFraction: Float,
+    val yFraction: Float
+)
+
+private fun toDisplayJointLoad(
+    joint: FinalAnalysisJointLoadSummary
+): DisplayJointLoad? {
+    val descriptor = jointDescriptorFor(joint.label) ?: return null
+    return DisplayJointLoad(
+        label = joint.label,
+        intensityPercent = joint.intensityPercent,
+        descriptor = descriptor
+    )
+}
+
+private fun jointDescriptorFor(label: String): JointDescriptor? {
+    val side = when {
+        label.contains("왼쪽") -> JointSide.LEFT
+        label.contains("오른쪽") -> JointSide.RIGHT
+        else -> return null
+    }
+
+    val kind = when {
+        label.contains("어깨") -> JointKind.SHOULDER
+        label.contains("팔꿈치") -> JointKind.ELBOW
+        label.contains("고관절") -> JointKind.HIP
+        label.contains("무릎") -> JointKind.KNEE
+        label.contains("발목") -> JointKind.ANKLE
+        else -> return null
+    }
+
+    val displayNumber = when (kind) {
+        JointKind.SHOULDER -> if (side == JointSide.RIGHT) 1 else 2
+        JointKind.ELBOW -> if (side == JointSide.RIGHT) 3 else 4
+        JointKind.HIP -> if (side == JointSide.RIGHT) 5 else 6
+        JointKind.KNEE -> if (side == JointSide.RIGHT) 7 else 8
+        JointKind.ANKLE -> if (side == JointSide.RIGHT) 9 else 10
+    }
+
+    return JointDescriptor(
+        side = side,
+        kind = kind,
+        displayNumber = displayNumber
+    )
+}
+
+private fun jointDisplayOrder(label: String): Int? {
+    val isLeft = label.contains("왼")
+    val isRight = label.contains("오른")
+
+    return when {
+        label.contains("어깨") -> if (isLeft) 1 else if (isRight) 2 else null
+        label.contains("팔꿈치") -> if (isLeft) 3 else if (isRight) 4 else null
+        label.contains("고관절") -> if (isLeft) 5 else if (isRight) 6 else null
+        label.contains("무릎") -> if (isLeft) 7 else if (isRight) 8 else null
+        label.contains("발목") -> if (isLeft) 9 else if (isRight) 10 else null
+        else -> null
+    }
 }
 
 private fun jointLoadTint(intensityPercent: Int): Color {
-    val ratio = (intensityPercent.coerceIn(0, 100) / 100f)
-    return Color(0xFFFF5E73).copy(alpha = 0.45f + (0.55f * ratio))
+    return steppedLoadColor(intensityPercent)
+}
+
+private fun steppedLoadColor(percent: Int): Color {
+    val step = (percent.coerceIn(0, 100) / 10)
+    return when (step) {
+        0 -> Color(0xFFFFF1F1)
+        1 -> Color(0xFFFFE2E2)
+        2 -> Color(0xFFFFD0D0)
+        3 -> Color(0xFFFFB8B8)
+        4 -> Color(0xFFFF9C9C)
+        5 -> Color(0xFFFF8080)
+        6 -> Color(0xFFFF6666)
+        7 -> Color(0xFFFF4D4D)
+        8 -> Color(0xFFF03A3A)
+        9 -> Color(0xFFD72A2A)
+        else -> Color(0xFFB71C1C)
+    }
+}
+
+private data class JointMarker(
+    val xFraction: Float,
+    val yFraction: Float,
+    val intensityPercent: Int,
+    val displayNumber: Int
+)
+
+private fun jointMarkerFor(
+    descriptor: JointDescriptor,
+    intensityPercent: Int,
+    view: BodyLoadView
+): JointMarker {
+    val anchor = when (view) {
+        BodyLoadView.FRONT -> when (descriptor.kind) {
+            JointKind.SHOULDER ->
+                if (descriptor.side == JointSide.RIGHT) JointAnchor(0.24f, 0.19f) else JointAnchor(0.76f, 0.19f)
+            JointKind.ELBOW ->
+                if (descriptor.side == JointSide.RIGHT) JointAnchor(0.18f, 0.38f) else JointAnchor(0.82f, 0.38f)
+            JointKind.HIP ->
+                if (descriptor.side == JointSide.RIGHT) JointAnchor(0.39f, 0.53f) else JointAnchor(0.61f, 0.53f)
+            JointKind.KNEE ->
+                if (descriptor.side == JointSide.RIGHT) JointAnchor(0.39f, 0.75f) else JointAnchor(0.61f, 0.75f)
+            JointKind.ANKLE ->
+                if (descriptor.side == JointSide.RIGHT) JointAnchor(0.35f, 0.95f) else JointAnchor(0.65f, 0.95f)
+        }
+
+        BodyLoadView.BACK -> when (descriptor.kind) {
+            JointKind.SHOULDER ->
+                if (descriptor.side == JointSide.LEFT) JointAnchor(0.24f, 0.19f) else JointAnchor(0.76f, 0.19f)
+            JointKind.ELBOW ->
+                if (descriptor.side == JointSide.LEFT) JointAnchor(0.18f, 0.38f) else JointAnchor(0.82f, 0.38f)
+            JointKind.HIP ->
+                if (descriptor.side == JointSide.LEFT) JointAnchor(0.39f, 0.53f) else JointAnchor(0.61f, 0.53f)
+            JointKind.KNEE ->
+                if (descriptor.side == JointSide.LEFT) JointAnchor(0.39f, 0.75f) else JointAnchor(0.61f, 0.75f)
+            JointKind.ANKLE ->
+                if (descriptor.side == JointSide.LEFT) JointAnchor(0.35f, 0.95f) else JointAnchor(0.65f, 0.95f)
+        }
+    }
+
+    return JointMarker(
+        xFraction = anchor.xFraction,
+        yFraction = anchor.yFraction,
+        intensityPercent = intensityPercent,
+        displayNumber = descriptor.displayNumber
+    )
+}
+
+private fun jointMarkerFor(
+    label: String,
+    intensityPercent: Int,
+    view: BodyLoadView,
+    rank: Int
+): JointMarker? {
+    val isLeft = label.contains("왼쪽")
+    val isRight = label.contains("오른쪽")
+
+    return when {
+        label.contains("어깨") -> when (view) {
+            BodyLoadView.FRONT -> JointMarker(
+                xFraction = if (isLeft) 0.29f else if (isRight) 0.71f else 0.50f,
+                yFraction = 0.19f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+            BodyLoadView.BACK -> JointMarker(
+                xFraction = if (isLeft) 0.29f else if (isRight) 0.71f else 0.50f,
+                yFraction = 0.19f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+        }
+
+        label.contains("팔꿈치") -> when (view) {
+            BodyLoadView.FRONT -> JointMarker(
+                xFraction = if (isLeft) 0.22f else if (isRight) 0.78f else 0.50f,
+                yFraction = 0.35f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+            BodyLoadView.BACK -> JointMarker(
+                xFraction = if (isLeft) 0.22f else if (isRight) 0.78f else 0.50f,
+                yFraction = 0.33f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+        }
+
+        label.contains("손목") -> when (view) {
+            BodyLoadView.FRONT -> JointMarker(
+                xFraction = if (isLeft) 0.84f else if (isRight) 0.16f else 0.50f,
+                yFraction = 0.59f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+            BodyLoadView.BACK -> JointMarker(
+                xFraction = if (isLeft) 0.18f else if (isRight) 0.82f else 0.50f,
+                yFraction = 0.59f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+        }
+
+        label.contains("고관절") -> when (view) {
+            BodyLoadView.FRONT -> JointMarker(
+                xFraction = if (isLeft) 0.47f else if (isRight) 0.53f else 0.50f,
+                yFraction = 0.47f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+            BodyLoadView.BACK -> JointMarker(
+                xFraction = if (isLeft) 0.50f else if (isRight) 0.52f else 0.51f,
+                yFraction = 0.46f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+        }
+
+        label.contains("무릎") -> when (view) {
+            BodyLoadView.FRONT -> JointMarker(
+                xFraction = if (isLeft) 0.47f else if (isRight) 0.55f else 0.50f,
+                yFraction = 0.74f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+            BodyLoadView.BACK -> JointMarker(
+                xFraction = if (isLeft) 0.47f else if (isRight) 0.55f else 0.50f,
+                yFraction = 0.74f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+        }
+
+        label.contains("발목") -> when (view) {
+            BodyLoadView.FRONT -> JointMarker(
+                xFraction = if (isLeft) 0.47f else if (isRight) 0.55f else 0.50f,
+                yFraction = 0.91f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+            BodyLoadView.BACK -> JointMarker(
+                xFraction = if (isLeft) 0.45f else if (isRight) 0.55f else 0.50f,
+                yFraction = 0.92f,
+                intensityPercent = intensityPercent,
+                displayNumber = rank
+            )
+        }
+
+        else -> null
+    }
+}
+
+@Composable
+private fun JointMarkerDot(
+    marker: JointMarker,
+    modifier: Modifier = Modifier
+) {
+    BoxWithConstraints(modifier = modifier) {
+        val dotSize = when {
+            marker.intensityPercent >= 80 -> 18.dp
+            marker.intensityPercent >= 60 -> 16.dp
+            else -> 14.dp
+        }
+        val xOffset = maxWidth * marker.xFraction
+        val yOffset = maxHeight * marker.yFraction
+
+        Box(
+            modifier = Modifier
+                .offset(x = xOffset - dotSize / 2, y = yOffset - dotSize / 2)
+                .size(dotSize)
+                .clip(RoundedCornerShape(999.dp))
+                .background(DdgoColorTokens.Warning.copy(alpha = 0.98f))
+        ) {
+            Text(
+                text = marker.displayNumber.toString(),
+                color = Color.Black,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+    }
 }
