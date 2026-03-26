@@ -72,7 +72,7 @@ import kotlin.math.abs
 import kotlinx.coroutines.delay
 
 private const val IntroHoldDurationMs = 1_500L
-private const val FeatureAutoAdvanceDurationMs = 2_800L
+private const val FeatureAutoAdvanceDurationMs = 4_000L
 
 private enum class WelcomeTransitionDirection {
     Forward,
@@ -227,8 +227,8 @@ fun AuthLandingScreen(
                 AnimatedContent(
                     targetState = showIntro,
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(durationMillis = 300)) togetherWith
-                            fadeOut(animationSpec = tween(durationMillis = 220))
+                        fadeIn(animationSpec = tween(durationMillis = 360)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 260))
                     },
                     label = "welcome_content"
                 ) { isIntroVisible ->
@@ -318,14 +318,14 @@ private fun WelcomeFeatureStage(
                     val isForward = transitionDirection == WelcomeTransitionDirection.Forward
                     (
                         slideInHorizontally(
-                            animationSpec = tween(durationMillis = 420)
+                            animationSpec = tween(durationMillis = 560)
                         ) { fullWidth -> if (isForward) fullWidth else -fullWidth } +
-                            fadeIn(animationSpec = tween(durationMillis = 320))
+                            fadeIn(animationSpec = tween(durationMillis = 420))
                         ).togetherWith(
                             slideOutHorizontally(
-                                animationSpec = tween(durationMillis = 320)
+                                animationSpec = tween(durationMillis = 460)
                             ) { fullWidth -> if (isForward) -fullWidth else fullWidth } +
-                                fadeOut(animationSpec = tween(durationMillis = 220))
+                                fadeOut(animationSpec = tween(durationMillis = 320))
                             )
                         .using(SizeTransform(clip = false))
                 },
@@ -376,8 +376,8 @@ private fun WelcomePhoneMockup(
             AnimatedContent(
                 targetState = slide.screenResId,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(durationMillis = 320)) togetherWith
-                        fadeOut(animationSpec = tween(durationMillis = 220))
+                    fadeIn(animationSpec = tween(durationMillis = 420)) togetherWith
+                        fadeOut(animationSpec = tween(durationMillis = 300))
                 },
                 label = "welcome_phone_screen"
             ) { screenResId ->
@@ -533,12 +533,12 @@ private fun WelcomeIndicator(
         repeat(slideCount) { index ->
             val width by animateDpAsState(
                 targetValue = if (index == activeIndex) 18.dp else 6.dp,
-                animationSpec = tween(durationMillis = 220),
+                animationSpec = tween(durationMillis = 260),
                 label = "welcome_indicator_width"
             )
             val color by animateColorAsState(
                 targetValue = if (index == activeIndex) Color(0xFF19191C) else Color(0xFFD5D5D5),
-                animationSpec = tween(durationMillis = 220),
+                animationSpec = tween(durationMillis = 260),
                 label = "welcome_indicator_color"
             )
             Box(
