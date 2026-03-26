@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -85,9 +84,7 @@ private data class WelcomeFeatureSlide(
     @DrawableRes val screenResId: Int,
     val headline: String,
     val highlight: String,
-    val accentColor: Color,
-    val iconWidth: Dp,
-    val iconHeight: Dp
+    val accentColor: Color
 )
 
 private data class WelcomeLayoutProfile(
@@ -98,15 +95,25 @@ private data class WelcomeLayoutProfile(
     val introTitleFontSize: TextUnit,
     val introTitleLineHeight: TextUnit,
     val featureTopPadding: Dp,
-    val featureSpacing: Dp,
+    val featureIconToTitleSpacing: Dp,
+    val featureTitleToPhoneSpacing: Dp,
+    val featurePhoneToIndicatorSpacing: Dp,
     val featureIconSize: Dp,
     val featureTitleFontSize: TextUnit,
     val featureTitleLineHeight: TextUnit,
     val featureTitleMinHeight: Dp,
     val featureHeaderHeight: Dp,
+    val featureTitleWidth: Dp,
+    val featureIndicatorActiveWidth: Dp,
+    val featureIndicatorInactiveWidth: Dp,
+    val featureIndicatorHeight: Dp,
     val phoneWidth: Dp,
     val phoneHeight: Dp,
-    val phoneShadowElevation: Dp
+    val phoneShadowElevation: Dp,
+    val phoneScreenStartPadding: Dp,
+    val phoneScreenTopPadding: Dp,
+    val phoneScreenEndPadding: Dp,
+    val phoneScreenBottomPadding: Dp
 )
 
 @Composable
@@ -120,40 +127,32 @@ fun AuthLandingScreen(
     val slides = remember {
         listOf(
             WelcomeFeatureSlide(
-                iconResId = R.drawable.welcome_ic_analysis,
+                iconResId = R.drawable.ic_records,
                 screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureAnalysis,
                 highlight = AuthStrings.WelcomeHighlightAnalysis,
-                accentColor = Color(0xFF53A6FF),
-                iconWidth = 37.dp,
-                iconHeight = 39.dp
+                accentColor = Color(0xFF53A6FF)
             ),
             WelcomeFeatureSlide(
-                iconResId = R.drawable.welcome_ic_realtime,
+                iconResId = R.drawable.ic_climbing,
                 screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureRealtime,
                 highlight = AuthStrings.WelcomeHighlightRealtime,
-                accentColor = Color(0xFF8A4E20),
-                iconWidth = 37.dp,
-                iconHeight = 39.dp
+                accentColor = Color(0xFF8A4E20)
             ),
             WelcomeFeatureSlide(
-                iconResId = R.drawable.welcome_ic_video,
+                iconResId = R.drawable.ic_record,
                 screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureVideo,
                 highlight = AuthStrings.WelcomeHighlightVideo,
-                accentColor = Color(0xFFFF4D73),
-                iconWidth = 40.dp,
-                iconHeight = 28.dp
+                accentColor = Color(0xFFFF4D73)
             ),
             WelcomeFeatureSlide(
-                iconResId = R.drawable.welcome_ic_calendar,
+                iconResId = R.drawable.ic_calendar,
                 screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureGrowth,
                 highlight = AuthStrings.WelcomeHighlightGrowth,
-                accentColor = Color(0xFF65B969),
-                iconWidth = 37.dp,
-                iconHeight = 39.dp
+                accentColor = Color(0xFF65B969)
             )
         )
     }
@@ -312,7 +311,7 @@ private fun WelcomeFeatureStage(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .padding(top = layoutProfile.featureTopPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -347,15 +346,16 @@ private fun WelcomeFeatureStage(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
+        Spacer(modifier = Modifier.height(layoutProfile.featureTitleToPhoneSpacing))
         WelcomePhoneMockup(
             layoutProfile = layoutProfile,
             slide = slide
         )
-        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
+        Spacer(modifier = Modifier.height(layoutProfile.featurePhoneToIndicatorSpacing))
         WelcomeIndicator(
             activeIndex = activeIndex,
-            slideCount = slideCount
+            slideCount = slideCount,
+            layoutProfile = layoutProfile
         )
     }
 }
@@ -386,7 +386,12 @@ private fun WelcomePhoneMockup(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 10.dp)
+                .padding(
+                    start = layoutProfile.phoneScreenStartPadding,
+                    top = layoutProfile.phoneScreenTopPadding,
+                    end = layoutProfile.phoneScreenEndPadding,
+                    bottom = layoutProfile.phoneScreenBottomPadding
+                )
                 .clip(RoundedCornerShape(40.dp))
         ) {
             AnimatedContent(
@@ -420,12 +425,10 @@ private fun WelcomeFeatureHeader(
         Icon(
             painter = painterResource(id = slide.iconResId),
             contentDescription = null,
-            tint = Color.Unspecified,
-            modifier = Modifier
-                .width(slide.iconWidth)
-                .height(slide.iconHeight)
+            tint = slide.accentColor,
+            modifier = Modifier.size(layoutProfile.featureIconSize)
         )
-        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
+        Spacer(modifier = Modifier.height(layoutProfile.featureIconToTitleSpacing))
         Text(
             text = highlightedHeadline(
                 text = slide.headline,
@@ -443,9 +446,8 @@ private fun WelcomeFeatureHeader(
             ),
             maxLines = 2,
             modifier = Modifier
-                .fillMaxWidth()
+                .width(layoutProfile.featureTitleWidth)
                 .heightIn(min = layoutProfile.featureTitleMinHeight)
-                .widthIn(max = 341.dp)
         )
     }
 }
@@ -460,18 +462,28 @@ private fun resolveWelcomeLayoutProfile(
             introLogoWidth = 94.dp,
             introLogoHeight = 62.dp,
             introLogoSpacing = 24.dp,
-            introTitleFontSize = 24.sp,
-            introTitleLineHeight = 34.sp,
-            featureTopPadding = 12.dp,
-            featureSpacing = 12.dp,
+            introTitleFontSize = 22.sp,
+            introTitleLineHeight = 31.sp,
+            featureTopPadding = 42.dp,
+            featureIconToTitleSpacing = 16.dp,
+            featureTitleToPhoneSpacing = 18.dp,
+            featurePhoneToIndicatorSpacing = 18.dp,
             featureIconSize = 32.dp,
-            featureTitleFontSize = 24.sp,
-            featureTitleLineHeight = 34.sp,
-            featureTitleMinHeight = 68.dp,
-            featureHeaderHeight = 112.dp,
+            featureTitleFontSize = 21.sp,
+            featureTitleLineHeight = 29.sp,
+            featureTitleMinHeight = 58.dp,
+            featureHeaderHeight = 102.dp,
+            featureTitleWidth = 300.dp,
+            featureIndicatorActiveWidth = 12.dp,
+            featureIndicatorInactiveWidth = 6.dp,
+            featureIndicatorHeight = 6.dp,
             phoneWidth = 154.dp,
             phoneHeight = 319.dp,
-            phoneShadowElevation = 18.dp
+            phoneShadowElevation = 18.dp,
+            phoneScreenStartPadding = 6.dp,
+            phoneScreenTopPadding = 8.dp,
+            phoneScreenEndPadding = 7.dp,
+            phoneScreenBottomPadding = 5.dp
         )
 
         availableHeight < 580.dp || fontScale >= 1.2f -> WelcomeLayoutProfile(
@@ -479,18 +491,28 @@ private fun resolveWelcomeLayoutProfile(
             introLogoWidth = 100.dp,
             introLogoHeight = 66.dp,
             introLogoSpacing = 28.dp,
-            introTitleFontSize = 26.sp,
-            introTitleLineHeight = 36.sp,
-            featureTopPadding = 14.dp,
-            featureSpacing = 14.dp,
-            featureIconSize = 34.dp,
-            featureTitleFontSize = 26.sp,
-            featureTitleLineHeight = 36.sp,
-            featureTitleMinHeight = 72.dp,
-            featureHeaderHeight = 120.dp,
+            introTitleFontSize = 24.sp,
+            introTitleLineHeight = 34.sp,
+            featureTopPadding = 52.dp,
+            featureIconToTitleSpacing = 18.dp,
+            featureTitleToPhoneSpacing = 22.dp,
+            featurePhoneToIndicatorSpacing = 22.dp,
+            featureIconSize = 33.dp,
+            featureTitleFontSize = 22.sp,
+            featureTitleLineHeight = 32.sp,
+            featureTitleMinHeight = 64.dp,
+            featureHeaderHeight = 112.dp,
+            featureTitleWidth = 320.dp,
+            featureIndicatorActiveWidth = 12.dp,
+            featureIndicatorInactiveWidth = 6.dp,
+            featureIndicatorHeight = 6.dp,
             phoneWidth = 170.dp,
             phoneHeight = 352.dp,
-            phoneShadowElevation = 22.dp
+            phoneShadowElevation = 22.dp,
+            phoneScreenStartPadding = 7.dp,
+            phoneScreenTopPadding = 8.dp,
+            phoneScreenEndPadding = 8.dp,
+            phoneScreenBottomPadding = 6.dp
         )
 
         availableHeight < 640.dp || fontScale >= 1.1f -> WelcomeLayoutProfile(
@@ -498,18 +520,28 @@ private fun resolveWelcomeLayoutProfile(
             introLogoWidth = 104.dp,
             introLogoHeight = 68.dp,
             introLogoSpacing = 32.dp,
-            introTitleFontSize = 28.sp,
-            introTitleLineHeight = 39.sp,
-            featureTopPadding = 16.dp,
-            featureSpacing = 18.dp,
-            featureIconSize = 36.dp,
-            featureTitleFontSize = 28.sp,
-            featureTitleLineHeight = 39.sp,
-            featureTitleMinHeight = 78.dp,
-            featureHeaderHeight = 132.dp,
+            introTitleFontSize = 26.sp,
+            introTitleLineHeight = 36.sp,
+            featureTopPadding = 58.dp,
+            featureIconToTitleSpacing = 19.dp,
+            featureTitleToPhoneSpacing = 24.dp,
+            featurePhoneToIndicatorSpacing = 28.dp,
+            featureIconSize = 35.dp,
+            featureTitleFontSize = 23.sp,
+            featureTitleLineHeight = 33.sp,
+            featureTitleMinHeight = 68.dp,
+            featureHeaderHeight = 116.dp,
+            featureTitleWidth = 332.dp,
+            featureIndicatorActiveWidth = 12.dp,
+            featureIndicatorInactiveWidth = 6.dp,
+            featureIndicatorHeight = 6.dp,
             phoneWidth = 186.dp,
             phoneHeight = 385.dp,
-            phoneShadowElevation = 24.dp
+            phoneShadowElevation = 24.dp,
+            phoneScreenStartPadding = 7.dp,
+            phoneScreenTopPadding = 9.dp,
+            phoneScreenEndPadding = 8.dp,
+            phoneScreenBottomPadding = 7.dp
         )
 
         else -> WelcomeLayoutProfile(
@@ -517,18 +549,28 @@ private fun resolveWelcomeLayoutProfile(
             introLogoWidth = 110.dp,
             introLogoHeight = 72.dp,
             introLogoSpacing = 36.dp,
-            introTitleFontSize = 28.sp,
-            introTitleLineHeight = 39.sp,
-            featureTopPadding = 20.dp,
-            featureSpacing = 22.dp,
-            featureIconSize = 38.dp,
-            featureTitleFontSize = 28.sp,
-            featureTitleLineHeight = 39.sp,
-            featureTitleMinHeight = 78.dp,
-            featureHeaderHeight = 138.dp,
-            phoneWidth = 200.dp,
-            phoneHeight = 414.dp,
-            phoneShadowElevation = 28.dp
+            introTitleFontSize = 26.sp,
+            introTitleLineHeight = 36.sp,
+            featureTopPadding = 58.dp,
+            featureIconToTitleSpacing = 20.dp,
+            featureTitleToPhoneSpacing = 26.dp,
+            featurePhoneToIndicatorSpacing = 30.dp,
+            featureIconSize = 36.dp,
+            featureTitleFontSize = 24.sp,
+            featureTitleLineHeight = 34.sp,
+            featureTitleMinHeight = 72.dp,
+            featureHeaderHeight = 126.dp,
+            featureTitleWidth = 341.dp,
+            featureIndicatorActiveWidth = 12.dp,
+            featureIndicatorInactiveWidth = 6.dp,
+            featureIndicatorHeight = 6.dp,
+            phoneWidth = 189.dp,
+            phoneHeight = 392.dp,
+            phoneShadowElevation = 28.dp,
+            phoneScreenStartPadding = 8.dp,
+            phoneScreenTopPadding = 10.dp,
+            phoneScreenEndPadding = 9.dp,
+            phoneScreenBottomPadding = 7.dp
         )
     }
 }
@@ -536,7 +578,8 @@ private fun resolveWelcomeLayoutProfile(
 @Composable
 private fun WelcomeIndicator(
     activeIndex: Int,
-    slideCount: Int
+    slideCount: Int,
+    layoutProfile: WelcomeLayoutProfile
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -544,7 +587,11 @@ private fun WelcomeIndicator(
     ) {
         repeat(slideCount) { index ->
             val width by animateDpAsState(
-                targetValue = if (index == activeIndex) 18.dp else 6.dp,
+                targetValue = if (index == activeIndex) {
+                    layoutProfile.featureIndicatorActiveWidth
+                } else {
+                    layoutProfile.featureIndicatorInactiveWidth
+                },
                 animationSpec = tween(durationMillis = 260),
                 label = "welcome_indicator_width"
             )
@@ -556,7 +603,7 @@ private fun WelcomeIndicator(
             Box(
                 modifier = Modifier
                     .width(width)
-                    .height(6.dp)
+                    .height(layoutProfile.featureIndicatorHeight)
                     .clip(RoundedCornerShape(percent = 50))
                     .background(color)
             )
@@ -572,15 +619,23 @@ private fun WelcomeActionSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 24.dp),
+            .padding(bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         DdgoPrimaryButton(
             text = AuthStrings.WelcomeRegister,
             onClick = onRegisterClick,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            height = 48.dp,
+            textStyle = TextStyle(
+                fontFamily = PretendardFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                lineHeight = 18.sp
+            ),
+            textFontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
