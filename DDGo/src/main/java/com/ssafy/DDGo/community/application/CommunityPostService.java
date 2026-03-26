@@ -186,7 +186,11 @@ public class CommunityPostService {
     private CommunityPostDetailResponse buildDetailResponse(CommunityPost post, User user) {
         List<CommunityPostVideoResponse> videoResponses = communityPostVideoRepository.findAllByPostIdOrderBySortOrderAsc(post.getId())
                 .stream()
-                .map(video -> CommunityPostVideoResponse.from(video, communityMediaService.getPlaybackUrl(video.getObjectKey())))
+                .map(video -> CommunityPostVideoResponse.from(
+                        video,
+                        communityMediaService.getPlaybackUrl(video.getObjectKey()),
+                        communityMediaService.getThumbnailUrl(video.getObjectKey())
+                ))
                 .toList();
         List<CommunityCommentResponse> comments = communityCommentService.getComments(user.getUsername(), post.getId());
 

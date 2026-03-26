@@ -58,6 +58,7 @@ data class CommunityPostDetail(
 data class CommunityVideoAttachment(
     val objectKey: String,
     val playbackUrl: String,
+    val thumbnailUrl: String? = null,
     val originalFileName: String,
     val contentType: String,
     val fileSize: Long,

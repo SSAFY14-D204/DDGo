@@ -1,10 +1,13 @@
 package com.ddgo.app.feature.community.components
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
 import androidx.media3.common.VideoSize
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import wseemann.media.FFmpegMediaMetadataRetriever
@@ -28,13 +31,15 @@ internal sealed interface CommunityVideoThumbnailState {
 
 @Composable
 internal fun rememberCommunityVideoThumbnailState(
-    playbackUrl: String
+    playbackUrl: String,
+    thumbnailUrl: String? = null
 ): CommunityVideoThumbnailState {
     return produceState<CommunityVideoThumbnailState>(
         initialValue = CommunityVideoThumbnailState.Loading,
-        key1 = playbackUrl
+        key1 = playbackUrl,
+        key2 = thumbnailUrl
     ) {
-        value = loadCommunityVideoThumbnailState(playbackUrl)
+        value = loadCommunityVideoThumbnailState(playbackUrl, thumbnailUrl)
     }.value
 }
 
@@ -56,8 +61,16 @@ internal fun resolveCommunityVideoIsPortrait(videoSize: VideoSize): Boolean? {
 }
 
 private suspend fun loadCommunityVideoThumbnailState(
-    playbackUrl: String
+    playbackUrl: String,
+    thumbnailUrl: String?
 ): CommunityVideoThumbnailState = withContext(Dispatchers.IO) {
+    val imageThumbnailState = thumbnailUrl
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::loadCommunityImageThumbnailState)
+    if (imageThumbnailState is CommunityVideoThumbnailState.Success) {
+        return@withContext imageThumbnailState
+    }
+
     val metadata = loadCommunityVideoMetadata(playbackUrl)
     val bitmap = loadCommunityVideoFrame(playbackUrl)
 
@@ -68,6 +81,31 @@ private suspend fun loadCommunityVideoThumbnailState(
         )
 
         else -> CommunityVideoThumbnailState.Error(isPortrait = metadata?.isPortrait)
+    }
+}
+
+private fun loadCommunityImageThumbnailState(thumbnailUrl: String): CommunityVideoThumbnailState? {
+    val connection = (URL(thumbnailUrl).openConnection() as? HttpURLConnection) ?: return null
+    return try {
+        connection.connectTimeout = COMMUNITY_THUMBNAIL_CONNECT_TIMEOUT_MS
+        connection.readTimeout = COMMUNITY_THUMBNAIL_READ_TIMEOUT_MS
+        connection.instanceFollowRedirects = true
+        connection.connect()
+        if (connection.responseCode !in 200..299) {
+            return null
+        }
+
+        connection.inputStream.use { inputStream ->
+            val bitmap = BitmapFactory.decodeStream(inputStream) ?: return null
+            CommunityVideoThumbnailState.Success(
+                bitmap = bitmap,
+                isPortrait = bitmap.height > bitmap.width
+            )
+        }
+    } catch (_: Throwable) {
+        null
+    } finally {
+        connection.disconnect()
     }
 }
 
@@ -142,3 +180,5 @@ private data class CommunityVideoMetadata(
 )
 
 private const val COMMUNITY_THUMBNAIL_TIME_US = 1_000_000L
+private const val COMMUNITY_THUMBNAIL_CONNECT_TIMEOUT_MS = 4_000
+private const val COMMUNITY_THUMBNAIL_READ_TIMEOUT_MS = 4_000

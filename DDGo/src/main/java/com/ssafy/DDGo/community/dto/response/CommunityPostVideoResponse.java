@@ -18,8 +18,9 @@ public class CommunityPostVideoResponse {
     private Long durationMs;
     private Integer sortOrder;
     private String playbackUrl;
+    private String thumbnailUrl;
 
-    public static CommunityPostVideoResponse from(CommunityPostVideo video, String playbackUrl) {
+    public static CommunityPostVideoResponse from(CommunityPostVideo video, String playbackUrl, String thumbnailUrl) {
         return CommunityPostVideoResponse.builder()
                 .id(video.getId())
                 .objectKey(video.getObjectKey())
@@ -29,6 +30,7 @@ public class CommunityPostVideoResponse {
                 .durationMs(video.getDurationMs())
                 .sortOrder(video.getSortOrder())
                 .playbackUrl(playbackUrl)
+                .thumbnailUrl(thumbnailUrl)
                 .build();
     }
 }
