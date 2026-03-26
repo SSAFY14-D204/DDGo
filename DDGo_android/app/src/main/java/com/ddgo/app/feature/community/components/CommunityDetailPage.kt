@@ -317,7 +317,7 @@ private fun CommunityDetailMediaCard(
     video: CommunityVideoAttachment,
     modifier: Modifier = Modifier
 ) {
-    val thumbnailState = rememberCommunityVideoThumbnailState(video.playbackUrl)
+    val thumbnailState = rememberCommunityVideoThumbnailState(video.playbackUrl, video.thumbnailUrl)
 
     CommunityDetailMediaSurface(modifier = modifier) {
         Box(
@@ -351,7 +351,7 @@ private fun CommunityDetailPlayableMediaCard(
 ) {
     val context = LocalContext.current
     var isPlaying by remember(video.playbackUrl) { mutableStateOf(false) }
-    val thumbnailState = rememberCommunityVideoThumbnailState(video.playbackUrl)
+    val thumbnailState = rememberCommunityVideoThumbnailState(video.playbackUrl, video.thumbnailUrl)
     var isPortraitVideo by remember(video.playbackUrl) { mutableStateOf(false) }
 
     LaunchedEffect(thumbnailState) {

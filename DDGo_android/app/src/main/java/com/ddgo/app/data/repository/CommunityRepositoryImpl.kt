@@ -554,7 +554,14 @@ class CommunityRepositoryImpl @Inject constructor(
     }
 
     private fun CommunityPostDetail.toEmulatorAccessibleDetail(): CommunityPostDetail =
-        copy(videos = videos.map { it.copy(playbackUrl = toEmulatorAccessibleUrl(it.playbackUrl)) })
+        copy(
+            videos = videos.map { video ->
+                video.copy(
+                    playbackUrl = toEmulatorAccessibleUrl(video.playbackUrl),
+                    thumbnailUrl = video.thumbnailUrl?.let(::toEmulatorAccessibleUrl)
+                )
+            }
+        )
 
     private fun CommunityFeedPage.toEmulatorAccessibleFeedPage(): CommunityFeedPage =
         copy(

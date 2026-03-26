@@ -60,9 +60,8 @@ import com.ddgo.app.feature.community.CommunityFeedTab
 import com.ddgo.app.feature.community.CommunityPalette
 import com.ddgo.app.feature.community.CommunityUiState
 import com.ddgo.app.feature.main.MainChromeDefaults
-import androidx.compose.foundation.Image as FoundationImage
+import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -692,13 +691,15 @@ private fun CommunityFeedThumbnail(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var imageState by remember(thumbnailUrl) {
+        mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty)
+    }
     val request = remember(thumbnailUrl) {
         ImageRequest.Builder(context)
             .data(thumbnailUrl)
             .crossfade(true)
             .build()
     }
-    val painter = rememberAsyncImagePainter(model = request)
 
     Box(
         modifier = modifier
@@ -707,16 +708,15 @@ private fun CommunityFeedThumbnail(
             .background(CommunityPalette.SurfaceMuted),
         contentAlignment = Alignment.Center
     ) {
-        when (painter.state) {
-            is AsyncImagePainter.State.Success -> {
-                FoundationImage(
-                    painter = painter,
-                    contentDescription = contentDescription,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
+        AsyncImage(
+            model = request,
+            contentDescription = contentDescription,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            onState = { state -> imageState = state }
+        )
 
+        when (imageState) {
             is AsyncImagePainter.State.Error -> {
                 Icon(
                     imageVector = Icons.Default.PlayCircle,
@@ -726,6 +726,7 @@ private fun CommunityFeedThumbnail(
                 )
             }
 
+            is AsyncImagePainter.State.Success -> Unit
             else -> {
                 androidx.compose.material3.CircularProgressIndicator(
                     color = CommunityPalette.AccentStrong,

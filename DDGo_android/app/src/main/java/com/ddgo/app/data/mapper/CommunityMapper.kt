@@ -71,6 +71,7 @@ object CommunityMapper {
     fun CommunityVideoDto.toDomain(): CommunityVideoAttachment = CommunityVideoAttachment(
         objectKey = objectKey,
         playbackUrl = playbackUrl,
+        thumbnailUrl = thumbnailUrl,
         originalFileName = originalFileName,
         contentType = contentType,
         fileSize = fileSize,

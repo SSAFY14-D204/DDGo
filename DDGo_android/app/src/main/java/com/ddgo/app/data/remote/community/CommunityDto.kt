@@ -61,6 +61,7 @@ data class CommunityVideoDto(
     val id: Long? = null,
     val objectKey: String,
     val playbackUrl: String,
+    val thumbnailUrl: String? = null,
     val originalFileName: String,
     val contentType: String,
     val fileSize: Long,
