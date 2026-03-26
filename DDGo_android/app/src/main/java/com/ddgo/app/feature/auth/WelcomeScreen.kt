@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -84,7 +85,9 @@ private data class WelcomeFeatureSlide(
     @DrawableRes val screenResId: Int,
     val headline: String,
     val highlight: String,
-    val accentColor: Color
+    val accentColor: Color,
+    val iconWidth: Dp,
+    val iconHeight: Dp
 )
 
 private data class WelcomeLayoutProfile(
@@ -117,32 +120,40 @@ fun AuthLandingScreen(
     val slides = remember {
         listOf(
             WelcomeFeatureSlide(
-                iconResId = R.drawable.ic_records,
+                iconResId = R.drawable.welcome_ic_analysis,
                 screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureAnalysis,
                 highlight = AuthStrings.WelcomeHighlightAnalysis,
-                accentColor = Color(0xFF53A6FF)
+                accentColor = Color(0xFF53A6FF),
+                iconWidth = 37.dp,
+                iconHeight = 39.dp
             ),
             WelcomeFeatureSlide(
-                iconResId = R.drawable.ic_climbing,
+                iconResId = R.drawable.welcome_ic_realtime,
                 screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureRealtime,
                 highlight = AuthStrings.WelcomeHighlightRealtime,
-                accentColor = Color(0xFF8A4E20)
+                accentColor = Color(0xFF8A4E20),
+                iconWidth = 37.dp,
+                iconHeight = 39.dp
             ),
             WelcomeFeatureSlide(
-                iconResId = R.drawable.ic_record,
+                iconResId = R.drawable.welcome_ic_video,
                 screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureVideo,
                 highlight = AuthStrings.WelcomeHighlightVideo,
-                accentColor = Color(0xFFFF4D73)
+                accentColor = Color(0xFFFF4D73),
+                iconWidth = 40.dp,
+                iconHeight = 28.dp
             ),
             WelcomeFeatureSlide(
-                iconResId = R.drawable.ic_calendar,
+                iconResId = R.drawable.welcome_ic_calendar,
                 screenResId = R.drawable.welcome_phone_screen,
                 headline = AuthStrings.WelcomeFeatureGrowth,
                 highlight = AuthStrings.WelcomeHighlightGrowth,
-                accentColor = Color(0xFF65B969)
+                accentColor = Color(0xFF65B969),
+                iconWidth = 37.dp,
+                iconHeight = 39.dp
             )
         )
     }
@@ -409,8 +420,10 @@ private fun WelcomeFeatureHeader(
         Icon(
             painter = painterResource(id = slide.iconResId),
             contentDescription = null,
-            tint = slide.accentColor,
-            modifier = Modifier.size(layoutProfile.featureIconSize)
+            tint = Color.Unspecified,
+            modifier = Modifier
+                .width(slide.iconWidth)
+                .height(slide.iconHeight)
         )
         Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
         Text(
@@ -432,7 +445,7 @@ private fun WelcomeFeatureHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = layoutProfile.featureTitleMinHeight)
-                .padding(horizontal = 18.dp)
+                .widthIn(max = 341.dp)
         )
     }
 }
