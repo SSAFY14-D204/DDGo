@@ -28,6 +28,9 @@ class CalendarRepositoryImpl @Inject constructor(
     }
 
     private fun ChallengeListResponseDto.toCalendarEntry(yearMonth: YearMonth): CalendarEntry? {
+        if (doneAttemptCount <= 0) {
+            return null
+        }
         val startedAt = RemoteDateTimeParser.parse(startedAt ?: createdAt) ?: return null
         if (YearMonth.from(startedAt) != yearMonth) {
             return null

@@ -334,7 +334,13 @@ fun FinalAnalysisRoute(
     Box(modifier = Modifier.fillMaxSize()) {
         FinalAnalysisPage(
             state = pageState,
-            onNavigateBack = onNavigateBack,
+            onNavigateBack = {
+                scope.launch {
+                    if (viewModel.abandonCurrentChallengeIfNeeded()) {
+                        onNavigateBack()
+                    }
+                }
+            },
             onAnalysisPointSelected = { timeMs ->
                 pendingSeekTimeMs = timeMs
                 seekRequestId += 1L
@@ -359,8 +365,8 @@ fun FinalAnalysisRoute(
                 when {
                     isSingleUploadedAttempt -> {
                         scope.launch {
-                            val hasChallengeToClose = viewModel.createdChallenge != null
-                            if (!hasChallengeToClose) {
+                            val currentChallengeId = viewModel.challengeId ?: 0L
+                            if (currentChallengeId <= 0L) {
                                 onNavigateToMain()
                                 return@launch
                             }
@@ -384,6 +390,11 @@ fun FinalAnalysisRoute(
 
                     else -> {
                         scope.launch {
+                            val currentChallengeId = viewModel.challengeId ?: 0L
+                            if (currentChallengeId <= 0L) {
+                                onNavigateToChallenge()
+                                return@launch
+                            }
                             val closed = viewModel.closeChallengeForFinalAnalysis(
                                 challengeResult = challengeResult,
                                 averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
@@ -423,8 +434,8 @@ fun FinalAnalysisRoute(
                     options = selectedOptions
                 )
                 scope.launch {
-                    val hasChallengeToClose = viewModel.createdChallenge != null
-                    if (!hasChallengeToClose) {
+                    val currentChallengeId = viewModel.challengeId ?: 0L
+                    if (currentChallengeId <= 0L) {
                         onNavigateToCommunityCompose(request)
                         return@launch
                     }

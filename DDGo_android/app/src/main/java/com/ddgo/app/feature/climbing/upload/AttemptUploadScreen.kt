@@ -38,7 +38,9 @@ fun AttemptUploadScreen(
     onNavigateToNext: () -> Unit = {}
 ) {
     LaunchedEffect(initialRecordedVideoUri) {
-        viewModel.beginNewChallengeUploadFlow()
+        if (!viewModel.beginNewChallengeUploadFlow()) {
+            return@LaunchedEffect
+        }
         initialRecordedVideoUri
             ?.takeIf { it.isNotBlank() }
             ?.let { recordedUri ->

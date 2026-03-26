@@ -9,24 +9,26 @@ import com.ssafy.DDGo.challenges.domain.ChallengeSummary;
 import com.ssafy.DDGo.challenges.dto.request.ChallengeCloseRequest;
 import com.ssafy.DDGo.challenges.dto.request.ChallengeCreateRequest;
 import com.ssafy.DDGo.challenges.dto.request.HoldSaveRequest;
-import com.ssafy.DDGo.gyms.dao.ClimbingGymGradeRepository;
-import com.ssafy.DDGo.gyms.dao.ClimbingGymRepository;
-import com.ssafy.DDGo.gyms.domain.ClimbingGym;
-import com.ssafy.DDGo.gyms.domain.ClimbingGymGrade;
-import com.ssafy.DDGo.attempts.dao.AttemptMetricsRepository;
-import com.ssafy.DDGo.challenges.dto.response.ChallengeAttemptDetailResponse;
-import com.ssafy.DDGo.challenges.dto.response.ChallengeSummaryResponse;
-import com.ssafy.DDGo.challenges.dto.response.HoldSaveResponse;
-import com.ssafy.DDGo.challenges.dto.response.ChallengeCloseResponse;
-import com.ssafy.DDGo.challenges.dto.response.ChallengeCreateResponse;
-import com.ssafy.DDGo.challenges.dto.response.ChallengeListResponse;
-import com.ssafy.DDGo.challenges.dto.response.ChallengeStatusResponse;
 import com.ssafy.DDGo.global.exception.CustomException;
 import com.ssafy.DDGo.global.exception.ErrorCode;
 import com.ssafy.DDGo.users.dao.UserRepository;
 import com.ssafy.DDGo.users.domain.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ssafy.DDGo.attempts.dao.AttemptMetricsRepository;
+import com.ssafy.DDGo.attempts.dao.AttemptRepository;
+import com.ssafy.DDGo.attempts.dao.ChallengeDoneAttemptCountProjection;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeAttemptDetailResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeCloseResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeCreateResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeListResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeStatusResponse;
+import com.ssafy.DDGo.challenges.dto.response.ChallengeSummaryResponse;
+import com.ssafy.DDGo.challenges.dto.response.HoldSaveResponse;
+import com.ssafy.DDGo.gyms.dao.ClimbingGymGradeRepository;
+import com.ssafy.DDGo.gyms.dao.ClimbingGymRepository;
+import com.ssafy.DDGo.gyms.domain.ClimbingGym;
+import com.ssafy.DDGo.gyms.domain.ClimbingGymGrade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -34,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -43,6 +46,7 @@ public class ChallengeService {
 
         private final ChallengeRepository challengeRepository;
         private final ChallengeSummaryRepository challengeSummaryRepository;
+        private final AttemptRepository attemptRepository;
         private final AttemptMetricsRepository attemptMetricsRepository;
         private final UserRepository userRepository;
         private final ClimbingGymRepository gymRepository;
@@ -89,7 +93,6 @@ public class ChallengeService {
                 // DB INSERT → 트리거(trg_challenges_init_attempt_counter)가 자동으로
                 // challenge_attempt_counters row를 생성
                 challengeRepository.save(challenge);
-
                 return ChallengeCreateResponse.from(challenge);
         }
 
@@ -98,9 +101,26 @@ public class ChallengeService {
                 User user = userRepository.findByUsername(username)
                                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
-                return challengeRepository.findAllByUserOrderByCreatedAtDesc(user)
-                                .stream()
-                                .map(ChallengeListResponse::from)
+                List<Challenge> challenges = challengeRepository.findAllByUserOrderByCreatedAtDesc(user);
+                if (challenges.isEmpty()) {
+                        return List.of();
+                }
+
+                List<Long> challengeIds = challenges.stream()
+                                .map(Challenge::getId)
+                                .collect(Collectors.toList());
+                Map<Long, Integer> doneAttemptCountByChallengeId = attemptRepository.countDoneAttemptsByChallengeIds(
+                                challengeIds).stream()
+                                .collect(Collectors.toMap(
+                                                ChallengeDoneAttemptCountProjection::getChallengeId,
+                                                projection -> Math.toIntExact(
+                                                                projection.getDoneAttemptCount() != null
+                                                                                ? projection.getDoneAttemptCount()
+                                                                                : 0L)));
+
+                return challenges.stream()
+                                .map(challenge -> ChallengeListResponse.from(challenge,
+                                                doneAttemptCountByChallengeId.getOrDefault(challenge.getId(), 0)))
                                 .collect(Collectors.toList());
         }
 
@@ -122,7 +142,7 @@ public class ChallengeService {
                         // 단, 프론트엔드가 새로운 결과를 명시적으로 보냈다면 부분 업데이트 허용 (옵션)
                         if (request.getChallengeResult() != null && challenge.getChallengeResult() == ChallengeResult.UNKNOWN) {
                                 // 기존 상태가 UNKNOWN이었고, 새롭게 명확한 결과가 들어왔다면 반영 (선택적)
-                                // challenge.close(request.getChallengeResult()); 
+                                // challenge.close(request.getChallengeResult());
                                 // (이 부분은 기획에 맞춰 오픈해둘 수 있지만, 안전을 위해 막아두거나 그냥 진행)
                         }
                 } else {
@@ -140,7 +160,7 @@ public class ChallengeService {
                 if (existingSummaryOpt.isPresent()) {
                         // 1. 기존 데이터가 있는 경우 (Update)
                         summary = existingSummaryOpt.get();
-                        
+
                         // 기존 값 백업
                         BigDecimal updatedRatio = summary.getAverageCenterStabilityRatio();
                         Integer updatedCruxHoldNo = summary.getMostCruxHoldNo();
@@ -163,7 +183,7 @@ public class ChallengeService {
                                         updatedFinalComment = summaryReq.getFinalComment();
                                 }
                         }
-                        
+
                         summary.updateSummary(updatedRatio, updatedCruxHoldNo, updatedMaxDurationMs, updatedFinalComment);
                 } else {
                         // 2. 기존 데이터가 없는 경우 (Insert)
@@ -196,20 +216,19 @@ public class ChallengeService {
                         }
 
                         BigDecimal averageCenterStabilityRatio = avgRatio != null ? BigDecimal.valueOf(avgRatio) : null;
-                        
+
                         summary = ChallengeSummary.builder()
                                         .challengeId(challengeId)
                                         .averageCenterStabilityRatio(averageCenterStabilityRatio)
                                         .mostCruxHoldNo(mostCruxHoldNo)
                                         .maxCruxDurationMs(maxDurationMs)
                                         .build();
-                        
+
                         summary.updateSummary(averageCenterStabilityRatio, mostCruxHoldNo, maxDurationMs, finalComment);
                 }
 
                 // challenge_summaries 테이블 반영 (insert 또는 update)
                 challengeSummaryRepository.save(summary);
-
                 return ChallengeCloseResponse.from(challenge, summary);
         }
 

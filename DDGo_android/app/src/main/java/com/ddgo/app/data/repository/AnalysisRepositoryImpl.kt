@@ -42,6 +42,9 @@ class AnalysisRepositoryImpl @Inject constructor(
     private suspend fun buildChallengeSnapshot(
         challenge: ChallengeListResponseDto
     ): AnalysisChallengeSnapshot? {
+        if (challenge.doneAttemptCount <= 0) {
+            return null
+        }
         val attemptsResponse = runCatching { attemptApi.getAttempts(challenge.id) }.getOrNull()
             ?: return null
         val attempts = attemptsResponse.data?.attempts
