@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.analysis
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +56,9 @@ fun AnalysisScreen(
 
     when {
         attemptDetail != null -> {
+            BackHandler {
+                viewModel.closeAttemptDetail()
+            }
             AnalysisAttemptDetailScreen(
                 detail = attemptDetail,
                 onBack = viewModel::closeAttemptDetail
@@ -62,6 +66,9 @@ fun AnalysisScreen(
         }
 
         challengeDetail != null -> {
+            BackHandler {
+                viewModel.closeChallengeDetail()
+            }
             AnalysisChallengeDetailScreen(
                 detail = challengeDetail,
                 onBack = viewModel::closeChallengeDetail,
