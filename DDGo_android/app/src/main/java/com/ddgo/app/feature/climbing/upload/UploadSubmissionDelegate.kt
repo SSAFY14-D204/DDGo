@@ -128,6 +128,8 @@ internal class UploadSubmissionDelegate(
     private var nextBackgroundUploadNoticeId = 1L
     private var attemptResultPreparationInFlight = false
 
+    fun finalizedAttemptCount(): Int = finalizedAttemptIds.size
+
     fun invalidateAnalysisPrewarm() {
         analysisPrewarmJob?.cancel()
         analysisPrewarmJob = null

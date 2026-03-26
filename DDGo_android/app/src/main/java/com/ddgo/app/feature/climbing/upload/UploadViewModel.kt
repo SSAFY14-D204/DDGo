@@ -837,47 +837,25 @@ class UploadViewModel @Inject constructor(
      * 기존 추가 시도 업로드 모드가 켜져 있더라도 기본 업로드 모드로 되돌리고,
      * 이전 attempt-only 선택 상태를 비웁니다.
      */
-    fun beginNewChallengeUploadFlow() {
-        invalidateSubmissionAnalysisPrewarm()
-        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
-        entryMode = UploadEntryMode.Gallery
-        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
-        realtimeGymSearchQuery = ""
-        realtimeHoldColorSheetVisible = false
-        uploadFlowMode = UploadFlowMode.FullChallenge
-        allowLocalAnalysisWithoutChallenge = false
-        clearHoldPrecomputeState()
-        clearAttemptHoldAlignmentState()
-        holdDetectionDelegate.resetHoldDetectionState(clearDebugSource = true)
-        resetAllSelectionPreparationJobs()
-        attemptOnlyVideoUris = emptyList()
-        additionalVideoUris = emptyList()
-        attemptOnlyManagedVideos = emptyList()
-        additionalManagedVideos = emptyList()
-        primaryManagedVideo = null
-        videoUri = null
-        resultPlaybackUris = emptyList()
-        uploadedAttemptVideos = emptyList()
-        currentAttemptIndex = 0
-        publishedAttemptResultSession = null
-        challengeDelegate.resetSearchState()
-        clearChallengeFlowState()
-        clearHoldReachAnalysis()
-        clearAiAnalysisState()
-        clearPosePrecomputeState()
-        resetUploadSubmissionState()
-        resetFinalAnalysisPreparationState()
-        cleanupUnusedManagedTempFiles(forceDeleteAll = true)
+    suspend fun beginNewChallengeUploadFlow(): Boolean {
+        if (!abandonCurrentChallengeIfNeeded()) {
+            return false
+        }
+        beginNewChallengeUploadFlowInternal()
+        return true
     }
 
-    fun beginRealtimeChallengeUploadFlow() {
-        beginNewChallengeUploadFlow()
+    suspend fun beginRealtimeChallengeUploadFlow(): Boolean {
+        if (!beginNewChallengeUploadFlow()) {
+            return false
+        }
         analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
         entryMode = UploadEntryMode.Realtime
         realtimeAttemptActionState = RealtimeAttemptActionState.Idle
         realtimeGymSearchQuery = ""
         realtimeHoldColorSheetVisible = false
         realtimeSetupStep = RealtimeSetupStep.GymPrompt
+        return true
     }
 
     fun beginRealtimeRetakeUploadFlow() {
@@ -1030,18 +1008,21 @@ class UploadViewModel @Inject constructor(
         query: String,
         nearbyOnly: Boolean = false
     ) {
-        realtimeGymSearchQuery = query.trim()
+        val isRealtimeSearch = isRealtimeEntryMode
         val onChallengeFlowCleared =
-            if (isRealtimeEntryMode) {
-                realtimeSetupStep = RealtimeSetupStep.GymList
+            if (isRealtimeSearch) {
                 ::clearRealtimeChallengeSelectionStatePreservingHoldPrecompute
             } else {
                 ::clearChallengeSelectionStatePreservingHoldPrecompute
             }
-        if (isRealtimeEntryMode) {
-            realtimeSetupStep = RealtimeSetupStep.GymList
-        }
         viewModelScope.launch {
+            if (!abandonCurrentChallengeIfNeeded()) {
+                return@launch
+            }
+            if (isRealtimeSearch) {
+                realtimeSetupStep = RealtimeSetupStep.GymList
+            }
+            realtimeGymSearchQuery = query.trim()
             challengeDelegate.searchNearbyPlaces(
                 latitude = latitude,
                 longitude = longitude,
@@ -1053,37 +1034,49 @@ class UploadViewModel @Inject constructor(
     }
 
     fun resolveSelectedPlace(place: NearbyPlace) {
-        realtimeGymSearchQuery = place.placeName
+        val isRealtimeSearch = isRealtimeEntryMode
         val onChallengeFlowCleared =
-            if (isRealtimeEntryMode) {
+            if (isRealtimeSearch) {
                 ::clearRealtimeChallengeSelectionStatePreservingHoldPrecompute
             } else {
                 ::clearChallengeSelectionStatePreservingHoldPrecompute
             }
         viewModelScope.launch {
+            if (!abandonCurrentChallengeIfNeeded()) {
+                return@launch
+            }
+            realtimeGymSearchQuery = place.placeName
             challengeDelegate.resolveSelectedPlace(
                 place = place,
                 onChallengeFlowCleared = onChallengeFlowCleared
             )
-            if (isRealtimeEntryMode && resolvedGym != null) {
+            if (isRealtimeSearch && resolvedGym != null) {
                 realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
             }
         }
     }
 
     fun selectGymLevel(sortOrder: Int) {
-        val onCreatedChallengeCleared =
-            if (isRealtimeEntryMode) {
-                ::clearRealtimeCreatedChallengeOnly
-            } else {
-                ::clearCreatedChallengeOnly
+        val isRealtimeSelection = isRealtimeEntryMode
+        viewModelScope.launch {
+            if (!abandonCurrentChallengeIfNeeded()) {
+                return@launch
             }
-        challengeDelegate.selectGymLevel(
-            sortOrder = sortOrder,
-            formatSelectedLevelLabel = ::formatSelectedLevelLabel,
-            onCreatedChallengeCleared = onCreatedChallengeCleared
-        )
-        ensureRealtimeDefaultHoldColorSetup()
+            challengeDelegate.selectGymLevel(
+                sortOrder = sortOrder,
+                formatSelectedLevelLabel = ::formatSelectedLevelLabel,
+                onCreatedChallengeCleared = if (isRealtimeSelection) {
+                    ::clearRealtimeCreatedChallengeOnly
+                } else {
+                    ::clearCreatedChallengeOnly
+                }
+            )
+            ensureRealtimeDefaultHoldColorSetup()
+            if (isRealtimeSelection) {
+                realtimeHoldColorSheetVisible = false
+                realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
+            }
+        }
     }
 
     fun updateHoldColor(colorKey: String) {
@@ -1117,15 +1110,11 @@ class UploadViewModel @Inject constructor(
 
     fun onRealtimeDifficultySelected(sortOrder: Int) {
         selectGymLevel(sortOrder)
-        realtimeHoldColorSheetVisible = false
-        realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
     }
 
     fun onRealtimeGymGradeSelected(grade: GymGrade) {
         entryMode = UploadEntryMode.Realtime
         selectGymGrade(grade)
-        realtimeHoldColorSheetVisible = false
-        realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
     }
 
     fun updateRealtimeHoldColorSheetVisible(visible: Boolean) {
@@ -1248,18 +1237,26 @@ class UploadViewModel @Inject constructor(
     }
 
     fun selectGymGrade(grade: GymGrade) {
-        val onCreatedChallengeCleared =
-            if (isRealtimeEntryMode) {
-                ::clearRealtimeCreatedChallengeOnly
-            } else {
-                ::clearCreatedChallengeOnly
+        val isRealtimeSelection = isRealtimeEntryMode
+        viewModelScope.launch {
+            if (!abandonCurrentChallengeIfNeeded()) {
+                return@launch
             }
-        challengeDelegate.selectGymGrade(
-            grade = grade,
-            formatSelectedLevelLabel = ::formatSelectedLevelLabel,
-            onCreatedChallengeCleared = onCreatedChallengeCleared
-        )
-        ensureRealtimeDefaultHoldColorSetup()
+            challengeDelegate.selectGymGrade(
+                grade = grade,
+                formatSelectedLevelLabel = ::formatSelectedLevelLabel,
+                onCreatedChallengeCleared = if (isRealtimeSelection) {
+                    ::clearRealtimeCreatedChallengeOnly
+                } else {
+                    ::clearCreatedChallengeOnly
+                }
+            )
+            ensureRealtimeDefaultHoldColorSetup()
+            if (isRealtimeSelection) {
+                realtimeHoldColorSheetVisible = false
+                realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
+            }
+        }
     }
 
     fun createChallengeFromSelection() {
@@ -1989,6 +1986,30 @@ class UploadViewModel @Inject constructor(
         }
     }
 
+    suspend fun abandonCurrentChallengeIfNeeded(): Boolean {
+        val currentChallengeId = challengeId ?: return true
+        if (currentChallengeId <= 0L) {
+            return true
+        }
+        val abandonResult = if (submissionDelegate.finalizedAttemptCount() > 0) {
+            "FAIL"
+        } else {
+            "UNKNOWN"
+        }
+
+        val closed = closeChallengeForFinalAnalysis(
+            challengeResult = abandonResult,
+            averageCenterStabilityRatio = null,
+            mostCruxHoldNo = null,
+            maxCruxDurationMs = null,
+            finalComment = null
+        )
+        if (!closed) {
+            return false
+        }
+        return true
+    }
+
     fun retryCurrentAnalysisLoadingPhase() {
         when (analysisLoadingPhase) {
             AnalysisLoadingPhase.AttemptResultPreparation -> {
@@ -2013,6 +2034,39 @@ class UploadViewModel @Inject constructor(
         _uiState.value = UploadUiState.Idle
         submissionDelegate.resetUploadSubmissionState()
         submissionDelegate.resetFinalAnalysisPreparationState()
+    }
+
+    private fun beginNewChallengeUploadFlowInternal() {
+        invalidateSubmissionAnalysisPrewarm()
+        analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+        entryMode = UploadEntryMode.Gallery
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        realtimeGymSearchQuery = ""
+        realtimeHoldColorSheetVisible = false
+        uploadFlowMode = UploadFlowMode.FullChallenge
+        allowLocalAnalysisWithoutChallenge = false
+        clearHoldPrecomputeState()
+        clearAttemptHoldAlignmentState()
+        holdDetectionDelegate.resetHoldDetectionState(clearDebugSource = true)
+        resetAllSelectionPreparationJobs()
+        attemptOnlyVideoUris = emptyList()
+        additionalVideoUris = emptyList()
+        attemptOnlyManagedVideos = emptyList()
+        additionalManagedVideos = emptyList()
+        primaryManagedVideo = null
+        videoUri = null
+        resultPlaybackUris = emptyList()
+        uploadedAttemptVideos = emptyList()
+        currentAttemptIndex = 0
+        publishedAttemptResultSession = null
+        challengeDelegate.resetSearchState()
+        clearChallengeFlowState()
+        clearHoldReachAnalysis()
+        clearAiAnalysisState()
+        clearPosePrecomputeState()
+        resetUploadSubmissionState()
+        resetFinalAnalysisPreparationState()
+        cleanupUnusedManagedTempFiles(forceDeleteAll = true)
     }
 
     private fun clearSelectedHoldSelection() {

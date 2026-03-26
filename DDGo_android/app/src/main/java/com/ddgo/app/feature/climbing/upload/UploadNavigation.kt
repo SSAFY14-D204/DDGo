@@ -50,7 +50,9 @@ fun NavGraphBuilder.uploadGraph(
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             LaunchedEffect(Unit) {
-                viewModel.beginRealtimeChallengeUploadFlow()
+                if (!viewModel.beginRealtimeChallengeUploadFlow()) {
+                    return@LaunchedEffect
+                }
                 viewModel.setLocalAnalysisWithoutChallengeEnabled(false)
                 navController.navigate(ScreenRoutes.Climbing.Record.route) {
                     popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) {

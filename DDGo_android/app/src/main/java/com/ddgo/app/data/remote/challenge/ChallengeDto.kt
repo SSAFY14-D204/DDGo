@@ -29,6 +29,7 @@ data class ChallengeListResponseDto(
     val gradeLabel: String? = null,
     val challengeStatus: String,
     val challengeResult: String? = null,
+    val doneAttemptCount: Int = 0,
     val startedAt: String? = null,
     val endedAt: String? = null,
     val createdAt: String

@@ -30,6 +30,9 @@ public class ChallengeListResponse {
     @Schema(description = "챌린지 결과 (SUCCESS / FAIL / UNKNOWN)", example = "UNKNOWN", nullable = true)
     private String challengeResult;
 
+    @Schema(description = "DONE 시도 수", example = "0")
+    private Integer doneAttemptCount;
+
     @Schema(description = "세션 시작 시각", example = "2026-03-04T10:00:00")
     private LocalDateTime startedAt;
 
@@ -40,6 +43,10 @@ public class ChallengeListResponse {
     private LocalDateTime createdAt;
 
     public static ChallengeListResponse from(Challenge challenge) {
+        return from(challenge, 0);
+    }
+
+    public static ChallengeListResponse from(Challenge challenge, Integer doneAttemptCount) {
         return ChallengeListResponse.builder()
                 .id(challenge.getId())
                 .gymName(challenge.getGymNameSnapshot())
@@ -49,6 +56,7 @@ public class ChallengeListResponse {
                 .challengeResult(challenge.getChallengeResult() != null
                         ? challenge.getChallengeResult().name()
                         : null)
+                .doneAttemptCount(doneAttemptCount != null ? doneAttemptCount : 0)
                 .startedAt(challenge.getStartedAt())
                 .endedAt(challenge.getEndedAt())
                 .createdAt(challenge.getCreatedAt())
