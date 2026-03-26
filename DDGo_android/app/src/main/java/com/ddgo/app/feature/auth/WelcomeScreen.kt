@@ -366,6 +366,12 @@ private fun WelcomePhoneMockup(
             ),
         contentAlignment = Alignment.Center
     ) {
+        Image(
+            painter = painterResource(id = R.drawable.welcome_phone_shell_frame),
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier.fillMaxSize()
+        )
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -388,12 +394,6 @@ private fun WelcomePhoneMockup(
                 )
             }
         }
-        Image(
-            painter = painterResource(id = R.drawable.welcome_phone_shell_frame),
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            modifier = Modifier.fillMaxSize()
-        )
     }
 }
 
