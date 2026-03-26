@@ -25,6 +25,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ddgo.app.core.ui.tokens.DdgoBrushTokens
@@ -46,7 +48,10 @@ fun DdgoPrimaryButton(
     variant: DdgoPrimaryButtonVariant = DdgoPrimaryButtonVariant.Solid,
     enabled: Boolean = true,
     isLoading: Boolean = false,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    height: Dp = DdgoSizeTokens.ButtonHeight,
+    textStyle: TextStyle = MaterialTheme.typography.titleMedium,
+    textFontWeight: FontWeight = FontWeight.SemiBold
 ) {
     val buttonShape = DdgoShapeTokens.Button
     val isInteractive = enabled && !isLoading
@@ -55,7 +60,7 @@ fun DdgoPrimaryButton(
         onClick = onClick,
         enabled = isInteractive,
         modifier = modifier
-            .height(DdgoSizeTokens.ButtonHeight)
+            .height(height)
             .then(
                 if (isInteractive) {
                     Modifier.shadow(
@@ -119,8 +124,8 @@ fun DdgoPrimaryButton(
 
                     Text(
                         text = text,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        style = textStyle,
+                        fontWeight = textFontWeight,
                         color = DdgoColorTokens.TextInverse
                     )
                 }
