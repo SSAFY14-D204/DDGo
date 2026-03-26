@@ -3,6 +3,7 @@ package com.ddgo.app.feature.calendar.mapper
 import com.ddgo.app.domain.model.CalendarEntry
 import com.ddgo.app.domain.model.CalendarEntryResult
 import com.ddgo.app.domain.model.CalendarMonthSummary
+import com.ddgo.app.domain.model.HoldDifficultyColor
 import com.ddgo.app.feature.calendar.model.CalendarDayUiModel
 import com.ddgo.app.feature.calendar.model.CalendarDayMarkerUiModel
 import com.ddgo.app.feature.calendar.model.CalendarEntryUiModel
@@ -155,20 +156,20 @@ internal object CalendarUiStateMapper {
     }
 
     private fun String.toMarkerTone(): CalendarMarkerToneUiModel {
-        return when (trim().lowercase(Locale.ROOT)) {
-            "빨강", "레드", "red" -> CalendarMarkerToneUiModel.RED
-            "주황", "오렌지", "orange" -> CalendarMarkerToneUiModel.ORANGE
-            "노랑", "노란색", "옐로", "yellow" -> CalendarMarkerToneUiModel.YELLOW
-            "초록", "초록색", "그린", "green" -> CalendarMarkerToneUiModel.GREEN
-            "파랑", "파란색", "블루", "blue" -> CalendarMarkerToneUiModel.BLUE
-            "남색", "네이비", "navy", "indigo" -> CalendarMarkerToneUiModel.NAVY
-            "보라", "보라색", "퍼플", "purple" -> CalendarMarkerToneUiModel.PURPLE
-            "분홍", "핑크", "pink" -> CalendarMarkerToneUiModel.PINK
-            "갈색", "브라운", "brown" -> CalendarMarkerToneUiModel.BROWN
-            "회색", "그레이", "gray", "grey" -> CalendarMarkerToneUiModel.GRAY
-            "검정", "검은색", "블랙", "black" -> CalendarMarkerToneUiModel.BLACK
-            "하양", "흰색", "화이트", "white" -> CalendarMarkerToneUiModel.WHITE
-            else -> CalendarMarkerToneUiModel.UNKNOWN
+        return when (HoldDifficultyColor.resolve(colorName = this, colorHex = null)) {
+            HoldDifficultyColor.RED -> CalendarMarkerToneUiModel.RED
+            HoldDifficultyColor.ORANGE -> CalendarMarkerToneUiModel.ORANGE
+            HoldDifficultyColor.YELLOW -> CalendarMarkerToneUiModel.YELLOW
+            HoldDifficultyColor.GREEN -> CalendarMarkerToneUiModel.GREEN
+            HoldDifficultyColor.SKYBLUE -> CalendarMarkerToneUiModel.BLUE
+            HoldDifficultyColor.NAVY -> CalendarMarkerToneUiModel.NAVY
+            HoldDifficultyColor.PURPLE -> CalendarMarkerToneUiModel.PURPLE
+            HoldDifficultyColor.PINK -> CalendarMarkerToneUiModel.PINK
+            HoldDifficultyColor.BROWN -> CalendarMarkerToneUiModel.BROWN
+            HoldDifficultyColor.GRAY -> CalendarMarkerToneUiModel.GRAY
+            HoldDifficultyColor.BLACK -> CalendarMarkerToneUiModel.BLACK
+            HoldDifficultyColor.WHITE -> CalendarMarkerToneUiModel.WHITE
+            null -> CalendarMarkerToneUiModel.UNKNOWN
         }
     }
 

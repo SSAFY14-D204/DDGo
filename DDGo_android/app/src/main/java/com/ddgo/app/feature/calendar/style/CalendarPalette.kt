@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.calendar.style
 
 import androidx.compose.ui.graphics.Color
+import com.ddgo.app.core.ui.tokens.DdgoHoldColorTokens
 import com.ddgo.app.feature.calendar.model.CalendarMarkerToneUiModel
 
 // 피그마 캘린더 시안을 기준으로 캘린더 화면 전용 토큰을 모아둔다.
@@ -48,34 +49,21 @@ internal object CalendarPalette {
     val MarkerOutlineFill = Color.White
     val MarkerOverflowDot = Color(0xFFFF5656)
 
-    private val MarkerRed = Color(0xFFFF0000)
-    private val MarkerOrange = Color(0xFFFF9F43)
-    private val MarkerYellow = Color(0xFFFED500)
-    private val MarkerGreen = Color(0xFF96FF6F)
-    private val MarkerBlue = Color(0xFF4396FB)
-    private val MarkerNavy = Color(0xFF4B5BD7)
-    private val MarkerPurple = Color(0xFF876FFF)
-    private val MarkerPink = Color(0xFFFF56A8)
-    private val MarkerBrown = Color(0xFF9A6B45)
-    private val MarkerGray = Color(0xFF999999)
-    private val MarkerBlack = Color(0xFF505050)
-    private val MarkerWhite = Color(0xFFE9EDF2)
-
     fun markerToneColor(tone: CalendarMarkerToneUiModel): Color {
         return when (tone) {
-            CalendarMarkerToneUiModel.RED -> MarkerRed
-            CalendarMarkerToneUiModel.ORANGE -> MarkerOrange
-            CalendarMarkerToneUiModel.YELLOW -> MarkerYellow
-            CalendarMarkerToneUiModel.GREEN -> MarkerGreen
-            CalendarMarkerToneUiModel.BLUE -> MarkerBlue
-            CalendarMarkerToneUiModel.NAVY -> MarkerNavy
-            CalendarMarkerToneUiModel.PURPLE -> MarkerPurple
-            CalendarMarkerToneUiModel.PINK -> MarkerPink
-            CalendarMarkerToneUiModel.BROWN -> MarkerBrown
-            CalendarMarkerToneUiModel.GRAY -> MarkerGray
-            CalendarMarkerToneUiModel.BLACK -> MarkerBlack
-            CalendarMarkerToneUiModel.WHITE -> MarkerWhite
-            CalendarMarkerToneUiModel.UNKNOWN -> MarkerGray
+            CalendarMarkerToneUiModel.RED -> DdgoHoldColorTokens.Red.color
+            CalendarMarkerToneUiModel.ORANGE -> DdgoHoldColorTokens.Orange.color
+            CalendarMarkerToneUiModel.YELLOW -> DdgoHoldColorTokens.Yellow.color
+            CalendarMarkerToneUiModel.GREEN -> DdgoHoldColorTokens.Green.color
+            CalendarMarkerToneUiModel.BLUE -> DdgoHoldColorTokens.SkyBlue.color
+            CalendarMarkerToneUiModel.NAVY -> DdgoHoldColorTokens.Navy.color
+            CalendarMarkerToneUiModel.PURPLE -> DdgoHoldColorTokens.Purple.color
+            CalendarMarkerToneUiModel.PINK -> DdgoHoldColorTokens.Pink.color
+            CalendarMarkerToneUiModel.BROWN -> DdgoHoldColorTokens.Brown.color
+            CalendarMarkerToneUiModel.GRAY -> DdgoHoldColorTokens.Gray.color
+            CalendarMarkerToneUiModel.BLACK -> DdgoHoldColorTokens.Black.color
+            CalendarMarkerToneUiModel.WHITE -> DdgoHoldColorTokens.White.color
+            CalendarMarkerToneUiModel.UNKNOWN -> DdgoHoldColorTokens.Gray.color
         }
     }
 }
