@@ -4,6 +4,7 @@ import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityComment
 import com.ddgo.app.domain.model.CommunityFeedPage
 import com.ddgo.app.domain.model.CommunityPostDetail
+import com.ddgo.app.domain.model.CommunityPostSummary
 import com.ddgo.app.domain.model.CommunitySort
 import com.ddgo.app.domain.model.CommunityVideoAttachment
 import com.ddgo.app.domain.model.CommunityVideoDraft
@@ -49,6 +50,26 @@ class CommunityViewModelTest {
         val composeDestination = viewModel.uiState.value.destination as CommunityDestination.Compose
         assertEquals(null, composeDestination.editingPostId)
         assertEquals(CommunityComposeMode.Create, viewModel.uiState.value.composeState.mode)
+    }
+
+    @Test
+    fun `initial feed load keeps thumbnail url`() = runTest {
+        val viewModel = createViewModel(
+            initialFeedPage = CommunityFeedPage(
+                items = listOf(sampleSummary()),
+                page = 0,
+                size = 20,
+                hasNext = false,
+                totalElements = 1L
+            )
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.posts.size)
+        assertEquals(
+            "https://example.com/thumbnail.jpg",
+            viewModel.uiState.value.posts.first().thumbnailUrl
+        )
     }
 
     @Test
@@ -157,19 +178,18 @@ class CommunityViewModelTest {
         toggleCommunityCommentLikeUseCase: ToggleCommunityCommentLikeUseCase = mockk(relaxed = true),
         getCommunityChallengeReferencesUseCase: GetCommunityChallengeReferencesUseCase = mockk(relaxed = true),
         createCommunityDraftVideoUseCase: CreateCommunityDraftVideoUseCase = mockk(relaxed = true),
-        prepareCommunityComposeVideosUseCase: PrepareCommunityComposeVideosUseCase = mockk(relaxed = true)
+        prepareCommunityComposeVideosUseCase: PrepareCommunityComposeVideosUseCase = mockk(relaxed = true),
+        initialFeedPage: CommunityFeedPage = CommunityFeedPage(
+            items = emptyList(),
+            page = 0,
+            size = 20,
+            hasNext = false,
+            totalElements = 0L
+        )
     ): CommunityViewModel {
         coEvery {
             getCommunityPostsUseCase(any(), any(), any(), any(), any())
-        } returns Result.success(
-            CommunityFeedPage(
-                items = emptyList(),
-                page = 0,
-                size = 20,
-                hasNext = false,
-                totalElements = 0L
-            )
-        )
+        } returns Result.success(initialFeedPage)
         coEvery { getCommunityPostDetailUseCase(any()) } returns Result.failure(
             IllegalStateException("missing detail")
         )
@@ -218,6 +238,25 @@ class CommunityViewModelTest {
                 )
             ),
             comments = emptyList<CommunityComment>()
+        )
+    }
+
+    private fun sampleSummary(): CommunityPostSummary {
+        return CommunityPostSummary(
+            id = 3L,
+            title = "summary",
+            contentPreview = "preview",
+            authorNickname = "tester",
+            gymId = 5L,
+            gymName = "DDGo Gym",
+            createdAt = "2026-03-26T09:00:00",
+            viewCount = 10,
+            likeCount = 4,
+            commentCount = 2,
+            videoCount = 1,
+            thumbnailUrl = "https://example.com/thumbnail.jpg",
+            isLiked = false,
+            isMine = true
         )
     }
 

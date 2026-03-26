@@ -22,6 +22,7 @@ public class CommunityPostSummaryResponse {
     private int likeCount;
     private int commentCount;
     private int videoCount;
+    private String thumbnailUrl;
     private boolean liked;
     private boolean mine;
 }

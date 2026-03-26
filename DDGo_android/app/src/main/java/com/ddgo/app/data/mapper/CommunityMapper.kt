@@ -45,6 +45,7 @@ object CommunityMapper {
         likeCount = likeCount,
         commentCount = commentCount,
         videoCount = videoCount,
+        thumbnailUrl = thumbnailUrl,
         isLiked = isLiked,
         isMine = isMine
     )

@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 public interface CommunityPostVideoRepository extends JpaRepository<CommunityPostVideo, Long> {
 
     List<CommunityPostVideo> findAllByPostIdOrderBySortOrderAsc(Long postId);
+    List<CommunityPostVideo> findAllByPostIdInOrderByPostIdAscSortOrderAsc(List<Long> postIds);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("DELETE FROM CommunityPostVideo v WHERE v.post.id = :postId")

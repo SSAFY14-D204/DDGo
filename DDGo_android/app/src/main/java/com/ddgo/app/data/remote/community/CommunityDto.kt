@@ -27,6 +27,7 @@ data class CommunityPostSummaryDto(
     val likeCount: Int,
     val commentCount: Int,
     val videoCount: Int,
+    val thumbnailUrl: String? = null,
     @SerialName("liked")
     val isLiked: Boolean = false,
     @SerialName("mine")
