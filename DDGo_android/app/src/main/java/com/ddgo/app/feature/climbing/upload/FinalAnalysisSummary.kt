@@ -481,9 +481,13 @@ internal fun calculateRecoveryScore(
         ?.takeIf { durationMs > 0L }
         ?.let { (it.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) }
     val startIndex = timeline.startIndex(analysisStartFraction)
-    if (timeline.size - startIndex < 3) return null
+    val effectiveStartIndex = if (timeline.size - startIndex < 3) {
+        0
+    } else {
+        startIndex
+    }
 
-    val lowestIndex = (startIndex..timeline.lastIndex).minByOrNull { timeline[it] } ?: return null
+    val lowestIndex = (effectiveStartIndex..timeline.lastIndex).minByOrNull { timeline[it] } ?: return null
     val recoveryIndex = findRecoveryIndex(timeline, lowestIndex)
     val recoverySamples = recoveryIndex?.minus(lowestIndex)
 
@@ -590,7 +594,10 @@ private fun calculateAttemptLowerBodyDriveScore(
         score += 5
     }
 
-    return if (signalCount == 0) null else score.coerceIn(0, 100)
+    if (signalCount == 0) return null
+
+    val rawScore = score.coerceIn(0, 100)
+    return softCapHighPercent(rawScore, start = 86, compression = 0.45f)
 }
 
 private data class LowerBodyDriveContactSignal(
@@ -2139,13 +2146,16 @@ private fun findLowestStabilityTimeMs(
         return null
     }
 
-    val analysisStartFraction = contactDebugResult
-        ?.findFourPointContactStartTimeMs()
+    val analysisStartTimeMs = contactDebugResult?.findFourPointContactStartTimeMs()
+    val analysisStartFraction = analysisStartTimeMs
         ?.let { startTimeMs -> (startTimeMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) }
     val startIndex = timeline.startIndex(analysisStartFraction)
     val lowestIndex = (startIndex..timeline.lastIndex).minByOrNull { timeline[it] } ?: return null
     val fraction = if (timeline.lastIndex == 0) 0f else lowestIndex.toFloat() / timeline.lastIndex.toFloat()
-    return fractionToTimeMs(fraction, durationMs)
+    val lowestTimeMs = fractionToTimeMs(fraction, durationMs)
+    return analysisStartTimeMs?.let { startTimeMs ->
+        lowestTimeMs.coerceAtLeast(startTimeMs)
+    } ?: lowestTimeMs
 }
 
 private fun fractionToTimeMs(

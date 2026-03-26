@@ -12,6 +12,7 @@ import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AttemptCompletionPayload
+import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
@@ -1855,10 +1856,13 @@ internal class UploadSubmissionDelegate(
         }
 
         val analyses = attemptUris.map { uri ->
+            val terminalEntry = terminalSnapshot.entriesByPlaybackUri[uri]
             analyzeSingleAttemptPoseAnalysis(
                 playbackUri = uri,
-                poses = terminalSnapshot.entriesByPlaybackUri[uri].filteredHoldContactPoses(),
-                holds = holds
+                poses = terminalEntry.filteredHoldContactPoses(),
+                holds = holds,
+                analysisStartTimeMs = terminalEntry.holdReachAnalysisStartTimeMs(),
+                analysisEndTimeMs = terminalEntry.holdReachAnalysisEndTimeMs()
             )
         }
 
@@ -1893,11 +1897,13 @@ internal class UploadSubmissionDelegate(
                 "최고 도달 홀드를 분석하고 있습니다. (${index + 1}/${alignedHoldSets.size})"
             )
 
+            val terminalEntry = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
             analyzeSingleAttemptPoseAnalysis(
                 playbackUri = alignedHoldSet.playbackUri,
-                poses = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
-                    .filteredHoldContactPoses(),
-                holds = alignedHoldSet.alignedHolds
+                poses = terminalEntry.filteredHoldContactPoses(),
+                holds = alignedHoldSet.alignedHolds,
+                analysisStartTimeMs = terminalEntry.holdReachAnalysisStartTimeMs(),
+                analysisEndTimeMs = terminalEntry.holdReachAnalysisEndTimeMs()
             )
         }
 
@@ -1915,7 +1921,9 @@ internal class UploadSubmissionDelegate(
     private fun analyzeSingleAttemptPoseAnalysis(
         playbackUri: String,
         poses: List<Pose>,
-        holds: List<HoldNumbered>
+        holds: List<HoldNumbered>,
+        analysisStartTimeMs: Long?,
+        analysisEndTimeMs: Long?
     ): AttemptPoseAnalysis {
         val stablePoses = poses
         val poseSequenceDto = stablePoses.toPoseSequenceDto()
@@ -1934,7 +1942,11 @@ internal class UploadSubmissionDelegate(
         )
 
         val holdReachResult = polygonHoldContactDebugResult
-            .toAttemptHoldReachResult(holds = holds)
+            .toAttemptHoldReachResult(
+                holds = holds,
+                analysisStartTimeMs = analysisStartTimeMs,
+                analysisEndTimeMs = analysisEndTimeMs
+            )
             .also { result ->
                 Log.d(
                     SUBMISSION_TAG,
@@ -2112,10 +2124,13 @@ internal class UploadSubmissionDelegate(
             Dispatchers.Default.limitedParallelism(HOLD_REACH_ANALYSIS_PARALLELISM)
         val analyses = alignedHoldSets.map { alignedHoldSet ->
             async(holdReachDispatcher) {
+                val terminalEntry = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]
                 analyzeSingleAttemptPoseAnalysis(
                     playbackUri = alignedHoldSet.playbackUri,
-                    poses = terminalSnapshot.entriesByPlaybackUri[alignedHoldSet.playbackUri]?.poses.orEmpty(),
-                    holds = alignedHoldSet.alignedHolds
+                    poses = terminalEntry.filteredHoldContactPoses(),
+                    holds = alignedHoldSet.alignedHolds,
+                    analysisStartTimeMs = terminalEntry.holdReachAnalysisStartTimeMs(),
+                    analysisEndTimeMs = terminalEntry.holdReachAnalysisEndTimeMs()
                 )
             }
         }.awaitAll()
@@ -2540,8 +2555,8 @@ private fun TerminalPrePoseEntry?.preferredAiPoseSequence(): AiPoseSequence? {
 
 private fun TerminalPrePoseEntry?.filteredHoldContactPoses(): List<Pose> {
     val entry = this ?: return emptyList()
-    val startTimeMs = entry.wallArrivalTimeMs ?: entry.personObservationStartTimeMs
-    val endTimeMs = entry.handPeakAnnotation?.endTimeMs
+    val startTimeMs = entry.holdReachAnalysisStartTimeMs()
+    val endTimeMs = entry.holdReachAnalysisEndTimeMs()
 
     if (startTimeMs != null && endTimeMs != null && endTimeMs < startTimeMs) {
         return emptyList()
@@ -2552,6 +2567,24 @@ private fun TerminalPrePoseEntry?.filteredHoldContactPoses(): List<Pose> {
         val afterStart = startTimeMs == null || timestampMs >= startTimeMs
         val beforeEnd = endTimeMs == null || timestampMs <= endTimeMs
         afterStart && beforeEnd
+    }
+}
+
+private fun TerminalPrePoseEntry?.holdReachAnalysisStartTimeMs(): Long? {
+    val entry = this ?: return null
+    return entry.timelinePoints.firstOrNull { point ->
+        point.kind == AnalysisPointKind.PERSON_OBSERVATION_START
+    }?.timeMs ?: entry.wallArrivalTimeMs ?: entry.personObservationStartTimeMs
+}
+
+private fun TerminalPrePoseEntry?.holdReachAnalysisEndTimeMs(): Long? {
+    val entry = this ?: return null
+    val startTimeMs = entry.holdReachAnalysisStartTimeMs()
+    val endTimeMs = entry.timelinePoints.firstOrNull { point ->
+        point.kind == AnalysisPointKind.CLIMB_END
+    }?.timeMs ?: entry.handPeakAnnotation?.endTimeMs
+    return endTimeMs?.takeIf { endMs ->
+        startTimeMs == null || endMs >= startTimeMs
     }
 }
 
