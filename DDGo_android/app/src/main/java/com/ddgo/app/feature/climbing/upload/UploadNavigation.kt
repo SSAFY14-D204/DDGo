@@ -16,7 +16,10 @@ import androidx.navigation.navigation
 import com.ddgo.app.feature.climbing.record.navigateToRecord
 import com.ddgo.app.feature.climbing.upload.ui.analysis.route.ChallengeFinalAnalysisRoute
 import com.ddgo.app.feature.climbing.upload.ui.analysis.route.FinalAnalysisRoute
+import com.ddgo.app.navigation.PENDING_COMMUNITY_COMPOSE_REQUEST_KEY
+import com.ddgo.app.navigation.PendingCommunityComposeRequest
 import com.ddgo.app.navigation.ScreenRoutes
+import com.ddgo.app.navigation.toSavedStateValue
 
 fun NavGraphBuilder.uploadGraph(
     navController: NavController
@@ -367,6 +370,9 @@ fun NavGraphBuilder.uploadGraph(
                     navController.navigate(ScreenRoutes.Main.route) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onNavigateToCommunityCompose = { request ->
+                    navController.navigateToCommunityCompose(request)
                 }
             )
         }
@@ -381,6 +387,9 @@ fun NavGraphBuilder.uploadGraph(
                     navController.navigate(ScreenRoutes.Main.route) {
                         popUpTo(0) { inclusive = true }
                     }
+                },
+                onNavigateToCommunityCompose = { request ->
+                    navController.navigateToCommunityCompose(request)
                 }
             )
         }
@@ -414,6 +423,14 @@ fun NavController.navigateToRealtimeRecordedAttempt(
         }
     }
     navigate(route)
+}
+
+private fun NavController.navigateToCommunityCompose(
+    request: PendingCommunityComposeRequest
+) {
+    val mainEntry = getBackStackEntry(ScreenRoutes.Main.route)
+    mainEntry.savedStateHandle[PENDING_COMMUNITY_COMPOSE_REQUEST_KEY] = request.toSavedStateValue()
+    popBackStack(ScreenRoutes.Main.route, false)
 }
 
 

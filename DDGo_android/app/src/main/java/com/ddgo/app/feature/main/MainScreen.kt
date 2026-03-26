@@ -25,6 +25,7 @@ import com.ddgo.app.feature.calendar.CalendarScreen
 import com.ddgo.app.feature.climbing.ClimbingMenuOverlay
 import com.ddgo.app.feature.community.CommunityScreen
 import com.ddgo.app.feature.profile.ProfileScreen
+import com.ddgo.app.navigation.PendingCommunityComposeRequest
 import java.time.LocalDate
 
 @Composable
@@ -36,6 +37,8 @@ fun MainScreen(
     calendarViewModel: CalendarViewModel,
     pendingCalendarChallengeId: Long? = null,
     onPendingCalendarChallengeHandled: () -> Unit = {},
+    pendingAnalysisShareRequest: PendingCommunityComposeRequest? = null,
+    onPendingAnalysisShareHandled: () -> Unit = {},
     onNavigateToDebug: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
@@ -51,6 +54,12 @@ fun MainScreen(
         onPendingCalendarChallengeHandled()
     }
 
+    LaunchedEffect(pendingAnalysisShareRequest?.requestId) {
+        if (pendingAnalysisShareRequest == null) return@LaunchedEffect
+        lastActiveTab = MainTab.COMMUNITY
+        selectedTab = MainTab.COMMUNITY
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -62,7 +71,10 @@ fun MainScreen(
                     onDateSelected = onNavigateToCalendarDetail,
                     viewModel = calendarViewModel
                 )
-                MainTab.COMMUNITY -> CommunityScreen()
+                MainTab.COMMUNITY -> CommunityScreen(
+                    pendingAnalysisShareRequest = pendingAnalysisShareRequest,
+                    onPendingAnalysisShareHandled = onPendingAnalysisShareHandled
+                )
                 MainTab.ANALYSIS -> AnalysisScreen(
                     externalChallengeId = analysisTargetChallengeId,
                     onExternalChallengeHandled = {

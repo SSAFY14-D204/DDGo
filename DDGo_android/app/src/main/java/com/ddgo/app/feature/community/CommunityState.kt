@@ -19,12 +19,21 @@ sealed interface CommunityDestination {
     data class Compose(val editingPostId: Long? = null) : CommunityDestination
 }
 
+enum class CommunityComposeMode {
+    Create,
+    Edit,
+    AnalysisShare
+}
+
 data class CommunityComposeState(
     val title: String = "",
     val content: String = "",
     val gymId: Long? = null,
     val gymName: String? = null,
     val videos: List<CommunityVideoDraft> = emptyList(),
+    val mode: CommunityComposeMode = CommunityComposeMode.Create,
+    val shareRequestId: Long? = null,
+    val isPreparingAnalysisShare: Boolean = false,
     val isSubmitting: Boolean = false,
     val submitError: String? = null
 )

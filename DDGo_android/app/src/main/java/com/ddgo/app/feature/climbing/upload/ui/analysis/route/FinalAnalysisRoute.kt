@@ -15,7 +15,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.domain.model.AnalysisPoint
@@ -32,6 +31,7 @@ import com.ddgo.app.feature.climbing.upload.withAlignedDisplayCrux
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPage
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPageState
+import com.ddgo.app.navigation.PendingCommunityComposeRequest
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -40,9 +40,9 @@ fun FinalAnalysisRoute(
     viewModel: UploadViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
     onNavigateToChallenge: () -> Unit = {},
-    onNavigateToMain: () -> Unit = {}
+    onNavigateToMain: () -> Unit = {},
+    onNavigateToCommunityCompose: (PendingCommunityComposeRequest) -> Unit = {}
 ) {
-    val context = LocalContext.current
     val attemptVideoUris = viewModel.playbackAttemptUris.ifEmpty { viewModel.allAttemptUris }
     val uploadedAttemptCount = attemptVideoUris.size
     val totalHolds = viewModel.totalSelectedHoldCount
@@ -126,6 +126,12 @@ fun FinalAnalysisRoute(
     var pendingSeekTimeMs by rememberSaveable {
         mutableStateOf<Long?>(null)
     }
+    var isShareSheetVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+    var shareSheetSelectedAttemptNos by rememberSaveable {
+        mutableStateOf(listOf<Int>())
+    }
 
     val safeSelectedAttempt = selectedAttempt.coerceIn(1, attemptCount)
     val safeSelectedAttemptIndex = (safeSelectedAttempt - 1).coerceAtLeast(0)
@@ -134,6 +140,16 @@ fun FinalAnalysisRoute(
     val isSingleUploadedAttempt = uploadedAttemptCount <= 1
     val selectedAttemptVideoUri = attemptVideoUris
         .getOrNull((safeSelectedAttempt - 1).coerceAtLeast(0))
+    val shareOptions = remember(attemptVideoUris) {
+        attemptVideoUris.mapIndexedNotNull { index, uri ->
+            uri.takeIf { it.isNotBlank() }?.let { videoUri ->
+                AnalysisCommunityShareOption(
+                    attemptNo = index + 1,
+                    videoUri = videoUri
+                )
+            }
+        }
+    }
 
     LaunchedEffect(safeSelectedAttemptIndex, attemptCount) {
         if (attemptCount > 0) {
@@ -323,22 +339,10 @@ fun FinalAnalysisRoute(
             } else {
                 null
             },
-            onShareAction = if (isSingleUploadedAttempt) {
+            onShareAction = if (shareOptions.isNotEmpty()) {
                 {
-                    shareAttemptAnalysis(
-                        context = context,
-                        videoUriString = selectedAttemptVideoUri,
-                        shareTitle = buildAttemptShareTitle(
-                            gymName = viewModel.gymName,
-                            attemptNo = safeSelectedAttempt
-                        ),
-                        shareText = buildAttemptShareText(
-                            gymName = viewModel.gymName,
-                            attemptNo = safeSelectedAttempt,
-                            summary = displaySummary,
-                            totalHolds = totalHolds
-                        )
-                    )
+                    shareSheetSelectedAttemptNos = listOf(safeSelectedAttempt)
+                    isShareSheetVisible = true
                 }
             } else {
                 null
@@ -393,6 +397,42 @@ fun FinalAnalysisRoute(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(horizontal = 20.dp, vertical = 32.dp)
+        )
+    }
+
+    if (isShareSheetVisible) {
+        AnalysisCommunityShareSheet(
+            options = shareOptions,
+            initialSelectedAttemptNos = shareSheetSelectedAttemptNos.toSet(),
+            onDismissRequest = { isShareSheetVisible = false },
+            onConfirm = { selectedOptions ->
+                isShareSheetVisible = false
+                if (selectedOptions.isEmpty()) return@AnalysisCommunityShareSheet
+
+                val request = buildPendingCommunityComposeRequest(
+                    gymId = viewModel.gymId?.toLong(),
+                    gymName = viewModel.gymName,
+                    options = selectedOptions
+                )
+                scope.launch {
+                    val hasChallengeToClose = viewModel.createdChallenge != null
+                    if (!hasChallengeToClose) {
+                        onNavigateToCommunityCompose(request)
+                        return@launch
+                    }
+
+                    val closed = viewModel.closeChallengeForFinalAnalysis(
+                        challengeResult = challengeResult,
+                        averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                        mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                        maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                        finalComment = closeSummaryPayload.finalComment
+                    )
+                    if (closed) {
+                        onNavigateToCommunityCompose(request)
+                    }
+                }
+            }
         )
     }
 }

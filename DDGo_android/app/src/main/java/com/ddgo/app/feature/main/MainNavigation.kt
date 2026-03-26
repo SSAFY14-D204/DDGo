@@ -12,6 +12,8 @@ import com.ddgo.app.feature.calendar.navigateToCalendarDetail
 import com.ddgo.app.feature.calendar.rememberSharedCalendarViewModel
 import com.ddgo.app.feature.climbing.record.recordGraph
 import com.ddgo.app.feature.climbing.upload.uploadGraph
+import com.ddgo.app.navigation.PENDING_COMMUNITY_COMPOSE_REQUEST_KEY
+import com.ddgo.app.navigation.toPendingCommunityComposeRequestOrNull
 import com.ddgo.app.navigation.ScreenRoutes
 
 /**
@@ -40,6 +42,11 @@ fun NavGraphBuilder.mainGraph(
             val pendingCalendarChallengeId by backStackEntry.savedStateHandle
                 .getStateFlow<Long?>(CALENDAR_DETAIL_RESULT_CHALLENGE_ID, null)
                 .collectAsState()
+            val pendingCommunityComposeRequestJson by backStackEntry.savedStateHandle
+                .getStateFlow<String?>(PENDING_COMMUNITY_COMPOSE_REQUEST_KEY, null)
+                .collectAsState()
+            val pendingCommunityComposeRequest = pendingCommunityComposeRequestJson
+                ?.toPendingCommunityComposeRequestOrNull()
 
             MainScreen(
                 onNavigateToUpload = {
@@ -54,6 +61,10 @@ fun NavGraphBuilder.mainGraph(
                 pendingCalendarChallengeId = pendingCalendarChallengeId,
                 onPendingCalendarChallengeHandled = {
                     backStackEntry.savedStateHandle[CALENDAR_DETAIL_RESULT_CHALLENGE_ID] = null
+                },
+                pendingAnalysisShareRequest = pendingCommunityComposeRequest,
+                onPendingAnalysisShareHandled = {
+                    backStackEntry.savedStateHandle[PENDING_COMMUNITY_COMPOSE_REQUEST_KEY] = null
                 },
                 onNavigateToDebug = onNavigateToDebug
             )
