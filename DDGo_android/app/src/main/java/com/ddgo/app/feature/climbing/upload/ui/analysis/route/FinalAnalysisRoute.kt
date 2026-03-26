@@ -174,7 +174,8 @@ fun FinalAnalysisRoute(
     }
     val currentAttemptContactDebugResult = viewModel.currentAttemptPolygonHoldContactDebugResult
     val analysisStartTimeMs = remember(currentAttemptContactDebugResult) {
-        currentAttemptContactDebugResult?.findClimbStartTimeMs()
+        currentAttemptContactDebugResult?.findFourPointContactStartTimeMs()
+            ?: currentAttemptContactDebugResult?.findClimbStartTimeMs()
     }
     val currentAttemptEndHoldNo = remember(
         viewModel.currentAttemptDisplayHolds,
@@ -666,6 +667,20 @@ private fun buildSuccessTimelinePoint(
 }
 
 private fun PolygonHoldContactDebugResult.findClimbStartTimeMs(): Long? {
+    return frames.firstOrNull { frame ->
+        val limbStatesByLimb = frame.limbStates.associateBy { it.limb }
+        listOf(
+            PolygonTrackedLimb.LEFT_HAND,
+            PolygonTrackedLimb.RIGHT_HAND,
+            PolygonTrackedLimb.LEFT_FOOT,
+            PolygonTrackedLimb.RIGHT_FOOT
+        ).all { limb ->
+            limbStatesByLimb[limb]?.activeHoldNo != null
+        }
+    }?.frameTimeMs
+}
+
+private fun PolygonHoldContactDebugResult.findFourPointContactStartTimeMs(): Long? {
     return frames.firstOrNull { frame ->
         val limbStatesByLimb = frame.limbStates.associateBy { it.limb }
         listOf(

@@ -115,17 +115,33 @@ data class PolygonHoldContactDebugResult(
 }
 
 fun PolygonHoldContactDebugResult.toAttemptHoldReachResult(
-    holds: List<HoldNumbered>
+    holds: List<HoldNumbered>,
+    analysisStartTimeMs: Long? = null,
+    analysisEndTimeMs: Long? = null
 ): AttemptHoldReachResult {
     val totalHoldCount = holds.size
-    val highestHold = holds.firstOrNull { it.holdNo == highestReachedHoldNo }
-    val normalizedHighestHoldNo = (highestHold?.holdNo ?: highestReachedHoldNo)
+    val scopedFrames = frames.filter { frame ->
+        val afterStart = analysisStartTimeMs == null || frame.frameTimeMs >= analysisStartTimeMs
+        val beforeEnd = analysisEndTimeMs == null || frame.frameTimeMs <= analysisEndTimeMs
+        afterStart && beforeEnd
+    }
+    val highestFrame = scopedFrames
+        .filter { it.activeContacts.isNotEmpty() }
+        .maxByOrNull { frame -> frame.activeContacts.maxOf { it.holdNo } }
+    val scopedHighestReachedHoldNo = highestFrame?.activeContacts
+        ?.maxOfOrNull(PolygonHoldContact::holdNo)
+        ?: 0
+    val scopedContactedHoldNos = scopedFrames
+        .flatMap { frame -> frame.activeContacts.map(PolygonHoldContact::holdNo) }
+        .toSet()
+    val highestHold = holds.firstOrNull { it.holdNo == scopedHighestReachedHoldNo }
+    val normalizedHighestHoldNo = (highestHold?.holdNo ?: scopedHighestReachedHoldNo)
         .coerceIn(0, totalHoldCount)
-    val normalizedContactedHoldNos = contactedHoldNos
+    val normalizedContactedHoldNos = scopedContactedHoldNos
         .filter { it in 1..totalHoldCount }
         .toSet()
     val endHoldNo = holds.resolveEndHoldNo()
-    val completedWithBothHandsOnEndHold = endHoldNo != null && frames.any { frame ->
+    val completedWithBothHandsOnEndHold = endHoldNo != null && scopedFrames.any { frame ->
         val engagedHands = frame.activeContacts
             .filter { it.holdNo == endHoldNo }
             .map(PolygonHoldContact::limb)
@@ -142,7 +158,7 @@ fun PolygonHoldContactDebugResult.toAttemptHoldReachResult(
     return AttemptHoldReachResult(
         highestReachedHold = highestHold,
         highestReachedHoldNo = normalizedHighestHoldNo,
-        highestReachedFrameTimeMs = highestReachedFrameTimeMs,
+        highestReachedFrameTimeMs = highestFrame?.frameTimeMs,
         totalHoldCount = totalHoldCount,
         contactedHoldNos = normalizedContactedHoldNos,
         reachedRatio = if (totalHoldCount > 0) {
