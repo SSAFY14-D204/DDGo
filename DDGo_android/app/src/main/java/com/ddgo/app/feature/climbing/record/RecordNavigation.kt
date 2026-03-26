@@ -60,6 +60,7 @@ fun NavGraphBuilder.recordGraph(
                 onNavigateBack = { navController.popBackStack() },
                 realtimeOverlayUiState = realtimeOverlayUiState,
                 onRecordedDraftReady = { draft ->
+                    uploadViewModel.registerRealtimeRecordedAttempt(draft)
                     navController.navigateToRealtimeRecordedAttempt(
                         recordedVideoUri = draft.videoUri
                     )

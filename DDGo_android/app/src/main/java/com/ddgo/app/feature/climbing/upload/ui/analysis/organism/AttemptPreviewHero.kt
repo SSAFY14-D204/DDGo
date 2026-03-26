@@ -201,14 +201,14 @@ internal fun AttemptPreviewHero(
                     HeaderChip(
                         text = "${state.selectedAttempt}차 ${if (state.isSuccess) "성공" else "실패"}",
                         background = statusChipTone.background,
-                        contentColor = statusChipTone.content,
+                        contentColor = Color.White,
                         borderColor = statusChipTone.border
                     )
                     if (state.difficultyLabel.isNotBlank()) {
                         HeaderChip(
                             text = "난이도 ${state.difficultyLabel}",
                             background = difficultyChipTone.background,
-                            contentColor = difficultyChipTone.content,
+                            contentColor = Color.White,
                             borderColor = difficultyChipTone.border
                         )
                     }
@@ -216,7 +216,7 @@ internal fun AttemptPreviewHero(
                         HeaderChip(
                             text = "홀드 ${state.holdColorLabel}",
                             background = holdChipTone.background,
-                            contentColor = holdChipTone.content,
+                            contentColor = Color.White,
                             borderColor = holdChipTone.border
                         )
                     }

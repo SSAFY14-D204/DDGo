@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @HiltViewModel
 class RecordViewModel @Inject constructor(
@@ -39,11 +40,20 @@ class RecordViewModel @Inject constructor(
     private var analyzerStopJob: Job? = null
     private var videoMetadata: AiVideoMetadata? = null
     private var currentRecordingSessionId: String? = null
+    private var recordingStartedAtMs: Long? = null
+    private val recordedHeartRateSeries = mutableListOf<HeartRatePoint>()
 
     init {
         watchRuntimeMonitor.start()
         viewModelScope.launch {
             watchRuntimeMonitor.snapshot.collect { snapshot ->
+                if (_uiState.value.isRecording) {
+                    appendHeartRateSample(
+                        heartRate = snapshot.heartRateSnapshot?.heartRate,
+                        sampleTimeMs = snapshot.heartRateSnapshot?.lastMeasuredAt
+                            ?: snapshot.heartRateSnapshot?.updatedAt
+                    )
+                }
                 _uiState.update { current ->
                     current.copy(
                         watchStatus = current.watchStatus.copy(
@@ -113,6 +123,14 @@ class RecordViewModel @Inject constructor(
     fun onRecordingStarted() {
         currentRecordingSessionId = UUID.randomUUID().toString()
         videoMetadata = null
+        recordingStartedAtMs = System.currentTimeMillis()
+        recordedHeartRateSeries.clear()
+        appendHeartRateSample(
+            heartRate = _uiState.value.watchStatus.latestHeartRate,
+            sampleTimeMs = _uiState.value.watchStatus.lastMeasuredAt
+                ?: _uiState.value.watchStatus.updatedAt
+                ?: recordingStartedAtMs
+        )
 
         _uiState.update {
             it.copy(
@@ -144,6 +162,9 @@ class RecordViewModel @Inject constructor(
         syncRecordingState(isRecording = false)
         viewModelScope.launch {
             stopLivePoseAnalyzer()
+            val heartRateSeries = recordedHeartRateSeries.toList()
+            recordedHeartRateSeries.clear()
+            recordingStartedAtMs = null
             _uiState.update {
                 it.copy(
                     isRecording = false,
@@ -151,7 +172,8 @@ class RecordViewModel @Inject constructor(
                     bufferedPoseFrameCount = 0,
                     recordedDraft = draft.copy(
                         frameWidthPx = videoMetadata?.frameWidth,
-                        frameHeightPx = videoMetadata?.frameHeight
+                        frameHeightPx = videoMetadata?.frameHeight,
+                        heartRateSeries = heartRateSeries
                     ),
                     statusMessage = "Recording finished. Upload will continue with batch AI analysis."
                 )
@@ -163,6 +185,8 @@ class RecordViewModel @Inject constructor(
         syncRecordingState(isRecording = false)
         viewModelScope.launch {
             stopLivePoseAnalyzer()
+            recordedHeartRateSeries.clear()
+            recordingStartedAtMs = null
             _uiState.update {
                 it.copy(
                     isRecording = false,
@@ -373,6 +397,31 @@ class RecordViewModel @Inject constructor(
         }
     }
 
+    private fun appendHeartRateSample(
+        heartRate: Int?,
+        sampleTimeMs: Long?
+    ) {
+        val bpm = heartRate ?: return
+        val startedAt = recordingStartedAtMs ?: return
+        val sampleTime = sampleTimeMs ?: return
+        val relativeTimeMs = (sampleTime - startedAt).coerceAtLeast(0L)
+        val previous = recordedHeartRateSeries.lastOrNull()
+
+        if (previous != null) {
+            val timeGapMs = relativeTimeMs - previous.timestampMs
+            val bpmGap = abs(previous.bpm - bpm)
+            if (timeGapMs <= 0L) return
+            if (timeGapMs < HEART_RATE_SAMPLE_INTERVAL_MS && bpmGap < HEART_RATE_SAMPLE_DELTA_BPM) {
+                return
+            }
+        }
+
+        recordedHeartRateSeries += HeartRatePoint(
+            timestampMs = relativeTimeMs,
+            bpm = bpm
+        )
+    }
+
     override fun onCleared() {
         analyzerStartJob?.cancel()
         analyzerStopJob?.cancel()
@@ -384,5 +433,7 @@ class RecordViewModel @Inject constructor(
         private const val TARGET_ANALYSIS_FPS = 10
         private const val MAX_SUBMISSION_FAILURES = 3
         private const val MIN_REQUIRED_LANDMARK_COUNT = 33
+        private const val HEART_RATE_SAMPLE_INTERVAL_MS = 800L
+        private const val HEART_RATE_SAMPLE_DELTA_BPM = 3
     }
 }

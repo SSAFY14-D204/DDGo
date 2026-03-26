@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,12 +31,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
 import com.ddgo.app.feature.climbing.upload.AnalysisText
-import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisBrandAccentBrush
 import kotlin.math.roundToInt
+
+private data class HeartRateAxisState(
+    val points: List<HeartRatePoint>,
+    val minBpm: Int,
+    val maxBpm: Int
+)
 
 @Composable
 internal fun StabilityInsightTimelineChart(
@@ -45,6 +52,7 @@ internal fun StabilityInsightTimelineChart(
     cruxStartFraction: Float?,
     cruxEndFraction: Float?,
     failureFraction: Float?,
+    heartRateSeries: List<HeartRatePoint> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     var progress by remember { mutableFloatStateOf(0f) }
@@ -53,8 +61,14 @@ internal fun StabilityInsightTimelineChart(
         animationSpec = tween(durationMillis = 900),
         label = "stability_insight_chart_progress"
     )
+    val heartRateAxisState = remember(heartRateSeries, durationMs) {
+        buildHeartRateAxisState(
+            heartRateSeries = heartRateSeries,
+            durationMs = durationMs
+        )
+    }
 
-    LaunchedEffect(data) {
+    LaunchedEffect(data, heartRateSeries) {
         progress = 1f
     }
 
@@ -64,7 +78,7 @@ internal fun StabilityInsightTimelineChart(
                 .fillMaxWidth()
                 .height(232.dp)
         ) {
-            Canvas(modifier = Modifier.matchParentSize()) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
                 if (data.size < 2) return@Canvas
 
                 val topPadding = 20.dp.toPx()
@@ -156,6 +170,57 @@ internal fun StabilityInsightTimelineChart(
                     style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
                 )
 
+                if (heartRateAxisState != null && heartRateAxisState.points.size >= 2) {
+                    val visibleDurationMs =
+                        (durationMs.toFloat() * animatedProgress).roundToInt().toLong().coerceAtLeast(1L)
+                    val visibleHeartRatePoints = heartRateAxisState.points
+                        .filter { it.timestampMs <= visibleDurationMs }
+                        .ifEmpty { heartRateAxisState.points.take(1) }
+
+                    if (visibleHeartRatePoints.size >= 2) {
+                        fun heartRateXOf(point: HeartRatePoint): Float {
+                            val fraction = if (durationMs > 0L) {
+                                point.timestampMs.toFloat() / durationMs.toFloat()
+                            } else {
+                                0f
+                            }
+                            return xOfFraction(fraction)
+                        }
+
+                        fun heartRateYOf(bpm: Int): Float {
+                            val range = (heartRateAxisState.maxBpm - heartRateAxisState.minBpm)
+                                .coerceAtLeast(1)
+                                .toFloat()
+                            val fraction =
+                                ((bpm - heartRateAxisState.minBpm).toFloat() / range).coerceIn(0f, 1f)
+                            return topPadding + chartHeight * (1f - fraction)
+                        }
+
+                        val heartRatePath = Path().apply {
+                            moveTo(
+                                heartRateXOf(visibleHeartRatePoints.first()),
+                                heartRateYOf(visibleHeartRatePoints.first().bpm)
+                            )
+                            for (index in 1 until visibleHeartRatePoints.size) {
+                                val previousPoint = visibleHeartRatePoints[index - 1]
+                                val currentPoint = visibleHeartRatePoints[index]
+                                val previousX = heartRateXOf(previousPoint)
+                                val previousY = heartRateYOf(previousPoint.bpm)
+                                val currentX = heartRateXOf(currentPoint)
+                                val currentY = heartRateYOf(currentPoint.bpm)
+                                val controlX = (previousX + currentX) / 2f
+                                cubicTo(controlX, previousY, controlX, currentY, currentX, currentY)
+                            }
+                        }
+
+                        drawPath(
+                            path = heartRatePath,
+                            color = AnalysisFailure,
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                    }
+                }
+
                 dangerFractions.forEach { fraction ->
                     val value = valueAtFraction(data, fraction)
                     val center = Offset(xOfFraction(fraction), yOf(value))
@@ -217,6 +282,28 @@ internal fun StabilityInsightTimelineChart(
                     color = Color(0xFFFFC271),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            heartRateAxisState?.let { axis ->
+                Text(
+                    text = "${axis.maxBpm} bpm",
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 12.dp, top = 28.dp),
+                    color = AnalysisFailure,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Text(
+                    text = "${axis.minBpm} bpm",
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 16.dp),
+                    color = AnalysisFailure.copy(alpha = 0.82f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -282,4 +369,34 @@ private fun formatTimeLabel(timeMs: Long): String {
     val minutes = totalSeconds / 60L
     val seconds = totalSeconds % 60L
     return "%02d:%02d".format(minutes, seconds)
+}
+
+private fun buildHeartRateAxisState(
+    heartRateSeries: List<HeartRatePoint>,
+    durationMs: Long
+): HeartRateAxisState? {
+    val filteredPoints = heartRateSeries
+        .filter { point ->
+            point.bpm > 0 &&
+                point.timestampMs >= 0L &&
+                (durationMs <= 0L || point.timestampMs <= durationMs)
+        }
+        .sortedBy(HeartRatePoint::timestampMs)
+        .distinctBy(HeartRatePoint::timestampMs)
+
+    if (filteredPoints.isEmpty()) return null
+
+    val rawMinBpm = filteredPoints.minOf(HeartRatePoint::bpm)
+    val rawMaxBpm = filteredPoints.maxOf(HeartRatePoint::bpm)
+    val padding = if (rawMinBpm == rawMaxBpm) {
+        5
+    } else {
+        ((rawMaxBpm - rawMinBpm) * 0.12f).roundToInt().coerceAtLeast(4)
+    }
+
+    return HeartRateAxisState(
+        points = filteredPoints,
+        minBpm = (rawMinBpm - padding).coerceAtLeast(40),
+        maxBpm = (rawMaxBpm + padding).coerceAtMost(220)
+    )
 }

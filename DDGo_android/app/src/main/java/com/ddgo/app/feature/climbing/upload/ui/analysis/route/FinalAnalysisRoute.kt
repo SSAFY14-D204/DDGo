@@ -141,6 +141,9 @@ fun FinalAnalysisRoute(
     val isSingleUploadedAttempt = uploadedAttemptCount <= 1
     val selectedAttemptVideoUri = attemptVideoUris
         .getOrNull((safeSelectedAttempt - 1).coerceAtLeast(0))
+    val heartRateSeries = remember(selectedAttemptVideoUri) {
+        viewModel.heartRateSeriesForPlaybackUri(selectedAttemptVideoUri)
+    }
     val shareOptions = remember(attemptVideoUris) {
         attemptVideoUris.mapIndexedNotNull { index, uri ->
             uri.takeIf { it.isNotBlank() }?.let { videoUri ->
@@ -274,6 +277,7 @@ fun FinalAnalysisRoute(
         selectedAttemptCropBounds,
         viewModel.allRawHolds,
         analysisStartTimeMs,
+        heartRateSeries,
         seekRequestId,
         pendingSeekTimeMs,
         reachedHoldsSuffix,
@@ -312,6 +316,7 @@ fun FinalAnalysisRoute(
             currentSummary = displaySummary,
             previousSummary = previousSummary,
             analysisStartTimeMs = analysisStartTimeMs,
+            heartRateSeries = heartRateSeries,
             timelinePoints = timelinePoints,
             reachedHoldsText = displaySummary.reachedHoldsText,
             reachedHoldsSuffix = reachedHoldsSuffix,
