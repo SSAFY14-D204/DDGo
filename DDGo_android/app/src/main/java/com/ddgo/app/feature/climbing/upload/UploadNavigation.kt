@@ -19,7 +19,25 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.route.FinalAnalysisRoute
 import com.ddgo.app.navigation.PENDING_COMMUNITY_COMPOSE_REQUEST_KEY
 import com.ddgo.app.navigation.PendingCommunityComposeRequest
 import com.ddgo.app.navigation.ScreenRoutes
+import androidx.compose.runtime.Composable
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import com.ddgo.app.core.ui.components.DarkSystemBarsEffect
 import com.ddgo.app.navigation.toSavedStateValue
+
+private fun NavGraphBuilder.uploadComposable(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable (NavBackStackEntry) -> Unit
+) {
+    composable(
+        route = route,
+        arguments = arguments
+    ) { backStackEntry ->
+        DarkSystemBarsEffect()
+        content(backStackEntry)
+    }
+}
 
 fun NavGraphBuilder.uploadGraph(
     navController: NavController
@@ -28,7 +46,7 @@ fun NavGraphBuilder.uploadGraph(
         startDestination = ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD,
         route = ScreenRoutes.Climbing.Upload.route
     ) {
-        composable(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             LaunchedEffect(Unit) {
@@ -50,7 +68,7 @@ fun NavGraphBuilder.uploadGraph(
             }
         }
 
-        composable(ScreenRoutes.Climbing.Upload.REALTIME_HOLD) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_HOLD) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             ChallengeHoldScreen(
@@ -65,7 +83,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.REALTIME_HOLD_SELECT) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_HOLD_SELECT) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             HoldSelectScreen(
@@ -83,13 +101,17 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(
+        uploadComposable(
             route = ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD_WITH_ARGS,
             arguments = listOf(
                 navArgument(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI) {
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
+                },
+                navArgument(ScreenRoutes.Climbing.Upload.ARG_AUTO_OPEN_PICKER) {
+                    type = NavType.BoolType
+                    defaultValue = false
                 }
             )
         ) { backStackEntry ->
@@ -97,17 +119,21 @@ fun NavGraphBuilder.uploadGraph(
             val initialRecordedVideoUri = backStackEntry.arguments
                 ?.getString(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
                 ?.let(Uri::decode)
+            val autoOpenPicker = backStackEntry.arguments
+                ?.getBoolean(ScreenRoutes.Climbing.Upload.ARG_AUTO_OPEN_PICKER)
+                ?: false
 
             AttemptUploadScreen(
                 viewModel = viewModel,
                 initialRecordedVideoUri = initialRecordedVideoUri,
+                autoOpenPicker = autoOpenPicker,
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE)
                 }
             )
         }
 
-        composable(
+        uploadComposable(
             route = ScreenRoutes.Climbing.Upload.REALTIME_RECORDED_ATTEMPT_WITH_ARGS,
             arguments = listOf(
                 navArgument(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI) {
@@ -154,7 +180,7 @@ fun NavGraphBuilder.uploadGraph(
             }
         }
 
-        composable(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             LaunchedEffect(Unit) {
@@ -170,7 +196,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.CHALLENGE_COLOR) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.CHALLENGE_COLOR) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             LaunchedEffect(Unit) {
@@ -189,7 +215,7 @@ fun NavGraphBuilder.uploadGraph(
         }
 
         // 2-2. 디버그용 이미지 선택 (베스트 프레임 선택 단계 우회)
-        composable(ScreenRoutes.Climbing.Upload.DEV_IMAGE_PICKER) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.DEV_IMAGE_PICKER) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             DevImagePickScreen(
@@ -207,7 +233,7 @@ fun NavGraphBuilder.uploadGraph(
         }
 
         // 3. 홀드 탐지 대기 + 누락 홀드 추가
-        composable(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             ChallengeHoldScreen(
@@ -221,7 +247,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             AdditionalUploadScreen(
@@ -242,7 +268,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.HOLD_SELECT) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.HOLD_SELECT) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             HoldSelectScreen(
@@ -258,7 +284,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             AnalysisLoadingScreen(
@@ -282,7 +308,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             AnalysisLoadingScreen(
@@ -306,7 +332,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.REALTIME_ATTEMPT_RESULT) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_ATTEMPT_RESULT) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             AttemptResultScreen(
@@ -325,7 +351,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             AttemptResultScreen(
@@ -346,7 +372,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.HOLD_CONTACT_DEBUG) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.HOLD_CONTACT_DEBUG) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             HoldContactDebugScreen(
@@ -355,7 +381,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             FinalAnalysisRoute(
@@ -377,7 +403,7 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
-        composable(ScreenRoutes.Climbing.Upload.CHALLENGE_FINAL_ANALYSIS) { backStackEntry ->
+        uploadComposable(ScreenRoutes.Climbing.Upload.CHALLENGE_FINAL_ANALYSIS) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
             ChallengeFinalAnalysisRoute(
@@ -397,19 +423,30 @@ fun NavGraphBuilder.uploadGraph(
 }
 
 fun NavController.navigateToUpload(
-    recordedVideoUri: String? = null
+    recordedVideoUri: String? = null,
+    autoOpenPicker: Boolean = false
 ) {
+    val queryParameters = buildList {
+        if (!recordedVideoUri.isNullOrBlank()) {
+            add(
+                "${ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI}=" +
+                    Uri.encode(recordedVideoUri)
+            )
+        }
+        if (autoOpenPicker) {
+            add("${ScreenRoutes.Climbing.Upload.ARG_AUTO_OPEN_PICKER}=true")
+        }
+    }
     val route = buildString {
         append(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD)
-        if (!recordedVideoUri.isNullOrBlank()) {
+        if (queryParameters.isNotEmpty()) {
             append("?")
-            append(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
-            append("=")
-            append(Uri.encode(recordedVideoUri.orEmpty()))
+            append(queryParameters.joinToString("&"))
         }
     }
     navigate(route)
 }
+
 fun NavController.navigateToRealtimeRecordedAttempt(
     recordedVideoUri: String? = null
 ) {

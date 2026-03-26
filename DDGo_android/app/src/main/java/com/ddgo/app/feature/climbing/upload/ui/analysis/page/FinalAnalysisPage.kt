@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.feature.climbing.upload.AnalysisBgColor
 import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
@@ -80,13 +81,15 @@ internal fun FinalAnalysisPage(
         mutableLongStateOf(-1L)
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(AnalysisBgColor)
-            .statusBarsPadding()
-            .verticalScroll(scrollState)
+    SafeAreaScreen(
+        modifier = modifier,
+        containerColor = AnalysisBgColor
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+        ) {
         FinalAnalysisTopBar(onNavigateBack = onNavigateBack)
 
         AttemptPreviewHero(
@@ -150,7 +153,8 @@ internal fun FinalAnalysisPage(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp).navigationBarsPadding())
+        Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }
 

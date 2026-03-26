@@ -18,6 +18,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +34,7 @@ import com.ddgo.app.core.ui.components.SafeAreaScreen
 fun AttemptUploadScreen(
     viewModel: UploadViewModel = hiltViewModel(),
     initialRecordedVideoUri: String? = null,
+    autoOpenPicker: Boolean = false,
     onNavigateToNext: () -> Unit = {}
 ) {
     LaunchedEffect(initialRecordedVideoUri) {
@@ -48,6 +53,18 @@ fun AttemptUploadScreen(
         if (uri != null) {
             viewModel.updateVideoUri(uri = uri.toString())
             onNavigateToNext()
+        }
+    }
+    var shouldAutoLaunchPicker by rememberSaveable(initialRecordedVideoUri, autoOpenPicker) {
+        mutableStateOf(autoOpenPicker && initialRecordedVideoUri.isNullOrBlank())
+    }
+
+    LaunchedEffect(initialRecordedVideoUri, shouldAutoLaunchPicker) {
+        if (initialRecordedVideoUri.isNullOrBlank() && shouldAutoLaunchPicker) {
+            shouldAutoLaunchPicker = false
+            videoPickerLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+            )
         }
     }
 

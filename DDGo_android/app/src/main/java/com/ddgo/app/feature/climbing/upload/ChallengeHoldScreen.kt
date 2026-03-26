@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.domain.model.Hold
 import kotlinx.coroutines.delay
 
@@ -173,11 +174,7 @@ fun ChallengeHoldScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
+    SafeAreaScreen(containerColor = Color.Black) {
         AnimatedContent(
             targetState = displayedUiState is UploadUiState.Success,
             transitionSpec = {

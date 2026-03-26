@@ -18,7 +18,9 @@ fun SafeAreaScreen(
     applyBottomInset: Boolean = true,
     content: @Composable BoxScope.() -> Unit
 ) {
-    var resolvedModifier = modifier.fillMaxSize()
+    var resolvedModifier = modifier
+        .fillMaxSize()
+        .background(containerColor)
 
     if (applyTopInset) {
         resolvedModifier = resolvedModifier.statusBarsPadding()
@@ -29,7 +31,7 @@ fun SafeAreaScreen(
     }
 
     Box(
-        modifier = resolvedModifier.background(containerColor),
+        modifier = resolvedModifier,
         content = content
     )
 }

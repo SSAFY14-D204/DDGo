@@ -2,7 +2,9 @@ package com.ddgo.app.data.remote.gym
 
 import com.ddgo.app.data.remote.common.ApiResponse
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 /**
  * DDGo 백엔드의 gym 관련 API 인터페이스.
@@ -23,4 +25,14 @@ interface GymApi {
     suspend fun resolveGym(
         @Body request: ResolveGymRequestDto
     ): ApiResponse<ResolveGymResponseDto>
+
+    /**
+     * 특정 암장의 난이도(grade) 목록을 조회합니다.
+     *
+     * [GYM_GRADES_API] 로그 태그로 Logcat에서 검색 가능합니다.
+     */
+    @GET("v1/gyms/{gymId}/grades")
+    suspend fun getGymGrades(
+        @Path("gymId") gymId: Int
+    ): ApiResponse<List<GymGradeDto>>
 }

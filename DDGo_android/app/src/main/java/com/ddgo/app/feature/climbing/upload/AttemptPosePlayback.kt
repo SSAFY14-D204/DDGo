@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -8,34 +9,45 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.Dp
+import com.ddgo.app.R
+import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.usecase.HoldNumbered
@@ -82,6 +94,7 @@ internal data class PoseScrubberColors(
 internal data class PoseScrubberMarker(
     val index: Int,
     val timeMs: Long,
+    val kind: AnalysisPointKind = AnalysisPointKind.GENERIC,
     val isSelected: Boolean = false
 )
 
@@ -422,6 +435,86 @@ internal fun calculateRawVerticalCropBounds(rawHolds: List<Hold>): RawVerticalCr
     )
 }
 
+internal fun calculateExpandedVerticalCropBoundsFromSelectedHolds(
+    selectedHolds: List<HoldNumbered>
+): RawVerticalCropBounds? {
+    if (selectedHolds.isEmpty()) return null
+
+    val topFraction = selectedHolds.maxOf { hold ->
+        hold.hold.boundingBox.top.coerceIn(0f, 1f)
+    }
+    val bottomFraction = selectedHolds.minOf { hold ->
+        hold.hold.boundingBox.bottom.coerceIn(0f, 1f)
+    }
+
+    return expandVerticalCropBoundsByVisibleHeightTenth(
+        RawVerticalCropBounds(
+            topFraction = topFraction,
+            bottomFraction = bottomFraction
+        )
+    )
+}
+
+internal fun calculateExpandedVerticalCropBoundsFromSelectedHoldExtents(
+    selectedHolds: List<HoldNumbered>
+): RawVerticalCropBounds? {
+    if (selectedHolds.isEmpty()) return null
+
+    val topFraction = selectedHolds.minOf { hold ->
+        hold.hold.boundingBox.top.coerceIn(0f, 1f)
+    }
+    val bottomFraction = selectedHolds.maxOf { hold ->
+        hold.hold.boundingBox.bottom.coerceIn(0f, 1f)
+    }
+
+    return expandVerticalCropBoundsByVisibleHeightTenth(
+        RawVerticalCropBounds(
+            topFraction = topFraction,
+            bottomFraction = bottomFraction
+        )
+    )
+}
+
+internal fun calculateExpandedVerticalCropBoundsFromRawHoldExtents(
+    rawHolds: List<Hold>
+): RawVerticalCropBounds? {
+    if (rawHolds.isEmpty()) return null
+
+    val topFraction = rawHolds.minOf { hold ->
+        hold.boundingBox.top.coerceIn(0f, 1f)
+    }
+    val bottomFraction = rawHolds.maxOf { hold ->
+        hold.boundingBox.bottom.coerceIn(0f, 1f)
+    }
+
+    return expandVerticalCropBoundsByVisibleHeightTenth(
+        RawVerticalCropBounds(
+            topFraction = topFraction,
+            bottomFraction = bottomFraction
+        )
+    )
+}
+
+internal fun expandVerticalCropBoundsByVisibleHeightTenth(
+    bounds: RawVerticalCropBounds
+): RawVerticalCropBounds? {
+    val clampedTopFraction = bounds.topFraction.coerceIn(0f, 1f)
+    val clampedBottomFraction = bounds.bottomFraction.coerceIn(clampedTopFraction, 1f)
+    val heightFraction = clampedBottomFraction - clampedTopFraction
+    if (heightFraction <= 0f) return null
+
+    val marginFraction = heightFraction / 10f
+    val expandedTopFraction = (clampedTopFraction - marginFraction).coerceIn(0f, 1f)
+    val expandedBottomFraction = (clampedBottomFraction + marginFraction)
+        .coerceIn(expandedTopFraction, 1f)
+    if (expandedBottomFraction <= expandedTopFraction) return null
+
+    return RawVerticalCropBounds(
+        topFraction = expandedTopFraction,
+        bottomFraction = expandedBottomFraction
+    )
+}
+
 internal fun resolveHybridVerticalCropBounds(
     rawBounds: RawVerticalCropBounds?,
     selectedHolds: List<HoldNumbered>
@@ -703,6 +796,8 @@ internal fun PoseVideoScrubber(
     onScrubMove: (Long) -> Unit,
     onScrubStop: () -> Unit
 ) {
+    val startFlag = ImageBitmap.imageResource(id = R.drawable.start_flag)
+    val endFlag = ImageBitmap.imageResource(id = R.drawable.end_flag)
     val progress = if (durationMs > 0L) {
         (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
     } else {
@@ -713,10 +808,17 @@ internal fun PoseVideoScrubber(
 
     @Composable
     fun ScrubberTrackCanvas() {
-        Canvas(
+        var trackSize by remember { mutableStateOf(IntSize.Zero) }
+        val density = LocalDensity.current
+        val markerBadgeSizePx = with(density) { 16.dp.toPx() }
+        val markerFlagSizePx = with(density) { 22.dp.toPx() }
+        val markerLineGapPx = with(density) { 2.dp.toPx() }
+
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(trackCanvasHeight)
+                .onSizeChanged { trackSize = it }
                 .pointerInput(enabled, durationMs) {
                     if (!enabled) return@pointerInput
                     detectTapGestures { offset ->
@@ -746,77 +848,116 @@ internal fun PoseVideoScrubber(
                     )
                 }
         ) {
-            val trackHeight = 4.dp.toPx()
-            val thumbRadius = 7.dp.toPx()
-            val centerY = if (trackAnchoredToBottom) {
-                size.height - thumbRadius - 2.dp.toPx()
-            } else {
-                size.height / 2f
+            Canvas(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val trackHeight = 4.dp.toPx()
+                val thumbRadius = 7.dp.toPx()
+                val centerY = if (trackAnchoredToBottom) {
+                    size.height - thumbRadius - 2.dp.toPx()
+                } else {
+                    size.height / 2f
+                }
+
+                drawLine(
+                    color = colors.trackColor,
+                    start = Offset(0f, centerY),
+                    end = Offset(size.width, centerY),
+                    strokeWidth = trackHeight,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = colors.progressColor,
+                    start = Offset(0f, centerY),
+                    end = Offset(size.width * progress, centerY),
+                    strokeWidth = trackHeight,
+                    cap = StrokeCap.Round
+                )
+
+                val markerCenterY = centerY - 12.dp.toPx()
+                markers
+                    .distinctBy { marker -> marker.index to marker.timeMs }
+                    .forEach { marker ->
+                        val markerX = size.width * markerPositionFraction(marker.timeMs, durationMs)
+                        val fillColor = colors.progressColor.copy(
+                            alpha = if (marker.isSelected) 1f else 0.58f
+                        )
+                        val markerHalfHeightPx = when (marker.kind) {
+                            AnalysisPointKind.PERSON_OBSERVATION_START,
+                            AnalysisPointKind.CLIMB_END -> markerFlagSizePx / 2f
+
+                            else -> markerBadgeSizePx / 2f
+                        }
+
+                        if (
+                            marker.kind != AnalysisPointKind.PERSON_OBSERVATION_START &&
+                            marker.kind != AnalysisPointKind.CLIMB_END
+                        ) {
+                            drawLine(
+                                color = fillColor,
+                                start = Offset(markerX, markerCenterY + markerHalfHeightPx + markerLineGapPx),
+                                end = Offset(markerX, centerY - trackHeight),
+                                strokeWidth = 1.5.dp.toPx(),
+                                cap = StrokeCap.Round
+                            )
+                        }
+                    }
+
+                drawCircle(
+                    color = colors.thumbColor.copy(alpha = if (enabled) 1f else 0.55f),
+                    radius = thumbRadius,
+                    center = Offset(size.width * progress, centerY)
+                )
             }
 
-            drawLine(
-                color = colors.trackColor,
-                start = Offset(0f, centerY),
-                end = Offset(size.width, centerY),
-                strokeWidth = trackHeight,
-                cap = StrokeCap.Round
-            )
-            drawLine(
-                color = colors.progressColor,
-                start = Offset(0f, centerY),
-                end = Offset(size.width * progress, centerY),
-                strokeWidth = trackHeight,
-                cap = StrokeCap.Round
-            )
-            val markerCenterY = centerY - 12.dp.toPx()
-            markers
-                .distinctBy { marker -> marker.index to marker.timeMs }
-                .forEach { marker ->
-                    val markerX = size.width * markerPositionFraction(marker.timeMs, durationMs)
-                    val badgeRadius = 8.dp.toPx()
-                    val fillColor = colors.progressColor.copy(
-                        alpha = if (marker.isSelected) 1f else 0.58f
-                    )
-                    val textColor = if (fillColor.luminance() > 0.45f) {
-                        android.graphics.Color.BLACK
-                    } else {
-                        android.graphics.Color.WHITE
-                    }
-
-                    drawLine(
-                        color = fillColor,
-                        start = Offset(markerX, markerCenterY + badgeRadius + 2.dp.toPx()),
-                        end = Offset(markerX, centerY - trackHeight),
-                        strokeWidth = 1.5.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                    drawCircle(
-                        color = fillColor,
-                        radius = badgeRadius,
-                        center = Offset(markerX, markerCenterY)
-                    )
-                    drawIntoCanvas { canvas ->
-                        val paint = android.graphics.Paint().apply {
-                            isAntiAlias = true
-                            color = textColor
-                            textAlign = android.graphics.Paint.Align.CENTER
-                            textSize = 10.sp.toPx()
-                            typeface = android.graphics.Typeface.DEFAULT_BOLD
-                        }
-                        val baseline = markerCenterY - ((paint.descent() + paint.ascent()) / 2f)
-                        canvas.nativeCanvas.drawText(
-                            marker.index.toString(),
-                            markerX,
-                            baseline,
-                            paint
-                        )
-                    }
+            if (trackSize.width > 0 && durationMs > 0L) {
+                val thumbRadiusPx = with(density) { 7.dp.toPx() }
+                val centerY = if (trackAnchoredToBottom) {
+                    trackSize.height.toFloat() - thumbRadiusPx - with(density) { 2.dp.toPx() }
+                } else {
+                    trackSize.height / 2f
                 }
-            drawCircle(
-                color = colors.thumbColor.copy(alpha = if (enabled) 1f else 0.55f),
-                radius = thumbRadius,
-                center = Offset(size.width * progress, centerY)
-            )
+                val markerCenterY = centerY - with(density) { 12.dp.toPx() }
+
+                markers
+                    .distinctBy { marker -> marker.index to marker.timeMs }
+                    .forEach { marker ->
+                        val markerX = trackSize.width * markerPositionFraction(marker.timeMs, durationMs)
+                        when (marker.kind) {
+                            AnalysisPointKind.PERSON_OBSERVATION_START -> {
+                                ScrubberFlagMarker(
+                                    image = startFlag,
+                                    contentDescription = "Start marker",
+                                    centerX = markerX,
+                                    centerY = markerCenterY,
+                                    sizePx = markerFlagSizePx,
+                                    isSelected = marker.isSelected
+                                )
+                            }
+
+                            AnalysisPointKind.CLIMB_END -> {
+                                ScrubberFlagMarker(
+                                    image = endFlag,
+                                    contentDescription = "End marker",
+                                    centerX = markerX,
+                                    centerY = markerCenterY,
+                                    sizePx = markerFlagSizePx,
+                                    isSelected = marker.isSelected
+                                )
+                            }
+
+                            else -> {
+                                ScrubberNumberMarker(
+                                    marker = marker,
+                                    colors = colors,
+                                    centerX = markerX,
+                                    centerY = markerCenterY,
+                                    sizePx = markerBadgeSizePx
+                                )
+                            }
+                        }
+                    }
+            }
         }
     }
 
@@ -863,6 +1004,66 @@ internal fun PoseVideoScrubber(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun BoxScope.ScrubberFlagMarker(
+    image: ImageBitmap,
+    contentDescription: String,
+    centerX: Float,
+    centerY: Float,
+    sizePx: Float,
+    isSelected: Boolean
+) {
+    Image(
+        bitmap = image,
+        contentDescription = contentDescription,
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (centerX - (sizePx / 2f)).roundToInt(),
+                    y = (centerY - (sizePx / 2f)).roundToInt()
+                )
+            }
+            .size(with(LocalDensity.current) { sizePx.toDp() })
+            .alpha(if (isSelected) 1f else 0.72f)
+    )
+}
+
+@Composable
+private fun BoxScope.ScrubberNumberMarker(
+    marker: PoseScrubberMarker,
+    colors: PoseScrubberColors,
+    centerX: Float,
+    centerY: Float,
+    sizePx: Float
+) {
+    val fillColor = colors.progressColor.copy(alpha = if (marker.isSelected) 1f else 0.58f)
+    val textColor = if (fillColor.luminance() > 0.45f) {
+        Color.Black
+    } else {
+        Color.White
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (centerX - (sizePx / 2f)).roundToInt(),
+                    y = (centerY - (sizePx / 2f)).roundToInt()
+                )
+            }
+            .size(with(LocalDensity.current) { sizePx.toDp() })
+            .background(color = fillColor, shape = CircleShape)
+    ) {
+        Text(
+            text = marker.index.toString(),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = textColor
+        )
     }
 }
 

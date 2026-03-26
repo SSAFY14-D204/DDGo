@@ -1,5 +1,6 @@
 package com.ddgo.app.data.repository
 
+import android.util.Log
 import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.GymMapper.toDomain
 import com.ddgo.app.data.mapper.GymMapper.toDomainOrNull
@@ -7,6 +8,7 @@ import com.ddgo.app.data.remote.gym.GymApi
 import com.ddgo.app.data.remote.gym.ResolveGymRequestDto
 import com.ddgo.app.data.remote.kakao.KakaoLocalApi
 import com.ddgo.app.data.remote.kakao.KakaoPlaceDocumentDto
+import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.ResolvedGym
 import com.ddgo.app.domain.repository.GymRepository
@@ -109,6 +111,50 @@ class GymRepositoryImpl @Inject constructor(
             Result.failure(
                 IllegalStateException(
                     e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "암장 정보를 확인하지 못했어요.",
+                    e
+                )
+            )
+        }
+    }
+
+    /**
+     * 특정 암장의 난이도 목록을 조회합니다.
+     *
+     * 로그 태그 [GYM_GRADES_API] 로 Logcat 에서 검색 가능합니다.
+     */
+    override suspend fun getGymGrades(gymId: Int): Result<List<GymGrade>> {
+        Log.d("GYM_GRADES_API", "→ GET v1/gyms/$gymId/grades 호출")
+        return try {
+            val response = gymApi.getGymGrades(gymId)
+
+            if (response.success && response.data != null) {
+                val grades = response.data.map { dto ->
+                    GymGrade(
+                        gymGradeId = dto.gymGradeId,
+                        colorName = dto.colorName,
+                        sortOrder = dto.sortOrder,
+                        colorHex = dto.colorHex,
+                        gradeLabel = dto.gradeLabel
+                    )
+                }
+                Log.d(
+                    "GYM_GRADES_API",
+                    "← 성공 gymId=$gymId grades=${grades.size}개: " +
+                        grades.joinToString { "${it.sortOrder}(${it.colorName})" }
+                )
+                Result.success(grades)
+            } else {
+                val msg = response.message.ifBlank { "Failed to fetch gym grades." }
+                Log.w("GYM_GRADES_API", "← 실패 gymId=$gymId message=$msg")
+                Result.failure(Exception(msg))
+            }
+        } catch (e: Exception) {
+            Log.e("GYM_GRADES_API", "← 에러 gymId=$gymId", e)
+            Result.failure(
+                IllegalStateException(
+                    e.toUserFacingNetworkMessageOrNull()
+                        ?: e.message
+                        ?: "암장 난이도 정보를 불러오지 못했어요.",
                     e
                 )
             )
