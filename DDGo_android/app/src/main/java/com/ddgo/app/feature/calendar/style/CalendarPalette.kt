@@ -42,8 +42,8 @@ internal object CalendarPalette {
     val DayCellTextMuted = Color(0xFF8F9BB3)
     val DayCellSelected = Color(0xFF4396FB)
     val DayCellSelectedText = Color.White
-    val DayPlaceholder = Color(0xFF999999)
-    val DayPlaceholderMuted = Color(0xFF8F9BB3).copy(alpha = 0.25f)
+    val DayPlaceholder = Color(0xFFF0F3F5)
+    val DayPlaceholderMuted = DayPlaceholder.copy(alpha = 0.25f)
     val GymMarkerBackground = Color(0xFF999999)
     val GymMarkerText = Color.White
     val MarkerOutlineFill = Color.White

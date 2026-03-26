@@ -1,14 +1,12 @@
 package com.ddgo.app.feature.calendar.components
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
@@ -22,9 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ddgo.app.R
 import com.ddgo.app.feature.calendar.model.CalendarMonthSummaryUiModel
 import com.ddgo.app.feature.calendar.style.CalendarPalette
 import java.time.YearMonth
@@ -100,14 +100,7 @@ internal fun CalendarHeroSection(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(
-                                color = CalendarPalette.Accent,
-                                shape = CircleShape
-                            )
-                    )
+                    CalendarHeroMark()
                 }
                 Text(
                     text = headline,
@@ -127,4 +120,13 @@ internal fun CalendarHeroSection(
             }
         }
     }
+}
+
+@Composable
+private fun CalendarHeroMark() {
+    Image(
+        painter = painterResource(id = R.drawable.ic_calendar_hero_subtract),
+        contentDescription = null,
+        modifier = Modifier.size(width = 61.dp, height = 40.dp)
+    )
 }
