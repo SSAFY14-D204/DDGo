@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -53,6 +55,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -81,13 +85,31 @@ private data class WelcomeFeatureSlide(
     val accentColor: Color
 )
 
+private data class WelcomeLayoutProfile(
+    val introTopPadding: Dp,
+    val introLogoWidth: Dp,
+    val introLogoHeight: Dp,
+    val introLogoSpacing: Dp,
+    val introTitleFontSize: TextUnit,
+    val introTitleLineHeight: TextUnit,
+    val featureTopPadding: Dp,
+    val featureSpacing: Dp,
+    val featureIconSize: Dp,
+    val featureTitleFontSize: TextUnit,
+    val featureTitleLineHeight: TextUnit,
+    val featureTitleMinHeight: Dp,
+    val phoneWidth: Dp,
+    val phoneHeight: Dp,
+    val phoneShadowElevation: Dp
+)
+
 @Composable
 fun AuthLandingScreen(
     viewModel: AuthViewModel,
     onRegisterClick: () -> Unit,
     onLoginClick: () -> Unit
 ) {
-    val density = androidx.compose.ui.platform.LocalDensity.current
+    val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 56.dp.toPx() }
     val slides = remember {
         listOf(
@@ -147,7 +169,7 @@ fun AuthLandingScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -188,6 +210,13 @@ fun AuthLandingScreen(
                     },
                 contentAlignment = Alignment.Center
             ) {
+                val layoutProfile = remember(maxHeight, density.fontScale) {
+                    resolveWelcomeLayoutProfile(
+                        availableHeight = maxHeight,
+                        fontScale = density.fontScale
+                    )
+                }
+
                 AnimatedContent(
                     targetState = if (showIntro) IntroSlideState else currentSlideIndex,
                     transitionSpec = {
@@ -213,12 +242,13 @@ fun AuthLandingScreen(
                     label = "welcome_content"
                 ) { targetState ->
                     if (targetState == IntroSlideState) {
-                        WelcomeIntroContent()
+                        WelcomeIntroContent(layoutProfile = layoutProfile)
                     } else {
                         WelcomeFeatureContent(
                             slide = slides[targetState],
                             activeIndex = targetState,
-                            slideCount = slides.size
+                            slideCount = slides.size,
+                            layoutProfile = layoutProfile
                         )
                     }
                 }
@@ -239,27 +269,29 @@ fun AuthLandingScreen(
 }
 
 @Composable
-private fun WelcomeIntroContent() {
+private fun WelcomeIntroContent(
+    layoutProfile: WelcomeLayoutProfile
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 24.dp),
+            .padding(top = layoutProfile.introTopPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         DdgoMascotMark(
             modifier = Modifier
-                .width(110.dp)
-                .height(72.dp)
+                .width(layoutProfile.introLogoWidth)
+                .height(layoutProfile.introLogoHeight)
         )
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(layoutProfile.introLogoSpacing))
         Text(
             text = AuthStrings.WelcomeIntroTitle,
             style = TextStyle(
                 fontFamily = PretendardFamily,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 28.sp,
-                lineHeight = 39.sp,
+                fontSize = layoutProfile.introTitleFontSize,
+                lineHeight = layoutProfile.introTitleLineHeight,
                 letterSpacing = (-0.28).sp,
                 color = Color(0xFF0B0B0E),
                 textAlign = TextAlign.Center
@@ -272,21 +304,22 @@ private fun WelcomeIntroContent() {
 private fun WelcomeFeatureContent(
     slide: WelcomeFeatureSlide,
     activeIndex: Int,
-    slideCount: Int
+    slideCount: Int,
+    layoutProfile: WelcomeLayoutProfile
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 20.dp),
+            .padding(top = layoutProfile.featureTopPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             painter = painterResource(id = slide.iconResId),
             contentDescription = null,
             tint = slide.accentColor,
-            modifier = Modifier.size(38.dp)
+            modifier = Modifier.size(layoutProfile.featureIconSize)
         )
-        Spacer(modifier = Modifier.height(22.dp))
+        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
         Text(
             text = highlightedHeadline(
                 text = slide.headline,
@@ -296,20 +329,20 @@ private fun WelcomeFeatureContent(
             style = TextStyle(
                 fontFamily = PretendardFamily,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 28.sp,
-                lineHeight = 39.sp,
+                fontSize = layoutProfile.featureTitleFontSize,
+                lineHeight = layoutProfile.featureTitleLineHeight,
                 letterSpacing = (-0.28).sp,
                 color = Color(0xFF0B0B0E),
                 textAlign = TextAlign.Center
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 90.dp)
+                .heightIn(min = layoutProfile.featureTitleMinHeight)
                 .padding(horizontal = 18.dp)
         )
-        Spacer(modifier = Modifier.height(22.dp))
-        WelcomePhoneMockup()
-        Spacer(modifier = Modifier.height(22.dp))
+        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
+        WelcomePhoneMockup(layoutProfile = layoutProfile)
+        Spacer(modifier = Modifier.height(layoutProfile.featureSpacing))
         WelcomeIndicator(
             activeIndex = activeIndex,
             slideCount = slideCount
@@ -318,15 +351,17 @@ private fun WelcomeFeatureContent(
 }
 
 @Composable
-private fun WelcomePhoneMockup() {
+private fun WelcomePhoneMockup(
+    layoutProfile: WelcomeLayoutProfile
+) {
     val context = LocalContext.current
 
     Box(
         modifier = Modifier
-            .width(200.dp)
-            .height(414.dp)
+            .width(layoutProfile.phoneWidth)
+            .height(layoutProfile.phoneHeight)
             .shadow(
-                elevation = 28.dp,
+                elevation = layoutProfile.phoneShadowElevation,
                 shape = RoundedCornerShape(48.dp),
                 ambientColor = Color(0x1A6A707C),
                 spotColor = Color(0x1A6A707C)
@@ -349,6 +384,85 @@ private fun WelcomePhoneMockup() {
                 .build(),
             contentDescription = null,
             modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+private fun resolveWelcomeLayoutProfile(
+    availableHeight: Dp,
+    fontScale: Float
+): WelcomeLayoutProfile {
+    return when {
+        availableHeight < 520.dp || fontScale >= 1.32f -> WelcomeLayoutProfile(
+            introTopPadding = 16.dp,
+            introLogoWidth = 94.dp,
+            introLogoHeight = 62.dp,
+            introLogoSpacing = 24.dp,
+            introTitleFontSize = 24.sp,
+            introTitleLineHeight = 34.sp,
+            featureTopPadding = 12.dp,
+            featureSpacing = 12.dp,
+            featureIconSize = 32.dp,
+            featureTitleFontSize = 24.sp,
+            featureTitleLineHeight = 34.sp,
+            featureTitleMinHeight = 68.dp,
+            phoneWidth = 154.dp,
+            phoneHeight = 319.dp,
+            phoneShadowElevation = 18.dp
+        )
+
+        availableHeight < 580.dp || fontScale >= 1.2f -> WelcomeLayoutProfile(
+            introTopPadding = 18.dp,
+            introLogoWidth = 100.dp,
+            introLogoHeight = 66.dp,
+            introLogoSpacing = 28.dp,
+            introTitleFontSize = 26.sp,
+            introTitleLineHeight = 36.sp,
+            featureTopPadding = 14.dp,
+            featureSpacing = 14.dp,
+            featureIconSize = 34.dp,
+            featureTitleFontSize = 26.sp,
+            featureTitleLineHeight = 36.sp,
+            featureTitleMinHeight = 72.dp,
+            phoneWidth = 170.dp,
+            phoneHeight = 352.dp,
+            phoneShadowElevation = 22.dp
+        )
+
+        availableHeight < 640.dp || fontScale >= 1.1f -> WelcomeLayoutProfile(
+            introTopPadding = 20.dp,
+            introLogoWidth = 104.dp,
+            introLogoHeight = 68.dp,
+            introLogoSpacing = 32.dp,
+            introTitleFontSize = 28.sp,
+            introTitleLineHeight = 39.sp,
+            featureTopPadding = 16.dp,
+            featureSpacing = 18.dp,
+            featureIconSize = 36.dp,
+            featureTitleFontSize = 28.sp,
+            featureTitleLineHeight = 39.sp,
+            featureTitleMinHeight = 78.dp,
+            phoneWidth = 186.dp,
+            phoneHeight = 385.dp,
+            phoneShadowElevation = 24.dp
+        )
+
+        else -> WelcomeLayoutProfile(
+            introTopPadding = 24.dp,
+            introLogoWidth = 110.dp,
+            introLogoHeight = 72.dp,
+            introLogoSpacing = 36.dp,
+            introTitleFontSize = 28.sp,
+            introTitleLineHeight = 39.sp,
+            featureTopPadding = 20.dp,
+            featureSpacing = 22.dp,
+            featureIconSize = 38.dp,
+            featureTitleFontSize = 28.sp,
+            featureTitleLineHeight = 39.sp,
+            featureTitleMinHeight = 78.dp,
+            phoneWidth = 200.dp,
+            phoneHeight = 414.dp,
+            phoneShadowElevation = 28.dp
         )
     }
 }
