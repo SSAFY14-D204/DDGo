@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.main
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -81,6 +82,16 @@ fun MainScreen(
         if (pendingAnalysisShareRequest == null) return@LaunchedEffect
         lastActiveTab = MainTab.COMMUNITY
         selectedTab = MainTab.COMMUNITY
+    }
+
+    // Root bottom-nav tabs should return to Calendar before leaving the app.
+    BackHandler(
+        enabled = selectedTab == MainTab.COMMUNITY ||
+            selectedTab == MainTab.ANALYSIS ||
+            selectedTab == MainTab.PROFILE
+    ) {
+        selectedTab = MainTab.CALENDAR
+        lastActiveTab = MainTab.CALENDAR
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
