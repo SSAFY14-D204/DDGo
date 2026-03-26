@@ -453,6 +453,7 @@ class AuthViewModel @Inject constructor(
         authToken: AuthToken,
         forceProfileOnboarding: Boolean = false
     ): AuthSuccessDestination {
+        onboardingPreferenceDataStore.setHasAuthenticatedOnce()
         val hasCompletedIntroOnboarding = onboardingPreferenceDataStore.hasCompletedOnboarding.first()
         val shouldOpenOnboarding = forceProfileOnboarding ||
             authToken.needsOnboarding == true ||

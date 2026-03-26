@@ -51,21 +51,21 @@ class SplashViewModel @Inject constructor(
             delay(SPLASH_DELAY_MS)
 
             val hasCompletedOnboarding = onboardingPreferenceDataStore.hasCompletedOnboarding.first()
+            val hasAuthenticatedOnce = onboardingPreferenceDataStore.hasAuthenticatedOnce.first()
             val resolvedDestination = resolveAuthenticatedDestination()
 
             val navigationEvent = when (resolvedDestination) {
                 ResolvedDestination.Auth -> {
-                    if (hasCompletedOnboarding) {
-                        SplashNavigationEvent.NavigateToAuth
+                    if (hasAuthenticatedOnce) {
+                        SplashNavigationEvent.NavigateToLoginEmail
                     } else {
-                        SplashNavigationEvent.NavigateToOnboarding(
-                            nextRoute = ScreenRoutes.Auth.route,
-                            mode = OnboardingMode.INTRO
-                        )
+                        SplashNavigationEvent.NavigateToWelcome
                     }
                 }
 
-                is ResolvedDestination.Main -> when {
+                is ResolvedDestination.Main -> {
+                    onboardingPreferenceDataStore.setHasAuthenticatedOnce()
+                    when {
                     !hasCompletedOnboarding && resolvedDestination.requiresProfileOnboarding -> {
                         SplashNavigationEvent.NavigateToOnboarding(
                             nextRoute = ScreenRoutes.MainGraph.route,
@@ -88,6 +88,7 @@ class SplashViewModel @Inject constructor(
                     }
 
                     else -> SplashNavigationEvent.NavigateToMain
+                    }
                 }
             }
 
@@ -215,7 +216,8 @@ private fun validationUserRequiresProfileOnboarding(user: UserResponseDto): Bool
 }
 
 sealed class SplashNavigationEvent {
-    data object NavigateToAuth : SplashNavigationEvent()
+    data object NavigateToWelcome : SplashNavigationEvent()
+    data object NavigateToLoginEmail : SplashNavigationEvent()
     data object NavigateToMain : SplashNavigationEvent()
     data class NavigateToOnboarding(
         val nextRoute: String,

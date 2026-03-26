@@ -22,14 +22,24 @@ class OnboardingPreferenceDataStore @Inject constructor(
 ) {
     private companion object {
         val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val KEY_HAS_AUTHENTICATED_ONCE = booleanPreferencesKey("has_authenticated_once")
     }
 
     val hasCompletedOnboarding: Flow<Boolean> = context.ddgoPreferencesDataStore.data
         .map { preferences -> preferences[KEY_ONBOARDING_COMPLETED] ?: false }
 
+    val hasAuthenticatedOnce: Flow<Boolean> = context.ddgoPreferencesDataStore.data
+        .map { preferences -> preferences[KEY_HAS_AUTHENTICATED_ONCE] ?: false }
+
     suspend fun setOnboardingCompleted(completed: Boolean = true) {
         context.ddgoPreferencesDataStore.edit { preferences ->
             preferences[KEY_ONBOARDING_COMPLETED] = completed
+        }
+    }
+
+    suspend fun setHasAuthenticatedOnce(authenticated: Boolean = true) {
+        context.ddgoPreferencesDataStore.edit { preferences ->
+            preferences[KEY_HAS_AUTHENTICATED_ONCE] = authenticated
         }
     }
 }
