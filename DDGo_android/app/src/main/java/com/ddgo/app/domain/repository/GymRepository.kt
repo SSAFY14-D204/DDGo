@@ -1,5 +1,6 @@
 package com.ddgo.app.domain.repository
 
+import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 import com.ddgo.app.domain.model.ResolvedGym
 
@@ -28,4 +29,11 @@ interface GymRepository {
      * 선택한 장소를 DDGo gym으로 resolve 합니다.
      */
     suspend fun resolveGym(place: NearbyPlace): Result<ResolvedGym>
+
+    /**
+     * 특정 암장의 난이도(grade) 목록을 조회합니다.
+     *
+     * Logcat에서 [GYM_GRADES_API] 태그로 검색하면 관련 로그를 볼 수 있습니다.
+     */
+    suspend fun getGymGrades(gymId: Int): Result<List<GymGrade>>
 }

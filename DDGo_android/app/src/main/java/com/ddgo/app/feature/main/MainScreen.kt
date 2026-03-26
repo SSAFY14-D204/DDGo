@@ -7,14 +7,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,6 +28,11 @@ import com.ddgo.app.feature.community.CommunityScreen
 import com.ddgo.app.feature.profile.ProfileScreen
 import com.ddgo.app.navigation.PendingCommunityComposeRequest
 import java.time.LocalDate
+
+private enum class PendingClimbingDestination {
+    Upload,
+    Record
+}
 
 @Composable
 fun MainScreen(
@@ -44,7 +50,24 @@ fun MainScreen(
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
     var lastActiveTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
     var analysisTargetChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingClimbingDestination by remember {
+        mutableStateOf<PendingClimbingDestination?>(null)
+    }
     val isClimbing = selectedTab == MainTab.CLIMBING
+
+    LaunchedEffect(pendingClimbingDestination, isClimbing) {
+        val destination = pendingClimbingDestination ?: return@LaunchedEffect
+        if (isClimbing) return@LaunchedEffect
+
+        // Let the menu overlay and its dim layer disappear before opening the next screen/picker.
+        withFrameNanos { }
+
+        when (destination) {
+            PendingClimbingDestination.Upload -> onNavigateToUpload()
+            PendingClimbingDestination.Record -> onNavigateToRecord()
+        }
+        pendingClimbingDestination = null
+    }
 
     LaunchedEffect(pendingCalendarChallengeId) {
         if (pendingCalendarChallengeId == null) return@LaunchedEffect
@@ -139,9 +162,19 @@ fun MainScreen(
                     .zIndex(MainZIndex.MENU_OVERLAY)
             ) {
                 ClimbingMenuOverlay(
-                    onNavigateToUpload = onNavigateToUpload,
-                    onNavigateToRecord = onNavigateToRecord,
-                    onDismiss = { selectedTab = lastActiveTab }
+                    onNavigateToUpload = {
+                        pendingClimbingDestination = PendingClimbingDestination.Upload
+                        selectedTab = lastActiveTab
+                    },
+                    onNavigateToRecord = {
+                        pendingClimbingDestination = PendingClimbingDestination.Record
+                        selectedTab = lastActiveTab
+                    },
+                    onDismiss = {
+                        if (pendingClimbingDestination == null) {
+                            selectedTab = lastActiveTab
+                        }
+                    }
                 )
             }
         }

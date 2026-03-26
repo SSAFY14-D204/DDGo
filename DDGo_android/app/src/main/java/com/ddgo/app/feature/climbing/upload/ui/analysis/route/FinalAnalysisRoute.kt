@@ -26,6 +26,7 @@ import com.ddgo.app.feature.climbing.upload.UploadBackgroundUploadSnackbarHost
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
 import com.ddgo.app.feature.climbing.upload.buildChallengeFinalAnalysisSummary
 import com.ddgo.app.feature.climbing.upload.buildFinalAnalysisAttemptSummaries
+import com.ddgo.app.feature.climbing.upload.calculateExpandedVerticalCropBoundsFromSelectedHoldExtents
 import com.ddgo.app.feature.climbing.upload.formatAnalysisDate
 import com.ddgo.app.feature.climbing.upload.withAlignedDisplayCrux
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
@@ -248,6 +249,10 @@ fun FinalAnalysisRoute(
     val displayDate = remember(viewModel.createdChallenge?.startedAt) {
         formatAnalysisDate(viewModel.createdChallenge?.startedAt)
     }
+    val currentAttemptDisplayHolds = viewModel.currentAttemptDisplayHolds
+    val selectedAttemptCropBounds = remember(currentAttemptDisplayHolds) {
+        calculateExpandedVerticalCropBoundsFromSelectedHoldExtents(currentAttemptDisplayHolds)
+    }
 
     val pageState = remember(
         viewModel.gymName,
@@ -265,6 +270,8 @@ fun FinalAnalysisRoute(
         viewModel.currentAttemptPoseSequence,
         viewModel.currentAttemptOverlayCache,
         viewModel.currentAttemptPrePoseEntry,
+        currentAttemptDisplayHolds,
+        selectedAttemptCropBounds,
         viewModel.allRawHolds,
         analysisStartTimeMs,
         seekRequestId,
@@ -287,12 +294,13 @@ fun FinalAnalysisRoute(
                 fallbackLabel = displaySummary.fallbackLabel,
                 previewBitmap = viewModel.bestFrameBitmap,
                 previewHolds = viewModel.detectedHolds,
-                numberedHolds = viewModel.currentAttemptDisplayHolds,
+                numberedHolds = currentAttemptDisplayHolds,
                 selectedAttemptVideoUri = selectedAttemptVideoUri,
                 analysisPoints = timelinePoints,
                 attemptPoseSequence = viewModel.currentAttemptPoseSequence,
                 overlayCache = viewModel.currentAttemptOverlayCache,
                 rawHolds = viewModel.allRawHolds,
+                viewportCropBounds = selectedAttemptCropBounds,
                 wallArrivalTimeMs = viewModel.currentAttemptPrePoseEntry?.wallArrivalTimeMs,
                 personObservationStartTimeMs = viewModel.currentAttemptPrePoseEntry?.personObservationStartTimeMs,
                 usesPoseTimeline = viewModel.currentAttemptPrePoseEntry != null,

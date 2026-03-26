@@ -48,10 +48,11 @@ sealed class ScreenRoutes(val route: String) {
 
             const val ATTEMPT_UPLOAD = "attempt_upload"
             const val ARG_RECORDED_VIDEO_URI = "recordedVideoUri"
+            const val ARG_AUTO_OPEN_PICKER = "autoOpenPicker"
             const val REALTIME_RECORDED_ATTEMPT_WITH_ARGS =
                 "$REALTIME_RECORDED_ATTEMPT?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}"
             const val ATTEMPT_UPLOAD_WITH_ARGS =
-                "$ATTEMPT_UPLOAD?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}"
+                "$ATTEMPT_UPLOAD?$ARG_RECORDED_VIDEO_URI={$ARG_RECORDED_VIDEO_URI}&$ARG_AUTO_OPEN_PICKER={$ARG_AUTO_OPEN_PICKER}"
 
             const val CHALLENGE_CREATE = "challenge_create"
             const val CHALLENGE_COLOR = "challenge_color"

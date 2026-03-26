@@ -11,6 +11,7 @@ import com.ddgo.app.feature.calendar.calendarDetailRoute
 import com.ddgo.app.feature.calendar.navigateToCalendarDetail
 import com.ddgo.app.feature.calendar.rememberSharedCalendarViewModel
 import com.ddgo.app.feature.climbing.record.recordGraph
+import com.ddgo.app.feature.climbing.upload.navigateToUpload
 import com.ddgo.app.feature.climbing.upload.uploadGraph
 import com.ddgo.app.navigation.PENDING_COMMUNITY_COMPOSE_REQUEST_KEY
 import com.ddgo.app.navigation.toPendingCommunityComposeRequestOrNull
@@ -50,7 +51,7 @@ fun NavGraphBuilder.mainGraph(
 
             MainScreen(
                 onNavigateToUpload = {
-                    navController.navigate(ScreenRoutes.Climbing.Upload.route)
+                    navController.navigateToUpload(autoOpenPicker = true)
                 },
                 onNavigateToRecord = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_SETUP)

@@ -54,6 +54,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -62,6 +64,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
@@ -77,13 +80,18 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.ddgo.app.R
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.domain.model.AnalysisPoint
+import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.usecase.HoldNumbered
+import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSection
+import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSectionState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 private val C_BG = Color(0xFF0D0D0D)
 private val C_ACCENT = Color(0xFF2979FF)
@@ -108,7 +116,6 @@ fun AttemptResultScreen(
     onNavigateToCompare: () -> Unit = {},
     onNavigateToAddAttempt: () -> Unit = {}
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
@@ -126,12 +133,17 @@ fun AttemptResultScreen(
     ) {
         presentationResults.firstOrNull() ?: (false to emptyList())
     }
+    val currentAnalysisPoints = remember(currentAttemptResult.second) {
+        currentAttemptResult.second.toAttemptDisplayAnalysisPoints()
+    }
+    val cardAnalysisPoints = remember(currentAnalysisPoints) {
+        currentAnalysisPoints.filterNot(AnalysisPoint::isAttemptStartPoint)
+    }
     val currentAttemptHoldReachResult = viewModel.currentAttemptHoldReachResult
     val totalSelectedHoldCount = viewModel.totalSelectedHoldCount
     val isSuccess = currentAttemptHoldReachResult?.let { result ->
         totalSelectedHoldCount > 0 && result.completedWithBothHandsOnEndHold
     } ?: currentAttemptResult.first
-    val currentAnalysisPoints = currentAttemptResult.second
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence
     val currentAttemptOverlayCache = viewModel.currentAttemptOverlayCache
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
@@ -140,7 +152,9 @@ fun AttemptResultScreen(
     val usesPoseDetectorTimeline = currentAttemptPrePoseEntry != null
     val numberedHolds = viewModel.currentAttemptDisplayHolds
     val allRawHolds = viewModel.allRawHolds
-    val currentAttemptCropBounds = viewModel.currentAttemptCropBounds
+    val selectedAttemptCropBounds = remember(numberedHolds) {
+        calculateExpandedVerticalCropBoundsFromSelectedHoldExtents(numberedHolds)
+    }
     val endpointStatusMessage = remember(currentAttemptPrePoseEntry, currentAnalysisPoints) {
         when {
             currentAttemptPrePoseEntry == null -> null
@@ -155,95 +169,13 @@ fun AttemptResultScreen(
         }
     }
 
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            playWhenReady = true
-        }
-    }
-
-    var playerVideoSize by remember(currentVideoUri) { mutableStateOf(VideoSize.UNKNOWN) }
-    var fullVideoLayerSize by remember(currentVideoUri) { mutableStateOf(IntSize.Zero) }
-    var currentPositionMs by remember(currentVideoUri) { mutableLongStateOf(0L) }
-    var durationMs by remember(currentVideoUri) { mutableLongStateOf(0L) }
-    var isPlaying by remember(currentVideoUri) { mutableStateOf(false) }
-    var playbackState by remember(currentVideoUri) { mutableStateOf(Player.STATE_IDLE) }
-    var isScrubbing by rememberSaveable(currentVideoUri) { mutableStateOf(false) }
-    var scrubPositionMs by rememberSaveable(currentVideoUri) { mutableLongStateOf(0L) }
-    var hasInitialAutoSeekApplied by rememberSaveable(currentVideoUri) { mutableStateOf(false) }
-    var wasPlayingBeforeScrub by remember(currentVideoUri) { mutableStateOf(false) }
+    var displayedPositionMs by remember(currentVideoUri) { mutableLongStateOf(0L) }
+    var seekRequestId by rememberSaveable(currentVideoUri) { mutableLongStateOf(0L) }
+    var pendingSeekTimeMs by rememberSaveable(currentVideoUri) { mutableStateOf<Long?>(null) }
     var tappedCardOverrideIdx by rememberSaveable(currentVideoUri) { mutableIntStateOf(-1) }
-
-    val poseTimestamps = remember(currentAttemptPoses) {
-        currentAttemptPoses
-            .map { pose -> pose.frameTimeMs }
-            .distinct()
-            .sorted()
-    }
-    val displayedPositionMs = if (isScrubbing) scrubPositionMs else currentPositionMs
-    val canScrub = durationMs > 0L && poseTimestamps.isNotEmpty()
-
-    val videoAspectRatio = remember(playerVideoSize) {
-        resolveDisplayedVideoAspectRatio(playerVideoSize)
-    }
-    val videoContentRect = remember(fullVideoLayerSize, playerVideoSize) {
-        calculateVideoContentRect(
-            containerSize = fullVideoLayerSize,
-            videoSize = playerVideoSize
-        )
-    }
-    val holdDrawArea = remember(videoContentRect, fullVideoLayerSize) {
-        resolveHoldDrawArea(
-            contentRect = videoContentRect,
-            fallbackSize = fullVideoLayerSize
-        )
-    }
-    val videoViewportCropSpec = remember(
-        numberedHolds,
-        allRawHolds,
-        fullVideoLayerSize,
-        videoAspectRatio,
-        playerVideoSize,
-        density
-    ) {
-        if (
-            playerVideoSize.width <= 0 ||
-            playerVideoSize.height <= 0 ||
-            fullVideoLayerSize.width <= 0 ||
-            fullVideoLayerSize.height <= 0
-        ) {
-            uncroppedVideoViewportCropSpec(videoAspectRatio)
-        } else {
-            calculateVerticalVideoViewportCropSpecFromRawHolds(
-                holds = allRawHolds,
-                videoAspectRatio = videoAspectRatio,
-                fullVideoHeightPx = fullVideoLayerSize.height.toFloat(),
-                topSafeInsetPx = with(density) { VIDEO_FRAME_TOP_SAFE_INSET.toPx() },
-                bottomSafeInsetPx = with(density) { VIDEO_FRAME_BOTTOM_SAFE_INSET.toPx() }
-            )
-        }
-    }
-    val topCropOffsetPx = remember(videoViewportCropSpec, fullVideoLayerSize) {
-        if (videoViewportCropSpec.isActive) {
-            fullVideoLayerSize.height * videoViewportCropSpec.topCropFraction
-        } else {
-            0f
-        }
-    }
-    LaunchedEffect(
-        currentVideoUri,
-        numberedHolds,
-        allRawHolds,
-        holdDrawArea,
-        fullVideoLayerSize,
-        videoViewportCropSpec
-    ) {
+    LaunchedEffect(currentVideoUri, numberedHolds, allRawHolds, selectedAttemptCropBounds) {
         if (currentVideoUri.isNullOrBlank()) return@LaunchedEffect
-        if (fullVideoLayerSize.width <= 0 || fullVideoLayerSize.height <= 0) return@LaunchedEffect
 
-        val holdScreenRects = calculateHoldNumberScreenRects(
-            holds = numberedHolds,
-            drawArea = holdDrawArea
-        )
         val normalizedBoxes = if (numberedHolds.isEmpty()) {
             "[]"
         } else {
@@ -258,91 +190,67 @@ fun AttemptResultScreen(
                 UploadAiTraceLogger.formatBoundingBox(hold.boundingBox)
             }
         }
-        val screenRectLogs = if (holdScreenRects.isEmpty()) {
-            "[]"
-        } else {
-            holdScreenRects.joinToString(prefix = "[", postfix = "]") { (numbered, rect) ->
-                "#${numbered.holdNo}=${UploadAiTraceLogger.formatRect(rect.l, rect.t, rect.r, rect.b)}"
-            }
-        }
 
         UploadAiTraceLogger.log(
             event = "attempt_result_screen_rects_resolved",
             playbackUri = currentVideoUri,
             details = mapOf(
-                "cropSource" to if (currentAttemptCropBounds != null) "hybridRawAndSelected" else "numberedHoldsFallback",
-                "resolvedCropBounds" to UploadAiTraceLogger.formatCropBounds(currentAttemptCropBounds),
-                "cropHoldCount" to allRawHolds.size,
+                "cropSource" to if (selectedAttemptCropBounds != null) "selectedExtentHolds" else "uncroppedFallback",
+                "resolvedCropBounds" to UploadAiTraceLogger.formatCropBounds(selectedAttemptCropBounds),
+                "cropHoldCount" to numberedHolds.size,
                 "displayHoldCount" to numberedHolds.size,
-                "topSafeInsetDp" to VIDEO_FRAME_TOP_SAFE_INSET.value,
-                "bottomSafeInsetDp" to VIDEO_FRAME_BOTTOM_SAFE_INSET.value,
-                "fullVideoLayerSize" to "${fullVideoLayerSize.width}x${fullVideoLayerSize.height}",
-                "videoContentRect" to UploadAiTraceLogger.formatRect(
-                    holdDrawArea.left,
-                    holdDrawArea.top,
-                    holdDrawArea.left + holdDrawArea.width,
-                    holdDrawArea.top + holdDrawArea.height
-                ),
-                "cropSpec" to "top=${videoViewportCropSpec.topCropFraction},bottom=${videoViewportCropSpec.bottomCropFraction},visible=${videoViewportCropSpec.visibleHeightFraction},aspect=${videoViewportCropSpec.viewportAspectRatio},active=${videoViewportCropSpec.isActive}",
+                "cropMarginMode" to "visibleHeightDiv10",
                 "rawHoldBounds" to rawHoldBounds,
-                "normalizedBBoxes" to normalizedBoxes,
-                "screenRects" to screenRectLogs
+                "normalizedBBoxes" to normalizedBoxes
             )
         )
     }
-    val currentOverlayFrame = remember(currentAttemptOverlayCache, displayedPositionMs) {
-        currentAttemptOverlayCache?.let { overlayCache ->
-            findNearestOverlayFrameForPlayback(
-                cache = overlayCache,
-                positionMs = displayedPositionMs
-            )
-        }
-    }
-
-    val activeIdx by remember(currentAnalysisPoints, displayedPositionMs, tappedCardOverrideIdx) {
+    val activeCardIdx by remember(cardAnalysisPoints, displayedPositionMs, tappedCardOverrideIdx) {
         derivedStateOf {
             resolveActiveAnalysisCardIndex(
-                points = currentAnalysisPoints,
+                points = cardAnalysisPoints,
                 displayedPositionMs = displayedPositionMs,
                 tappedCardOverrideIdx = tappedCardOverrideIdx
             )
         }
     }
-    val scrubberMarkers = remember(currentAnalysisPoints, activeIdx) {
+    val activeMarkerIdx by remember(currentAnalysisPoints, displayedPositionMs) {
+        derivedStateOf {
+            resolvePlaybackActiveAnalysisCardIndex(
+                points = currentAnalysisPoints,
+                displayedPositionMs = displayedPositionMs
+            )
+        }
+    }
+    val scrubberMarkers = remember(currentAnalysisPoints, activeMarkerIdx) {
         currentAnalysisPoints.mapIndexed { index, point ->
             PoseScrubberMarker(
                 index = point.index,
                 timeMs = point.timeMs,
-                isSelected = index == activeIdx
+                kind = point.kind,
+                isSelected = index == activeMarkerIdx
             )
         }
     }
 
     LaunchedEffect(currentVideoUri) {
-        currentPositionMs = 0L
-        durationMs = 0L
-        scrubPositionMs = 0L
-        isScrubbing = false
+        displayedPositionMs = 0L
+        seekRequestId = 0L
+        pendingSeekTimeMs = null
         tappedCardOverrideIdx = -1
-        currentVideoUri?.let { videoUri ->
-            exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(videoUri)))
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
-            playerVideoSize = exoPlayer.videoSize
-        }
     }
 
-    LaunchedEffect(currentAnalysisPoints, tappedCardOverrideIdx) {
-        if (tappedCardOverrideIdx !in currentAnalysisPoints.indices) {
+    LaunchedEffect(cardAnalysisPoints, tappedCardOverrideIdx) {
+        if (tappedCardOverrideIdx !in cardAnalysisPoints.indices) {
             tappedCardOverrideIdx = -1
         }
     }
 
-    LaunchedEffect(currentAnalysisPoints, displayedPositionMs, tappedCardOverrideIdx) {
+    LaunchedEffect(cardAnalysisPoints, displayedPositionMs, tappedCardOverrideIdx) {
         if (
             tappedCardOverrideIdx >= 0 &&
             !shouldKeepTappedAnalysisCardOverride(
-                points = currentAnalysisPoints,
+                points = cardAnalysisPoints,
                 tappedCardOverrideIdx = tappedCardOverrideIdx,
                 displayedPositionMs = displayedPositionMs
             )
@@ -351,74 +259,11 @@ fun AttemptResultScreen(
         }
     }
 
-    LaunchedEffect(
-        currentVideoUri,
-        wallArrivalTimeMs,
-        personObservationStartTimeMs,
-        poseTimestamps,
-        hasInitialAutoSeekApplied
-    ) {
-        if (currentVideoUri == null || hasInitialAutoSeekApplied) return@LaunchedEffect
-        val initialStartMs = resolveInitialAttemptPlaybackStartTimeMs(
-            wallArrivalTimeMs = wallArrivalTimeMs,
-            fallbackPersonObservationStartTimeMs = personObservationStartTimeMs,
-            poseTimestamps = poseTimestamps
-        ) ?: return@LaunchedEffect
-        exoPlayer.seekTo(initialStartMs)
-        currentPositionMs = initialStartMs
-        scrubPositionMs = initialStartMs
-        hasInitialAutoSeekApplied = true
-    }
-
-    LaunchedEffect(exoPlayer, currentVideoUri, isScrubbing) {
-        while (isActive) {
-            durationMs = exoPlayer.duration.coerceAtLeast(0L)
-            playbackState = exoPlayer.playbackState
-            isPlaying = exoPlayer.isPlaying
-            if (!isScrubbing) {
-                currentPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
-            }
-            delay(16L)
-        }
-    }
-
-    DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onVideoSizeChanged(videoSize: VideoSize) {
-                playerVideoSize = videoSize
-            }
-
-            override fun onPlaybackStateChanged(state: Int) {
-                playbackState = state
-                durationMs = exoPlayer.duration.coerceAtLeast(0L)
-                if (!isScrubbing) {
-                    currentPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
-                }
-            }
-        }
-
-        exoPlayer.addListener(listener)
-        onDispose {
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
-        }
-    }
-
-    LaunchedEffect(activeIdx) {
-        if (activeIdx >= 0) {
+    LaunchedEffect(activeCardIdx) {
+        if (activeCardIdx >= 0) {
             scope.launch {
-                cardListState.animateScrollToItem(activeIdx)
+                cardListState.animateScrollToItem(activeCardIdx)
             }
-        }
-    }
-
-    val seekToNearestPoseFrame: (Long) -> Long? = { targetTimeMs ->
-        if (!canScrub) {
-            null
-        } else {
-            poseTimestamps
-                .findNearestTimestamp(targetTimeMs.coerceIn(0L, durationMs))
-                ?.also(exoPlayer::seekTo)
         }
     }
     val bottomActionAreaPadding = with(density) { bottomActionAreaHeightPx.toDp() + 24.dp }
@@ -456,49 +301,37 @@ fun AttemptResultScreen(
                 )
             }
 
-            CroppedVideoViewport(
-                cropSpec = videoViewportCropSpec,
-                fullVideoAspectRatio = videoAspectRatio,
-                topCropPx = topCropOffsetPx,
+            AttemptVideoSection(
+                state = AttemptVideoSectionState(
+                    videoUri = currentVideoUri,
+                    numberedHolds = numberedHolds,
+                    rawHolds = allRawHolds,
+                    viewportCropBounds = selectedAttemptCropBounds,
+                    analysisPoints = currentAnalysisPoints,
+                    markers = scrubberMarkers,
+                    attemptPoseSequence = currentAttemptPoses,
+                    overlayCache = currentAttemptOverlayCache,
+                    wallArrivalTimeMs = wallArrivalTimeMs,
+                    personObservationStartTimeMs = personObservationStartTimeMs,
+                    seekRequestId = seekRequestId,
+                    seekRequestTimeMs = pendingSeekTimeMs
+                ),
                 modifier = Modifier.fillMaxWidth(),
-                onFullVideoSizeChanged = { fullVideoLayerSize = it },
-                transformedLayer = {
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = { viewContext ->
-                            PlayerView(viewContext).apply {
-                                player = exoPlayer
-                                useController = false
-                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                setShutterBackgroundColor(android.graphics.Color.BLACK)
-                            }
-                        },
-                        update = { playerView ->
-                            playerView.player = exoPlayer
-                        }
-                    )
-
-                    currentOverlayFrame?.let { overlayFrame ->
-                        PoseOverlay(
-                            pose = overlayFrame.pose,
-                            contentRect = videoContentRect,
-                            modifier = Modifier.fillMaxSize(),
-                            lineColor = C_BONE,
-                            pointColor = C_JOINT,
-                            hiddenLandmarkIndices = HIDDEN_FACE_LANDMARK_INDICES
-                        )
-                    }
-
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        if (numberedHolds.isNotEmpty()) {
-                            drawHoldNumbers(
-                                holds = numberedHolds,
-                                contentRect = videoContentRect
-                            )
-                        }
-                    }
-                },
-                overlayLayer = {
+                lineColor = C_BONE,
+                pointColor = C_JOINT,
+                scrubberColors = PoseScrubberColors(
+                    trackColor = Color.White.copy(alpha = 0.18f),
+                    progressColor = C_ACCENT_GLOW,
+                    thumbColor = Color.White,
+                    textColor = Color.White.copy(alpha = 0.82f)
+                ),
+                controlSurfaceColor = C_BG,
+                hiddenLandmarkIndices = HIDDEN_FACE_LANDMARK_INDICES,
+                topSafeInset = VIDEO_FRAME_TOP_SAFE_INSET,
+                bottomSafeInset = VIDEO_FRAME_BOTTOM_SAFE_INSET,
+                controlAreaHeight = VIDEO_CONTROL_AREA_HEIGHT,
+                onDisplayedPositionChanged = { displayedPositionMs = it },
+                topOverlayContent = {
                     if (currentAttemptPrePoseEntry?.status == PrePoseStatus.Failed) {
                         Box(
                             modifier = Modifier
@@ -515,98 +348,6 @@ fun AttemptResultScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clickable {
-                                if (playbackState == Player.STATE_ENDED) {
-                                    exoPlayer.seekTo(0L)
-                                }
-                                if (exoPlayer.isPlaying) {
-                                    exoPlayer.pause()
-                                } else {
-                                    exoPlayer.play()
-                                }
-                            }
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(VIDEO_CONTROL_AREA_HEIGHT)
-                            .background(
-                                Brush.verticalGradient(
-                                    colorStops = arrayOf(
-                                        0.0f to Color.Transparent,
-                                        0.22f to C_BG.copy(alpha = 0.08f),
-                                        0.55f to C_BG.copy(alpha = 0.46f),
-                                        0.82f to C_BG.copy(alpha = 0.84f),
-                                        1.0f to C_BG
-                                    )
-                                )
-                            )
-                    ) {
-                        PoseVideoScrubber(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp),
-                            currentPositionMs = displayedPositionMs,
-                            durationMs = durationMs,
-                            enabled = canScrub,
-                            markers = scrubberMarkers,
-                            colors = PoseScrubberColors(
-                                trackColor = Color.White.copy(alpha = if (canScrub) 0.18f else 0.08f),
-                                progressColor = C_ACCENT_GLOW,
-                                thumbColor = Color.White,
-                                textColor = Color.White.copy(alpha = 0.82f)
-                            ),
-                            trackAnchoredToBottom = true,
-                            onTapSeek = { requestedTimeMs ->
-                                tappedCardOverrideIdx = -1
-                                val wasPlaying = exoPlayer.isPlaying
-                                seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
-                                    currentPositionMs = snappedTimeMs
-                                    scrubPositionMs = snappedTimeMs
-                                    if (wasPlaying) {
-                                        exoPlayer.play()
-                                    } else {
-                                        exoPlayer.pause()
-                                    }
-                                }
-                            },
-                            onScrubStart = {
-                                if (!canScrub) return@PoseVideoScrubber
-                                tappedCardOverrideIdx = -1
-                                wasPlayingBeforeScrub = exoPlayer.isPlaying
-                                scrubPositionMs = poseTimestamps.findNearestTimestamp(displayedPositionMs)
-                                    ?: displayedPositionMs
-                                isScrubbing = true
-                                exoPlayer.pause()
-                            },
-                            onScrubMove = { requestedTimeMs ->
-                                if (!canScrub) return@PoseVideoScrubber
-                                seekToNearestPoseFrame(requestedTimeMs)?.let { snappedTimeMs ->
-                                    scrubPositionMs = snappedTimeMs
-                                    currentPositionMs = snappedTimeMs
-                                }
-                            },
-                            onScrubStop = {
-                                if (!isScrubbing) return@PoseVideoScrubber
-                                val finalTimeMs = poseTimestamps.findNearestTimestamp(scrubPositionMs)
-                                    ?: scrubPositionMs
-                                exoPlayer.seekTo(finalTimeMs)
-                                currentPositionMs = finalTimeMs
-                                scrubPositionMs = finalTimeMs
-                                isScrubbing = false
-                                if (wasPlayingBeforeScrub) {
-                                    exoPlayer.play()
-                                }
-                            }
-                        )
                     }
                 }
             )
@@ -636,13 +377,13 @@ fun AttemptResultScreen(
                     color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )
-            } else {
+            } else if (cardAnalysisPoints.isNotEmpty()) {
                 LazyRow(
                     state = cardListState,
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    itemsIndexed(currentAnalysisPoints) { idx, point ->
+                    itemsIndexed(cardAnalysisPoints) { idx, point ->
                         AnimatedVisibility(
                             visible = true,
                             enter = fadeIn(tween(400, delayMillis = idx * 120)) +
@@ -650,17 +391,16 @@ fun AttemptResultScreen(
                         ) {
                             AnalysisCard(
                                 point = point,
-                                isSelected = idx == activeIdx,
+                                isSelected = idx == activeCardIdx,
                                 onClick = {
                                     val targetSeekMs = resolveAnalysisSeekTimeMs(
                                         point = point,
                                         usesPoseDetectorTimeline = usesPoseDetectorTimeline
                                     )
                                     tappedCardOverrideIdx = idx
-                                    currentPositionMs = targetSeekMs
-                                    scrubPositionMs = targetSeekMs
-                                    exoPlayer.seekTo(targetSeekMs)
-                                    exoPlayer.play()
+                                    displayedPositionMs = targetSeekMs
+                                    pendingSeekTimeMs = targetSeekMs
+                                    seekRequestId += 1L
                                 }
                             )
                         }
@@ -879,100 +619,20 @@ private fun AnalysisCard(
     }
 }
 
-private fun DrawScope.drawHoldNumbers(
-    holds: List<HoldNumbered>,
-    contentRect: VideoContentRect
-) {
-    val drawArea = resolveHoldDrawArea(
-        contentRect = contentRect,
-        fallbackSize = IntSize(size.width.toInt(), size.height.toInt())
-    )
+private fun Long.toTimeString() =
+    "%02d:%02d".format(this / 60_000L, (this / 1_000L) % 60L)
 
-    calculateHoldNumberScreenRects(
-        holds = holds,
-        drawArea = drawArea
-    ).forEach { (numbered, rect) ->
-        val center = Offset(
-            x = (rect.l + rect.r) / 2f,
-            y = (rect.t + rect.b) / 2f
-        )
-        val badgeRadius = minOf(rect.r - rect.l, rect.b - rect.t)
-            .times(0.22f)
-            .coerceIn(12.dp.toPx(), 20.dp.toPx())
-        val fillColor = when {
-            numbered.isStart -> COLOR_START
-            numbered.isEnd -> COLOR_END
-            else -> holdLabelToComposeColor(numbered.hold.colorLabel)
-        }.copy(alpha = 0.92f)
-        val textColor = if (fillColor.luminance() < 0.45f) Color.White else Color.Black
-
-        drawCircle(
-            color = Color.Black.copy(alpha = 0.45f),
-            radius = badgeRadius + 3.dp.toPx(),
-            center = center
-        )
-        drawCircle(
-            color = fillColor,
-            radius = badgeRadius,
-            center = center
-        )
-        drawCircle(
-            color = Color.White.copy(alpha = 0.95f),
-            radius = badgeRadius,
-            center = center,
-            style = Stroke(width = 1.5.dp.toPx())
-        )
-
-        drawIntoCanvas { canvas ->
-            val paint = android.graphics.Paint().apply {
-                isAntiAlias = true
-                color = textColor.toArgb()
-                textAlign = android.graphics.Paint.Align.CENTER
-                textSize = (badgeRadius * 1.05f).coerceAtLeast(12.sp.toPx())
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-            }
-
-            val baseline = center.y - ((paint.descent() + paint.ascent()) / 2f)
-            canvas.nativeCanvas.drawText(
-                numbered.holdNo.toString(),
-                center.x,
-                baseline,
-                paint
-            )
+private fun List<AnalysisPoint>.toAttemptDisplayAnalysisPoints(): List<AnalysisPoint> {
+    var nextDisplayIndex = 1
+    return map { point ->
+        if (point.isAttemptStartPoint()) {
+            point.copy(index = 0)
+        } else {
+            point.copy(index = nextDisplayIndex++)
         }
     }
 }
 
-private fun resolveHoldDrawArea(
-    contentRect: VideoContentRect,
-    fallbackSize: IntSize
-): VideoContentRect {
-    if (contentRect.width > 0f && contentRect.height > 0f) {
-        return contentRect
-    }
-
-    return VideoContentRect(
-        left = 0f,
-        top = 0f,
-        width = fallbackSize.width.toFloat(),
-        height = fallbackSize.height.toFloat()
-    )
-}
-
-private fun calculateHoldNumberScreenRects(
-    holds: List<HoldNumbered>,
-    drawArea: VideoContentRect
-): List<Pair<HoldNumbered, ScreenRect>> {
-    return holds.map { numbered ->
-        numbered to numbered.hold.toScreenRect(
-            offX = drawArea.left,
-            offY = drawArea.top,
-            scaledW = drawArea.width,
-            scaledH = drawArea.height
-        )
-    }
-}
-
-private fun Long.toTimeString() =
-    "%02d:%02d".format(this / 60_000L, (this / 1_000L) % 60L)
+private fun AnalysisPoint.isAttemptStartPoint(): Boolean =
+    kind == AnalysisPointKind.PERSON_OBSERVATION_START
 

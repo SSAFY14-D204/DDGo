@@ -21,14 +21,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,23 +38,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.core.ui.components.SafeAreaScreen
+import com.ddgo.app.domain.model.Hold
+import kotlin.math.roundToInt
 
-// ── 홀드 선택 단계 ────────────────────────────────────────────────────────────────
 private enum class SelectionPhase { START, END }
 
-/**
- * 시작 홀드 → 끝 홀드를 순서대로 선택하는 화면.
- * [ChallengeHoldScreen]에서 누락 홀드 추가 완료 후 진입합니다.
- */
 @Composable
 fun HoldSelectScreen(
     viewModel: UploadViewModel = hiltViewModel(),
@@ -67,64 +68,26 @@ fun HoldSelectScreen(
     var showAdditionalUploadDialog by remember { mutableStateOf(false) }
 
     if (showAdditionalUploadDialog) {
-        AlertDialog(
-            onDismissRequest = {},
-            title = {
-                Text(
-                    text = "이 문제의 추가 시도 영상이 있나요?",
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+        AdditionalAttemptPromptDialog(
+            onNavigateToAdditional = {
+                showAdditionalUploadDialog = false
+                onNavigateToAdditional()
             },
-            text = {
-                Text(
-                    text = "시도 별로 비교해서 분석을 보여줄게요",
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            },
-            containerColor = Color(0xFF2E2E2E),
-            titleContentColor = Color.White,
-            textContentColor = Color.White,
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showAdditionalUploadDialog = false
-                        onNavigateToAdditional()
-                    }
-                ) {
-                    Text(
-                        text = "더 있어요!",
-                        color = Color(0xFF42A5F5),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showAdditionalUploadDialog = false
-                        onNavigateToNext()
-                    }
-                ) {
-                    Text(
-                        text = "없어요",
-                        color = Color.White
-                    )
-                }
+            onNavigateToNext = {
+                showAdditionalUploadDialog = false
+                onNavigateToNext()
             }
         )
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
+    SafeAreaScreen(containerColor = Color.Black) {
         if (bitmap == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     "프레임을 불러올 수 없어요.\n다시 시도해주세요.",
-                    color = Color.White, fontSize = 18.sp, lineHeight = 28.sp
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    lineHeight = 28.sp
                 )
             }
         } else {
@@ -132,15 +95,11 @@ fun HoldSelectScreen(
                 viewModel = viewModel,
                 allowAdditionalUpload = allowAdditionalUpload,
                 onNavigateToNext = onNavigateToNext,
-                onShowAdditionalUploadDialog = {
-                    showAdditionalUploadDialog = true
-                }
+                onShowAdditionalUploadDialog = { showAdditionalUploadDialog = true }
             )
         }
     }
 }
-
-// ── 2단계 홀드 선택 래퍼 ─────────────────────────────────────────────────────────
 
 @Composable
 private fun TwoPhaseHoldSelection(
@@ -149,30 +108,30 @@ private fun TwoPhaseHoldSelection(
     onNavigateToNext: () -> Unit,
     onShowAdditionalUploadDialog: () -> Unit
 ) {
-    var phase              by remember { mutableStateOf(SelectionPhase.START) }
+    var phase by remember { mutableStateOf(SelectionPhase.START) }
     var selectedStartIndex by remember { mutableIntStateOf(-1) }
-    var selectedEndIndex   by remember { mutableIntStateOf(-1) }
+    var selectedEndIndex by remember { mutableIntStateOf(-1) }
 
     AnimatedContent(
-        targetState    = phase,
+        targetState = phase,
         transitionSpec = {
             val forward = targetState == SelectionPhase.END
-            val enter   = slideInHorizontally(tween(380)) { if (forward)  it else -it } +
-                          fadeIn(tween(300))
-            val exit    = slideOutHorizontally(tween(300)) { if (forward) -it else  it } +
-                          fadeOut(tween(200))
+            val enter = slideInHorizontally(tween(380)) { if (forward) it else -it } +
+                fadeIn(tween(300))
+            val exit = slideOutHorizontally(tween(300)) { if (forward) -it else it } +
+                fadeOut(tween(200))
             enter togetherWith exit
         },
         label = "phase_transition"
     ) { currentPhase ->
         HoldSelectionContent(
-            viewModel     = viewModel,
-            phase         = currentPhase,
-            startIndex    = selectedStartIndex,
-            endIndex      = selectedEndIndex,
+            viewModel = viewModel,
+            phase = currentPhase,
+            startIndex = selectedStartIndex,
+            endIndex = selectedEndIndex,
             onStartSelect = { selectedStartIndex = it },
-            onEndSelect   = { selectedEndIndex   = it },
-            onConfirm     = {
+            onEndSelect = { selectedEndIndex = it },
+            onConfirm = {
                 when (currentPhase) {
                     SelectionPhase.START -> {
                         val selectedHold = viewModel.detectedHolds[selectedStartIndex]
@@ -185,11 +144,10 @@ private fun TwoPhaseHoldSelection(
                                 "bbox" to selectedHold.boundingBox.toString()
                             )
                         )
-                        viewModel.updateSelectedStartHold(
-                            selectedHold
-                        )
+                        viewModel.updateSelectedStartHold(selectedHold)
                         phase = SelectionPhase.END
                     }
+
                     SelectionPhase.END -> {
                         val selectedHold = viewModel.detectedHolds[selectedEndIndex]
                         UploadAiTraceLogger.log(
@@ -201,9 +159,7 @@ private fun TwoPhaseHoldSelection(
                                 "bbox" to selectedHold.boundingBox.toString()
                             )
                         )
-                        viewModel.updateSelectedEndHold(
-                            selectedHold
-                        )
+                        viewModel.updateSelectedEndHold(selectedHold)
                         viewModel.resetState()
                         if (allowAdditionalUpload) {
                             onShowAdditionalUploadDialog()
@@ -223,8 +179,6 @@ private fun TwoPhaseHoldSelection(
     }
 }
 
-// ── 단일 단계 홀드 선택 UI ───────────────────────────────────────────────────────
-
 @Composable
 private fun HoldSelectionContent(
     viewModel: UploadViewModel,
@@ -237,16 +191,15 @@ private fun HoldSelectionContent(
     onBack: () -> Unit
 ) {
     val bitmap = viewModel.bestFrameBitmap ?: return
-    val holds  = viewModel.detectedHolds
+    val holds = viewModel.detectedHolds
+    val localDensity = LocalDensity.current
 
-    val isStart       = phase == SelectionPhase.START
-    val accentColor   = if (isStart) COLOR_START else COLOR_END
-    val selectedIndex = if (isStart) startIndex  else endIndex
+    val isStart = phase == SelectionPhase.START
+    val accentColor = if (isStart) COLOR_START else COLOR_END
+    val selectedIndex = if (isStart) startIndex else endIndex
     val onSelect: (Int) -> Unit = if (isStart) onStartSelect else onEndSelect
 
     Column(modifier = Modifier.fillMaxSize()) {
-
-        // ── 헤더 ──────────────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -255,138 +208,249 @@ private fun HoldSelectionContent(
             StepBadgeRow(phase = phase)
             Spacer(Modifier.height(10.dp))
             Text(
-                text       = if (isStart) "분석 정확도를 위해\n시작 홀드를 지정해주세요"
-                             else "목표 홀드를 선택해주세요",
-                color      = Color.White,
-                style      = MaterialTheme.typography.headlineMedium.copy(
+                text = if (isStart) {
+                    "분석 정확도를 위해\n시작 홀드를 지정해주세요"
+                } else {
+                    "목표 홀드를 선택해주세요"
+                },
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium.copy(
                     lineHeight = 28.6.sp,
                     letterSpacing = (-0.22).sp
                 )
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text     = "${holds.size}개의 홀드가 감지됐어요",
+                text = "${holds.size}개의 홀드가 감지되었어요",
                 fontSize = 13.sp,
-                color    = Color.White.copy(alpha = 0.5f)
+                color = Color.White.copy(alpha = 0.5f)
             )
         }
 
-        // ── 이미지 + 바운딩박스 오버레이 ──────────────────────────────────────
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            val cW      = constraints.maxWidth.toFloat()
-            val cH      = constraints.maxHeight.toFloat()
-            val scale   = minOf(cW / bitmap.width, cH / bitmap.height)
-            val scaledW = bitmap.width  * scale
-            val scaledH = bitmap.height * scale
-            val offX    = (cW - scaledW) / 2f
-            val offY    = (cH - scaledH) / 2f
-
-            Image(
-                bitmap             = bitmap.asImageBitmap(),
-                contentDescription = "홀드 탐지 프레임",
-                modifier           = Modifier.fillMaxSize(),
-                contentScale       = ContentScale.Fit
-            )
-
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(holds, phase) {
-                        detectTapGestures { tap ->
-                            holds.forEachIndexed { idx, hold ->
-                                val r = hold.toScreenRect(offX, offY, scaledW, scaledH)
-                                if (tap.x in r.l..r.r && tap.y in r.t..r.b) {
-                                    val otherIndex = if (isStart) endIndex else startIndex
-                                    if (idx != otherIndex) {
-                                        onSelect(if (selectedIndex == idx) -1 else idx)
-                                    }
-                                }
-                            }
-                        }
-                    }
-            ) {
-                holds.forEachIndexed { idx, hold ->
-                    val r = hold.toScreenRect(offX, offY, scaledW, scaledH)
-
-                    val isOtherSelected = if (isStart) idx == endIndex else idx == startIndex
-                    val isThisSelected  = idx == selectedIndex
-
-                    val color = when {
-                        isThisSelected  -> accentColor
-                        isOtherSelected -> if (isStart) COLOR_END else COLOR_START
-                        else            -> COLOR_INACTIVE
-                    }
-                    val alpha = when {
-                        isThisSelected  -> 1.0f
-                        isOtherSelected -> 0.5f
-                        else            -> 0.7f
-                    }
-                    val strokePx = (if (isThisSelected) 4f else 2f) * density
-
-                    drawRect(
-                        color   = color.copy(alpha = if (isThisSelected) 0.22f else 0.07f),
-                        topLeft = Offset(r.l, r.t),
-                        size    = Size(r.r - r.l, r.b - r.t)
-                    )
-                    drawRect(
-                        color   = color.copy(alpha = alpha),
-                        topLeft = Offset(r.l, r.t),
-                        size    = Size(r.r - r.l, r.b - r.t),
-                        style   = Stroke(width = strokePx)
-                    )
-                    val cr  = minOf(r.r - r.l, r.b - r.t) * 0.18f
-                    val cPx = strokePx * 2f
-                    listOf(
-                        listOf(Offset(r.l, r.t + cr), Offset(r.l, r.t), Offset(r.l + cr, r.t)),
-                        listOf(Offset(r.r - cr, r.t), Offset(r.r, r.t), Offset(r.r, r.t + cr)),
-                        listOf(Offset(r.l, r.b - cr), Offset(r.l, r.b), Offset(r.l + cr, r.b)),
-                        listOf(Offset(r.r - cr, r.b), Offset(r.r, r.b), Offset(r.r, r.b - cr))
-                    ).forEach { pts ->
-                        drawLine(color.copy(alpha = alpha), pts[0], pts[1], strokeWidth = cPx)
-                        drawLine(color.copy(alpha = alpha), pts[1], pts[2], strokeWidth = cPx)
-                    }
-                    drawConfidenceLabel(
-                        label      = "${(hold.confidence * 100).toInt()}%",
-                        boxLeft    = r.l,
-                        boxTop     = r.t,
-                        boxBottom  = r.b,
-                        color      = color,
-                        isSelected = isThisSelected
+            val containerWidthPx = constraints.maxWidth.toFloat()
+            val containerHeightPx = constraints.maxHeight.toFloat()
+            val bitmapAspectRatio = remember(bitmap.width, bitmap.height) {
+                if (bitmap.width > 0 && bitmap.height > 0) {
+                    bitmap.width.toFloat() / bitmap.height.toFloat()
+                } else {
+                    9f / 16f
+                }
+            }
+            val rawCropBounds = remember(holds) {
+                calculateExpandedVerticalCropBoundsFromRawHoldExtents(holds)
+            }
+            val cropSpec = remember(rawCropBounds, bitmapAspectRatio) {
+                if (rawCropBounds == null) {
+                    uncroppedVideoViewportCropSpec(bitmapAspectRatio)
+                } else {
+                    calculateVerticalVideoViewportCropSpecFromBounds(
+                        topFraction = rawCropBounds.topFraction,
+                        bottomFraction = rawCropBounds.bottomFraction,
+                        videoAspectRatio = bitmapAspectRatio,
+                        fullVideoHeightPx = bitmap.height.toFloat().coerceAtLeast(1f),
+                        topSafeInsetPx = 0f,
+                        bottomSafeInsetPx = 0f
                     )
                 }
             }
+            val viewportWidthPx = remember(
+                containerWidthPx,
+                containerHeightPx,
+                cropSpec
+            ) {
+                val safeContainerWidthPx = containerWidthPx.coerceAtLeast(0f)
+                val safeContainerHeightPx = containerHeightPx.coerceAtLeast(0f)
+                if (safeContainerWidthPx <= 0f || safeContainerHeightPx <= 0f) {
+                    0f
+                } else {
+                    val viewportAspectRatio = cropSpec.viewportAspectRatio
+                        .takeIf { it > 0f }
+                        ?: bitmapAspectRatio
+                    minOf(
+                        safeContainerWidthPx,
+                        safeContainerHeightPx * viewportAspectRatio
+                    ).coerceAtLeast(0f)
+                }
+            }
+            val fullImageHeightPx = remember(viewportWidthPx, bitmapAspectRatio) {
+                if (viewportWidthPx <= 0f || bitmapAspectRatio <= 0f) {
+                    0f
+                } else {
+                    viewportWidthPx / bitmapAspectRatio
+                }
+            }
+            val topCropOffsetPx = remember(cropSpec, fullImageHeightPx) {
+                if (cropSpec.isActive) {
+                    fullImageHeightPx * cropSpec.topCropFraction
+                } else {
+                    0f
+                }
+            }
+            val cropPlacement = remember(fullImageHeightPx, cropSpec, topCropOffsetPx) {
+                calculateCroppedVideoViewportPlacement(
+                    fullVideoHeightPx = fullImageHeightPx.roundToInt().coerceAtLeast(1),
+                    cropSpec = cropSpec,
+                    topCropPx = topCropOffsetPx
+                )
+            }
+            val displayRects = remember(holds, viewportWidthPx, cropPlacement) {
+                holds.map { hold ->
+                    hold.toScreenRect(
+                        offX = 0f,
+                        offY = 0f,
+                        scaledW = viewportWidthPx,
+                        scaledH = cropPlacement.fullVideoHeightPx.toFloat()
+                    )
+                }
+            }
+            val visibleRects = remember(displayRects, cropPlacement) {
+                displayRects.map { rect ->
+                    ScreenRect(
+                        l = rect.l,
+                        t = rect.t + cropPlacement.transformedLayerOffsetYPx,
+                        r = rect.r,
+                        b = rect.b + cropPlacement.transformedLayerOffsetYPx
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CroppedVideoViewport(
+                    cropSpec = cropSpec,
+                    fullVideoAspectRatio = bitmapAspectRatio,
+                    topCropPx = topCropOffsetPx,
+                    modifier = Modifier.width(with(localDensity) { viewportWidthPx.toDp() }),
+                    transformedLayer = {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.FillBounds
+                        )
+
+                        Canvas(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    compositingStrategy = CompositingStrategy.Offscreen
+                                }
+                        ) {
+                            val uniformStrokePx = 1.5f * density
+
+                            drawRect(
+                                color = Color.Black.copy(alpha = 0.28f),
+                                size = size
+                            )
+
+                            displayRects.forEach { rect ->
+                                drawRect(
+                                    color = Color.Transparent,
+                                    topLeft = Offset(rect.l, rect.t),
+                                    size = Size(rect.r - rect.l, rect.b - rect.t),
+                                    blendMode = BlendMode.Clear
+                                )
+                            }
+
+                            holds.forEachIndexed { idx, hold ->
+                                val rect = displayRects[idx]
+
+                                val isOtherSelected = if (isStart) idx == endIndex else idx == startIndex
+                                val isThisSelected = idx == selectedIndex
+                                val color = when {
+                                    isThisSelected -> accentColor
+                                    isOtherSelected -> if (isStart) COLOR_END else COLOR_START
+                                    else -> COLOR_INACTIVE
+                                }
+                                val alpha = when {
+                                    isThisSelected -> 1.0f
+                                    isOtherSelected -> 0.5f
+                                    else -> 0.7f
+                                }
+
+                                drawRect(
+                                    color = color.copy(alpha = if (isThisSelected) 0.22f else 0.07f),
+                                    topLeft = Offset(rect.l, rect.t),
+                                    size = Size(rect.r - rect.l, rect.b - rect.t)
+                                )
+                                drawRect(
+                                    color = color.copy(alpha = alpha),
+                                    topLeft = Offset(rect.l, rect.t),
+                                    size = Size(rect.r - rect.l, rect.b - rect.t),
+                                    style = Stroke(width = uniformStrokePx)
+                                )
+                                drawConfidenceLabel(
+                                    label = "${(hold.confidence * 100).toInt()}%",
+                                    boxLeft = rect.l,
+                                    boxTop = rect.t,
+                                    boxBottom = rect.b,
+                                    color = color,
+                                    isSelected = isThisSelected
+                                )
+                            }
+                        }
+                    },
+                    overlayLayer = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(visibleRects, phase, selectedIndex, startIndex, endIndex, isStart) {
+                                    detectTapGestures { tap ->
+                                        val tapX = tap.x
+                                        val tapY = tap.y
+
+                                        for (idx in visibleRects.indices.reversed()) {
+                                            val rect = visibleRects[idx]
+                                            if (tapX in rect.l..rect.r && tapY in rect.t..rect.b) {
+                                                val otherIndex = if (isStart) endIndex else startIndex
+                                                if (idx != otherIndex) {
+                                                    onSelect(if (selectedIndex == idx) -1 else idx)
+                                                }
+                                                break
+                                            }
+                                        }
+                                    }
+                                }
+                        )
+                    }
+                )
+            }
         }
 
-        // ── 버튼 영역 ─────────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             Button(
-                onClick  = onConfirm,
-                enabled  = selectedIndex >= 0,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape    = RoundedCornerShape(12.dp),
-                colors   = ButtonDefaults.buttonColors(
-                    containerColor         = accentColor,
-                    contentColor           = Color.Black,
+                onClick = onConfirm,
+                enabled = selectedIndex >= 0,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accentColor,
+                    contentColor = Color.Black,
                     disabledContainerColor = Color.White.copy(alpha = 0.15f),
-                    disabledContentColor   = Color.White.copy(alpha = 0.35f)
+                    disabledContentColor = Color.White.copy(alpha = 0.35f)
                 )
             ) {
                 Text(
-                    text       = when {
-                        selectedIndex < 0 -> if (isStart) "시작 홀드를 터치해 선택해주세요"
-                                             else "끝 홀드를 터치해 선택해주세요"
-                        isStart           -> "다음 — 끝 홀드 선택하기"
-                        else              -> "선택 완료"
+                    text = when {
+                        selectedIndex < 0 && isStart -> "시작 홀드 위치를 선택해주세요"
+                        selectedIndex < 0 -> "끝 홀드 위치를 선택해주세요"
+                        isStart -> "다음 단계로 이동하기"
+                        else -> "선택 완료"
                     },
-                    fontSize   = 15.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -394,59 +458,66 @@ private fun HoldSelectionContent(
             if (!isStart) {
                 Spacer(Modifier.height(10.dp))
                 Button(
-                    onClick  = onBack,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape    = RoundedCornerShape(12.dp),
-                    colors   = ButtonDefaults.buttonColors(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White.copy(alpha = 0.10f),
-                        contentColor   = Color.White
+                        contentColor = Color.White
                     )
                 ) {
-                    Text("← 시작 홀드 다시 선택", fontSize = 14.sp)
+                    Text("시작 홀드 다시 선택", fontSize = 14.sp)
                 }
             }
         }
     }
-}
 
-// ── 단계 뱃지 행 ──────────────────────────────────────────────────────────────────
+}
 
 @Composable
 private fun StepBadgeRow(phase: SelectionPhase) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         StepBadge(
-            step   = "1",
-            label  = "시작 홀드",
+            step = "1",
+            label = "시작 홀드",
             active = phase == SelectionPhase.START,
-            done   = phase == SelectionPhase.END,
-            color  = COLOR_START
+            done = phase == SelectionPhase.END,
+            color = COLOR_START
         )
         Spacer(Modifier.size(8.dp))
         Text("→", color = Color.White.copy(alpha = 0.4f), fontSize = 14.sp)
         Spacer(Modifier.size(8.dp))
         StepBadge(
-            step   = "2",
-            label  = "끝 홀드",
+            step = "2",
+            label = "끝 홀드",
             active = phase == SelectionPhase.END,
-            done   = false,
-            color  = COLOR_END
+            done = false,
+            color = COLOR_END
         )
     }
 }
 
 @Composable
 private fun StepBadge(
-    step: String, label: String,
-    active: Boolean, done: Boolean,
+    step: String,
+    label: String,
+    active: Boolean,
+    done: Boolean,
     color: Color
 ) {
-    val bgColor   = when { active -> color; done -> color.copy(alpha = 0.5f); else -> Color.White.copy(alpha = 0.12f) }
-    val textColor = if (active || done) Color.Black else Color.White.copy(alpha = 0.4f)
+    val backgroundColor = when {
+        active -> color
+        done -> color.copy(alpha = 0.5f)
+        else -> Color.White.copy(alpha = 0.12f)
+    }
+    val textColor = if (active || done) Color.Black else Color.White.copy(alpha = 0.75f)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .background(bgColor, RoundedCornerShape(20.dp))
+            .background(backgroundColor, RoundedCornerShape(20.dp))
             .padding(horizontal = 12.dp, vertical = 5.dp)
     ) {
         Box(
@@ -455,9 +526,19 @@ private fun StepBadge(
                 .size(18.dp)
                 .background(textColor.copy(alpha = 0.2f), CircleShape)
         ) {
-            Text(step, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = textColor)
+            Text(
+                text = step,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = textColor
+            )
         }
         Spacer(Modifier.size(5.dp))
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = textColor)
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = textColor
+        )
     }
 }

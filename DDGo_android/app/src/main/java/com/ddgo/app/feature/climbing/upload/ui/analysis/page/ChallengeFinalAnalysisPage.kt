@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.core.ui.components.SafeAreaScreen
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -95,43 +96,42 @@ internal fun ChallengeFinalAnalysisPage(
 ) {
     val scrollState = rememberScrollState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(AnalysisBgColor)
-            .statusBarsPadding()
-            .verticalScroll(scrollState)
+    SafeAreaScreen(
+        modifier = modifier,
+        containerColor = AnalysisBgColor
     ) {
-        ChallengeFinalAnalysisTopBar(
-            onNavigateBack = onNavigateBack
-        )
-
-        ChallengePreviewHero(
-            state = state.heroState,
-            onAttemptVideoShare = onAttemptVideoShare,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
-
-        ChallengeAnalysisContentSection(
-            summary = state.summary,
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        AnalysisGradientButton(
-            text = "홈으로 이동",
-            onClick = onPrimaryAction,
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp)
-        )
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+        ) {
+            ChallengeFinalAnalysisTopBar(
+                onNavigateBack = onNavigateBack
+            )
 
-        Spacer(
-            modifier = Modifier
-                .height(24.dp)
-                .navigationBarsPadding()
-        )
+            ChallengePreviewHero(
+                state = state.heroState,
+                onAttemptVideoShare = onAttemptVideoShare,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+
+            ChallengeAnalysisContentSection(
+                summary = state.summary,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            AnalysisGradientButton(
+                text = "홈으로 이동",
+                onClick = onPrimaryAction,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 22.dp)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }
 
