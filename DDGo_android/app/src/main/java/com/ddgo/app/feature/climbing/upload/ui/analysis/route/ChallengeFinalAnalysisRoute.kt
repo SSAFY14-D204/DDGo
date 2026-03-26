@@ -4,14 +4,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.ddgo.app.feature.climbing.upload.ChallengeFinalAnalysisSummary
-import com.ddgo.app.feature.climbing.upload.FinalAnalysisAttemptSummary
 import com.ddgo.app.feature.climbing.upload.UploadBackgroundUploadSnackbarHost
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
 import com.ddgo.app.feature.climbing.upload.buildChallengeFinalAnalysisSummary
@@ -21,16 +22,23 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.page.ChallengeFinalAnaly
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.ChallengeFinalAnalysisPageState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.ChallengePreviewHeroState
 import com.ddgo.app.feature.climbing.upload.withAlignedDisplayCrux
+import com.ddgo.app.navigation.PendingCommunityComposeRequest
 import kotlin.math.max
 
 @Composable
 fun ChallengeFinalAnalysisRoute(
     viewModel: UploadViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
-    onNavigateToMain: () -> Unit = {}
+    onNavigateToMain: () -> Unit = {},
+    onNavigateToCommunityCompose: (PendingCommunityComposeRequest) -> Unit = {}
 ) {
-    val context = LocalContext.current
     val attemptVideoUris = viewModel.playbackAttemptUris.ifEmpty { viewModel.allAttemptUris }
+    var isShareSheetVisible by rememberSaveable {
+        mutableStateOf(false)
+    }
+    var shareSheetSelectedAttemptNos by rememberSaveable {
+        mutableStateOf(listOf<Int>())
+    }
     val totalHolds = viewModel.totalSelectedHoldCount
         .takeIf { it > 0 }
         ?: viewModel.detectedHolds.size.takeIf { it > 0 }
@@ -74,6 +82,16 @@ fun ChallengeFinalAnalysisRoute(
     val displayDate = remember(viewModel.createdChallenge?.startedAt) {
         formatAnalysisDate(viewModel.createdChallenge?.startedAt)
     }
+    val shareOptions = remember(attemptVideoUris) {
+        attemptVideoUris.mapIndexedNotNull { index, uri ->
+            uri.takeIf { it.isNotBlank() }?.let { videoUri ->
+                AnalysisCommunityShareOption(
+                    attemptNo = index + 1,
+                    videoUri = videoUri
+                )
+            }
+        }
+    }
 
     val pageState = remember(
         viewModel.gymName,
@@ -107,23 +125,11 @@ fun ChallengeFinalAnalysisRoute(
             state = pageState,
             onNavigateBack = onNavigateBack,
             onPrimaryAction = onNavigateToMain,
-            onAttemptVideoShare = if (attemptVideoUris.isNotEmpty()) {
-                { attemptNo, videoUri ->
-                    val summary = attemptSummaries.getOrNull(attemptNo - 1)
-                    shareAttemptAnalysis(
-                        context = context,
-                        videoUriString = videoUri,
-                        shareTitle = buildChallengeAttemptShareTitle(
-                            gymName = viewModel.gymName,
-                            attemptNo = attemptNo
-                        ),
-                        shareText = buildChallengeAttemptShareText(
-                            gymName = viewModel.gymName,
-                            attemptNo = attemptNo,
-                            summary = summary,
-                            totalHolds = totalHolds
-                        )
-                    )
+            onAttemptVideoShare = if (shareOptions.isNotEmpty()) {
+                { attemptNo ->
+                    shareSheetSelectedAttemptNos = setOf(attemptNo)
+                        .toList()
+                    isShareSheetVisible = true
                 }
             } else {
                 null
@@ -137,41 +143,24 @@ fun ChallengeFinalAnalysisRoute(
                 .padding(horizontal = 20.dp, vertical = 32.dp)
         )
     }
-}
 
-private fun buildChallengeAttemptShareTitle(
-    gymName: String,
-    attemptNo: Int
-): String {
-    val safeGymName = gymName.ifBlank { "DDGo" }
-    return "$safeGymName ${attemptNo}차 시도 분석 결과"
-}
+    if (isShareSheetVisible) {
+        AnalysisCommunityShareSheet(
+            options = shareOptions,
+            initialSelectedAttemptNos = shareSheetSelectedAttemptNos.toSet(),
+            onDismissRequest = { isShareSheetVisible = false },
+            onConfirm = { selectedOptions ->
+                isShareSheetVisible = false
+                if (selectedOptions.isEmpty()) return@AnalysisCommunityShareSheet
 
-private fun buildChallengeAttemptShareText(
-    gymName: String,
-    attemptNo: Int,
-    summary: FinalAnalysisAttemptSummary?,
-    totalHolds: Int
-): String {
-    val safeGymName = gymName.ifBlank { "DDGo" }
-    val resultLabel = when {
-        summary == null -> "정보 없음"
-        summary.isSuccess -> "성공"
-        else -> "실패"
-    }
-    val scoreText = summary?.overallMovementScore?.let { "${it}점" } ?: "정보 없음"
-    val reachedText = buildString {
-        append(summary?.reachedHoldsText ?: "정보 없음")
-        if (summary?.reachedHolds != null && totalHolds > 0) {
-            append("/$totalHolds")
-        }
-    }
-    val cruxText = summary?.primaryCruxHoldNo?.let { "${it}번 홀드" } ?: "정보 없음"
-    return buildString {
-        appendLine("$safeGymName ${attemptNo}차 시도 분석 결과")
-        appendLine("문제 풀이 여부: $resultLabel")
-        appendLine("종합 점수: $scoreText")
-        appendLine("도달 홀드: $reachedText")
-        append("대표 크럭스: $cruxText")
+                onNavigateToCommunityCompose(
+                    buildPendingCommunityComposeRequest(
+                        gymId = viewModel.gymId?.toLong(),
+                        gymName = viewModel.gymName,
+                        options = selectedOptions
+                    )
+                )
+            }
+        )
     }
 }

@@ -4,6 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -14,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.material3.CircularProgressIndicator
 import com.ddgo.app.feature.community.components.CommunityChallengeReferenceSheet
 import com.ddgo.app.feature.community.components.CommunityComposePage
 import com.ddgo.app.feature.community.components.CommunityDetailPage
@@ -22,12 +26,18 @@ import com.ddgo.app.feature.community.components.CommunityMessageCard
 import com.ddgo.app.feature.community.components.CommunityPagePadding
 import com.ddgo.app.feature.community.components.CommunityPageShell
 import com.ddgo.app.feature.main.MainChromeDefaults
+import com.ddgo.app.navigation.PendingCommunityComposeRequest
 import kotlinx.coroutines.delay
 
 @Composable
-fun CommunityScreen(viewModel: CommunityViewModel = hiltViewModel()) {
+fun CommunityScreen(
+    pendingAnalysisShareRequest: PendingCommunityComposeRequest? = null,
+    onPendingAnalysisShareHandled: () -> Unit = {},
+    viewModel: CommunityViewModel = hiltViewModel()
+) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val isPreparingAnalysisShare = uiState.composeState.isPreparingAnalysisShare
     val isComposeSubmitting = uiState.destination is CommunityDestination.Compose &&
         uiState.composeState.isSubmitting
     val videoPickerLauncher = rememberLauncherForActivityResult(
@@ -45,9 +55,21 @@ fun CommunityScreen(viewModel: CommunityViewModel = hiltViewModel()) {
     val handleBack = {
         when {
             uiState.isChallengeSheetVisible -> viewModel.closeChallengeReferenceSheet()
+            isPreparingAnalysisShare -> Unit
             isComposeSubmitting -> Unit
             else -> viewModel.navigateBack()
         }
+    }
+
+    LaunchedEffect(pendingAnalysisShareRequest?.requestId) {
+        val request = pendingAnalysisShareRequest ?: return@LaunchedEffect
+        onPendingAnalysisShareHandled()
+        viewModel.consumePendingAnalysisShare(
+            requestId = request.requestId,
+            gymId = request.gymId,
+            gymName = request.gymName,
+            videoUris = request.videos.map { it.videoUri }
+        )
     }
 
     LaunchedEffect(uiState.message) {
@@ -58,7 +80,9 @@ fun CommunityScreen(viewModel: CommunityViewModel = hiltViewModel()) {
     }
 
     BackHandler(
-        enabled = uiState.destination != CommunityDestination.Feed || uiState.isChallengeSheetVisible
+        enabled = isPreparingAnalysisShare ||
+            uiState.destination != CommunityDestination.Feed ||
+            uiState.isChallengeSheetVisible
     ) { handleBack() }
 
     CommunityPageShell {
@@ -127,6 +151,17 @@ fun CommunityScreen(viewModel: CommunityViewModel = hiltViewModel()) {
                     .padding(horizontal = CommunityPagePadding, vertical = 16.dp)
                     .padding(bottom = MainChromeDefaults.ContentBottomPadding)
             )
+        }
+
+        if (isPreparingAnalysisShare) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(CommunityPalette.Surface.copy(alpha = 0.72f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = CommunityPalette.AccentStrong)
+            }
         }
     }
 

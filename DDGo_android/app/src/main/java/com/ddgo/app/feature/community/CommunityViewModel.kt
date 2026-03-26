@@ -18,6 +18,7 @@ import com.ddgo.app.domain.usecase.DeleteCommunityPostUseCase
 import com.ddgo.app.domain.usecase.GetCommunityChallengeReferencesUseCase
 import com.ddgo.app.domain.usecase.GetCommunityPostDetailUseCase
 import com.ddgo.app.domain.usecase.GetCommunityPostsUseCase
+import com.ddgo.app.domain.usecase.PrepareCommunityComposeVideosUseCase
 import com.ddgo.app.domain.usecase.ToggleCommunityCommentLikeUseCase
 import com.ddgo.app.domain.usecase.ToggleCommunityPostLikeUseCase
 import com.ddgo.app.domain.usecase.UpdateCommunityCommentUseCase
@@ -43,7 +44,8 @@ class CommunityViewModel @Inject constructor(
     private val toggleCommunityPostLikeUseCase: ToggleCommunityPostLikeUseCase,
     private val toggleCommunityCommentLikeUseCase: ToggleCommunityCommentLikeUseCase,
     private val getCommunityChallengeReferencesUseCase: GetCommunityChallengeReferencesUseCase,
-    private val createCommunityDraftVideoUseCase: CreateCommunityDraftVideoUseCase
+    private val createCommunityDraftVideoUseCase: CreateCommunityDraftVideoUseCase,
+    private val prepareCommunityComposeVideosUseCase: PrepareCommunityComposeVideosUseCase
 ) : ViewModel() {
 
     private companion object {
@@ -52,6 +54,7 @@ class CommunityViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(CommunityUiState())
     val uiState: StateFlow<CommunityUiState> = _uiState.asStateFlow()
+    private var lastConsumedAnalysisShareRequestId: Long? = null
 
     init {
         refreshFeed()
@@ -126,7 +129,7 @@ class CommunityViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 destination = CommunityDestination.Compose(),
-                composeState = CommunityComposeState()
+                composeState = CommunityComposeState(mode = CommunityComposeMode.Create)
             )
         }
     }
@@ -154,9 +157,55 @@ class CommunityViewModel @Inject constructor(
                     content = detail.content,
                     gymId = detail.gymId,
                     gymName = detail.gymName,
-                    videos = draftVideos
+                    videos = draftVideos,
+                    mode = CommunityComposeMode.Edit
                 )
             )
+        }
+    }
+
+    fun consumePendingAnalysisShare(
+        requestId: Long,
+        gymId: Long?,
+        gymName: String?,
+        videoUris: List<String>
+    ) {
+        if (lastConsumedAnalysisShareRequestId == requestId) return
+        lastConsumedAnalysisShareRequestId = requestId
+
+        _uiState.update {
+            it.copy(
+                destination = CommunityDestination.Feed,
+                isChallengeSheetVisible = false,
+                composeState = CommunityComposeState(
+                    gymId = gymId,
+                    gymName = gymName,
+                    mode = CommunityComposeMode.AnalysisShare,
+                    shareRequestId = requestId,
+                    isPreparingAnalysisShare = true
+                )
+            )
+        }
+
+        viewModelScope.launch {
+            prepareCommunityComposeVideosUseCase(videoUris)
+                .onSuccess { videos ->
+                    openComposeWithAnalysisShare(
+                        requestId = requestId,
+                        gymId = gymId,
+                        gymName = gymName,
+                        videos = videos
+                    )
+                }
+                .onFailure { throwable ->
+                    _uiState.update {
+                        it.copy(
+                            composeState = CommunityComposeState(),
+                            isChallengeSheetVisible = false
+                        )
+                    }
+                    emitMessage(throwable.orNetworkMessage("공유할 영상을 준비하지 못했어요."))
+                }
         }
     }
 
@@ -216,6 +265,7 @@ class CommunityViewModel @Inject constructor(
 
     fun clearComposeGym() {
         if (_uiState.value.composeState.isSubmitting) return
+        if (_uiState.value.composeState.isAnalysisShareMode()) return
         _uiState.update {
             it.copy(
                 composeState = it.composeState.copy(
@@ -230,6 +280,7 @@ class CommunityViewModel @Inject constructor(
     fun addSelectedVideos(uriStrings: List<String>) {
         if (uriStrings.isEmpty()) return
         if (_uiState.value.composeState.isSubmitting) return
+        if (_uiState.value.composeState.isAnalysisShareMode()) return
         val remainingSlots = 3 - _uiState.value.composeState.videos.size
         if (remainingSlots <= 0) {
             emitMessage("영상은 최대 3개까지 첨부할 수 있어요.")
@@ -260,6 +311,7 @@ class CommunityViewModel @Inject constructor(
 
     fun removeComposeVideo(videoId: String) {
         if (_uiState.value.composeState.isSubmitting) return
+        if (_uiState.value.composeState.isAnalysisShareMode()) return
         _uiState.update {
             it.copy(
                 composeState = it.composeState.copy(
@@ -274,6 +326,7 @@ class CommunityViewModel @Inject constructor(
 
     fun moveComposeVideo(videoId: String, direction: Int) {
         if (_uiState.value.composeState.isSubmitting) return
+        if (_uiState.value.composeState.isAnalysisShareMode()) return
         val videos = _uiState.value.composeState.videos.toMutableList()
         val currentIndex = videos.indexOfFirst { it.id == videoId }
         if (currentIndex == -1) return
@@ -491,6 +544,7 @@ class CommunityViewModel @Inject constructor(
 
     fun openChallengeReferenceSheet() {
         if (_uiState.value.composeState.isSubmitting) return
+        if (_uiState.value.composeState.isAnalysisShareMode()) return
         _uiState.update { it.copy(isChallengeSheetVisible = true) }
         if (_uiState.value.challengeReferences.isNotEmpty()) return
 
@@ -518,6 +572,7 @@ class CommunityViewModel @Inject constructor(
 
     fun selectChallengeReference(reference: CommunityChallengeReference) {
         if (_uiState.value.composeState.isSubmitting) return
+        if (_uiState.value.composeState.isAnalysisShareMode()) return
         if (reference.gymId == null) {
             _uiState.update { it.copy(isChallengeSheetVisible = false) }
             emitMessage("이 챌린지에서 연결할 암장 정보를 찾지 못했어요.")
@@ -722,6 +777,27 @@ class CommunityViewModel @Inject constructor(
         _uiState.update { it.copy(message = message) }
     }
 
+    private fun openComposeWithAnalysisShare(
+        requestId: Long,
+        gymId: Long?,
+        gymName: String?,
+        videos: List<CommunityVideoDraft>
+    ) {
+        _uiState.update {
+            it.copy(
+                destination = CommunityDestination.Compose(),
+                isChallengeSheetVisible = false,
+                composeState = CommunityComposeState(
+                    gymId = gymId,
+                    gymName = gymName,
+                    videos = videos,
+                    mode = CommunityComposeMode.AnalysisShare,
+                    shareRequestId = requestId
+                )
+            )
+        }
+    }
+
     private fun Throwable.orNetworkMessage(fallback: String): String {
         return toUserFacingNetworkMessageOrNull() ?: message ?: fallback
     }
@@ -779,5 +855,9 @@ class CommunityViewModel @Inject constructor(
             CommunityFeedTab.Popular -> CommunitySort.POPULAR
             CommunityFeedTab.Latest -> CommunitySort.LATEST
         }
+    }
+
+    private fun CommunityComposeState.isAnalysisShareMode(): Boolean {
+        return mode == CommunityComposeMode.AnalysisShare
     }
 }

@@ -150,3 +150,20 @@ class CreateCommunityDraftVideoUseCase @Inject constructor(
         sortOrder: Int
     ): Result<CommunityVideoDraft> = communityRepository.createDraftVideo(uriString, sortOrder)
 }
+
+class PrepareCommunityComposeVideosUseCase @Inject constructor(
+    private val createCommunityDraftVideoUseCase: CreateCommunityDraftVideoUseCase
+) {
+    suspend operator fun invoke(uriStrings: List<String>): Result<List<CommunityVideoDraft>> = runCatching {
+        val uniqueUris = uriStrings
+            .filter(String::isNotBlank)
+            .distinct()
+
+        require(uniqueUris.isNotEmpty()) { "공유할 영상을 선택해 주세요." }
+        require(uniqueUris.size <= 3) { "영상은 최대 3개까지 첨부할 수 있어요." }
+
+        uniqueUris.mapIndexed { index, uri ->
+            createCommunityDraftVideoUseCase(uri, index).getOrThrow()
+        }
+    }
+}

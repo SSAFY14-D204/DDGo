@@ -90,7 +90,7 @@ internal fun ChallengeFinalAnalysisPage(
     state: ChallengeFinalAnalysisPageState,
     onNavigateBack: () -> Unit,
     onPrimaryAction: () -> Unit,
-    onAttemptVideoShare: ((attemptNo: Int, videoUri: String) -> Unit)?,
+    onAttemptVideoShare: ((attemptNo: Int) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -177,7 +177,7 @@ private fun ChallengeFinalAnalysisTopBar(
 @Composable
 private fun ChallengePreviewHero(
     state: ChallengePreviewHeroState,
-    onAttemptVideoShare: ((attemptNo: Int, videoUri: String) -> Unit)?,
+    onAttemptVideoShare: ((attemptNo: Int) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val difficultyChipTone = remember(state.difficultyLabel) {
@@ -304,7 +304,7 @@ private fun ChallengePreviewHero(
 @Composable
 private fun ChallengeAttemptVideoCarousel(
     videoUris: List<String>,
-    onAttemptVideoShare: ((attemptNo: Int, videoUri: String) -> Unit)?,
+    onAttemptVideoShare: ((attemptNo: Int) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(modifier = modifier) {
@@ -323,7 +323,7 @@ private fun ChallengeAttemptVideoCarousel(
                     videoUri = videoUri,
                     headline = "${index + 1}차 시도",
                     onShareClick = onAttemptVideoShare?.let { share ->
-                        { share(index + 1, videoUri) }
+                        { share(index + 1) }
                     },
                     modifier = Modifier.width(itemWidth)
                 )

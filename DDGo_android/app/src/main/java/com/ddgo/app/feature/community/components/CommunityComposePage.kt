@@ -50,6 +50,7 @@ import coil.request.ImageRequest
 import coil.request.videoFrameMillis
 import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityVideoDraft
+import com.ddgo.app.feature.community.CommunityComposeMode
 import com.ddgo.app.feature.community.CommunityDestination
 import com.ddgo.app.feature.community.CommunityPalette
 import com.ddgo.app.feature.community.CommunityUiState
@@ -72,6 +73,8 @@ internal fun CommunityComposePage(
     val composeState = uiState.composeState
     val isSubmitting = composeState.isSubmitting
     val isEditMode = (uiState.destination as? CommunityDestination.Compose)?.editingPostId != null
+    val isAnalysisShareMode = composeState.mode == CommunityComposeMode.AnalysisShare
+    val showGymSection = !isAnalysisShareMode || composeState.gymName != null
 
     LazyColumn(
         modifier = Modifier
@@ -108,19 +111,23 @@ internal fun CommunityComposePage(
                 readOnly = isSubmitting
             )
             Spacer(Modifier.height(40.dp))
-            CommunityComposeSectionDivider()
-            Spacer(Modifier.height(32.dp))
-            CommunityComposeTagSection(
-                selectedGymName = composeState.gymName,
-                enabled = !isSubmitting,
-                onOpenChallengeSheet = onOpenChallengeSheet,
-                onClearGym = onClearGym
-            )
-            Spacer(Modifier.height(42.dp))
+            if (showGymSection) {
+                CommunityComposeSectionDivider()
+                Spacer(Modifier.height(32.dp))
+                CommunityComposeTagSection(
+                    selectedGymName = composeState.gymName,
+                    editable = !isAnalysisShareMode,
+                    enabled = !isSubmitting,
+                    onOpenChallengeSheet = onOpenChallengeSheet,
+                    onClearGym = onClearGym
+                )
+                Spacer(Modifier.height(42.dp))
+            }
             CommunityComposeSectionDivider()
             Spacer(Modifier.height(28.dp))
             CommunityComposeVideoSection(
                 videos = composeState.videos,
+                editable = !isAnalysisShareMode,
                 enabled = !isSubmitting,
                 onPickVideos = onPickVideos,
                 onRemoveVideo = onRemoveVideo,
@@ -268,10 +275,21 @@ private fun CommunityComposeSectionLabel(text: String) {
 @Composable
 private fun CommunityComposeTagSection(
     selectedGymName: String?,
+    editable: Boolean,
     enabled: Boolean,
     onOpenChallengeSheet: () -> Unit,
     onClearGym: () -> Unit
 ) {
+    if (!editable) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            CommunityComposeSectionLabel(text = "암장 태그")
+            selectedGymName?.let { gymName ->
+                CommunityComposeChip(text = gymName)
+            }
+        }
+        return
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         CommunityComposeSectionLabel(text = "암장 태그")
         CommunityComposeSearchFieldChrome(
@@ -301,12 +319,42 @@ private fun CommunityComposeTagSection(
 @Composable
 private fun CommunityComposeVideoSection(
     videos: List<CommunityVideoDraft>,
+    editable: Boolean,
     enabled: Boolean,
     onPickVideos: () -> Unit,
     onRemoveVideo: (String) -> Unit,
     onMoveVideoUp: (String) -> Unit,
     onMoveVideoDown: (String) -> Unit
 ) {
+    if (!editable) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            CommunityComposeSectionLabel(text = "첨부 영상")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                videos.forEach { video ->
+                    CommunityComposeVideoPreviewTile(
+                        video = video,
+                        editable = false,
+                        enabled = enabled,
+                        isFirst = true,
+                        isLast = true,
+                        onMoveLeft = {},
+                        onMoveRight = {},
+                        onRemove = {}
+                    )
+                }
+            }
+            Text(
+                text = "${videos.size} / 3",
+                color = CommunityPalette.TextHint,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        return
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         CommunityComposeSectionLabel(text = "첨부 영상")
         FlowRow(
@@ -320,6 +368,7 @@ private fun CommunityComposeVideoSection(
             videos.forEachIndexed { index, video ->
                 CommunityComposeVideoPreviewTile(
                     video = video,
+                    editable = true,
                     enabled = enabled,
                     isFirst = index == 0,
                     isLast = index == videos.lastIndex,
@@ -373,6 +422,7 @@ private fun CommunityVideoPickerTile(
 @Composable
 private fun CommunityComposeVideoPreviewTile(
     video: CommunityVideoDraft,
+    editable: Boolean,
     enabled: Boolean,
     isFirst: Boolean,
     isLast: Boolean,
@@ -427,7 +477,7 @@ private fun CommunityComposeVideoPreviewTile(
                         .size(30.dp)
                 )
 
-                if (!isFirst) {
+                if (editable && !isFirst) {
                     CommunityVideoOverlayButton(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "앞으로 이동",
@@ -439,7 +489,7 @@ private fun CommunityComposeVideoPreviewTile(
                     )
                 }
 
-                if (!isLast) {
+                if (editable && !isLast) {
                     CommunityVideoOverlayButton(
                         icon = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "뒤로 이동",
@@ -452,8 +502,8 @@ private fun CommunityComposeVideoPreviewTile(
                 }
             }
         }
-
-        Surface(
+        if (editable) {
+            Surface(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .offset(x = 8.dp, y = (-8).dp),
@@ -472,6 +522,7 @@ private fun CommunityComposeVideoPreviewTile(
                     modifier = Modifier.size(14.dp)
                 )
             }
+        }
         }
     }
 }
