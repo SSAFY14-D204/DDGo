@@ -389,9 +389,14 @@ CREATE TABLE `attempt_metrics` (
   `attempt_id` INT NOT NULL,
 
   `center_stability_ratio` DECIMAL(5,2) NULL,
+  `stability_recovery_score` INT NULL,
+  `stable_contact_ratio` DOUBLE NULL,
+  `lower_body_drive_score` INT NULL,
+  `overall_movement_score` INT NULL,
   `crux_hold_no` INT NULL,
   `crux_duration_ms` INT NULL,
   `danger_event_count` INT NULL,
+  `load_focus_label` VARCHAR(100) NULL,
 
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

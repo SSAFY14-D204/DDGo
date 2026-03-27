@@ -22,17 +22,27 @@ public record AttemptFullResponse(
 
     public record MetricsData(
             Double centerStabilityRatio,
+            Integer stabilityRecoveryScore,
+            Double stableContactRatio,
+            Integer lowerBodyDriveScore,
+            Integer overallMovementScore,
             Integer cruxHoldNo,
             Integer cruxDurationMs,
-            Integer dangerEventCount) {
+            Integer dangerEventCount,
+            String loadFocusLabel) {
         public static MetricsData from(AttemptMetrics metrics) {
             if (metrics == null)
                 return null;
             return new MetricsData(
                     metrics.getCenterStabilityRatio(),
+                    metrics.getStabilityRecoveryScore(),
+                    metrics.getStableContactRatio(),
+                    metrics.getLowerBodyDriveScore(),
+                    metrics.getOverallMovementScore(),
                     metrics.getCruxHoldNo(),
                     metrics.getCruxDurationMs(),
-                    metrics.getDangerEventCount());
+                    metrics.getDangerEventCount(),
+                    metrics.getLoadFocusLabel());
         }
     }
 

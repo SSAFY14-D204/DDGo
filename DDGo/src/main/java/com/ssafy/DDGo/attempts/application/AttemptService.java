@@ -174,17 +174,27 @@ public class AttemptService {
             if (metrics != null) {
                 metrics.updateMetrics(
                         request.metricsData().centerStabilityRatio(),
+                        request.metricsData().stabilityRecoveryScore(),
+                        request.metricsData().stableContactRatio(),
+                        request.metricsData().lowerBodyDriveScore(),
+                        request.metricsData().overallMovementScore(),
                         request.metricsData().cruxHoldNo(),
                         request.metricsData().cruxDurationMs(),
-                        request.metricsData().dangerEventCount()
+                        request.metricsData().dangerEventCount(),
+                        request.metricsData().loadFocusLabel()
                 );
             } else {
                 metrics = AttemptMetrics.builder()
                         .attempt(attempt)
                         .centerStabilityRatio(request.metricsData().centerStabilityRatio())
+                        .stabilityRecoveryScore(request.metricsData().stabilityRecoveryScore())
+                        .stableContactRatio(request.metricsData().stableContactRatio())
+                        .lowerBodyDriveScore(request.metricsData().lowerBodyDriveScore())
+                        .overallMovementScore(request.metricsData().overallMovementScore())
                         .cruxHoldNo(request.metricsData().cruxHoldNo())
                         .cruxDurationMs(request.metricsData().cruxDurationMs())
                         .dangerEventCount(request.metricsData().dangerEventCount())
+                        .loadFocusLabel(request.metricsData().loadFocusLabel())
                         .build();
                 attemptMetricsRepository.save(metrics);
             }
