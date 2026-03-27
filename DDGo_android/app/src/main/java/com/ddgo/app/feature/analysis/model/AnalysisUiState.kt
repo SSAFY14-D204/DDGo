@@ -11,6 +11,7 @@ import com.ddgo.app.feature.analysis.AnalysisStrings
  */
 data class AnalysisUiState(
     val title: String,
+    val currentScreen: AnalysisScreenState,
     val growthSummary: AnalysisGrowthSummaryUiModel,
     val challenges: List<AnalysisChallengeListItemUiModel>,
     val challengeDetail: AnalysisChallengeDetailUiModel?,
@@ -21,6 +22,7 @@ data class AnalysisUiState(
         fun empty(): AnalysisUiState {
             return AnalysisUiState(
                 title = AnalysisStrings.ScreenTitle,
+                currentScreen = AnalysisScreenState.Dashboard,
                 growthSummary = AnalysisGrowthSummaryUiModel.empty(),
                 challenges = emptyList(),
                 challengeDetail = null,
@@ -39,8 +41,8 @@ data class AnalysisGrowthSummaryUiModel(
     val trendPoints: List<AnalysisTrendPointUiModel>,
     val stabilityScore: Float,
     val completionScore: Float,
-    val averageDangerEvents: Float,
-    val dangerEventProgress: Float
+    val averageLowerBodyDriveScore: Float,
+    val lowerBodyDriveProgress: Float
 ) {
     companion object {
         /** 데이터가 없을 때도 레이아웃이 무너지지 않도록 비어 있는 요약 모델을 제공합니다. */
@@ -53,8 +55,8 @@ data class AnalysisGrowthSummaryUiModel(
                 trendPoints = emptyList(),
                 stabilityScore = 0f,
                 completionScore = 0f,
-                averageDangerEvents = 0f,
-                dangerEventProgress = 0f
+                averageLowerBodyDriveScore = 0f,
+                lowerBodyDriveProgress = 0f
             )
         }
     }
@@ -92,7 +94,19 @@ data class AnalysisChallengeDetailUiModel(
 data class AnalysisChallengeSummaryUiModel(
     val title: String,
     val headline: String,
-    val stats: List<AnalysisOverviewStatUiModel>
+    val attemptCount: Int,
+    val overallScore: Int?,
+    val overallSuccess: Boolean,
+    val reachedHoldLabel: String,
+    val reachedHoldSuffix: String?,
+    val cruxHoldLabel: String,
+    val averageStabilityScore: Int?,
+    val averageRecoveryScore: Int?,
+    val averageLowerBodyDriveScore: Int?,
+    val averageStableContactScore: Int?,
+    val repeatedLoadFocusLabel: String?,
+    val strengths: List<String>,
+    val improvements: List<String>
 )
 
 /** 챌린지 안의 시도 목록 카드 모델입니다. */
@@ -101,7 +115,19 @@ data class AnalysisAttemptListItemUiModel(
     val title: String,
     val subtitle: String,
     val holdLabel: String,
+    val holdSuffix: String?,
+    val cruxLabel: String,
+    val stabilityScore: Int?,
     val stabilityLabel: String,
+    val recoveryScore: Int?,
+    val recoveryLabel: String,
+    val lowerBodyDriveScore: Int?,
+    val lowerBodyDriveLabel: String,
+    val stableContactScore: Int?,
+    val stableContactLabel: String,
+    val overallMovementScore: Int?,
+    val loadFocusLabel: String?,
+    val summaryLine: String,
     val resultBadge: AnalysisBadgeUiModel
 )
 
@@ -111,14 +137,21 @@ data class AnalysisAttemptDetailUiModel(
     val subtitle: String,
     val resultBadge: AnalysisBadgeUiModel,
     val headline: String,
+    val videoUrl: String?,
+    val overallMovementScore: Int?,
+    val attemptResultLabel: String,
+    val reachedHoldLabel: String,
+    val reachedHoldSuffix: String?,
+    val cruxHoldLabel: String,
     val stabilityScore: Float,
-    val reachScore: Float,
-    val dangerEventScore: Float,
-    val cruxFocusScore: Float,
+    val recoveryScore: Float,
+    val lowerBodyDriveScore: Float,
+    val stableContactScore: Float,
     val stabilityValueLabel: String,
-    val reachValueLabel: String,
-    val dangerEventValueLabel: String,
-    val cruxFocusValueLabel: String,
+    val recoveryValueLabel: String,
+    val lowerBodyDriveValueLabel: String,
+    val stableContactValueLabel: String,
+    val loadFocusLabel: String,
     val metricCards: List<AnalysisOverviewStatUiModel>,
     val timelineItems: List<AnalysisTimelineItemUiModel>,
     val coachCards: List<AnalysisCoachCardUiModel>
@@ -136,7 +169,7 @@ data class AnalysisAttemptGrowthPointUiModel(
     val label: String,
     val stabilityScore: Float,
     val maxHoldNo: Int,
-    val riskEventCount: Int,
+    val lowerBodyDriveScore: Int,
     val tone: AnalysisBadgeTone
 )
 

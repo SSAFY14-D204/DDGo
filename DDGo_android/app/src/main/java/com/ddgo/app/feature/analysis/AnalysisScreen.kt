@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.core.ui.theme.DDGoTheme
 import com.ddgo.app.feature.main.MainChromeDefaults
+import com.ddgo.app.feature.analysis.components.AnalysisAllChallengesScreen
 import com.ddgo.app.feature.analysis.components.AnalysisAttemptDetailScreen
 import com.ddgo.app.feature.analysis.components.AnalysisChallengeDetailScreen
 import com.ddgo.app.feature.analysis.components.AnalysisChallengeListSection
@@ -76,10 +77,22 @@ fun AnalysisScreen(
             )
         }
 
+        uiState.currentScreen == com.ddgo.app.feature.analysis.model.AnalysisScreenState.AllChallenges -> {
+            BackHandler {
+                viewModel.closeAllChallenges()
+            }
+            AnalysisAllChallengesScreen(
+                challenges = uiState.challenges,
+                onBack = viewModel::closeAllChallenges,
+                onChallengeSelected = viewModel::openChallengeDetail
+            )
+        }
+
         else -> {
             AnalysisDashboardContent(
                 uiState = uiState,
-                onChallengeSelected = viewModel::openChallengeDetail
+                onChallengeSelected = viewModel::openChallengeDetail,
+                onShowAllChallenges = viewModel::openAllChallenges
             )
         }
     }
@@ -95,8 +108,10 @@ fun AnalysisScreen(
 @Composable
 internal fun AnalysisDashboardContent(
     uiState: AnalysisUiState,
-    onChallengeSelected: (Long) -> Unit
+    onChallengeSelected: (Long) -> Unit,
+    onShowAllChallenges: () -> Unit
 ) {
+    val recentChallenges = uiState.challenges.take(3)
     val backgroundBrush = Brush.verticalGradient(
         colors = listOf(
             AnalysisPalette.BackgroundTop,
@@ -154,8 +169,23 @@ internal fun AnalysisDashboardContent(
 
             item {
                 AnalysisChallengeListSection(
-                    challenges = uiState.challenges,
-                    onChallengeSelected = onChallengeSelected
+                    challenges = recentChallenges,
+                    onChallengeSelected = onChallengeSelected,
+                    subtitle = if (uiState.challenges.size > recentChallenges.size) {
+                        "최근 기록 3개만 먼저 보여드려요."
+                    } else {
+                        "최근 기록을 한눈에 다시 확인해보세요."
+                    },
+                    footerActionLabel = if (uiState.challenges.size > recentChallenges.size) {
+                        "전체 기록 보기"
+                    } else {
+                        null
+                    },
+                    onFooterAction = if (uiState.challenges.size > recentChallenges.size) {
+                        onShowAllChallenges
+                    } else {
+                        null
+                    }
                 )
             }
         }
@@ -168,7 +198,8 @@ private fun AnalysisScreenPreview() {
     DDGoTheme(darkTheme = false) {
         AnalysisDashboardContent(
             uiState = AnalysisPreviewData.defaultUiState(),
-            onChallengeSelected = {}
+            onChallengeSelected = {},
+            onShowAllChallenges = {}
         )
     }
 }

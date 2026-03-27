@@ -18,14 +18,14 @@ internal object AnalysisStrings {
     const val ChallengeAttemptCountLabel = "시도 수"
     const val ChallengeStabilityLabel = "평균 안정률"
     const val ChallengeCruxLabel = "대표 크럭스 홀드"
-    const val ChallengeDangerLabel = "위험 이벤트"
+    const val ChallengeLowerBodyDriveLabel = "평균 하체 주도성"
 
     const val AttemptDurationLabel = "영상 길이"
     const val AttemptMaxHoldLabel = "최대 홀드"
     const val AttemptStabilityLabel = "안정률"
     const val AttemptCruxHoldLabel = "크럭스 홀드"
     const val AttemptCruxTimeLabel = "크럭스 시간"
-    const val AttemptDangerEventsLabel = "위험 이벤트 수"
+    const val AttemptLowerBodyDriveLabel = "하체 주도성"
 
     const val CoachFailureTitle = "실패 원인"
     const val CoachRiskTitle = "리스크"

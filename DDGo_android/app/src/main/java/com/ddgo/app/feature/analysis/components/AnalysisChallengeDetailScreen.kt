@@ -27,8 +27,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -45,13 +45,6 @@ import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
 import com.ddgo.app.feature.analysis.model.AnalysisChallengeDetailUiModel
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
 
-/**
- * 메인 분석 탭에서 선택한 챌린지의 상세 분석을 보여주는 화면입니다.
- *
- * 역할:
- * - 문제 자체를 먼저 이해하게 하고,
- * - 시도 흐름과 성장 추세를 보여준 뒤 아래에서 시도 목록으로 이어집니다.
- */
 @Composable
 internal fun AnalysisChallengeDetailScreen(
     detail: AnalysisChallengeDetailUiModel,
@@ -85,13 +78,14 @@ internal fun AnalysisChallengeDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
                 AnalysisBackChip(
                     label = AnalysisStrings.BackToDashboard,
-                    onClick = onBack
+                    onClick = onBack,
+                    compact = true
                 )
             }
 
@@ -100,15 +94,13 @@ internal fun AnalysisChallengeDetailScreen(
             }
 
             item {
-                ChallengeFlowRow(flowItems = detail.attemptFlow)
-            }
-
-            item {
-                ChallengeGrowthCard(points = detail.growthPoints)
-            }
-
-            item {
                 AnalysisChallengeSummarySection(summary = detail.summary)
+            }
+
+            if (detail.growthPoints.isNotEmpty()) {
+                item {
+                    ChallengeGrowthCard(points = detail.growthPoints)
+                }
             }
 
             item {
@@ -121,13 +113,6 @@ internal fun AnalysisChallengeDetailScreen(
     }
 }
 
-/**
- * 챌린지의 가장 중요한 정보만 먼저 보여주는 상단 카드입니다.
- *
- * 역할:
- * - 문제명, 난이도, 상태를 제일 먼저 보이게 합니다.
- * - 핵심 문장 하나만 남겨 화면의 시작점을 단순하게 만듭니다.
- */
 @Composable
 private fun ChallengeHeroCard(
     detail: AnalysisChallengeDetailUiModel
@@ -135,7 +120,7 @@ private fun ChallengeHeroCard(
     Surface(
         color = Color.Transparent,
         shape = RoundedCornerShape(30.dp),
-        shadowElevation = 4.dp
+        shadowElevation = 0.dp
     ) {
         Box(
             modifier = Modifier
@@ -148,13 +133,13 @@ private fun ChallengeHeroCard(
                         )
                     )
                 )
-                .padding(22.dp)
+                .padding(horizontal = 18.dp, vertical = 16.dp)
         ) {
             AnalysisGlow(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 16.dp, y = (-12).dp)
-                    .size(132.dp),
+                    .offset(x = 12.dp, y = (-10).dp)
+                    .size(104.dp),
                 colors = listOf(
                     Color.White.copy(alpha = 0.2f),
                     Color.White.copy(alpha = 0f)
@@ -162,7 +147,7 @@ private fun ChallengeHeroCard(
             )
 
             Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -173,17 +158,19 @@ private fun ChallengeHeroCard(
                 }
 
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = detail.title,
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.titleLarge,
                         color = AnalysisPalette.OnAccent
                     )
                     Text(
                         text = detail.subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AnalysisPalette.OnAccent.copy(alpha = 0.84f)
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AnalysisPalette.OnAccent.copy(alpha = 0.84f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -191,13 +178,6 @@ private fun ChallengeHeroCard(
     }
 }
 
-/**
- * 시도 결과 흐름을 가볍게 훑어볼 수 있는 행입니다.
- *
- * 역할:
- * - 시도별 결과 변화만 간단히 보여주고 바로 다음 섹션으로 넘어가게 합니다.
- * - 큰 카드 대신 작은 칩 흐름으로 정리해 화면을 덜 무겁게 만듭니다.
- */
 @Composable
 private fun ChallengeFlowRow(
     flowItems: List<AnalysisAttemptFlowItemUiModel>
@@ -235,7 +215,7 @@ private fun ChallengeFlowRow(
                         )
                         if (item.isLatest) {
                             Text(
-                                text = "최신",
+                                text = "최근",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = AnalysisPalette.TextHint
                             )
@@ -247,13 +227,6 @@ private fun ChallengeFlowRow(
     }
 }
 
-/**
- * 시도별 안정성 흐름을 조용한 그래프로 보여주는 카드입니다.
- *
- * 역할:
- * - 챌린지 안에서 내가 어떻게 안정적으로 좋아졌는지 한눈에 보여줍니다.
- * - 화면을 복잡하게 만들지 않도록 한 가지 그래프와 짧은 보조 수치만 사용합니다.
- */
 @Composable
 private fun ChallengeGrowthCard(
     points: List<AnalysisAttemptGrowthPointUiModel>
@@ -269,41 +242,28 @@ private fun ChallengeGrowthCard(
         ) {
             AnalysisSectionTitle(title = "시도별 성장")
 
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = AnalysisPalette.SurfaceMuted
+            Column(
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    ChallengeGrowthMetricTabs(
-                        selectedMetric = selectedMetric,
-                        onMetricSelected = { selectedMetric = it }
-                    )
+                ChallengeGrowthMetricTabs(
+                    selectedMetric = selectedMetric,
+                    onMetricSelected = { selectedMetric = it }
+                )
 
-                    ChallengeGrowthTrendChart(
-                        points = points,
-                        selectedMetric = selectedMetric
-                    )
+                ChallengeGrowthTrendChart(
+                    points = points,
+                    selectedMetric = selectedMetric
+                )
 
-                    ChallengeGrowthSnapshots(
-                        points = points,
-                        selectedMetric = selectedMetric
-                    )
-                }
+                ChallengeGrowthSnapshots(
+                    points = points,
+                    selectedMetric = selectedMetric
+                )
             }
         }
     }
 }
 
-/**
- * 성장 카드 안에서 어떤 지표를 볼지 전환하는 작은 탭입니다.
- *
- * 역할:
- * - 한 카드 안에서 안정률과 최대 홀드 흐름을 번갈아 볼 수 있게 해줍니다.
- * - 탭 자체가 과하게 튀지 않도록, 카드 톤 안에서 조용한 선택 UI로 구성합니다.
- */
 @Composable
 private fun ChallengeGrowthMetricTabs(
     selectedMetric: ChallengeGrowthMetric,
@@ -313,7 +273,7 @@ private fun ChallengeGrowthMetricTabs(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        ChallengeGrowthMetric.values().forEach { metric ->
+        ChallengeGrowthMetric.entries.forEach { metric ->
             val selected = metric == selectedMetric
             Surface(
                 modifier = Modifier.weight(1f),
@@ -337,13 +297,6 @@ private fun ChallengeGrowthMetricTabs(
     }
 }
 
-/**
- * 현재 선택된 성장 지표를 선 그래프로 보여줍니다.
- *
- * 역할:
- * - 시도 순서에 따라 안정률 또는 최대 홀드가 어떻게 달라졌는지 한눈에 보여줍니다.
- * - 값의 절대 단위가 달라도 같은 그래프 영역에서 읽을 수 있도록 내부에서 정규화합니다.
- */
 @Composable
 private fun ChallengeGrowthTrendChart(
     points: List<AnalysisAttemptGrowthPointUiModel>,
@@ -360,7 +313,7 @@ private fun ChallengeGrowthTrendChart(
             when (selectedMetric) {
                 ChallengeGrowthMetric.Stability -> point.stabilityScore
                 ChallengeGrowthMetric.MaxHold -> point.maxHoldNo.toFloat()
-                ChallengeGrowthMetric.RiskEvents -> point.riskEventCount.toFloat()
+                ChallengeGrowthMetric.LowerBodyDrive -> point.lowerBodyDriveScore.toFloat()
             }
         }
 
@@ -368,7 +321,7 @@ private fun ChallengeGrowthTrendChart(
         val maxValue = when (selectedMetric) {
             ChallengeGrowthMetric.Stability -> 1f
             ChallengeGrowthMetric.MaxHold -> values.maxOrNull()?.coerceAtLeast(1f) ?: 1f
-            ChallengeGrowthMetric.RiskEvents -> values.maxOrNull()?.coerceAtLeast(1f) ?: 1f
+            ChallengeGrowthMetric.LowerBodyDrive -> 100f
         }
         val range = (maxValue - minValue).coerceAtLeast(1f)
         val stepX = if (values.size == 1) 0f else size.width / (values.size - 1)
@@ -413,13 +366,6 @@ private fun ChallengeGrowthTrendChart(
     }
 }
 
-/**
- * 각 시도의 핵심 값을 짧은 카드로 요약합니다.
- *
- * 역할:
- * - 그래프만 보고 끝나지 않도록 시도별 실제 수치를 같이 보여줍니다.
- * - 선택한 탭에 따라 대표 값과 보조 문구가 자연스럽게 바뀌도록 구성합니다.
- */
 @Composable
 private fun ChallengeGrowthSnapshots(
     points: List<AnalysisAttemptGrowthPointUiModel>,
@@ -431,13 +377,13 @@ private fun ChallengeGrowthSnapshots(
         items(points) { point ->
             val primaryValue = when (selectedMetric) {
                 ChallengeGrowthMetric.Stability -> "${(point.stabilityScore * 100f).toInt()}%"
-                ChallengeGrowthMetric.MaxHold -> "${point.maxHoldNo}홀드"
-                ChallengeGrowthMetric.RiskEvents -> "${point.riskEventCount}회"
+                ChallengeGrowthMetric.MaxHold -> "${point.maxHoldNo}번"
+                ChallengeGrowthMetric.LowerBodyDrive -> "${point.lowerBodyDriveScore}점"
             }
             val secondaryValue = when (selectedMetric) {
-                ChallengeGrowthMetric.Stability -> "최대 ${point.maxHoldNo}홀드"
-                ChallengeGrowthMetric.MaxHold -> "안정 ${(point.stabilityScore * 100f).toInt()}%"
-                ChallengeGrowthMetric.RiskEvents -> "안정 ${(point.stabilityScore * 100f).toInt()}%"
+                ChallengeGrowthMetric.Stability -> "최대 홀드 ${point.maxHoldNo}번"
+                ChallengeGrowthMetric.MaxHold -> "안정률 ${(point.stabilityScore * 100f).toInt()}%"
+                ChallengeGrowthMetric.LowerBodyDrive -> "안정률 ${(point.stabilityScore * 100f).toInt()}%"
             }
 
             Surface(
@@ -471,48 +417,45 @@ private fun ChallengeGrowthSnapshots(
     }
 }
 
-/**
- * 챌린지 성장 카드에서 전환할 수 있는 지표 종류입니다.
- *
- * 역할:
- * - 카드 내부 탭과 그래프 계산 기준을 하나의 기준으로 묶습니다.
- * - 화면 문구와 실제 데이터 전환 로직이 어긋나지 않게 유지합니다.
- */
-private enum class ChallengeGrowthMetric(val label: String) {
-    Stability("안정률"),
-    MaxHold("최대 홀드"),
-    RiskEvents("위험 이벤트")
-}
-
-/** 상세 화면 상단에서 쓰는 간결한 뒤로가기 칩입니다. */
 @Composable
-private fun AnalysisBackChip(
+internal fun AnalysisBackChip(
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    compact: Boolean = false
 ) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(999.dp),
         color = AnalysisPalette.Surface,
-        shadowElevation = 1.dp
+        shadowElevation = 0.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(
+                horizontal = if (compact) 12.dp else 14.dp,
+                vertical = if (compact) 8.dp else 10.dp
+            ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Rounded.ArrowBack,
                 contentDescription = null,
+                modifier = Modifier.size(if (compact) 18.dp else 24.dp),
                 tint = AnalysisPalette.TextPrimary
             )
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleSmall,
+                style = if (compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleSmall,
                 color = AnalysisPalette.TextPrimary
             )
         }
     }
+}
+
+private enum class ChallengeGrowthMetric(val label: String) {
+    Stability("안정률"),
+    MaxHold("최대 홀드"),
+    LowerBodyDrive("하체 주도성")
 }
 
 private fun flowSoftColor(tone: AnalysisBadgeTone): Color =

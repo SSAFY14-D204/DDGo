@@ -4,9 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,11 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ddgo.app.feature.analysis.AnalysisStrings
 import com.ddgo.app.feature.analysis.model.AnalysisAttemptDetailUiModel
@@ -38,14 +34,10 @@ import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
 import com.ddgo.app.feature.analysis.model.AnalysisCoachCardUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisTimelineItemUiModel
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
+import com.ddgo.app.feature.climbing.upload.PoseScrubberColors
+import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSection
+import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSectionState
 
-/**
- * 메인 분석 탭에서 개별 시도의 상세 분석을 보여주는 화면입니다.
- *
- * 역할:
- * - 이번 시도의 핵심 결과를 먼저 보여줍니다.
- * - 그 다음 지표, 흐름, 코칭 순서로 아래로 읽게 해서 화면을 단순하게 유지합니다.
- */
 @Composable
 internal fun AnalysisAttemptDetailScreen(
     detail: AnalysisAttemptDetailUiModel,
@@ -78,42 +70,64 @@ internal fun AnalysisAttemptDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                AnalysisBackChip(
-                    label = AnalysisStrings.BackToChallenge,
-                    onClick = onBack
-                )
+                Column(
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    AnalysisBackChip(
+                        label = AnalysisStrings.BackToChallenge,
+                        onClick = onBack,
+                        compact = true
+                    )
+                    AttemptHeroCard(detail = detail)
+                }
+            }
+
+            detail.videoUrl
+                ?.takeIf { it.isNotBlank() }
+                ?.let { videoUrl ->
+                    item {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AttemptVideoSection(
+                                state = AttemptVideoSectionState(videoUri = videoUrl),
+                                lineColor = AnalysisPalette.AccentStrong,
+                                pointColor = AnalysisPalette.Accent,
+                                scrubberColors = PoseScrubberColors(
+                                    trackColor = AnalysisPalette.Border,
+                                    progressColor = AnalysisPalette.AccentStrong,
+                                    thumbColor = AnalysisPalette.Accent,
+                                    textColor = AnalysisPalette.TextPrimary
+                                ),
+                                controlSurfaceColor = AnalysisPalette.SurfaceMuted
+                            )
+                        }
+                    }
+                }
+
+            item {
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    AttemptResultAndScoreSection(detail = detail)
+                    AttemptTimelineSection(items = detail.timelineItems)
+                    AttemptCoachSection(cards = detail.coachCards)
+                }
             }
 
             item {
-                AttemptHeroCard(detail = detail)
-            }
-
-            item {
-                AttemptMetricsSection(detail = detail)
-            }
-
-            item {
-                AttemptTimelineSection(items = detail.timelineItems)
-            }
-
-            item {
-                AttemptCoachSection(cards = detail.coachCards)
+                Box(modifier = Modifier.height(120.dp))
             }
         }
     }
 }
 
-/**
- * 시도 상세 상단에서 결과와 핵심 메시지를 보여주는 카드입니다.
- *
- * 역할:
- * - 결과 배지와 요약 문장을 화면의 시작점으로 만듭니다.
- * - 필요한 텍스트만 남겨 첫인상이 복잡하지 않게 유지되도록 합니다.
- */
 @Composable
 private fun AttemptHeroCard(
     detail: AnalysisAttemptDetailUiModel
@@ -121,7 +135,7 @@ private fun AttemptHeroCard(
     Surface(
         color = Color.Transparent,
         shape = RoundedCornerShape(30.dp),
-        shadowElevation = 4.dp
+        shadowElevation = 0.dp
     ) {
         Box(
             modifier = Modifier
@@ -134,13 +148,12 @@ private fun AttemptHeroCard(
                         )
                     )
                 )
-                .padding(22.dp)
         ) {
             AnalysisGlow(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 18.dp, y = (-12).dp)
-                    .size(132.dp),
+                    .offset(x = 12.dp, y = (-10).dp)
+                    .size(108.dp),
                 colors = listOf(
                     Color.White.copy(alpha = 0.2f),
                     Color.White.copy(alpha = 0f)
@@ -148,45 +161,36 @@ private fun AttemptHeroCard(
             )
 
             Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                AnalysisBadge(badge = detail.resultBadge)
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = detail.title,
                         style = MaterialTheme.typography.headlineSmall,
                         color = AnalysisPalette.OnAccent
                     )
-                    Text(
-                        text = detail.subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AnalysisPalette.OnAccent.copy(alpha = 0.82f)
-                    )
+                    AnalysisBadge(badge = detail.resultBadge)
                 }
 
                 Text(
-                    text = detail.headline,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = AnalysisPalette.OnAccent
+                    text = detail.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AnalysisPalette.OnAccent.copy(alpha = 0.8f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
     }
 }
 
-/**
- * 시도 핵심 지표를 한 카드에 정돈해서 보여주는 섹션입니다.
- *
- * 역할:
- * - 상단에는 2열 수치 카드,
- * - 하단에는 해석용 진행 바를 두어 같은 카드 안에서 위계를 만듭니다.
- */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AttemptMetricsSection(
+private fun AttemptResultAndScoreSection(
     detail: AnalysisAttemptDetailUiModel
 ) {
     AnalysisCardSurface {
@@ -194,69 +198,116 @@ private fun AttemptMetricsSection(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            AnalysisSectionTitle(title = AnalysisStrings.AttemptDetailSection)
-
-            FlowRow(
-                maxItemsInEachRow = 2,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                detail.metricCards.forEach { stat ->
-                    AnalysisMiniStatCard(
-                        label = stat.label,
-                        value = stat.value,
-                        modifier = Modifier.width(148.dp)
-                    )
-                }
-            }
+            AnalysisSectionTitle(title = "이번 시도 결과")
 
             Surface(
                 shape = RoundedCornerShape(22.dp),
                 color = AnalysisPalette.SurfaceMuted
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    AttemptSignalBar(
-                        label = "안정률",
-                        score = detail.stabilityScore,
-                        valueLabel = detail.stabilityValueLabel,
-                        tone = AnalysisBadgeTone.Accent
-                    )
-                    AttemptSignalBar(
-                        label = "최대 홀드",
-                        score = detail.reachScore,
-                        valueLabel = detail.reachValueLabel,
-                        tone = AnalysisBadgeTone.Success
-                    )
-                    AttemptSignalBar(
-                        label = "위험 이벤트",
-                        score = detail.dangerEventScore,
-                        valueLabel = detail.dangerEventValueLabel,
-                        tone = AnalysisBadgeTone.Warning
-                    )
-                    AttemptSignalBar(
-                        label = "크럭스 구간 시간",
-                        score = detail.cruxFocusScore,
-                        valueLabel = detail.cruxFocusValueLabel,
-                        tone = AnalysisBadgeTone.Danger
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "종합 점수",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = AnalysisPalette.TextPrimary
+                            )
+                            Text(
+                                text = detail.overallMovementScore?.let { "${it}점" } ?: "-",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = scoreColor(detail.overallMovementScore),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        AnalysisBadge(badge = detail.resultBadge)
+                    }
+
+                    DividerLine()
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        AttemptInlineMetric(
+                            label = "문제 풀이 여부",
+                            value = detail.attemptResultLabel,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AttemptInlineDivider()
+                        AttemptInlineMetric(
+                            label = "도달 홀드",
+                            value = detail.reachedHoldLabel,
+                            trailingValue = detail.reachedHoldSuffix,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AttemptInlineDivider()
+                        AttemptInlineMetric(
+                            label = "대표 크럭스",
+                            value = detail.cruxHoldLabel,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
+            }
+
+            DividerLine()
+
+            AnalysisSectionTitle(title = "항목별 점수")
+
+            AttemptDetailScoreRow(
+                label = "안정성 유지",
+                progress = detail.stabilityScore,
+                valueLabel = detail.stabilityValueLabel
+            )
+            AttemptDetailScoreRow(
+                label = "안정성 회복력",
+                progress = detail.recoveryScore,
+                valueLabel = detail.recoveryValueLabel
+            )
+            AttemptDetailScoreRow(
+                label = "하체 주도성",
+                progress = detail.lowerBodyDriveScore,
+                valueLabel = detail.lowerBodyDriveValueLabel
+            )
+
+            DividerLine()
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "부담 집중 부위",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = AnalysisPalette.TextSecondary
+                )
+                Text(
+                    text = detail.loadFocusLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = AnalysisPalette.TextPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }
 }
 
-/** 한 줄 막대 형태로 시도 신호를 보여줍니다. */
 @Composable
-private fun AttemptSignalBar(
+private fun AttemptDetailScoreRow(
     label: String,
-    score: Float,
-    valueLabel: String,
-    tone: AnalysisBadgeTone
+    progress: Float,
+    valueLabel: String
 ) {
-    val clampedScore = score.coerceIn(0f, 1f)
+    val percentScore = (progress.coerceIn(0f, 1f) * 100f).toInt()
 
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -273,40 +324,30 @@ private fun AttemptSignalBar(
             )
             Text(
                 text = valueLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = signalToneColor(tone)
+                style = MaterialTheme.typography.titleMedium,
+                color = AnalysisPalette.TextPrimary,
+                fontWeight = FontWeight.SemiBold
             )
         }
 
-        Box(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(10.dp)
-                .background(
-                    color = signalToneSoftColor(tone),
-                    shape = RoundedCornerShape(999.dp)
-                )
+                .height(10.dp),
+            shape = RoundedCornerShape(999.dp),
+            color = AnalysisPalette.Border
         ) {
-            Box(
+            Surface(
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(clampedScore)
-                    .background(
-                        color = signalToneColor(tone),
-                        shape = RoundedCornerShape(999.dp)
-                    )
-            )
+                    .fillMaxWidth(progress.coerceIn(0f, 1f))
+                    .height(10.dp),
+                shape = RoundedCornerShape(999.dp),
+                color = scoreColor(percentScore)
+            ) {}
         }
     }
 }
 
-/**
- * 시도 진행 흐름을 카드형 리스트로 보여주는 섹션입니다.
- *
- * 역할:
- * - 단계 번호와 설명 카드만 남겨 읽는 순서를 분명하게 합니다.
- * - 복잡한 장식 없이 흐름 자체가 먼저 보이게 합니다.
- */
 @Composable
 private fun AttemptTimelineSection(
     items: List<AnalysisTimelineItemUiModel>
@@ -316,25 +357,26 @@ private fun AttemptTimelineSection(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            AnalysisSectionTitle(title = AnalysisStrings.TimelineSection)
+            AnalysisSectionTitle(
+                title = "핵심 흐름",
+                subtitle = "이번 시도에서 중요하게 남는 흐름을 순서대로 정리했어요."
+            )
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items.forEachIndexed { index, item ->
-                    AttemptTimelineCard(
-                        step = index + 1,
-                        item = item
-                    )
+            items.forEachIndexed { index, item ->
+                AttemptTimelineRow(
+                    step = index + 1,
+                    item = item
+                )
+                if (index < items.lastIndex) {
+                    DividerLine()
                 }
             }
         }
     }
 }
 
-/** 타임라인 한 단계를 카드로 표현합니다. */
 @Composable
-private fun AttemptTimelineCard(
+private fun AttemptTimelineRow(
     step: Int,
     item: AnalysisTimelineItemUiModel
 ) {
@@ -343,9 +385,9 @@ private fun AttemptTimelineCard(
         verticalAlignment = Alignment.Top
     ) {
         Surface(
-            modifier = Modifier.size(30.dp),
-            shape = CircleShape,
-            color = signalToneColor(item.tone)
+            modifier = Modifier.size(28.dp),
+            shape = RoundedCornerShape(999.dp),
+            color = timelineStepColor(step)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(
@@ -356,37 +398,24 @@ private fun AttemptTimelineCard(
             }
         }
 
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = signalToneSoftColor(item.tone)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = AnalysisPalette.TextPrimary
-                )
-                Text(
-                    text = item.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = AnalysisPalette.TextSecondary
-                )
-            }
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = AnalysisPalette.TextPrimary
+            )
+            Text(
+                text = item.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = AnalysisPalette.TextSecondary
+            )
         }
     }
 }
 
-/**
- * 분석 결과를 다음 행동으로 바꿔주는 코칭 섹션입니다.
- *
- * 역할:
- * - 카드 형태는 유지하되 같은 패턴으로 반복해서 읽기 쉽게 만듭니다.
- * - 색상은 포인트만 주고, 본문은 차분하게 읽히도록 유지합니다.
- */
 @Composable
 private fun AttemptCoachSection(
     cards: List<AnalysisCoachCardUiModel>
@@ -396,97 +425,136 @@ private fun AttemptCoachSection(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            AnalysisSectionTitle(title = AnalysisStrings.CoachSection)
+            AnalysisSectionTitle(
+                title = "이번 시도 핵심",
+                subtitle = "이번 시도에서 바로 가져갈 핵심 포인트만 짧게 정리했어요."
+            )
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                cards.forEach { card ->
-                    Surface(
-                        shape = RoundedCornerShape(22.dp),
-                        color = signalToneSoftColor(card.tone)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(6.dp)
-                                    .height(52.dp)
-                                    .background(
-                                        color = signalToneColor(card.tone),
-                                        shape = RoundedCornerShape(999.dp)
-                                    )
-                            )
-
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = card.title,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = AnalysisPalette.TextPrimary
-                                )
-                                Text(
-                                    text = card.body,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = AnalysisPalette.TextSecondary
-                                )
-                            }
-                        }
-                    }
+            cards.forEachIndexed { index, card ->
+                AttemptCoachRow(card = card)
+                if (index < cards.lastIndex) {
+                    DividerLine()
                 }
             }
         }
     }
 }
 
-/** 시도 상세에서만 쓰는 간결한 뒤로가기 칩입니다. */
 @Composable
-private fun AnalysisBackChip(
-    label: String,
-    onClick: () -> Unit
+private fun AttemptCoachRow(
+    card: AnalysisCoachCardUiModel
 ) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(999.dp),
-        color = AnalysisPalette.Surface,
-        shadowElevation = 1.dp
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            modifier = Modifier
+                .width(4.dp)
+                .height(44.dp),
+            shape = RoundedCornerShape(999.dp),
+            color = toneColor(card.tone)
+        ) {}
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(
-                imageVector = Icons.Rounded.ArrowBack,
-                contentDescription = null,
-                tint = AnalysisPalette.TextPrimary
+            Text(
+                text = card.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = AnalysisPalette.TextPrimary
             )
             Text(
-                text = label,
-                style = MaterialTheme.typography.titleSmall,
-                color = AnalysisPalette.TextPrimary
+                text = card.body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = AnalysisPalette.TextSecondary,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
 }
 
-private fun signalToneColor(tone: AnalysisBadgeTone): Color =
+@Composable
+private fun AttemptInlineMetric(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    trailingValue: String? = null
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = AnalysisPalette.TextSecondary
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                color = AnalysisPalette.TextPrimary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            trailingValue?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = AnalysisPalette.TextHint
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttemptInlineDivider() {
+    Surface(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(1.dp),
+        color = AnalysisPalette.Divider
+    ) {}
+}
+
+@Composable
+private fun DividerLine() {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp),
+        color = AnalysisPalette.Divider
+    ) {}
+}
+
+private fun toneColor(tone: AnalysisBadgeTone): Color =
     when (tone) {
         AnalysisBadgeTone.Accent -> AnalysisPalette.AccentStrong
         AnalysisBadgeTone.Success -> AnalysisPalette.Success
         AnalysisBadgeTone.Danger -> AnalysisPalette.Danger
         AnalysisBadgeTone.Warning -> AnalysisPalette.Warning
-        AnalysisBadgeTone.Neutral -> AnalysisPalette.TextSecondary
+        AnalysisBadgeTone.Neutral -> AnalysisPalette.TextHint
     }
 
-private fun signalToneSoftColor(tone: AnalysisBadgeTone): Color =
-    when (tone) {
-        AnalysisBadgeTone.Accent -> AnalysisPalette.AccentSoft
-        AnalysisBadgeTone.Success -> AnalysisPalette.SuccessSoft
-        AnalysisBadgeTone.Danger -> AnalysisPalette.DangerSoft
-        AnalysisBadgeTone.Warning -> AnalysisPalette.WarningSoft
-        AnalysisBadgeTone.Neutral -> AnalysisPalette.SurfaceMuted
+private fun scoreColor(score: Int?): Color =
+    when {
+        score == null -> AnalysisPalette.TextHint
+        score >= 85 -> AnalysisPalette.Success
+        score >= 70 -> AnalysisPalette.AccentStrong
+        score >= 55 -> AnalysisPalette.Warning
+        else -> AnalysisPalette.Danger
+    }
+
+private fun timelineStepColor(step: Int): Color =
+    when ((step - 1) % 5) {
+        0 -> AnalysisPalette.Warning
+        1 -> AnalysisPalette.AccentStrong
+        2 -> AnalysisPalette.Success
+        3 -> AnalysisPalette.Danger
+        else -> AnalysisPalette.TextSecondary
     }

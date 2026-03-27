@@ -22,14 +22,20 @@ internal object AnalysisDashboardUiMapper {
         val totalAttempts = attempts.size
         val successChallenges = challenges.count { it.challengeResult == AnalysisChallengeResult.SUCCESS }
         val averageStability = attempts.map { it.centerStabilityRatio }.average().toFloat()
-        val averageDangerEvents = attempts.map { it.dangerEventCount }.average().toFloat()
-        val totalDangerEvents = attempts.sumOf { it.dangerEventCount }
+
+        val lowerBodyDriveScores = attempts.mapNotNull { it.lowerBodyDriveScore }
+        val averageLowerBodyDrive = if (lowerBodyDriveScores.isNotEmpty()) {
+            lowerBodyDriveScores.average().toFloat()
+        } else {
+            0f
+        }
+
         val completionScore = if (totalChallenges > 0) {
             successChallenges.toFloat() / totalChallenges.toFloat()
         } else {
             0f
         }
-        val dangerEventProgress = (averageDangerEvents / 4f).coerceIn(0f, 1f)
+        val lowerBodyDriveProgress = (averageLowerBodyDrive / 100f).coerceIn(0f, 1f)
 
         val recentChallenges = challenges
             .sortedBy { it.startedAt }
@@ -51,11 +57,13 @@ internal object AnalysisDashboardUiMapper {
 
         val growthHeadline = when {
             stabilityDeltaPercent > 0 ->
-                "최근 기록에서 평균 안정률이 ${stabilityDeltaPercent}% 좋아졌어요."
+                "최근 기록에서\n평균 안정률이 ${stabilityDeltaPercent}% 좋아졌어요."
+
             stabilityDeltaPercent < 0 ->
-                "최근 기록에서 평균 안정률이 ${abs(stabilityDeltaPercent)}% 낮아졌어요."
+                "최근 기록에서\n평균 안정률이 ${abs(stabilityDeltaPercent)}% 낮아졌어요."
+
             else ->
-                "최근 기록의 평균 안정률이 비슷한 흐름을 유지하고 있어요."
+                "최근 기록에서\n평균 안정률이 비슷한 흐름을 유지하고 있어요."
         }
 
         return AnalysisGrowthSummaryUiModel(
@@ -63,7 +71,7 @@ internal object AnalysisDashboardUiMapper {
             headline = growthHeadline,
             trendBadges = listOf(
                 AnalysisBadgeUiModel(
-                    label = "완등 ${successChallenges}개",
+                    label = "완등 ${successChallenges}회",
                     tone = AnalysisBadgeTone.Success
                 ),
                 AnalysisBadgeUiModel(
@@ -79,8 +87,16 @@ internal object AnalysisDashboardUiMapper {
                     }
                 ),
                 AnalysisBadgeUiModel(
-                    label = "평균 위험 이벤트 ${AnalysisFormatters.formatAverageEventCount(averageDangerEvents)}",
-                    tone = AnalysisBadgeTone.Warning
+                    label = if (lowerBodyDriveScores.isNotEmpty()) {
+                        "평균 하체 주도성 ${averageLowerBodyDrive.roundToInt()}점"
+                    } else {
+                        "하체 주도성 데이터 없음"
+                    },
+                    tone = if (averageLowerBodyDrive >= 65f) {
+                        AnalysisBadgeTone.Success
+                    } else {
+                        AnalysisBadgeTone.Warning
+                    }
                 )
             ),
             metrics = listOf(
@@ -97,15 +113,19 @@ internal object AnalysisDashboardUiMapper {
                     value = AnalysisFormatters.formatPercent(averageStability)
                 ),
                 AnalysisOverviewStatUiModel(
-                    label = "위험 이벤트",
-                    value = AnalysisFormatters.formatEventCount(totalDangerEvents)
+                    label = "평균 하체 주도성",
+                    value = if (lowerBodyDriveScores.isNotEmpty()) {
+                        "${averageLowerBodyDrive.roundToInt()}점"
+                    } else {
+                        "-"
+                    }
                 )
             ),
             trendPoints = trendPoints,
             stabilityScore = averageStability.coerceIn(0f, 1f),
             completionScore = completionScore,
-            averageDangerEvents = averageDangerEvents,
-            dangerEventProgress = dangerEventProgress
+            averageLowerBodyDriveScore = averageLowerBodyDrive,
+            lowerBodyDriveProgress = lowerBodyDriveProgress
         )
     }
 

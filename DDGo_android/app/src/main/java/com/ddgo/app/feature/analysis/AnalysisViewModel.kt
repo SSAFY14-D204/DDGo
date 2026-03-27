@@ -64,6 +64,11 @@ class AnalysisViewModel @Inject constructor(
         openChallengeDetailIfAvailable(challengeId)
     }
 
+    fun openAllChallenges() {
+        if (challengeSnapshots.value.isEmpty()) return
+        currentScreen.value = AnalysisScreenState.AllChallenges
+    }
+
     fun openAttemptDetail(attemptNo: Int) {
         val challenge = challengeSnapshots.value.firstOrNull { it.id == selectedChallengeId.value } ?: return
         if (challenge.attempts.none { it.attemptNo == attemptNo }) return
@@ -76,6 +81,10 @@ class AnalysisViewModel @Inject constructor(
     }
 
     fun closeChallengeDetail() {
+        currentScreen.value = AnalysisScreenState.Dashboard
+    }
+
+    fun closeAllChallenges() {
         currentScreen.value = AnalysisScreenState.Dashboard
     }
 

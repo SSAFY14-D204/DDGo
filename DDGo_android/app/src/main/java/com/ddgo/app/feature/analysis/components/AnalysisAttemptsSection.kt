@@ -20,17 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.ddgo.app.feature.analysis.AnalysisStrings
 import com.ddgo.app.feature.analysis.model.AnalysisAttemptListItemUiModel
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
 
-/**
- * 챌린지 상세 안의 시도 목록 섹션입니다.
- *
- * 역할:
- * - 각 시도의 결과와 핵심 수치를 한 줄씩 빠르게 비교할 수 있게 합니다.
- * - 시도 상세 화면으로 이동하는 진입점 역할만 하도록 정보량을 적절히 제한합니다.
- */
 @Composable
 internal fun AnalysisAttemptsSection(
     attempts: List<AnalysisAttemptListItemUiModel>,
@@ -39,13 +31,16 @@ internal fun AnalysisAttemptsSection(
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        AnalysisSectionTitle(title = AnalysisStrings.AttemptsSection)
+        AnalysisSectionTitle(
+            title = "시도 목록",
+            subtitle = "N차 시도, 영상 길이, 등반 결과만 먼저 확인하고 상세 분석으로 들어가세요."
+        )
 
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             attempts.forEach { attempt ->
-                AttemptListCard(
+                AttemptListRow(
                     attempt = attempt,
                     onClick = { onAttemptSelected(attempt.attemptNo) }
                 )
@@ -54,9 +49,8 @@ internal fun AnalysisAttemptsSection(
     }
 }
 
-/** 시도 목록의 개별 카드입니다. */
 @Composable
-private fun AttemptListCard(
+private fun AttemptListRow(
     attempt: AnalysisAttemptListItemUiModel,
     onClick: () -> Unit
 ) {
@@ -67,16 +61,16 @@ private fun AttemptListCard(
         shape = RoundedCornerShape(22.dp),
         color = AnalysisPalette.Surface,
         border = BorderStroke(1.dp, AnalysisPalette.Border),
-        shadowElevation = 2.dp
+        shadowElevation = 0.dp
     ) {
-        Column(
+        Row(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = attempt.title,
@@ -87,36 +81,43 @@ private fun AttemptListCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                AnalysisBadge(badge = attempt.resultBadge)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "영상 길이 ${attempt.subtitle}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AnalysisPalette.TextSecondary
+                    )
+                    Text(
+                        text = "·",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AnalysisPalette.TextHint
+                    )
+                    Text(
+                        text = attempt.resultBadge.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = badgeTextColor(attempt.resultBadge.tone),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
-            Text(
-                text = attempt.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = AnalysisPalette.TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = AnalysisPalette.TextHint
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "${attempt.stabilityLabel}  |  ${attempt.holdLabel}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = AnalysisPalette.TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = null,
-                    tint = AnalysisPalette.TextHint
-                )
-            }
         }
     }
 }
+
+private fun badgeTextColor(tone: com.ddgo.app.feature.analysis.model.AnalysisBadgeTone) =
+    when (tone) {
+        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Accent -> AnalysisPalette.AccentStrong
+        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Success -> AnalysisPalette.Success
+        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Danger -> AnalysisPalette.Danger
+        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Warning -> AnalysisPalette.Warning
+        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Neutral -> AnalysisPalette.TextSecondary
+    }
