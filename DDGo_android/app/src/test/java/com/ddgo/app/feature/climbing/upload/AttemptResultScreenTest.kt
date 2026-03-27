@@ -234,6 +234,7 @@ class AttemptResultScreenTest {
     @Test
     fun `cropped viewport placement uses the intended middle segment`() {
         val placement = calculateCroppedVideoViewportPlacement(
+            fullVideoWidthPx = 10,
             fullVideoHeightPx = 10,
             cropSpec = VideoViewportCropSpec(
                 topCropFraction = 0.4f,
@@ -253,6 +254,7 @@ class AttemptResultScreenTest {
     @Test
     fun `cropped viewport placement keeps full height when crop is inactive`() {
         val placement = calculateCroppedVideoViewportPlacement(
+            fullVideoWidthPx = 10,
             fullVideoHeightPx = 10,
             cropSpec = uncroppedVideoViewportCropSpec(videoAspectRatio = 9f / 16f),
             topCropPx = 0f

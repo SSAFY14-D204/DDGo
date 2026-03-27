@@ -9,7 +9,6 @@ import com.ddgo.app.data.remote.auth.AuthApi
 import com.ddgo.app.data.remote.auth.UserResponseDto
 import com.ddgo.app.data.remote.common.ApiErrorResponse
 import com.ddgo.app.domain.repository.AuthRepository
-import com.ddgo.app.feature.onboarding.OnboardingMode
 import com.ddgo.app.navigation.ScreenRoutes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -66,28 +65,18 @@ class SplashViewModel @Inject constructor(
                 is ResolvedDestination.Main -> {
                     onboardingPreferenceDataStore.setHasAuthenticatedOnce()
                     when {
-                    !hasCompletedOnboarding && resolvedDestination.requiresProfileOnboarding -> {
-                        SplashNavigationEvent.NavigateToOnboarding(
+                        !hasCompletedOnboarding -> SplashNavigationEvent.NavigateToOnboarding(
                             nextRoute = ScreenRoutes.MainGraph.route,
-                            mode = OnboardingMode.INTRO_AND_PROFILE
+                            showEntryGuide = true
                         )
-                    }
 
-                    !hasCompletedOnboarding -> {
-                        SplashNavigationEvent.NavigateToOnboarding(
-                            nextRoute = ScreenRoutes.MainGraph.route,
-                            mode = OnboardingMode.INTRO
-                        )
-                    }
+                        resolvedDestination.requiresRecoveryOnboarding ->
+                            SplashNavigationEvent.NavigateToOnboarding(
+                                nextRoute = ScreenRoutes.MainGraph.route,
+                                showEntryGuide = false
+                            )
 
-                    resolvedDestination.requiresProfileOnboarding -> {
-                        SplashNavigationEvent.NavigateToOnboarding(
-                            nextRoute = ScreenRoutes.MainGraph.route,
-                            mode = OnboardingMode.PROFILE
-                        )
-                    }
-
-                    else -> SplashNavigationEvent.NavigateToMain
+                        else -> SplashNavigationEvent.NavigateToMain
                     }
                 }
             }
@@ -120,12 +109,12 @@ class SplashViewModel @Inject constructor(
     private suspend fun resolveServerValidatedDestination(accessToken: String): ResolvedDestination {
         return when (val validation = validateServerSession(accessToken)) {
             is ServerSessionValidation.Valid -> ResolvedDestination.Main(
-                requiresProfileOnboarding = validationUserRequiresProfileOnboarding(
+                requiresRecoveryOnboarding = validationUserRequiresRecoveryOnboarding(
                     user = validation.user
                 )
             )
             ServerSessionValidation.UnknownFailure -> ResolvedDestination.Main(
-                requiresProfileOnboarding = false
+                requiresRecoveryOnboarding = false
             )
 
             ServerSessionValidation.InvalidSession -> {
@@ -202,17 +191,14 @@ private sealed interface ServerSessionValidation {
 
 private sealed interface ResolvedDestination {
     data object Auth : ResolvedDestination
-    data class Main(val requiresProfileOnboarding: Boolean) : ResolvedDestination
+    data class Main(val requiresRecoveryOnboarding: Boolean) : ResolvedDestination
 }
 
-private fun validationUserRequiresProfileOnboarding(user: UserResponseDto): Boolean {
-    return user.sex.isNullOrBlank() ||
-        user.heightCm == null ||
-        user.heightCm <= 0f ||
-        user.weightKg == null ||
-        user.weightKg <= 0f ||
-        user.wingspanCm == null ||
-        user.wingspanCm <= 0f
+private fun validationUserRequiresRecoveryOnboarding(user: UserResponseDto): Boolean {
+    return user.sex.isNullOrBlank() &&
+        user.heightCm.isMissingBodyMetric() &&
+        user.weightKg.isMissingBodyMetric() &&
+        user.wingspanCm.isMissingBodyMetric()
 }
 
 sealed class SplashNavigationEvent {
@@ -221,6 +207,8 @@ sealed class SplashNavigationEvent {
     data object NavigateToMain : SplashNavigationEvent()
     data class NavigateToOnboarding(
         val nextRoute: String,
-        val mode: OnboardingMode
+        val showEntryGuide: Boolean
     ) : SplashNavigationEvent()
 }
+
+private fun Float?.isMissingBodyMetric(): Boolean = this == null || this <= 0f

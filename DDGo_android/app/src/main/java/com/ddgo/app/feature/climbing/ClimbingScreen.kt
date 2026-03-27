@@ -7,64 +7,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ddgo.app.R
-import com.ddgo.app.core.ui.tokens.DdgoColorTokens
+import coil.compose.AsyncImage
+import com.ddgo.app.core.ui.components.SvgAssetImage
 
-class SpeechBubbleShape(
-    private val cornerRadius: Dp = 20.dp,
-    private val tipSize: Dp = 15.dp
-) : Shape {
-    override fun createOutline(
-        size: Size,
-        layoutDirection: LayoutDirection,
-        density: Density
-    ): Outline {
-        val tipSizePx = with(density) { tipSize.toPx() }
-        val cornerRadiusPx = with(density) { cornerRadius.toPx() }
-        val path = Path().apply {
-            addRoundRect(
-                RoundRect(
-                    left = 0f,
-                    top = 0f,
-                    right = size.width,
-                    bottom = size.height - tipSizePx,
-                    cornerRadius = CornerRadius(cornerRadiusPx)
-                )
-            )
-            moveTo(size.width / 2f - tipSizePx, size.height - tipSizePx)
-            lineTo(size.width / 2f, size.height)
-            lineTo(size.width / 2f + tipSizePx, size.height - tipSizePx)
-            close()
-        }
-        return Outline.Generic(path)
-    }
-}
+private const val MENU_CARD_ASSET = "file:///android_asset/figma/guide2_menu_card.svg"
+private const val MENU_UPLOAD_ICON_ASSET = "file:///android_asset/figma/guide2_upload_icon.svg"
+private const val MENU_RECORD_ICON_ASSET = "file:///android_asset/figma/guide2_record_icon.svg"
+private const val MENU_DIVIDER_ASSET = "file:///android_asset/figma/guide2_divider.svg"
 
 @Composable
 fun ClimbingScreen() {
@@ -86,34 +48,40 @@ fun ClimbingMenuOverlay(
     onNavigateToRecord: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .shadow(elevation = 12.dp, shape = SpeechBubbleShape())
-            .wrapContentSize(),
-        color = Color.White.copy(alpha = 0.95f),
-        shape = SpeechBubbleShape()
+    Box(
+        modifier = Modifier.size(width = 227.dp, height = 205.dp)
     ) {
+        SvgAssetImage(
+            assetPath = MENU_CARD_ASSET,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize()
+        )
+
         Column(
             modifier = Modifier
-                .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 35.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.Start
+                .fillMaxSize()
+                .padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 31.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             ClimbingMenuItem(
-                iconResId = R.drawable.ic_record,
+                iconAsset = MENU_UPLOAD_ICON_ASSET,
                 label = "영상 업로드",
                 onClick = {
                     onNavigateToUpload()
                     onDismiss()
                 }
             )
-            HorizontalDivider(
-                modifier = Modifier.width(140.dp),
-                thickness = 1.dp,
-                color = Color.LightGray.copy(alpha = 0.5f)
+
+            SvgAssetImage(
+                assetPath = MENU_DIVIDER_ASSET,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(start = 2.dp, end = 2.dp)
+                    .fillMaxWidth()
             )
+
             ClimbingMenuItem(
-                iconResId = R.drawable.ic_timer,
+                iconAsset = MENU_RECORD_ICON_ASSET,
                 label = "실시간 기록",
                 onClick = {
                     onNavigateToRecord()
@@ -125,29 +93,31 @@ fun ClimbingMenuOverlay(
 }
 
 @Composable
-fun ClimbingMenuItem(
-    iconResId: Int,
+private fun ClimbingMenuItem(
+    iconAsset: String,
     label: String,
     onClick: () -> Unit
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
+            .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 4.dp)
+            .padding(vertical = 2.dp)
     ) {
-        Icon(
-            painter = painterResource(id = iconResId),
+        SvgAssetImage(
+            assetPath = iconAsset,
             contentDescription = label,
-            tint = Color.Unspecified,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(52.dp)
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(20.dp))
         Text(
             text = label,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = DdgoColorTokens.TextPrimary
+            style = TextStyle(
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFF505050)
+            )
         )
     }
 }
