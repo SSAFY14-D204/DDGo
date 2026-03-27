@@ -35,10 +35,11 @@ fun AttemptUploadScreen(
     viewModel: UploadViewModel = hiltViewModel(),
     initialRecordedVideoUri: String? = null,
     autoOpenPicker: Boolean = false,
+    prepareOnLaunch: Boolean = true,
     onNavigateToNext: () -> Unit = {}
 ) {
-    LaunchedEffect(initialRecordedVideoUri) {
-        if (!viewModel.beginNewChallengeUploadFlow()) {
+    LaunchedEffect(initialRecordedVideoUri, prepareOnLaunch) {
+        if (prepareOnLaunch && !viewModel.beginNewChallengeUploadFlow()) {
             return@LaunchedEffect
         }
         initialRecordedVideoUri
@@ -79,14 +80,13 @@ fun AttemptUploadScreen(
         ) {
             Column {
                 Text(
-                    text = "분석하고 싶은 문제의\n첫번째 시도 영상을 골라주세요",
-                    modifier = Modifier
-                        .width(279.dp),
+                    text = "분석하고 싶은 문제의\n첫 번째 시도 영상을 골라주세요",
+                    modifier = Modifier.width(279.dp),
                     style = MaterialTheme.typography.headlineMedium.copy(
                         lineHeight = 28.6.sp,
                         letterSpacing = (-0.22).sp
                     ),
-                    color = Color(0xFFFFFFFF)
+                    color = Color.White
                 )
             }
 

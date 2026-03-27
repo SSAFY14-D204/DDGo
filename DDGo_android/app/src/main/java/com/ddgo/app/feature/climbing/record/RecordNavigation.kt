@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.record
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -15,10 +16,12 @@ import com.ddgo.app.feature.climbing.upload.ChallengeCreationUiState
 import com.ddgo.app.feature.climbing.upload.ChallengeCreateScreen
 import com.ddgo.app.feature.climbing.upload.GymResolveUiState
 import com.ddgo.app.feature.climbing.upload.GymSearchUiState
+import com.ddgo.app.feature.climbing.upload.UploadRecoveryRoute
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
 import com.ddgo.app.feature.climbing.upload.rememberSharedUploadViewModel
 import com.ddgo.app.feature.climbing.upload.navigateToRealtimeRecordedAttempt
 import com.ddgo.app.navigation.ScreenRoutes
+import com.ddgo.app.core.datastore.UploadRecoveryEntryIntent
 
 fun NavGraphBuilder.recordGraph(
     navController: NavController
@@ -30,6 +33,16 @@ fun NavGraphBuilder.recordGraph(
         composable(ScreenRoutes.Climbing.Record.RECORD_MAIN) {
             val uploadViewModel: UploadViewModel =
                 rememberSharedUploadViewModel(navController, it)
+            LaunchedEffect(
+                uploadViewModel.realtimeOverlayUiState.setupStep,
+                uploadViewModel.recoveryCreateEntryStep
+            ) {
+                uploadViewModel.rememberRecoveryRoute(
+                    route = UploadRecoveryRoute.REALTIME_SETUP,
+                    createStep = uploadViewModel.recoveryCreateEntryStep,
+                    entryIntent = UploadRecoveryEntryIntent.REALTIME
+                )
+            }
             val gymSearchUiState by uploadViewModel.gymSearchUiState.collectAsState(
                 initial = GymSearchUiState.Idle
             )
@@ -48,9 +61,16 @@ fun NavGraphBuilder.recordGraph(
                 @Composable {
                     ChallengeCreateScreen(
                         viewModel = uploadViewModel,
-                        initialStep = ChallengeCreateEntryStep.LEVEL,
+                        initialStep = uploadViewModel.recoveryCreateEntryStep,
                         minimumStep = ChallengeCreateEntryStep.LEVEL,
                         presentationMode = ChallengeCreatePresentationMode.RealtimeEmbedded,
+                        onStepChanged = { step ->
+                            uploadViewModel.rememberRecoveryRoute(
+                                route = UploadRecoveryRoute.REALTIME_SETUP,
+                                createStep = step,
+                                entryIntent = UploadRecoveryEntryIntent.REALTIME
+                            )
+                        },
                         onNavigateBack = uploadViewModel::openRealtimeGymList
                     )
                 }

@@ -2,6 +2,7 @@ package com.ddgo.app.di
 
 import android.content.Context
 import com.ddgo.app.core.datastore.TokenDataStore
+import com.ddgo.app.core.datastore.UploadRecoveryDataStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,6 +20,10 @@ object DataStoreModule {
     @Provides
     @Singleton
     fun provideTokenDataStore(
-        @ApplicationContext context: Context
-    ): TokenDataStore = TokenDataStore(context)
+        @ApplicationContext context: Context,
+        uploadRecoveryDataStore: UploadRecoveryDataStore
+    ): TokenDataStore = TokenDataStore(
+        context = context,
+        uploadRecoveryDataStore = uploadRecoveryDataStore
+    )
 }

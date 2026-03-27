@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
 import androidx.annotation.ColorInt
+import com.ddgo.app.core.datastore.UploadRecoveryEntryIntent
 import com.ddgo.app.core.ui.tokens.DdgoHoldColorPalette
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.GymGrade
@@ -14,6 +15,32 @@ sealed class UploadUiState {
     data object Success : UploadUiState()
     data class Error(val message: String) : UploadUiState()
 }
+
+sealed interface UploadEntryPreparationResult {
+    data object NoRecovery : UploadEntryPreparationResult
+    data class Recovered(
+        val target: UploadRecoveryResumeTarget
+    ) : UploadEntryPreparationResult
+    data object Blocked : UploadEntryPreparationResult
+}
+
+data class UploadRecoveryResumeTarget(
+    val route: UploadRecoveryRoute,
+    val createStep: ChallengeCreateEntryStep? = null
+)
+
+enum class UploadRecoveryPromptType {
+    ClosedResult,
+    RetryRequired,
+    RestartRequired
+}
+
+data class UploadRecoveryPrompt(
+    val type: UploadRecoveryPromptType,
+    val challengeResult: String? = null,
+    val reason: String? = null,
+    val entryIntent: UploadRecoveryEntryIntent? = null
+)
 
 sealed class GymSearchUiState {
     data object Idle : GymSearchUiState()

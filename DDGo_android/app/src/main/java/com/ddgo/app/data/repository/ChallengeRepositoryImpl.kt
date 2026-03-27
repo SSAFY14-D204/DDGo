@@ -3,6 +3,7 @@ package com.ddgo.app.data.repository
 import android.util.Log
 import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.ChallengeMapper.toDomain
+import com.ddgo.app.data.mapper.ChallengeMapper.toOverview
 import com.ddgo.app.data.mapper.ChallengeMapper.toRequestDto
 import com.ddgo.app.data.remote.challenge.ChallengeApi
 import com.ddgo.app.data.remote.challenge.ChallengeCloseRequestDto
@@ -10,6 +11,7 @@ import com.ddgo.app.data.remote.challenge.ChallengeCloseSummaryDto
 import com.ddgo.app.data.remote.challenge.ChallengeCreateRequestDto
 import com.ddgo.app.data.remote.challenge.HoldSaveRequestDto
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
+import com.ddgo.app.domain.model.ChallengeOverview
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.ClosedChallenge
 import com.ddgo.app.domain.model.SavedChallengeHolds
@@ -34,6 +36,24 @@ private val HoldApiJson = Json {
 class ChallengeRepositoryImpl @Inject constructor(
     private val challengeApi: ChallengeApi
 ) : ChallengeRepository {
+
+    override suspend fun getChallenges(): Result<List<ChallengeOverview>> {
+        return try {
+            val response = challengeApi.getChallenges()
+            if (response.success && response.data != null) {
+                Result.success(response.data.map { it.toOverview() })
+            } else {
+                Result.failure(Exception(response.message.ifBlank { "Failed to get challenges." }))
+            }
+        } catch (e: Exception) {
+            Result.failure(
+                IllegalStateException(
+                    e.toUserFacingNetworkMessageOrNull() ?: e.message ?: "챌린지 목록을 불러오지 못했어요.",
+                    e
+                )
+            )
+        }
+    }
 
     override suspend fun createChallenge(
         gymId: Long,

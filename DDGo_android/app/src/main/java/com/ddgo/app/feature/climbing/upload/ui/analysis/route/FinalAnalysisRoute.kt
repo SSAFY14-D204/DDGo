@@ -58,7 +58,7 @@ fun FinalAnalysisRoute(
         ),
         viewModel.attemptHoldReachResults.size
     ).coerceAtLeast(1)
-    val initialSelectedAttempt = 1
+    val initialSelectedAttempt = (viewModel.currentAttemptIndex + 1).coerceAtLeast(1)
     val attemptSummaries = remember(
         attemptCount,
         totalHolds,

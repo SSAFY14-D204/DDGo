@@ -16,7 +16,8 @@ import kotlinx.coroutines.flow.map
  * 세션 만료처럼 앱 전역에서 반응해야 하는 인증 이벤트도 함께 전달합니다.
  */
 class TokenDataStore @Inject constructor(
-    private val context: Context
+    private val context: Context,
+    private val uploadRecoveryDataStore: UploadRecoveryDataStore
 ) {
     private companion object {
         val KEY_ACCESS_TOKEN = stringPreferencesKey("access_token")
@@ -44,6 +45,7 @@ class TokenDataStore @Inject constructor(
             preferences.remove(KEY_ACCESS_TOKEN)
             preferences.remove(KEY_REFRESH_TOKEN)
         }
+        uploadRecoveryDataStore.clearAll()
     }
 
     suspend fun clearTokensBySessionExpiry() {

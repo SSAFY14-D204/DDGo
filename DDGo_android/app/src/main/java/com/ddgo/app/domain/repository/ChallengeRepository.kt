@@ -1,6 +1,7 @@
 package com.ddgo.app.domain.repository
 
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
+import com.ddgo.app.domain.model.ChallengeOverview
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.ClosedChallenge
 import com.ddgo.app.domain.model.SavedChallengeHolds
@@ -13,6 +14,8 @@ import com.ddgo.app.domain.model.SavedChallengeHolds
  * - 실제 백엔드 구현은 data 계층에서 제공합니다.
  */
 interface ChallengeRepository {
+
+    suspend fun getChallenges(): Result<List<ChallengeOverview>>
 
     /** 선택한 암장과 난이도로 챌린지 세션을 생성합니다. */
     suspend fun createChallenge(

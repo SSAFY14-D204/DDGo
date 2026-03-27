@@ -1817,6 +1817,21 @@ internal class UploadSubmissionDelegate(
         )
     }
 
+    fun buildRecoveryPublishedAttemptResultSession(
+        callbacks: UploadSubmissionCallbacks
+    ): UploadRecoveryPublishedAttemptResultSessionDto? {
+        captureCurrentAttemptResultSession(callbacks)
+        return callbacks.publishedSession()?.toRecoveryDto()
+    }
+
+    fun restoreRecoveryPublishedAttemptResultSession(
+        recoverySession: UploadRecoveryPublishedAttemptResultSessionDto?,
+        callbacks: UploadSubmissionCallbacks
+    ) {
+        callbacks.setPublishedSession(recoverySession?.toDomain())
+        restorePublishedAttemptResultSession(callbacks)
+    }
+
     fun restorePublishedAttemptResultSession(callbacks: UploadSubmissionCallbacks) {
         val session = callbacks.publishedSession() ?: run {
             clearAttemptResultState(callbacks, clearPublishedSession = false)

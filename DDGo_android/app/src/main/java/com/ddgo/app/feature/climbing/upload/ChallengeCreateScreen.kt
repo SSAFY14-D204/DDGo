@@ -125,6 +125,7 @@ fun ChallengeCreateScreen(
     initialStep: ChallengeCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME,
     minimumStep: ChallengeCreateEntryStep = initialStep,
     presentationMode: ChallengeCreatePresentationMode = ChallengeCreatePresentationMode.UploadFullScreen,
+    onStepChanged: (ChallengeCreateEntryStep) -> Unit = {},
     onNavigateToNext: () -> Unit = {},
     onNavigateBack: () -> Unit = {}
 ) {
@@ -133,6 +134,7 @@ fun ChallengeCreateScreen(
         initialStep = initialStep,
         minimumStep = minimumStep,
         presentationMode = presentationMode,
+        onStepChanged = onStepChanged,
         onNavigateToNext = onNavigateToNext,
         onNavigateBack = onNavigateBack
     )
@@ -144,11 +146,16 @@ private fun ChallengeCreateFlowContent(
     initialStep: ChallengeCreateEntryStep,
     minimumStep: ChallengeCreateEntryStep,
     presentationMode: ChallengeCreatePresentationMode,
+    onStepChanged: (ChallengeCreateEntryStep) -> Unit,
     onNavigateToNext: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
-    var step by rememberSaveable(initialStep) { mutableStateOf(initialStep.toCreateStep()) }
+    var step by rememberSaveable { mutableStateOf(initialStep.toCreateStep()) }
     val minimumAllowedStep = minimumStep.toCreateStep()
+
+    LaunchedEffect(step) {
+        onStepChanged(step.toEntryStep())
+    }
 
     val handleBack = {
         val previousStep = step.previousStep()
@@ -190,6 +197,12 @@ private fun ChallengeCreateEntryStep.toCreateStep(): CreateStep = when (this) {
     ChallengeCreateEntryStep.GYM_NAME -> CreateStep.GYM_NAME
     ChallengeCreateEntryStep.LEVEL -> CreateStep.LEVEL
     ChallengeCreateEntryStep.COLOR -> CreateStep.COLOR
+}
+
+private fun CreateStep.toEntryStep(): ChallengeCreateEntryStep = when (this) {
+    CreateStep.GYM_NAME -> ChallengeCreateEntryStep.GYM_NAME
+    CreateStep.LEVEL -> ChallengeCreateEntryStep.LEVEL
+    CreateStep.COLOR -> ChallengeCreateEntryStep.COLOR
 }
 
 private fun CreateStep.previousStep(): CreateStep? = when (this) {
