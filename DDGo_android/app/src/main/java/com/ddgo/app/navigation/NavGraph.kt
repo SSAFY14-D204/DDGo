@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -128,6 +129,16 @@ fun NavGraph(
                     navArgument(ScreenRoutes.Onboarding.ARG_SHOW_ENTRY_GUIDE) {
                         type = NavType.BoolType
                         defaultValue = false
+                    },
+                    navArgument(ScreenRoutes.Onboarding.ARG_START_STEP) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument(ScreenRoutes.Onboarding.ARG_SESSION_KEY) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ""
                     }
                 )
             ) { backStackEntry ->
@@ -138,17 +149,26 @@ fun NavGraph(
                 val showEntryGuide = backStackEntry.arguments
                     ?.getBoolean(ScreenRoutes.Onboarding.ARG_SHOW_ENTRY_GUIDE)
                     ?: false
+                val startStep = backStackEntry.arguments
+                    ?.getString(ScreenRoutes.Onboarding.ARG_START_STEP)
+                val sessionKey = backStackEntry.arguments
+                    ?.getString(ScreenRoutes.Onboarding.ARG_SESSION_KEY)
+                    .orEmpty()
 
-                OnboardingScreen(
-                    showEntryGuide = showEntryGuide,
-                    onExit = { navController.popBackStack() },
-                    onFinish = {
-                        navController.navigate(nextRoute) {
-                            popUpTo(0) { inclusive = true }
-                            launchSingleTop = true
+                key(sessionKey) {
+                    OnboardingScreen(
+                        sessionKey = sessionKey,
+                        initialStepKey = startStep,
+                        showEntryGuide = showEntryGuide,
+                        onExit = { navController.popBackStack() },
+                        onFinish = {
+                            navController.navigate(nextRoute) {
+                                popUpTo(0) { inclusive = true }
+                                launchSingleTop = true
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
 
             authGraph(

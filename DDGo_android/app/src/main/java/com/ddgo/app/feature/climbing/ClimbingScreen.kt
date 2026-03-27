@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.climbing
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,9 +9,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,13 +24,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.ddgo.app.core.ui.components.SvgAssetImage
 
-private const val MENU_CARD_ASSET = "file:///android_asset/figma/guide2_menu_card.svg"
 private const val MENU_UPLOAD_ICON_ASSET = "file:///android_asset/figma/guide2_upload_icon.svg"
 private const val MENU_RECORD_ICON_ASSET = "file:///android_asset/figma/guide2_record_icon.svg"
-private const val MENU_DIVIDER_ASSET = "file:///android_asset/figma/guide2_divider.svg"
 
 @Composable
 fun ClimbingScreen() {
@@ -48,20 +49,17 @@ fun ClimbingMenuOverlay(
     onNavigateToRecord: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Box(
-        modifier = Modifier.size(width = 227.dp, height = 205.dp)
+    Surface(
+        modifier = Modifier.size(width = 195.dp, height = 175.dp),
+        color = Color.White,
+        shape = RoundedCornerShape(18.dp),
+        shadowElevation = 16.dp
     ) {
-        SvgAssetImage(
-            assetPath = MENU_CARD_ASSET,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize()
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 22.dp, end = 22.dp, top = 18.dp, bottom = 31.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(start = 21.dp, end = 21.dp, top = 16.dp, bottom = 15.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ClimbingMenuItem(
                 iconAsset = MENU_UPLOAD_ICON_ASSET,
@@ -72,12 +70,11 @@ fun ClimbingMenuOverlay(
                 }
             )
 
-            SvgAssetImage(
-                assetPath = MENU_DIVIDER_ASSET,
-                contentDescription = null,
+            Box(
                 modifier = Modifier
-                    .padding(start = 2.dp, end = 2.dp)
+                    .height(1.dp)
                     .fillMaxWidth()
+                    .background(Color(0xFFE6E8EC))
             )
 
             ClimbingMenuItem(

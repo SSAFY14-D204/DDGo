@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.onboarding
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,7 +20,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -46,10 +50,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -89,17 +99,24 @@ private enum class FigmaOnboardingStep {
 }
 
 private enum class MeasurementRulerKind {
-    Body,
+    Height,
+    Wingspan,
     Weight
 }
 
 private data class MeasurementRulerConfig(
+    val containerHeight: androidx.compose.ui.unit.Dp,
     val tickWidth: androidx.compose.ui.unit.Dp,
-    val topPadding: androidx.compose.ui.unit.Dp,
+    val labelWidth: androidx.compose.ui.unit.Dp,
+    val rulerTopPadding: androidx.compose.ui.unit.Dp,
     val minorTickHeight: androidx.compose.ui.unit.Dp,
     val majorTickHeight: androidx.compose.ui.unit.Dp,
+    val labelTopPadding: androidx.compose.ui.unit.Dp,
     val majorEvery: Int,
     val labelEvery: Int,
+    val minorTickColor: Color,
+    val majorTickColor: Color,
+    val labelColor: Color,
     val labelFormatter: (Int) -> String
 )
 
@@ -111,32 +128,45 @@ private val OnboardingMediumGray = Color(0xFF8C8C8C)
 private val OnboardingWhiteGray = Color(0xFFF0F3F5)
 private val OnboardingGreen = Color(0xFF65B969)
 private val OnboardingPurple = Color(0xFF8458FF)
-private val OnboardingGlow = Brush.radialGradient(
+private val OnboardingIntroGlow = Brush.radialGradient(
     colors = listOf(
         Color(0x6653A6FF),
-        Color(0x338458FF),
+        Color(0x448458FF),
         Color.Transparent
     )
+)
+private val OnboardingResultGlow = Brush.linearGradient(
+    colors = listOf(Color(0xFFB8D8FF), Color(0xFFE4D7FF))
 )
 private val OnboardingCtaGradient = Brush.linearGradient(
     colors = listOf(Color(0xFF42A7FF), Color(0xFF8458FF))
 )
 
-private const val SEX_LEFT_ASSET = "file:///android_asset/onboarding/sex_left.svg"
-private const val SEX_RIGHT_ASSET = "file:///android_asset/onboarding/sex_right.svg"
-private const val COMPLETE_CHARACTER_ASSET = "file:///android_asset/onboarding/complete_character.svg"
-private const val GYM_SEARCH_CIRCLE_ASSET = "file:///android_asset/figma/gym_search_circle.svg"
-private const val GYM_SEARCH_HANDLE_ASSET = "file:///android_asset/figma/gym_search_handle.png"
+private const val INTRO_SCREEN_ASSET = "file:///android_asset/onboarding/onboarding1.png"
+private const val SEX_LEFT_ASSET = "file:///android_asset/onboarding/sex_male.svg"
+private const val SEX_RIGHT_ASSET = "file:///android_asset/onboarding/sex_female.svg"
+private const val COMPLETE_GLOW_ASSET = "file:///android_asset/onboarding/complete_glow.svg"
+private const val COMPLETE_FEMALE_ASSET = "file:///android_asset/onboarding/complete_female.svg"
+private const val COMPLETE_MALE_ASSET = "file:///android_asset/onboarding/complete_male.svg"
 
 @Composable
 fun OnboardingScreen(
+    sessionKey: String,
+    initialStepKey: String? = null,
     showEntryGuide: Boolean,
     onExit: () -> Unit,
     onFinish: () -> Unit,
     viewModel: FigmaOnboardingViewModel = hiltViewModel()
 ) {
     val steps = remember { FigmaOnboardingStep.entries }
-    var currentStepIndex by rememberSaveable { mutableIntStateOf(0) }
+    val initialStepIndex = remember(initialStepKey, steps) {
+        steps.indexOfFirst { it.name.equals(initialStepKey, ignoreCase = true) }
+            .takeIf { it >= 0 }
+            ?: 0
+    }
+    var currentStepIndex by rememberSaveable(sessionKey, initialStepKey) {
+        mutableIntStateOf(initialStepIndex)
+    }
     val currentStep = steps[currentStepIndex]
 
     LaunchedEffect(Unit) {
@@ -183,7 +213,7 @@ fun OnboardingScreen(
                 unit = "cm",
                 tickRange = HEIGHT_RANGE,
                 selectedTick = viewModel.heightCm,
-                rulerKind = MeasurementRulerKind.Body,
+                rulerKind = MeasurementRulerKind.Height,
                 progressStep = 0,
                 onBack = ::moveBack,
                 onTickChange = viewModel::setHeight,
@@ -209,13 +239,12 @@ fun OnboardingScreen(
                 unit = "cm",
                 tickRange = WINGSPAN_RANGE,
                 selectedTick = viewModel.wingspanCm,
-                rulerKind = MeasurementRulerKind.Body,
+                rulerKind = MeasurementRulerKind.Wingspan,
                 progressStep = 2,
                 onBack = ::moveBack,
                 onTickChange = viewModel::setWingspan,
-                helperTitle = "양 팔 리치",
-                helperDescription = "윙스팬을 몰라도 괜찮아요. 키와 동일하게 설정할게요.",
-                quickActionLabel = "키와 동일하게",
+                helperDescription = "양팔을 양옆으로 쫙 펼쳤을 때의 길이에요",
+                quickActionLabel = "윙스팬을 몰라도 괜찮아요. 키와 동일하게 설정할게요.",
                 onQuickAction = viewModel::applyHeightToWingspan,
                 isLoading = viewModel.isSavingProfile,
                 errorMessage = viewModel.profileErrorMessage,
@@ -252,6 +281,7 @@ fun OnboardingScreen(
             )
 
             FigmaOnboardingStep.Complete -> CompleteStepScreen(
+                sex = viewModel.sex ?: ProfileSexOption.Female,
                 nickname = viewModel.completionNickname(),
                 heightCm = viewModel.heightCm,
                 weightText = viewModel.weightSummaryText(),
@@ -327,14 +357,14 @@ private fun SexStepScreen(
                 assetPath = SEX_LEFT_ASSET,
                 contentDescription = "남성",
                 modifier = Modifier
-                    .size(width = 111.dp * scale, height = 72.dp * scale)
+                    .size(width = 110.857.dp * scale, height = 72.dp * scale)
                     .clickable { onSelect(ProfileSexOption.Male) }
             )
             SvgAssetImage(
                 assetPath = SEX_RIGHT_ASSET,
                 contentDescription = "여성",
                 modifier = Modifier
-                    .size(width = 111.dp * scale, height = 72.dp * scale)
+                    .size(width = 113.846.dp * scale, height = 72.dp * scale)
                     .clickable { onSelect(ProfileSexOption.Female) }
             )
         }
@@ -343,54 +373,60 @@ private fun SexStepScreen(
 
 @Composable
 private fun IntroStepScreen(onContinue: () -> Unit) {
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
     ) {
-        Box(
+        val scale = maxWidth / 412.dp
+
+        AsyncImage(
+            model = INTRO_SCREEN_ASSET,
+            contentDescription = null,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 180.dp)
-                .size(width = 280.dp, height = 260.dp)
-                .background(brush = OnboardingGlow, shape = CircleShape)
+                .size(width = 412.dp * scale, height = 892.dp * scale)
         )
 
-        Column(
+        Text(
+            text = "이제 나에게 꼭 맞는\n클라이밍 분석을 받아볼 차례예요",
+            style = TextStyle(
+                fontSize = 28.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 36.sp,
+                color = Color.Transparent,
+                textAlign = TextAlign.Center
+            ),
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "이제 나에게 꼭 맞는\n클라이밍 분석을 받아볼 차례예요",
-                style = TextStyle(
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 36.sp,
-                    color = OnboardingBlack,
-                    textAlign = TextAlign.Center
-                ),
-                modifier = Modifier.padding(top = 278.dp)
-            )
-            Text(
-                text = "여러분의 클라이밍 목표를\n달성할 수 있도록\n몇 가지 질문을 준비했어요.",
-                style = TextStyle(
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                    lineHeight = 28.sp,
-                    color = OnboardingGray,
-                    textAlign = TextAlign.Center
-                ),
-                modifier = Modifier.padding(top = 54.dp)
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            SolidCtaButton(
-                label = "좋아요!",
-                onClick = onContinue,
-                modifier = Modifier.padding(bottom = 45.dp)
-            )
-        }
+                .align(Alignment.TopCenter)
+                .padding(top = 330.dp * scale)
+                .width(412.dp * scale)
+        )
+        Text(
+            text = "여러분의 클라이밍 목표를\n달성할 수 있도록\n몇 가지 질문을 준비했어요.",
+            style = TextStyle(
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium,
+                lineHeight = 28.sp,
+                color = Color.Transparent,
+                textAlign = TextAlign.Center
+            ),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 454.dp * scale)
+                .width(279.dp * scale)
+        )
+        SolidCtaButton(
+            label = "좋아요!",
+            onClick = onContinue,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(
+                    start = 15.dp * scale,
+                    end = 15.dp * scale,
+                    bottom = 45.dp * scale
+                )
+        )
     }
 }
 
@@ -413,6 +449,13 @@ private fun MeasurementStepScreen(
     isLoading: Boolean = false,
     errorMessage: String? = null
 ) {
+    val isWingspan = rulerKind == MeasurementRulerKind.Wingspan
+    val valueTopPadding = when (rulerKind) {
+        MeasurementRulerKind.Height -> 156.dp
+        MeasurementRulerKind.Weight -> 156.dp
+        MeasurementRulerKind.Wingspan -> 156.dp
+    }
+
     QuestionShell(
         title = title,
         progressStep = progressStep,
@@ -422,60 +465,30 @@ private fun MeasurementStepScreen(
         isLoading = isLoading,
         isContinueEnabled = !isLoading
     ) {
-        if (helperTitle != null || helperDescription != null) {
-            Column(
+        if (isWingspan && !helperDescription.isNullOrBlank()) {
+            Text(
+                text = helperDescription,
+                style = TextStyle(
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Normal,
+                    lineHeight = 21.sp,
+                    color = Color(0xFF8C8C8F)
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                helperTitle?.let {
-                    Text(
-                        text = it,
-                        style = TextStyle(
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = OnboardingGray
-                        )
-                    )
-                }
-                helperDescription?.let {
-                    Text(
-                        text = it,
-                        style = TextStyle(
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Normal,
-                            lineHeight = 22.sp,
-                            color = OnboardingLightGray,
-                            textAlign = TextAlign.Center
-                        ),
-                        modifier = Modifier.padding(top = 10.dp)
-                    )
-                }
-                if (quickActionLabel != null && onQuickAction != null) {
-                    Text(
-                        text = quickActionLabel,
-                        style = TextStyle(
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = OnboardingBlue
-                        ),
-                        modifier = Modifier
-                            .padding(top = 14.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .clickable { onQuickAction() }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    )
-                }
-            }
+                    .padding(top = 8.dp, end = 12.dp),
+                textAlign = TextAlign.Start
+            )
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = if (helperTitle == null && helperDescription == null) 140.dp else 92.dp),
+                .weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(valueTopPadding))
+
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.Center
@@ -483,41 +496,54 @@ private fun MeasurementStepScreen(
                 Text(
                     text = displayValueText,
                     style = TextStyle(
-                        fontSize = 64.sp,
+                        fontSize = 57.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = OnboardingBlack,
-                        lineHeight = 68.sp
+                        lineHeight = 60.sp
                     )
                 )
                 Text(
                     text = unit,
                     style = TextStyle(
-                        fontSize = 24.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Normal,
                         color = OnboardingGray
                     ),
-                    modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(start = 8.dp, bottom = 7.dp)
                 )
             }
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 28.dp)
+                    .padding(top = 18.dp)
             ) {
+                val rulerWidth = when (rulerKind) {
+                    MeasurementRulerKind.Height,
+                    MeasurementRulerKind.Wingspan -> 500.dp
+                    MeasurementRulerKind.Weight -> 500.dp
+                }
+                val indicatorHeight = when (rulerKind) {
+                    MeasurementRulerKind.Height -> 90.dp
+                    MeasurementRulerKind.Wingspan -> 90.dp
+                    MeasurementRulerKind.Weight -> 90.dp
+                }
                 MeasurementRuler(
                     kind = rulerKind,
                     tickRange = tickRange,
                     selectedTick = selectedTick,
-                    onTickChange = onTickChange
+                    onTickChange = onTickChange,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .requiredWidth(rulerWidth)
                 )
 
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 9.dp)
+                        .padding(top = 0.dp)
                         .width(3.dp)
-                        .height(154.dp)
+                        .height(indicatorHeight)
                         .background(OnboardingBlue, RoundedCornerShape(12.dp))
                 )
             }
@@ -533,6 +559,26 @@ private fun MeasurementStepScreen(
                     ),
                     modifier = Modifier.padding(top = 18.dp)
                 )
+            }
+
+            if (isWingspan && quickActionLabel != null && onQuickAction != null) {
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = quickActionLabel,
+                    style = TextStyle(
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = 21.sp,
+                        color = Color(0xFF8C8C8F)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onQuickAction() }
+                        .padding(end = 12.dp, bottom = 14.dp),
+                    textAlign = TextAlign.Start
+                )
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
@@ -562,16 +608,17 @@ private fun GymStepScreen(
             text = "홈짐은 언제든지 변경할 수 있어요!",
             style = TextStyle(
                 fontSize = 18.sp,
-                fontWeight = FontWeight.Medium,
-                color = OnboardingGray
+                fontWeight = FontWeight.Normal,
+                lineHeight = 19.sp,
+                color = Color(0xFF8C8C8F)
             ),
-            modifier = Modifier.padding(top = 42.dp, start = 4.dp)
+            modifier = Modifier.padding(top = 8.dp)
         )
 
         UnderlineTextField(
             value = query,
             onValueChange = onQueryChange,
-            hint = "암장 이름으로 검색",
+            hint = "",
             textAlign = TextAlign.Start,
             trailing = {
                 FigmaSearchIcon(
@@ -580,7 +627,7 @@ private fun GymStepScreen(
                         .clickable { onSearch() }
                 )
             },
-            modifier = Modifier.padding(top = 48.dp),
+            modifier = Modifier.padding(top = 124.dp),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Text,
                 imeAction = ImeAction.Search
@@ -650,7 +697,7 @@ private fun GymStepScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 28.dp),
+                        .padding(top = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     searchState.places.take(5).forEach { place ->
@@ -693,7 +740,7 @@ private fun NicknameStepScreen(
             onValueChange = onNicknameChange,
             hint = recommendedNickname,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 118.dp),
+            modifier = Modifier.padding(top = 114.dp),
             textStyle = TextStyle(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Normal,
@@ -722,23 +769,24 @@ private fun NicknameStepScreen(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 26.dp)
+                    .padding(top = 10.dp)
             )
         }
 
         if (showRecommendation) {
             Surface(
                 modifier = Modifier
-                    .padding(top = 28.dp)
+                    .padding(top = 19.dp)
+                    .height(26.dp)
                     .clip(RoundedCornerShape(36.dp))
                     .clickable { onRecommendationClick() },
                 color = OnboardingWhiteGray,
                 shape = RoundedCornerShape(36.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = "추천",
@@ -764,6 +812,7 @@ private fun NicknameStepScreen(
 
 @Composable
 private fun CompleteStepScreen(
+    sex: ProfileSexOption,
     nickname: String,
     heightCm: Int,
     weightText: String,
@@ -771,11 +820,23 @@ private fun CompleteStepScreen(
     isLoading: Boolean,
     onContinue: () -> Unit
 ) {
-    ResultShell(
-        buttonLabel = "열심히 해볼게요!",
-        isLoading = isLoading,
-        onContinue = onContinue
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
     ) {
+        val scale = maxWidth / 412.dp
+
+        SvgAssetImage(
+            assetPath = COMPLETE_GLOW_ASSET,
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(x = (-3.74f).dp * scale, y = (-250.24f).dp * scale)
+                .size(width = 470.214.dp * scale, height = 837.087.dp * scale)
+                .graphicsLayer { rotationZ = 89.65f }
+        )
+
         Text(
             text = "${nickname}님을 위한\n맞춤 분석 준비가 끝났어요!",
             style = TextStyle(
@@ -786,87 +847,116 @@ private fun CompleteStepScreen(
                 textAlign = TextAlign.Center
             ),
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 78.dp)
+                .align(Alignment.TopCenter)
+                .padding(top = 134.dp * scale)
+                .width(341.dp * scale)
         )
 
-        Box(
+        Surface(
             modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 40.dp)
-                .size(width = 334.dp, height = 307.dp)
+                .align(Alignment.TopCenter)
+                .padding(top = 267.dp * scale)
+                .size(width = 363.dp * scale, height = 436.dp * scale),
+            color = Color(0xFF0B0B0E),
+            shape = RoundedCornerShape(30.dp * scale)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(Color(0xFFD0E0FF), Color.White, Color(0xFFD0E0FF))
-                        ),
-                        shape = RoundedCornerShape(18.dp)
-                    )
-            )
-
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 10.dp, vertical = 12.dp)
-                    .fillMaxSize(),
-                shape = RoundedCornerShape(18.dp),
-                color = Color.Transparent
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .align(Alignment.TopCenter)
+                        .padding(top = 12.dp * scale)
+                        .size(width = 334.dp * scale, height = 307.dp * scale)
                         .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFF111319), Color(0xFF2A2F38))
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFEAF2FF),
+                                    Color.White,
+                                    Color(0xFFD7E6FF)
+                                ),
+                                start = androidx.compose.ui.geometry.Offset(28f, 300f),
+                                end = androidx.compose.ui.geometry.Offset(310f, 0f)
                             ),
-                            shape = RoundedCornerShape(18.dp)
+                            shape = RoundedCornerShape(20.dp * scale)
                         )
+                )
+
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 29.dp * scale, top = 29.dp * scale),
+                    color = Color(0xFF5D5D62),
+                    shape = RoundedCornerShape(36.dp * scale)
                 ) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 18.dp),
-                        color = OnboardingGray,
-                        shape = RoundedCornerShape(36.dp)
-                    ) {
-                        Text(
-                            text = nickname,
-                            style = TextStyle(
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White,
-                                letterSpacing = 0.48.sp
-                            ),
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp)
+                    Text(
+                        text = nickname,
+                        style = TextStyle(
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                            letterSpacing = 0.48.sp
+                        ),
+                        modifier = Modifier.padding(
+                            horizontal = 12.dp * scale,
+                            vertical = 6.dp * scale
                         )
-                    }
-
-                    SvgAssetImage(
-                        assetPath = COMPLETE_CHARACTER_ASSET,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(top = 8.dp)
-                            .size(width = 188.dp, height = 218.dp)
                     )
+                }
 
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        SummaryMetric(label = "키", value = "$heightCm cm")
-                        SummaryMetric(label = "몸무게", value = "$weightText kg")
-                        SummaryMetric(label = "윙스팬", value = "$wingspanCm cm")
-                    }
+                SvgAssetImage(
+                    assetPath = when (sex) {
+                        ProfileSexOption.Male -> COMPLETE_MALE_ASSET
+                        ProfileSexOption.Female -> COMPLETE_FEMALE_ASSET
+                    },
+                    contentDescription = null,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 41.dp * scale)
+                        .size(width = 234.dp * scale, height = 239.dp * scale)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(
+                            start = 29.dp * scale,
+                            end = 29.dp * scale,
+                            bottom = 37.dp * scale
+                        ),
+                    horizontalArrangement = Arrangement.spacedBy(13.dp * scale)
+                ) {
+                    SummaryMetric(
+                        label = "키",
+                        value = "$heightCm cm",
+                        modifier = Modifier.weight(1f)
+                    )
+                    SummaryMetric(
+                        label = "몸무게",
+                        value = "$weightText kg",
+                        modifier = Modifier.weight(1f)
+                    )
+                    SummaryMetric(
+                        label = "윙스팬",
+                        value = "$wingspanCm cm",
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
+
+        GradientCtaButton(
+            label = "열심히 해볼게요!",
+            isLoading = isLoading,
+            onClick = onContinue,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(
+                    start = 15.dp * scale,
+                    end = 15.dp * scale,
+                    bottom = 45.dp * scale
+                )
+                .fillMaxWidth()
+        )
     }
 }
 
@@ -945,6 +1035,7 @@ private fun QuestionShell(
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
+                .imePadding()
         ) {
             Text(
                 text = title,
@@ -984,8 +1075,17 @@ private fun ResultShell(
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .size(width = 420.dp, height = 400.dp)
-                .background(brush = OnboardingGlow, shape = CircleShape)
+                .padding(top = 14.dp)
+                .size(width = 470.dp, height = 360.dp)
+                .graphicsLayer {
+                    rotationZ = 14f
+                    alpha = 0.85f
+                }
+                .background(
+                    brush = OnboardingResultGlow,
+                    shape = RoundedCornerShape(220.dp)
+                )
+                .blur(64.dp)
         )
 
         Column(
@@ -1060,33 +1160,69 @@ private fun MeasurementRuler(
     kind: MeasurementRulerKind,
     tickRange: IntRange,
     selectedTick: Int,
-    onTickChange: (Int) -> Unit
+    onTickChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .then(modifier)
+            .height(
+                when (kind) {
+                    MeasurementRulerKind.Height,
+                    MeasurementRulerKind.Wingspan -> 142.dp
+                    MeasurementRulerKind.Weight -> 142.dp
+                }
+            )
     ) {
         val config = remember(kind) {
             when (kind) {
-                MeasurementRulerKind.Body -> MeasurementRulerConfig(
-                    tickWidth = 16.dp,
-                    topPadding = 34.dp,
-                    minorTickHeight = 52.dp,
-                    majorTickHeight = 86.dp,
+                MeasurementRulerKind.Height -> MeasurementRulerConfig(
+                    containerHeight = 142.dp,
+                    tickWidth = 7.3.dp,
+                    labelWidth = 36.dp,
+                    rulerTopPadding = 32.dp,
+                    minorTickHeight = 40.dp,
+                    majorTickHeight = 56.dp,
+                    labelTopPadding = 10.dp,
                     majorEvery = 5,
                     labelEvery = 5,
+                    minorTickColor = Color(0xFFDCE2EA),
+                    majorTickColor = Color(0xFFC2CAD6),
+                    labelColor = Color(0xFFB8C3CF),
+                    labelFormatter = { it.toString() }
+                )
+
+                MeasurementRulerKind.Wingspan -> MeasurementRulerConfig(
+                    containerHeight = 142.dp,
+                    tickWidth = 7.3.dp,
+                    labelWidth = 36.dp,
+                    rulerTopPadding = 32.dp,
+                    minorTickHeight = 40.dp,
+                    majorTickHeight = 56.dp,
+                    labelTopPadding = 10.dp,
+                    majorEvery = 5,
+                    labelEvery = 5,
+                    minorTickColor = Color(0xFFDCE2EA),
+                    majorTickColor = Color(0xFFC2CAD6),
+                    labelColor = Color(0xFFB8C3CF),
                     labelFormatter = { it.toString() }
                 )
 
                 MeasurementRulerKind.Weight -> MeasurementRulerConfig(
-                    tickWidth = 8.dp,
-                    topPadding = 40.dp,
+                    containerHeight = 142.dp,
+                    tickWidth = 7.3.dp,
+                    labelWidth = 36.dp,
+                    rulerTopPadding = 32.dp,
                     minorTickHeight = 40.dp,
                     majorTickHeight = 56.dp,
+                    labelTopPadding = 10.dp,
                     majorEvery = 10,
                     labelEvery = 10,
+                    minorTickColor = Color(0xFFDCE2EA),
+                    majorTickColor = Color(0xFFC2CAD6),
+                    labelColor = Color(0xFFB8C3CF),
                     labelFormatter = { (it / 10).toString() }
                 )
             }
@@ -1142,34 +1278,47 @@ private fun MeasurementRuler(
             modifier = Modifier.fillMaxWidth()
         ) {
             itemsIndexed(rulerTicks) { _, tick ->
+                val tickHeight = if (tick % config.majorEvery == 0) {
+                    config.majorTickHeight
+                } else {
+                    config.minorTickHeight
+                }
+
                 Column(
                     modifier = Modifier.width(itemWidth),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Spacer(modifier = Modifier.height(config.topPadding))
+                    Spacer(modifier = Modifier.height(config.rulerTopPadding))
                     Box(
-                        modifier = Modifier
-                            .width(if (tick % config.majorEvery == 0) 2.dp else 1.dp)
-                            .height(
-                                if (tick % config.majorEvery == 0) {
-                                    config.majorTickHeight
-                                } else {
-                                    config.minorTickHeight
-                                }
-                            )
-                            .background(
-                                if (tick % config.majorEvery == 0) Color(0xFFC2CAD6) else Color(0xFFDCE2EA)
-                            )
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                        modifier = Modifier.height(config.majorTickHeight),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(if (tick % config.majorEvery == 0) 2.dp else 1.dp)
+                                .height(tickHeight)
+                                .background(
+                                    if (tick % config.majorEvery == 0) {
+                                        config.majorTickColor
+                                    } else {
+                                        config.minorTickColor
+                                    }
+                                )
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(config.labelTopPadding))
                     if (tick % config.labelEvery == 0) {
                         Text(
                             text = config.labelFormatter(tick),
                             style = TextStyle(
-                                fontSize = 16.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Normal,
-                                color = Color(0xFFB8C3CF)
-                            )
+                                color = config.labelColor
+                            ),
+                            modifier = Modifier.requiredWidth(config.labelWidth),
+                            maxLines = 1,
+                            softWrap = false,
+                            textAlign = TextAlign.Center
                         )
                     } else {
                         Spacer(modifier = Modifier.height(19.dp))
@@ -1200,7 +1349,7 @@ private fun UnderlineTextField(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(66.dp)
+            .height(56.dp)
     ) {
         BasicTextField(
             value = value,
@@ -1213,7 +1362,7 @@ private fun UnderlineTextField(
             modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp)
+                .padding(horizontal = 2.dp)
         ) { innerTextField ->
             Box(
                 modifier = Modifier.fillMaxWidth(),
@@ -1237,7 +1386,7 @@ private fun UnderlineTextField(
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp),
+                    .padding(end = 2.dp),
                 content = it
             )
         }
@@ -1303,19 +1452,26 @@ private fun GymSearchRow(
 private fun FigmaSearchIcon(
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier) {
-        SvgAssetImage(
-            assetPath = GYM_SEARCH_CIRCLE_ASSET,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize()
+    Canvas(modifier = modifier) {
+        val strokeWidth = size.minDimension * 0.1f
+        val circleRadius = size.minDimension * 0.26f
+        val circleCenter = Offset(
+            x = size.width * 0.42f,
+            y = size.height * 0.42f
         )
-        AsyncImage(
-            model = GYM_SEARCH_HANDLE_ASSET,
-            contentDescription = null,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 2.dp)
-                .size(width = 12.dp, height = 4.dp)
+
+        drawCircle(
+            color = OnboardingBlack,
+            radius = circleRadius,
+            center = circleCenter,
+            style = Stroke(width = strokeWidth)
+        )
+        drawLine(
+            color = OnboardingBlack,
+            start = Offset(size.width * 0.62f, size.height * 0.62f),
+            end = Offset(size.width * 0.9f, size.height * 0.9f),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
         )
     }
 }
@@ -1323,9 +1479,11 @@ private fun FigmaSearchIcon(
 @Composable
 private fun SummaryMetric(
     label: String,
-    value: String
+    value: String,
+    modifier: Modifier = Modifier
 ) {
     Column(
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {

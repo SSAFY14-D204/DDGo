@@ -154,9 +154,35 @@ private val devRoutes = listOf(
             showEntryGuide = false
         )
     ),
+    DevRoute(
+        "Onboarding Gym",
+        ScreenRoutes.Onboarding.createRoute(
+            nextRoute = ScreenRoutes.MainGraph.route,
+            showEntryGuide = false,
+            startStep = "Gym"
+        )
+    ),
+    DevRoute(
+        "Onboarding Nickname",
+        ScreenRoutes.Onboarding.createRoute(
+            nextRoute = ScreenRoutes.MainGraph.route,
+            showEntryGuide = false,
+            startStep = "Nickname"
+        )
+    ),
+    DevRoute(
+        "Onboarding Complete",
+        ScreenRoutes.Onboarding.createRoute(
+            nextRoute = ScreenRoutes.MainGraph.route,
+            showEntryGuide = false,
+            startStep = "Complete"
+        )
+    ),
 
     // ── Main ──
-    DevRoute("Main (탭 UI)", ScreenRoutes.Main.route, clearBackStack = true),
+    DevRoute("Main (탭 UI)", ScreenRoutes.Main.createRoute(), clearBackStack = true),
+    DevRoute("Main Guide FAB", ScreenRoutes.Main.createRoute("FAB"), clearBackStack = true),
+    DevRoute("Main Guide MENU", ScreenRoutes.Main.createRoute("MENU"), clearBackStack = true),
 
     // ── Upload Flow ──
     DevRoute("1. 영상 선택", ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD),
@@ -178,9 +204,9 @@ private val devRoutes = listOf(
 private val sectionLabels = mapOf(
     0 to "Auth",
     5 to "Onboarding",
-    7 to "Main",
-    8 to "Upload Flow",
-    19 to "Record",
+    10 to "Main",
+    13 to "Upload Flow",
+    24 to "Record",
 )
 
 @Composable
