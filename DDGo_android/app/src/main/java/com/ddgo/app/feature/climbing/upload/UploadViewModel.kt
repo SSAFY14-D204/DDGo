@@ -388,6 +388,13 @@ class UploadViewModel @Inject constructor(
             resultPlaybackUris = uris
         }
 
+        override fun applyAttemptEndRefinements(refinements: List<AttemptEndRefinement>) {
+            sessionDelegate.applyAttemptEndRefinements(
+                refinements = refinements,
+                callbacks = sessionCallbacks
+            )
+        }
+
         override fun publishedSession(): PublishedAttemptResultSession? = publishedAttemptResultSession
 
         override fun setPublishedSession(session: PublishedAttemptResultSession?) {

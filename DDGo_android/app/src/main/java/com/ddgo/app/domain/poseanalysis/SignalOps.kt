@@ -105,9 +105,14 @@ internal fun findLocalPeakIndices(values: List<Double>): List<Int> {
 internal fun countSupportingValues(
     values: List<Double>,
     targetHeight: Double,
-    bandRadius: Double
-): Int = values.count { value ->
-    kotlin.math.abs(value - targetHeight) <= bandRadius
+    bandRadius: Double,
+    allowedFlags: List<Boolean>? = null
+): Int {
+    val effectiveAllowedFlags = allowedFlags ?: List(values.size) { true }
+    return values.indices.count { index ->
+        effectiveAllowedFlags[index] &&
+            kotlin.math.abs(values[index] - targetHeight) <= bandRadius
+    }
 }
 
 internal fun findLastSupportedEndIndex(

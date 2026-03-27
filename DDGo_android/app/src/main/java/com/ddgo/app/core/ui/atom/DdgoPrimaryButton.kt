@@ -46,6 +46,7 @@ fun DdgoPrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     variant: DdgoPrimaryButtonVariant = DdgoPrimaryButtonVariant.Solid,
+    enabledBackgroundBrush: Brush? = null,
     enabled: Boolean = true,
     isLoading: Boolean = false,
     leadingIcon: ImageVector? = null,
@@ -98,7 +99,13 @@ fun DdgoPrimaryButton(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(buttonShape)
-                .background(buttonBackground(variant = variant, enabled = enabled)),
+                .background(
+                    buttonBackground(
+                        variant = variant,
+                        enabled = enabled,
+                        enabledBackgroundBrush = enabledBackgroundBrush
+                    )
+                ),
             contentAlignment = Alignment.Center
         ) {
             if (isLoading) {
@@ -137,7 +144,8 @@ fun DdgoPrimaryButton(
 @Composable
 private fun buttonBackground(
     variant: DdgoPrimaryButtonVariant,
-    enabled: Boolean
+    enabled: Boolean,
+    enabledBackgroundBrush: Brush? = null
 ): Brush {
     return when {
         !enabled -> Brush.horizontalGradient(
@@ -147,6 +155,7 @@ private fun buttonBackground(
             )
         )
 
+        enabledBackgroundBrush != null -> enabledBackgroundBrush
         variant == DdgoPrimaryButtonVariant.EmphasisGradient -> DdgoBrushTokens.PrimaryButtonGradient
         else -> Brush.horizontalGradient(
             colors = listOf(

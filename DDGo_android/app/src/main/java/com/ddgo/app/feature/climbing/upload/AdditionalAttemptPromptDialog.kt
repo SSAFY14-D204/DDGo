@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,13 +30,23 @@ import androidx.compose.ui.window.DialogProperties
 import com.ddgo.app.core.ui.tokens.DdgoColorTokens
 
 @Composable
-internal fun AdditionalAttemptPromptDialog(
-    onNavigateToAdditional: () -> Unit,
-    onNavigateToNext: () -> Unit
+internal fun UploadConfirmationDialog(
+    title: String,
+    message: String,
+    dismissText: String,
+    confirmText: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    dismissOnBackPress: Boolean = false,
+    dismissOnClickOutside: Boolean = false
 ) {
     Dialog(
-        onDismissRequest = {},
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = dismissOnBackPress,
+            dismissOnClickOutside = dismissOnClickOutside
+        )
     ) {
         Box(
             modifier = Modifier
@@ -58,7 +69,7 @@ internal fun AdditionalAttemptPromptDialog(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
-                            text = "이 문제의 추가 시도 영상이 있나요?",
+                            text = title,
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 20.sp,
@@ -66,17 +77,21 @@ internal fun AdditionalAttemptPromptDialog(
                             ),
                             modifier = Modifier.fillMaxWidth(),
                             color = DdgoColorTokens.TextPrimary,
-                            textAlign = TextAlign.Center
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Start
                         )
 
                         Text(
-                            text = "시도 별로 비교해서 분석을 보여줄게요",
+                            text = message,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 14.sp,
-                                lineHeight = 14.sp
+                                lineHeight = 20.sp
                             ),
                             color = DdgoColorTokens.BrandGray,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Start
                         )
                     }
@@ -85,18 +100,18 @@ internal fun AdditionalAttemptPromptDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        AdditionalAttemptPromptButton(
-                            text = "없어요",
+                        UploadConfirmationDialogButton(
+                            text = dismissText,
                             backgroundColor = Color(0xFFADADAD),
                             contentColor = DdgoColorTokens.BrandGray,
-                            onClick = onNavigateToNext,
+                            onClick = onDismiss,
                             modifier = Modifier.weight(1f)
                         )
-                        AdditionalAttemptPromptButton(
-                            text = "더 있어요!",
+                        UploadConfirmationDialogButton(
+                            text = confirmText,
                             backgroundColor = DdgoColorTokens.BrandBlue,
                             contentColor = Color.White,
-                            onClick = onNavigateToAdditional,
+                            onClick = onConfirm,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -107,7 +122,22 @@ internal fun AdditionalAttemptPromptDialog(
 }
 
 @Composable
-private fun AdditionalAttemptPromptButton(
+internal fun AdditionalAttemptPromptDialog(
+    onNavigateToAdditional: () -> Unit,
+    onNavigateToNext: () -> Unit
+) {
+    UploadConfirmationDialog(
+        title = "이 문제의 추가 시도 영상이 있나요?",
+        message = "시도 별로 비교해서 분석을 보여줄게요",
+        dismissText = "없어요",
+        confirmText = "더 있어요!",
+        onDismiss = onNavigateToNext,
+        onConfirm = onNavigateToAdditional
+    )
+}
+
+@Composable
+private fun UploadConfirmationDialogButton(
     text: String,
     backgroundColor: Color,
     contentColor: Color,
@@ -116,7 +146,7 @@ private fun AdditionalAttemptPromptButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.height(56.dp),
+        modifier = modifier.height(52.dp),
         shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = backgroundColor,

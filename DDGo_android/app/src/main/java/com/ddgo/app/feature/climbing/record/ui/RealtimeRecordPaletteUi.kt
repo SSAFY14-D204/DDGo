@@ -28,10 +28,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ddgo.app.core.ui.tokens.DdgoHoldColorTokens
+import com.ddgo.app.core.ui.tokens.DdgoColorTokens
+import com.ddgo.app.core.ui.tokens.DdgoHoldColorPalette
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.feature.climbing.upload.ChallengeCreationUiState
 import com.ddgo.app.feature.climbing.upload.RealtimeHoldColorOption
+import com.ddgo.app.feature.climbing.upload.resolveHoldColorKey
 
 internal val RecordAccent = Color(0xFF42A5F5)
 internal val RecordAccentStrong = Color(0xFF1E88E5)
@@ -501,23 +503,39 @@ private fun difficultyReferenceSlots(selectedGrade: GymGrade?): List<DifficultyR
 }
 
 internal fun resolveGymGradeAccentColor(grade: GymGrade): Color {
-    return DdgoHoldColorTokens.resolveColor(
-        colorName = grade.colorName,
-        colorHex = grade.colorHex
-    )
+    return DdgoHoldColorPalette.colorForKey(
+        resolveHoldColorKey(
+            colorName = grade.colorName,
+            colorHex = grade.colorHex
+        )
+    ) ?: DdgoColorTokens.BrandBlue
 }
 
 internal fun resolveHoldColorDisplayName(
     colorName: String,
     colorHex: String?
 ): String {
-    return DdgoHoldColorTokens.resolveDisplayName(
+    val resolved = com.ddgo.app.feature.climbing.upload.resolveHoldColorDisplayName(
         colorName = colorName,
         colorHex = colorHex
     )
+    return resolved.ifBlank { "색상" }
 }
 
 private fun resolveRealtimeHoldColorTileDisplayName(option: RealtimeHoldColorOption): String {
-    return DdgoHoldColorTokens.resolveDisplayNameByKey(option.key)
-        ?: resolveHoldColorDisplayName(option.key, null)
+    return realtimeHoldColorDisplayNameByKey(option.key) ?: resolveHoldColorDisplayName(option.key, null)
+}
+
+private fun realtimeHoldColorDisplayNameByKey(colorKey: String): String? {
+    return DdgoHoldColorPalette.displayNameForKey(colorKey)
+}
+
+private fun colorOverrideByName(colorName: String): Color? {
+    return DdgoHoldColorPalette.colorForKey(
+        resolveHoldColorKey(colorName = colorName, colorHex = null)
+    )
+}
+
+private fun fallbackColorByName(colorName: String): Color {
+    return colorOverrideByName(colorName) ?: DdgoColorTokens.BrandBlue
 }

@@ -1,10 +1,25 @@
 package com.ddgo.app.domain.usecase
 
 import com.ddgo.app.domain.poseanalysis.HandPeakConfig
+import com.ddgo.app.domain.poseanalysis.FrameBodyPartHeights
 import com.ddgo.app.domain.poseanalysis.PoseFrame
 import com.ddgo.app.domain.poseanalysis.extractBodyPartHeights
 import com.ddgo.app.domain.poseanalysis.smoothOptionalSeries
 import javax.inject.Inject
+
+internal data class WallPresenceSegment(
+    val id: Int,
+    val startTimeMs: Long,
+    val endTimeMs: Long
+)
+
+internal data class WallArrivalAnalysis(
+    val arrivalTimeMs: Long? = null,
+    val stableMinTorsoScale: Double? = null,
+    val arrivalThreshold: Double? = null,
+    val wallSegments: List<WallPresenceSegment> = emptyList(),
+    val wallSegmentIdByFrameTimeMs: Map<Long, Int> = emptyMap()
+)
 
 class DetectWallArrivalTimeUseCase @Inject constructor() {
     operator fun invoke(
@@ -17,14 +32,58 @@ class DetectWallArrivalTimeUseCase @Inject constructor() {
         arrivalThresholdMultiplier: Double = DEFAULT_ARRIVAL_THRESHOLD_MULTIPLIER,
         maxGapMs: Long = DEFAULT_MAX_GAP_MS,
         minDurationMs: Long = DEFAULT_MIN_DURATION_MS
-    ): Long? {
-        if (frames.isEmpty()) return null
+    ): Long? = analyze(
+        frames = frames,
+        personObservationStartTimeMs = personObservationStartTimeMs,
+        config = config,
+        supportWindowMs = supportWindowMs,
+        minSupportCountPerSide = minSupportCountPerSide,
+        stableMinSampleCount = stableMinSampleCount,
+        arrivalThresholdMultiplier = arrivalThresholdMultiplier,
+        maxGapMs = maxGapMs,
+        minDurationMs = minDurationMs
+    ).arrivalTimeMs
+
+    internal fun analyze(
+        frames: List<PoseFrame>,
+        personObservationStartTimeMs: Long?,
+        config: HandPeakConfig = HandPeakConfig(),
+        supportWindowMs: Long = DEFAULT_SUPPORT_WINDOW_MS,
+        minSupportCountPerSide: Int = DEFAULT_MIN_SUPPORT_COUNT_PER_SIDE,
+        stableMinSampleCount: Int = DEFAULT_STABLE_MIN_SAMPLE_COUNT,
+        arrivalThresholdMultiplier: Double = DEFAULT_ARRIVAL_THRESHOLD_MULTIPLIER,
+        maxGapMs: Long = DEFAULT_MAX_GAP_MS,
+        minDurationMs: Long = DEFAULT_MIN_DURATION_MS
+    ): WallArrivalAnalysis {
+        if (frames.isEmpty()) return WallArrivalAnalysis()
 
         val filteredPoints = extractBodyPartHeights(frames = frames, config = config)
             .filter { point ->
                 personObservationStartTimeMs == null || point.frameTimeMs >= personObservationStartTimeMs
             }
-        if (filteredPoints.isEmpty()) return null
+        if (filteredPoints.isEmpty()) return WallArrivalAnalysis()
+
+        return analyzeFilteredPoints(
+            filteredPoints = filteredPoints,
+            supportWindowMs = supportWindowMs,
+            minSupportCountPerSide = minSupportCountPerSide,
+            stableMinSampleCount = stableMinSampleCount,
+            arrivalThresholdMultiplier = arrivalThresholdMultiplier,
+            maxGapMs = maxGapMs,
+            minDurationMs = minDurationMs
+        )
+    }
+
+    private fun analyzeFilteredPoints(
+        filteredPoints: List<FrameBodyPartHeights>,
+        supportWindowMs: Long,
+        minSupportCountPerSide: Int,
+        stableMinSampleCount: Int,
+        arrivalThresholdMultiplier: Double,
+        maxGapMs: Long,
+        minDurationMs: Long
+    ): WallArrivalAnalysis {
+        if (filteredPoints.isEmpty()) return WallArrivalAnalysis()
 
         val timesMs = filteredPoints.map { point -> point.frameTimeMs }
         val torsoScales = filteredPoints.map { point -> point.torsoScale }
@@ -34,10 +93,11 @@ class DetectWallArrivalTimeUseCase @Inject constructor() {
             meanWindow = TORSO_SCALE_MEAN_WINDOW
         )
         val baseValidFlags = torsoScaleSmoothed.map { value -> value != null }
-        if (baseValidFlags.none { flag -> flag }) return null
+        if (baseValidFlags.none { flag -> flag }) return WallArrivalAnalysis()
 
         val validTorsoScaleFlags = filteredPoints.indices.map { index ->
             torsoScaleSmoothed[index] != null &&
+                filteredPoints[index].torsoUpright &&
                 countValidFramesInWindow(
                     timesMs = timesMs,
                     validFlags = baseValidFlags,
@@ -58,7 +118,7 @@ class DetectWallArrivalTimeUseCase @Inject constructor() {
             }
             .sorted()
             .take(stableMinSampleCount)
-        if (stableMinSamples.isEmpty()) return null
+        if (stableMinSamples.isEmpty()) return WallArrivalAnalysis()
 
         val stableMinTorsoScale = median(stableMinSamples)
         val arrivalThreshold = stableMinTorsoScale * arrivalThresholdMultiplier
@@ -67,31 +127,49 @@ class DetectWallArrivalTimeUseCase @Inject constructor() {
                 torsoScaleSmoothed[index] != null &&
                 torsoScaleSmoothed[index]!! <= arrivalThreshold
         }
-        if (candidateIndices.isEmpty()) return null
+        val wallSegments = mutableListOf<WallPresenceSegment>()
+        val wallSegmentIdByFrameTimeMs = mutableMapOf<Long, Int>()
 
-        var segmentStartIndex = candidateIndices.first()
-        var segmentEndIndex = candidateIndices.first()
+        fun appendSegment(segmentCandidateIndices: List<Int>) {
+            if (segmentCandidateIndices.isEmpty()) return
 
-        fun resolveSegmentStartOrNull(startIndex: Int, endIndex: Int): Long? {
+            val startIndex = segmentCandidateIndices.first()
+            val endIndex = segmentCandidateIndices.last()
             val durationMs = timesMs[endIndex] - timesMs[startIndex]
-            return if (durationMs >= minDurationMs) {
-                timesMs[startIndex]
-            } else {
-                null
+            if (durationMs < minDurationMs) return
+
+            val segmentId = wallSegments.size
+            wallSegments += WallPresenceSegment(
+                id = segmentId,
+                startTimeMs = timesMs[startIndex],
+                endTimeMs = timesMs[endIndex]
+            )
+            segmentCandidateIndices.forEach { candidateIndex ->
+                wallSegmentIdByFrameTimeMs[timesMs[candidateIndex]] = segmentId
             }
         }
 
-        candidateIndices.zipWithNext().forEach { (previousIndex, currentIndex) ->
-            if (timesMs[currentIndex] - timesMs[previousIndex] <= maxGapMs) {
-                segmentEndIndex = currentIndex
-            } else {
-                resolveSegmentStartOrNull(segmentStartIndex, segmentEndIndex)?.let { return it }
-                segmentStartIndex = currentIndex
-                segmentEndIndex = currentIndex
+        if (candidateIndices.isNotEmpty()) {
+            val currentSegmentCandidateIndices = mutableListOf(candidateIndices.first())
+            candidateIndices.zipWithNext().forEach { (previousIndex, currentIndex) ->
+                if (timesMs[currentIndex] - timesMs[previousIndex] <= maxGapMs) {
+                    currentSegmentCandidateIndices += currentIndex
+                } else {
+                    appendSegment(currentSegmentCandidateIndices.toList())
+                    currentSegmentCandidateIndices.clear()
+                    currentSegmentCandidateIndices += currentIndex
+                }
             }
+            appendSegment(currentSegmentCandidateIndices.toList())
         }
 
-        return resolveSegmentStartOrNull(segmentStartIndex, segmentEndIndex)
+        return WallArrivalAnalysis(
+            arrivalTimeMs = wallSegments.firstOrNull()?.startTimeMs,
+            stableMinTorsoScale = stableMinTorsoScale,
+            arrivalThreshold = arrivalThreshold,
+            wallSegments = wallSegments,
+            wallSegmentIdByFrameTimeMs = wallSegmentIdByFrameTimeMs
+        )
     }
 
     private fun countValidFramesInWindow(

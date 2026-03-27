@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
@@ -81,7 +82,9 @@ internal data class VideoViewportCropSpec(
 internal data class CroppedVideoViewportPlacement(
     val fullVideoHeightPx: Int,
     val viewportHeightPx: Int,
-    val transformedLayerOffsetYPx: Int
+    val transformedLayerOffsetXPx: Int,
+    val transformedLayerOffsetYPx: Int,
+    val transformedLayerScale: Float
 )
 
 internal data class PoseScrubberColors(
@@ -95,7 +98,8 @@ internal data class PoseScrubberMarker(
     val index: Int,
     val timeMs: Long,
     val kind: AnalysisPointKind = AnalysisPointKind.GENERIC,
-    val isSelected: Boolean = false
+    val isSelected: Boolean = false,
+    val flagAnchorFractionX: Float = 0.5f
 )
 
 private val SHARED_POSE_CONNECTIONS = listOf(
@@ -544,35 +548,62 @@ internal fun resolveHybridVerticalCropBounds(
     }
 }
 internal fun calculateCroppedVideoViewportPlacement(
+    fullVideoWidthPx: Int,
     fullVideoHeightPx: Int,
     cropSpec: VideoViewportCropSpec,
-    topCropPx: Float
+    topCropPx: Float,
+    viewportHeightOverridePx: Int? = null
 ): CroppedVideoViewportPlacement {
+    val safeFullVideoWidthPx = fullVideoWidthPx.coerceAtLeast(1)
     val safeFullVideoHeightPx = fullVideoHeightPx.coerceAtLeast(1)
-    if (!cropSpec.isActive) {
-        return CroppedVideoViewportPlacement(
-            fullVideoHeightPx = safeFullVideoHeightPx,
-            viewportHeightPx = safeFullVideoHeightPx,
-            transformedLayerOffsetYPx = 0
-        )
+    val baseViewportHeightPx = if (cropSpec.isActive) {
+        (safeFullVideoHeightPx * cropSpec.visibleHeightFraction)
+            .roundToInt()
+            .coerceIn(1, safeFullVideoHeightPx)
+    } else {
+        safeFullVideoHeightPx
     }
-
-    val viewportHeightPx = (safeFullVideoHeightPx * cropSpec.visibleHeightFraction)
-        .roundToInt()
-        .coerceIn(1, safeFullVideoHeightPx)
-    val derivedTopCropPx = (safeFullVideoHeightPx * cropSpec.topCropFraction)
-        .roundToInt()
+    val clampedViewportHeightOverridePx = viewportHeightOverridePx
+        ?.coerceIn(1, baseViewportHeightPx)
+    val viewportHeightPx = clampedViewportHeightOverridePx ?: baseViewportHeightPx
+    val derivedTopCropPx = if (cropSpec.isActive) {
+        (safeFullVideoHeightPx * cropSpec.topCropFraction).roundToInt()
+    } else {
+        0
+    }
     val resolvedTopCropPx = topCropPx
         .roundToInt()
         .takeIf { it > 0 }
         ?: derivedTopCropPx
-    val maxTopCropPx = (safeFullVideoHeightPx - viewportHeightPx).coerceAtLeast(0)
+    val maxTopCropPx = (safeFullVideoHeightPx - baseViewportHeightPx).coerceAtLeast(0)
     val clampedTopCropPx = resolvedTopCropPx.coerceIn(0, maxTopCropPx)
+
+    if (viewportHeightPx >= baseViewportHeightPx) {
+        return CroppedVideoViewportPlacement(
+            fullVideoHeightPx = safeFullVideoHeightPx,
+            viewportHeightPx = viewportHeightPx,
+            transformedLayerOffsetXPx = 0,
+            transformedLayerOffsetYPx = if (cropSpec.isActive) -clampedTopCropPx else 0,
+            transformedLayerScale = 1f
+        )
+    }
+
+    val transformedLayerScale = viewportHeightPx.toFloat() / baseViewportHeightPx.toFloat()
+    val transformedLayerOffsetXPx = (
+        (safeFullVideoWidthPx - (safeFullVideoWidthPx * transformedLayerScale)) / 2f
+        ).roundToInt()
+    val transformedLayerOffsetYPx = if (cropSpec.isActive) {
+        -(clampedTopCropPx * transformedLayerScale).roundToInt()
+    } else {
+        0
+    }
 
     return CroppedVideoViewportPlacement(
         fullVideoHeightPx = safeFullVideoHeightPx,
         viewportHeightPx = viewportHeightPx,
-        transformedLayerOffsetYPx = -clampedTopCropPx
+        transformedLayerOffsetXPx = transformedLayerOffsetXPx,
+        transformedLayerOffsetYPx = transformedLayerOffsetYPx,
+        transformedLayerScale = transformedLayerScale
     )
 }
 
@@ -581,6 +612,7 @@ internal fun CroppedVideoViewport(
     cropSpec: VideoViewportCropSpec,
     fullVideoAspectRatio: Float,
     topCropPx: Float,
+    viewportHeightOverridePx: Int? = null,
     modifier: Modifier = Modifier,
     onFullVideoSizeChanged: (IntSize) -> Unit = {},
     transformedLayer: @Composable BoxScope.() -> Unit,
@@ -613,9 +645,11 @@ internal fun CroppedVideoViewport(
             .roundToInt()
             .coerceAtLeast(1)
         val placement = calculateCroppedVideoViewportPlacement(
+            fullVideoWidthPx = viewportWidthPx,
             fullVideoHeightPx = fullVideoHeightPx,
             cropSpec = cropSpec,
-            topCropPx = topCropPx
+            topCropPx = topCropPx,
+            viewportHeightOverridePx = viewportHeightOverridePx
         )
 
         val transformedMeasurable = measurables.first { measurable ->
@@ -641,10 +675,14 @@ internal fun CroppedVideoViewport(
             width = viewportWidthPx,
             height = placement.viewportHeightPx
         ) {
-            transformedPlaceable.placeRelative(
-                x = 0,
+            transformedPlaceable.placeRelativeWithLayer(
+                x = placement.transformedLayerOffsetXPx,
                 y = placement.transformedLayerOffsetYPx
-            )
+            ) {
+                scaleX = placement.transformedLayerScale
+                scaleY = placement.transformedLayerScale
+                transformOrigin = TransformOrigin(0f, 0f)
+            }
             overlayPlaceable.placeRelative(x = 0, y = 0)
         }
     }
@@ -739,16 +777,21 @@ internal fun PoseOverlay(
     modifier: Modifier = Modifier,
     lineColor: Color,
     pointColor: Color,
-    hiddenLandmarkIndices: Set<Int> = emptySet()
+    hiddenLandmarkIndices: Set<Int> = emptySet(),
+    hiddenPointIndices: Set<Int> = emptySet(),
+    pointRadiusScale: Float = 1f
 ) {
     Canvas(modifier = modifier) {
         if (contentRect.width <= 0f || contentRect.height <= 0f) return@Canvas
 
         val landmarksByIndex = pose.landmarks.associateBy { landmark -> landmark.index }
-        val jointRadius = 4.dp.toPx()
+        val jointRadius = 4.dp.toPx() * pointRadiusScale.coerceAtLeast(0f)
         val strokeWidth = 2.dp.toPx()
 
         SHARED_POSE_CONNECTIONS.forEach { (startIndex, endIndex) ->
+            if (startIndex in hiddenLandmarkIndices || endIndex in hiddenLandmarkIndices) {
+                return@forEach
+            }
             val start = landmarksByIndex[startIndex] ?: return@forEach
             val end = landmarksByIndex[endIndex] ?: return@forEach
 
@@ -768,7 +811,9 @@ internal fun PoseOverlay(
         }
 
         pose.landmarks.forEach { landmark ->
-            if (landmark.index in hiddenLandmarkIndices) return@forEach
+            if (landmark.index in hiddenLandmarkIndices || landmark.index in hiddenPointIndices) {
+                return@forEach
+            }
 
             drawCircle(
                 color = pointColor,
@@ -931,7 +976,8 @@ internal fun PoseVideoScrubber(
                                     centerX = markerX,
                                     centerY = markerCenterY,
                                     sizePx = markerFlagSizePx,
-                                    isSelected = marker.isSelected
+                                    isSelected = marker.isSelected,
+                                    flagAnchorFractionX = marker.flagAnchorFractionX
                                 )
                             }
 
@@ -942,7 +988,8 @@ internal fun PoseVideoScrubber(
                                     centerX = markerX,
                                     centerY = markerCenterY,
                                     sizePx = markerFlagSizePx,
-                                    isSelected = marker.isSelected
+                                    isSelected = marker.isSelected,
+                                    flagAnchorFractionX = marker.flagAnchorFractionX
                                 )
                             }
 
@@ -1014,15 +1061,17 @@ private fun BoxScope.ScrubberFlagMarker(
     centerX: Float,
     centerY: Float,
     sizePx: Float,
-    isSelected: Boolean
+    isSelected: Boolean,
+    flagAnchorFractionX: Float = 0.5f
 ) {
+    val clampedAnchorFractionX = flagAnchorFractionX.coerceIn(0f, 1f)
     Image(
         bitmap = image,
         contentDescription = contentDescription,
         modifier = Modifier
             .offset {
                 IntOffset(
-                    x = (centerX - (sizePx / 2f)).roundToInt(),
+                    x = (centerX - (sizePx * clampedAnchorFractionX)).roundToInt(),
                     y = (centerY - (sizePx / 2f)).roundToInt()
                 )
             }

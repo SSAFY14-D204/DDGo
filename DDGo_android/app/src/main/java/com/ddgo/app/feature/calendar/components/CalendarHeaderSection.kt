@@ -61,8 +61,11 @@ internal fun CalendarHeroSection(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                CalendarHeroMark()
+
                 Surface(
                     shape = RoundedCornerShape(18.dp),
                     color = Color.White.copy(alpha = 0.10f)
@@ -96,12 +99,6 @@ internal fun CalendarHeroSection(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CalendarHeroMark()
-                }
                 Text(
                     text = headline,
                     style = MaterialTheme.typography.headlineSmall,

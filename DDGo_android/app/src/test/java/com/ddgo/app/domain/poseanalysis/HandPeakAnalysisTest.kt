@@ -137,6 +137,78 @@ class HandPeakAnalysisTest {
     }
 
     @Test
+    fun `analyzeHandPeakAndEnd ignores global top outside wall scope`() {
+        val annotation = analyzeHandPeakAndEnd(
+            points = listOf(
+                bodyPoint(0L, 0.58, footHeight = 0.4),
+                bodyPoint(250L, 0.60, footHeight = 0.4),
+                bodyPoint(500L, 0.59, footHeight = 0.4),
+                bodyPoint(750L, 0.90, footHeight = 0.4),
+                bodyPoint(1_000L, 0.60, footHeight = 0.4),
+                bodyPoint(1_250L, 0.59, footHeight = 0.4),
+                bodyPoint(1_500L, 0.60, footHeight = 0.4)
+            ),
+            wallSegmentIdByFrameTimeMs = mapOf(
+                0L to 0,
+                250L to 0,
+                500L to 0,
+                1_000L to 0,
+                1_250L to 0,
+                1_500L to 0
+            )
+        )
+
+        assertNotNull(annotation)
+        assertTrue(annotation!!.validTopFound)
+        assertEquals(0.9, annotation.globalTopHeight, 1e-9)
+        assertEquals(1_500L, annotation.endTimeMs)
+        assertEquals(6, annotation.supportCount)
+    }
+
+    @Test
+    fun `analyzeHandPeakAndEnd clips end time to selected wall segment`() {
+        val annotation = analyzeHandPeakAndEnd(
+            points = listOf(
+                bodyPoint(0L, 0.60, footHeight = 0.4),
+                bodyPoint(250L, 0.60, footHeight = 0.4),
+                bodyPoint(500L, 0.60, footHeight = 0.4),
+                bodyPoint(750L, 0.60, footHeight = 0.4),
+                bodyPoint(1_000L, 0.60, footHeight = 0.4),
+                bodyPoint(1_250L, 0.60, footHeight = 0.4),
+                bodyPoint(1_500L, 0.60, footHeight = 0.4)
+            ),
+            wallSegmentIdByFrameTimeMs = mapOf(
+                0L to 0,
+                250L to 0,
+                500L to 0,
+                750L to 0,
+                1_000L to 0
+            )
+        )
+
+        assertNotNull(annotation)
+        assertTrue(annotation!!.validTopFound)
+        assertEquals(1_000L, annotation.endTimeMs)
+    }
+
+    @Test
+    fun `analyzeHandPeakAndEnd returns invalid when no supported wall peak exists`() {
+        val annotation = analyzeHandPeakAndEnd(
+            points = listOf(
+                bodyPoint(0L, 0.80, footHeight = 0.4),
+                bodyPoint(400L, 0.60, footHeight = 0.4),
+                bodyPoint(800L, 0.40, footHeight = 0.4)
+            ),
+            wallSegmentIdByFrameTimeMs = mapOf(0L to 0)
+        )
+
+        assertNotNull(annotation)
+        assertFalse(annotation!!.validTopFound)
+        assertNull(annotation.selectedTopTimeMs)
+        assertNull(annotation.endTimeMs)
+    }
+
+    @Test
     fun `python success sample matches expected hand peak annotation`() {
         val path = File("C:/ssafy/ref-codes/pose-timestamp/videos/export_성공1_1773988614180.json")
         assumeTrue(path.exists())

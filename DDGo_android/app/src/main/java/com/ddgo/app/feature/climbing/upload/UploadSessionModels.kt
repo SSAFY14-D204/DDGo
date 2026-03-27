@@ -43,6 +43,7 @@ internal data class PrePoseCacheEntry(
     val overlayCache: AttemptPoseOverlayCache? = null,
     val personObservationStartTimeMs: Long? = null,
     val wallArrivalTimeMs: Long? = null,
+    val resolvedAttemptEndTimeMs: Long? = null,
     val stallSegment: StallSegmentAnnotation? = null,
     val climbEndDetection: ClimbEndDetection? = null,
     val handPeakAnnotation: HandPeakAnnotation? = null,
@@ -65,6 +66,7 @@ internal fun PrePoseCacheEntry.toTerminalEntry(): TerminalPrePoseEntry = Termina
     overlayCache = overlayCache,
     personObservationStartTimeMs = personObservationStartTimeMs,
     wallArrivalTimeMs = wallArrivalTimeMs,
+    resolvedAttemptEndTimeMs = resolvedAttemptEndTimeMs,
     stallSegment = stallSegment,
     climbEndDetection = climbEndDetection,
     handPeakAnnotation = handPeakAnnotation,
@@ -91,11 +93,17 @@ internal data class TerminalPrePoseEntry(
     val overlayCache: AttemptPoseOverlayCache?,
     val personObservationStartTimeMs: Long?,
     val wallArrivalTimeMs: Long?,
+    val resolvedAttemptEndTimeMs: Long?,
     val stallSegment: StallSegmentAnnotation?,
     val climbEndDetection: ClimbEndDetection?,
     val handPeakAnnotation: HandPeakAnnotation?,
     val timelinePoints: List<AnalysisPoint>,
     val errorMessage: String?
+)
+
+internal data class AttemptEndRefinement(
+    val playbackUri: String,
+    val resolvedAttemptEndTimeMs: Long?
 )
 
 data class PrePoseBatchState(

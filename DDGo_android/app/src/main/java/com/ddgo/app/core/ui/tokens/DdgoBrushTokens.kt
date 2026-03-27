@@ -3,10 +3,10 @@ package com.ddgo.app.core.ui.tokens
 import androidx.compose.ui.graphics.Brush
 
 object DdgoBrushTokens {
-    val PrimaryButtonGradient = Brush.horizontalGradient(
+    val PrimaryButtonGradient = Brush.verticalGradient(
         colors = listOf(
-            DdgoColorTokens.BrandGradientEnd,
-            DdgoColorTokens.BrandGradientStart
+            DdgoColorTokens.BrandGradientStart,
+            DdgoColorTokens.BrandGradientEnd
         )
     )
 

@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.ddgo.app.domain.model.HoldDifficultyColor
 
-data class DdgoHoldColorToken(
+data class DdgoSharedHoldColorToken(
     val key: String,
     val displayName: String,
     val color: Color,
@@ -67,18 +67,18 @@ object DdgoHoldColorTokens {
         HoldDifficultyColor.BLACK to Black
     )
 
-    fun byKey(key: String?): DdgoHoldColorToken? {
+    fun byKey(key: String?): DdgoSharedHoldColorToken? {
         return key?.trim()?.lowercase()?.let(tokensByKey::get)
     }
 
-    fun byHoldDifficultyColor(color: HoldDifficultyColor?): DdgoHoldColorToken? {
+    fun byHoldDifficultyColor(color: HoldDifficultyColor?): DdgoSharedHoldColorToken? {
         return color?.let(tokensByHoldDifficultyColor::get)
     }
 
     fun resolveToken(
         colorName: String?,
         colorHex: String?
-    ): DdgoHoldColorToken? {
+    ): DdgoSharedHoldColorToken? {
         return byHoldDifficultyColor(HoldDifficultyColor.resolve(colorName, colorHex))
     }
 
@@ -125,8 +125,8 @@ object DdgoHoldColorTokens {
         holdDifficultyColor: HoldDifficultyColor,
         color: Color,
         borderColor: Color? = null
-    ): DdgoHoldColorToken {
-        return DdgoHoldColorToken(
+    ): DdgoSharedHoldColorToken {
+        return DdgoSharedHoldColorToken(
             key = holdDifficultyColor.key,
             displayName = holdDifficultyColor.displayName,
             color = color,

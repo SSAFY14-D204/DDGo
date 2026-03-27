@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,10 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ddgo.app.R
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
@@ -34,7 +37,6 @@ import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
 import com.ddgo.app.feature.climbing.upload.AnalysisText
 import com.ddgo.app.feature.climbing.upload.toVideoTimeString
-import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.AnalysisAccentText
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.analysisAccentBrushFor
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.analysisSurfaceBrushFor
 
@@ -110,6 +112,8 @@ private fun AttemptTimelineCard(
     useFixedWidth: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val isBoundaryPoint = point.kind == AnalysisPointKind.PERSON_OBSERVATION_START ||
+        point.kind == AnalysisPointKind.CLIMB_END
     val accentColor = if (point.kind == AnalysisPointKind.CLIMB_END) {
         Color(0xFFFFB357)
     } else {
@@ -173,23 +177,41 @@ private fun AttemptTimelineCard(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .then(
-                        if (isSelected && accentBrush != null) {
-                            Modifier.background(brush = accentBrush)
+            if (isBoundaryPoint) {
+                Image(
+                    painter = painterResource(
+                        id = if (point.kind == AnalysisPointKind.CLIMB_END) {
+                            R.drawable.end_flag
                         } else {
-                            Modifier.background(if (isSelected) accentColor else Color.Transparent)
+                            R.drawable.start_flag
                         }
-                    )
-                    .border(
-                        width = if (isSelected) 0.dp else 1.dp,
-                        color = if (isSelected) Color.Transparent else AnalysisMuted.copy(alpha = 0.35f),
-                        shape = RoundedCornerShape(999.dp)
-                    )
-            )
+                    ),
+                    contentDescription = if (point.kind == AnalysisPointKind.CLIMB_END) {
+                        "등반 완료"
+                    } else {
+                        "등반 시작"
+                    },
+                    modifier = Modifier.size(width = 20.dp, height = 24.dp)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .then(
+                            if (isSelected && accentBrush != null) {
+                                Modifier.background(brush = accentBrush)
+                            } else {
+                                Modifier.background(if (isSelected) accentColor else Color.Transparent)
+                            }
+                        )
+                        .border(
+                            width = if (isSelected) 0.dp else 1.dp,
+                            color = if (isSelected) Color.Transparent else AnalysisMuted.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(999.dp)
+                        )
+                )
+            }
         }
 
         Text(
@@ -203,10 +225,10 @@ private fun AttemptTimelineCard(
         )
 
         Text(
-            text = if (point.kind == AnalysisPointKind.CLIMB_END) {
-                "등반 끝"
-            } else {
-                "장면 보기"
+            text = when (point.kind) {
+                AnalysisPointKind.PERSON_OBSERVATION_START -> "시작 지점 보기"
+                AnalysisPointKind.CLIMB_END -> "완료 지점 보기"
+                else -> "핵심 보기"
             },
             color = AnalysisMuted,
             fontSize = 12.sp
