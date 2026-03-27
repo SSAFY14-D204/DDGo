@@ -141,7 +141,7 @@ internal object AnalysisAttemptDetailUiMapper {
             ),
             AnalysisCoachCardUiModel(
                 title = AnalysisStrings.CoachRiskTitle,
-                body = attempt.riskAlert ?: AnalysisStrings.EmptyCoachMessage,
+                body = formatRiskBody(attempt.riskAlert) ?: AnalysisStrings.EmptyCoachMessage,
                 tone = AnalysisBadgeTone.Danger
             ),
             AnalysisCoachCardUiModel(
@@ -150,5 +150,67 @@ internal object AnalysisAttemptDetailUiMapper {
                 tone = AnalysisBadgeTone.Accent
             )
         )
+    }
+
+    private fun formatRiskBody(raw: String?): String? {
+        val text = raw?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val hold = extractHoldLabel(text)
+        val loadFocus = extractRiskField(text, "부담 집중 부위")
+        val rootCause = extractRiskField(text, "핵심 원인")
+        val dominantMotion = extractRiskField(text, "주요 동작")
+
+        val subject = when {
+            hold != null && loadFocus != null -> "${hold}에서 ${loadFocus} 부담이 커졌어요"
+            loadFocus != null -> "${loadFocus} 부담이 커졌어요"
+            hold != null -> "${hold}에서 리스크가 커졌어요"
+            else -> "리스크가 커진 구간이 있었어요"
+        }
+
+        val detail = when {
+            rootCause != null && dominantMotion != null ->
+                "${rootCause} 때문에 ${dominantMotion} 동작이 두드러졌어요"
+            rootCause != null ->
+                "${rootCause} 때문에 흐름이 흔들렸어요"
+            dominantMotion != null ->
+                "${dominantMotion} 동작이 두드러졌어요"
+            else -> null
+        }
+
+        return listOfNotNull(subject, detail)
+            .joinToString(". ")
+            .let { if (it.endsWith(".")) it else "$it." }
+    }
+
+    private fun extractHoldLabel(raw: String): String? =
+        Regex("""\d+번 홀드""").find(raw)?.value
+
+    private fun extractRiskField(raw: String, label: String): String? {
+        val markers = listOf(
+            "부담 집중 부위:",
+            "핵심 원인:",
+            "주요 사용 부위:",
+            "주요 동작:",
+            "균형 이탈",
+            "안정 접촉 비율"
+        )
+        val marker = "$label:"
+        val start = raw.indexOf(marker)
+        if (start < 0) return null
+
+        val valueStart = start + marker.length
+        val nextIndex = markers
+            .mapNotNull { nextMarker ->
+                raw.indexOf(nextMarker, valueStart)
+                    .takeIf { it >= 0 }
+            }
+            .filter { it > start }
+            .minOrNull()
+            ?: raw.length
+
+        return raw
+            .substring(valueStart, nextIndex)
+            .trim()
+            .trim(',', '.', '·')
+            .takeIf { it.isNotBlank() }
     }
 }

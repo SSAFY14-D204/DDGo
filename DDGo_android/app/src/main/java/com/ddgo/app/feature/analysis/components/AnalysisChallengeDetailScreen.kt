@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -32,14 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.ddgo.app.feature.analysis.AnalysisStrings
-import com.ddgo.app.feature.analysis.model.AnalysisAttemptFlowItemUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisAttemptGrowthPointUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
 import com.ddgo.app.feature.analysis.model.AnalysisChallengeDetailUiModel
@@ -51,29 +47,11 @@ internal fun AnalysisChallengeDetailScreen(
     onBack: () -> Unit,
     onAttemptSelected: (Int) -> Unit
 ) {
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            AnalysisPalette.BackgroundTop,
-            AnalysisPalette.BackgroundBottom,
-            AnalysisPalette.BackgroundTop
-        )
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundBrush)
+            .background(AnalysisPalette.BackgroundTop)
     ) {
-        AnalysisGlow(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 72.dp, y = (-24).dp),
-            colors = listOf(
-                AnalysisPalette.Accent.copy(alpha = 0.18f),
-                AnalysisPalette.Accent.copy(alpha = 0f)
-            )
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -83,21 +61,22 @@ internal fun AnalysisChallengeDetailScreen(
         ) {
             item {
                 AnalysisBackChip(
-                    label = AnalysisStrings.BackToDashboard,
+                    label = "돌아가기",
                     onClick = onBack,
                     compact = true
                 )
             }
 
             item {
-                ChallengeHeroCard(detail = detail)
+                AnalysisChallengeSummarySection(
+                    summary = detail.summary,
+                    heroContent = {
+                        ChallengeHeroCard(detail = detail)
+                    }
+                )
             }
 
-            item {
-                AnalysisChallengeSummarySection(summary = detail.summary)
-            }
-
-            if (detail.growthPoints.isNotEmpty()) {
+            if (detail.growthPoints.size >= 2) {
                 item {
                     ChallengeGrowthCard(points = detail.growthPoints)
                 }
@@ -117,6 +96,8 @@ internal fun AnalysisChallengeDetailScreen(
 private fun ChallengeHeroCard(
     detail: AnalysisChallengeDetailUiModel
 ) {
+    val resultBadge = detail.badges.lastOrNull()
+
     Surface(
         color = Color.Transparent,
         shape = RoundedCornerShape(30.dp),
@@ -125,103 +106,32 @@ private fun ChallengeHeroCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            AnalysisPalette.HeroStart,
-                            AnalysisPalette.HeroEnd
-                        )
-                    )
-                )
+                .background(AnalysisPalette.HeroStart)
                 .padding(horizontal = 18.dp, vertical = 16.dp)
         ) {
-            AnalysisGlow(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 12.dp, y = (-10).dp)
-                    .size(104.dp),
-                colors = listOf(
-                    Color.White.copy(alpha = 0.2f),
-                    Color.White.copy(alpha = 0f)
-                )
-            )
-
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    detail.badges.forEach { badge ->
-                        AnalysisBadge(badge = badge)
-                    }
-                }
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = detail.title,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         color = AnalysisPalette.OnAccent
                     )
-                    Text(
-                        text = detail.subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AnalysisPalette.OnAccent.copy(alpha = 0.84f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    resultBadge?.let { AnalysisBadge(badge = it) }
                 }
-            }
-        }
-    }
-}
 
-@Composable
-private fun ChallengeFlowRow(
-    flowItems: List<AnalysisAttemptFlowItemUiModel>
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        AnalysisSectionTitle(title = "시도 흐름")
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(flowItems) { item ->
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = flowSoftColor(item.tone)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(
-                                    color = flowStrongColor(item.tone),
-                                    shape = RoundedCornerShape(999.dp)
-                                )
-                        )
-                        Text(
-                            text = "${item.attemptNo}차",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = AnalysisPalette.TextPrimary
-                        )
-                        if (item.isLatest) {
-                            Text(
-                                text = "최근",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AnalysisPalette.TextHint
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = detail.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AnalysisPalette.OnAccent.copy(alpha = 0.84f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -311,7 +221,7 @@ private fun ChallengeGrowthTrendChart(
 
         val values = points.map { point ->
             when (selectedMetric) {
-                ChallengeGrowthMetric.Stability -> point.stabilityScore
+                ChallengeGrowthMetric.Stability -> point.stabilityScore * 100f
                 ChallengeGrowthMetric.MaxHold -> point.maxHoldNo.toFloat()
                 ChallengeGrowthMetric.LowerBodyDrive -> point.lowerBodyDriveScore.toFloat()
             }
@@ -319,7 +229,7 @@ private fun ChallengeGrowthTrendChart(
 
         val minValue = 0f
         val maxValue = when (selectedMetric) {
-            ChallengeGrowthMetric.Stability -> 1f
+            ChallengeGrowthMetric.Stability -> 100f
             ChallengeGrowthMetric.MaxHold -> values.maxOrNull()?.coerceAtLeast(1f) ?: 1f
             ChallengeGrowthMetric.LowerBodyDrive -> 100f
         }
@@ -376,14 +286,14 @@ private fun ChallengeGrowthSnapshots(
     ) {
         items(points) { point ->
             val primaryValue = when (selectedMetric) {
-                ChallengeGrowthMetric.Stability -> "${(point.stabilityScore * 100f).toInt()}%"
+                ChallengeGrowthMetric.Stability -> "${(point.stabilityScore * 100f).toInt()}점"
                 ChallengeGrowthMetric.MaxHold -> "${point.maxHoldNo}번"
                 ChallengeGrowthMetric.LowerBodyDrive -> "${point.lowerBodyDriveScore}점"
             }
             val secondaryValue = when (selectedMetric) {
                 ChallengeGrowthMetric.Stability -> "최대 홀드 ${point.maxHoldNo}번"
-                ChallengeGrowthMetric.MaxHold -> "안정률 ${(point.stabilityScore * 100f).toInt()}%"
-                ChallengeGrowthMetric.LowerBodyDrive -> "안정률 ${(point.stabilityScore * 100f).toInt()}%"
+                ChallengeGrowthMetric.MaxHold -> "안정성 ${(point.stabilityScore * 100f).toInt()}점"
+                ChallengeGrowthMetric.LowerBodyDrive -> "안정성 ${(point.stabilityScore * 100f).toInt()}점"
             }
 
             Surface(
@@ -453,19 +363,10 @@ internal fun AnalysisBackChip(
 }
 
 private enum class ChallengeGrowthMetric(val label: String) {
-    Stability("안정률"),
-    MaxHold("최대 홀드"),
+    Stability("안정성"),
+    MaxHold("도달 홀드"),
     LowerBodyDrive("하체 주도성")
 }
-
-private fun flowSoftColor(tone: AnalysisBadgeTone): Color =
-    when (tone) {
-        AnalysisBadgeTone.Accent -> AnalysisPalette.AccentSoft
-        AnalysisBadgeTone.Success -> AnalysisPalette.SuccessSoft
-        AnalysisBadgeTone.Danger -> AnalysisPalette.DangerSoft
-        AnalysisBadgeTone.Warning -> AnalysisPalette.WarningSoft
-        AnalysisBadgeTone.Neutral -> AnalysisPalette.SurfaceMuted
-    }
 
 private fun flowStrongColor(tone: AnalysisBadgeTone): Color =
     when (tone) {

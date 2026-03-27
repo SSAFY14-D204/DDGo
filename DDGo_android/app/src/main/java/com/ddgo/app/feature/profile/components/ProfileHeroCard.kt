@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,18 +42,11 @@ internal fun ProfileHeroCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
         color = Color.Transparent,
-        shadowElevation = 12.dp
+        shadowElevation = 0.dp
     ) {
         Box(
             modifier = Modifier
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            ProfilePalette.HeroStart,
-                            ProfilePalette.HeroEnd
-                        )
-                    )
-                )
+                .background(ProfilePalette.HeroStart)
                 .padding(22.dp)
         ) {
             Row(

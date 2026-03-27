@@ -31,7 +31,6 @@ import com.ddgo.app.feature.main.MainChromeDefaults
 import com.ddgo.app.feature.profile.components.ProfileActionConfirmationDialog
 import com.ddgo.app.feature.profile.components.ProfileBodyProfileEditorDialog
 import com.ddgo.app.feature.profile.components.ProfileDangerZoneCard
-import com.ddgo.app.feature.profile.components.ProfileGlow
 import com.ddgo.app.feature.profile.components.ProfileHeroCard
 import com.ddgo.app.feature.profile.components.ProfileInfoSection
 import com.ddgo.app.feature.profile.components.ProfileNicknameEditorDialog
@@ -164,26 +163,6 @@ internal fun ProfileScreenContent(
             .fillMaxSize()
             .background(backgroundBrush)
     ) {
-        ProfileGlow(
-            modifier = Modifier.align(Alignment.TopEnd),
-            xOffset = 52.dp,
-            yOffset = (-22).dp,
-            colors = listOf(
-                ProfilePalette.Accent.copy(alpha = 0.18f),
-                ProfilePalette.Accent.copy(alpha = 0f)
-            )
-        )
-
-        ProfileGlow(
-            modifier = Modifier.align(Alignment.CenterStart),
-            xOffset = (-84).dp,
-            yOffset = 156.dp,
-            colors = listOf(
-                ProfilePalette.AccentStrong.copy(alpha = 0.12f),
-                ProfilePalette.AccentStrong.copy(alpha = 0f)
-            )
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

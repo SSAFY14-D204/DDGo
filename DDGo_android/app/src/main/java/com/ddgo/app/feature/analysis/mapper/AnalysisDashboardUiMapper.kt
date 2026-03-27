@@ -110,7 +110,7 @@ internal object AnalysisDashboardUiMapper {
                 ),
                 AnalysisOverviewStatUiModel(
                     label = AnalysisStrings.AverageStabilityLabel,
-                    value = AnalysisFormatters.formatPercent(averageStability)
+                    value = "${(averageStability * 100f).roundToInt()}점"
                 ),
                 AnalysisOverviewStatUiModel(
                     label = "평균 하체 주도성",

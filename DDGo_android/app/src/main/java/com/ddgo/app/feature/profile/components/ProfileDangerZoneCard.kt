@@ -45,7 +45,7 @@ internal fun ProfileDangerZoneCard(
             shape = RoundedCornerShape(28.dp),
             color = ProfilePalette.Surface,
             border = BorderStroke(1.dp, ProfilePalette.Border),
-            shadowElevation = 4.dp
+            shadowElevation = 0.dp
         ) {
             Row(
                 modifier = Modifier
