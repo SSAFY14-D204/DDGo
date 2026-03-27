@@ -1,8 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
 import androidx.annotation.ColorInt
-import androidx.compose.ui.graphics.toArgb
-import com.ddgo.app.core.ui.tokens.DdgoHoldColorTokens
+import com.ddgo.app.core.ui.tokens.DdgoHoldColorPalette
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
@@ -99,12 +98,12 @@ data class UploadRealtimeOverlayUiState(
     val lastSearchLongitude: Double? = null
 )
 
-internal val realtimeHoldColorOptions = DdgoHoldColorTokens.All.map { token ->
+internal val realtimeHoldColorOptions = DdgoHoldColorPalette.all.map { token ->
     RealtimeHoldColorOption(
         key = token.key,
-        label = token.displayName,
-        colorInt = token.color.toArgb(),
-        borderColorInt = token.borderColor?.toArgb()
+        label = token.label,
+        colorInt = token.colorInt,
+        borderColorInt = token.borderColorInt
     )
 }
 

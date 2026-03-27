@@ -17,9 +17,14 @@ import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.domain.usecase.HoldRole
 import com.ddgo.app.domain.usecase.OverallHoldReachSummary
+import com.ddgo.app.domain.usecase.PolygonHoldContact
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
+import com.ddgo.app.domain.usecase.PolygonHoldContactFrame
+import com.ddgo.app.domain.usecase.PolygonLimbFrameState
+import com.ddgo.app.domain.usecase.PolygonTrackedLimb
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
+import com.ddgo.app.domain.usecase.findSuccessfulTopContactTimeMs
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -29,6 +34,45 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UploadSubmissionDelegateTest {
+
+    @Test
+    fun `findSuccessfulTopContactTimeMs returns first simultaneous end hold contact after analysis start`() {
+        val endHold = numberedHold(
+            holdNo = 2,
+            role = HoldRole.END,
+            left = 0.45f,
+            top = 0.45f,
+            right = 0.55f,
+            bottom = 0.55f
+        )
+        val debugResult = PolygonHoldContactDebugResult(
+            frames = listOf(
+                polygonFrame(
+                    timeMs = 120L,
+                    hold = endHold,
+                    leftHandHoldNo = 2,
+                    rightHandHoldNo = 2
+                ),
+                polygonFrame(
+                    timeMs = 260L,
+                    hold = endHold,
+                    leftHandHoldNo = 2,
+                    rightHandHoldNo = 2
+                )
+            ),
+            highestReachedHoldNo = 2,
+            highestReachedFrameTimeMs = 260L,
+            contactedHoldNos = setOf(2)
+        )
+
+        assertEquals(
+            260L,
+            debugResult.findSuccessfulTopContactTimeMs(
+                endHoldNo = 2,
+                analysisStartTimeMs = 150L
+            )
+        )
+    }
 
     @Test
     fun `attempt success resolution requires both hands on end hold`() {
@@ -123,6 +167,7 @@ class UploadSubmissionDelegateTest {
         var currentAttemptIndexValue: Int = 0
         var resultPlaybackUris: List<String> = emptyList()
         var publishedSessionValue: PublishedAttemptResultSession? = null
+        var appliedAttemptEndRefinements: List<AttemptEndRefinement> = emptyList()
 
         override suspend fun awaitSubmitReadyPrePose(
             playbackUris: List<String>,
@@ -149,6 +194,7 @@ class UploadSubmissionDelegateTest {
                         overlayCache = null,
                         personObservationStartTimeMs = null,
                         wallArrivalTimeMs = null,
+                        resolvedAttemptEndTimeMs = null,
                         stallSegment = null,
                         climbEndDetection = null,
                         handPeakAnnotation = null,
@@ -175,6 +221,10 @@ class UploadSubmissionDelegateTest {
 
         override fun setSessionResultPlaybackUris(uris: List<String>) {
             resultPlaybackUris = uris
+        }
+
+        override fun applyAttemptEndRefinements(refinements: List<AttemptEndRefinement>) {
+            appliedAttemptEndRefinements = refinements
         }
 
         override fun publishedSession(): PublishedAttemptResultSession? = publishedSessionValue
@@ -227,6 +277,73 @@ class UploadSubmissionDelegateTest {
             progress = if (role == HoldRole.START) 0f else 1f,
             axisDistance = 0f,
             role = role
+        )
+    }
+
+    private fun polygonFrame(
+        timeMs: Long,
+        hold: HoldNumbered,
+        leftHandHoldNo: Int?,
+        rightHandHoldNo: Int?
+    ): PolygonHoldContactFrame {
+        val limbStates = listOf(
+            PolygonLimbFrameState(
+                limb = PolygonTrackedLimb.LEFT_HAND,
+                state = "GRIP",
+                activeHoldNo = leftHandHoldNo,
+                candidateHoldNo = leftHandHoldNo,
+                distancePx = 0f,
+                speedPxPerSec = 0f,
+                transition = null,
+                insidePolygon = true,
+                contactPointNormalized = null
+            ),
+            PolygonLimbFrameState(
+                limb = PolygonTrackedLimb.RIGHT_HAND,
+                state = "GRIP",
+                activeHoldNo = rightHandHoldNo,
+                candidateHoldNo = rightHandHoldNo,
+                distancePx = 0f,
+                speedPxPerSec = 0f,
+                transition = null,
+                insidePolygon = true,
+                contactPointNormalized = null
+            )
+        )
+
+        val activeContacts = buildList {
+            if (leftHandHoldNo == hold.holdNo) {
+                add(
+                    PolygonHoldContact(
+                        hold = hold,
+                        limb = PolygonTrackedLimb.LEFT_HAND,
+                        state = "GRIP",
+                        insidePolygon = true,
+                        distancePx = 0f,
+                        speedPxPerSec = 0f,
+                        contactPointNormalized = null
+                    )
+                )
+            }
+            if (rightHandHoldNo == hold.holdNo) {
+                add(
+                    PolygonHoldContact(
+                        hold = hold,
+                        limb = PolygonTrackedLimb.RIGHT_HAND,
+                        state = "GRIP",
+                        insidePolygon = true,
+                        distancePx = 0f,
+                        speedPxPerSec = 0f,
+                        contactPointNormalized = null
+                    )
+                )
+            }
+        }
+
+        return PolygonHoldContactFrame(
+            frameTimeMs = timeMs,
+            limbStates = limbStates,
+            activeContacts = activeContacts
         )
     }
 }

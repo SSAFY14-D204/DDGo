@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.route
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -20,8 +21,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
-import com.ddgo.app.domain.usecase.PolygonTrackedLimb
+import com.ddgo.app.domain.usecase.findSuccessfulTopContactTimeMs
 import com.ddgo.app.feature.climbing.upload.FinalAnalysisAttemptSummary
+import com.ddgo.app.feature.climbing.upload.UploadConfirmationDialog
 import com.ddgo.app.feature.climbing.upload.UploadBackgroundUploadSnackbarHost
 import com.ddgo.app.feature.climbing.upload.UploadViewModel
 import com.ddgo.app.feature.climbing.upload.buildChallengeFinalAnalysisSummary
@@ -39,7 +41,6 @@ import kotlin.math.max
 @Composable
 fun FinalAnalysisRoute(
     viewModel: UploadViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit = {},
     onNavigateToChallenge: () -> Unit = {},
     onNavigateToMain: () -> Unit = {},
     onNavigateToCommunityCompose: (PendingCommunityComposeRequest) -> Unit = {}
@@ -133,6 +134,9 @@ fun FinalAnalysisRoute(
     var shareSheetSelectedAttemptNos by rememberSaveable {
         mutableStateOf(listOf<Int>())
     }
+    var showExitConfirmDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     val safeSelectedAttempt = selectedAttempt.coerceIn(1, attemptCount)
     val safeSelectedAttemptIndex = (safeSelectedAttempt - 1).coerceAtLeast(0)
@@ -173,9 +177,22 @@ fun FinalAnalysisRoute(
             ?: currentSummary.analysisPoints
     }
     val currentAttemptContactDebugResult = viewModel.currentAttemptPolygonHoldContactDebugResult
-    val analysisStartTimeMs = remember(currentAttemptContactDebugResult) {
-        currentAttemptContactDebugResult?.findFourPointContactStartTimeMs()
-            ?: currentAttemptContactDebugResult?.findClimbStartTimeMs()
+    val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
+    val analysisStartTimeMs = remember(currentAttemptPrePoseEntry) {
+        currentAttemptPrePoseEntry?.wallArrivalTimeMs
+            ?: currentAttemptPrePoseEntry?.personObservationStartTimeMs
+    }
+    val analysisEndTimeMs = remember(currentAttemptPrePoseEntry) {
+        currentAttemptPrePoseEntry?.resolvedAttemptEndTimeMs
+            ?: currentAttemptPrePoseEntry?.handPeakAnnotation?.endTimeMs
+    }
+    val boundaryTimelinePoints = remember(currentAttemptPrePoseEntry) {
+        buildAttemptBoundaryTimelinePoints(
+            wallArrivalTimeMs = currentAttemptPrePoseEntry?.wallArrivalTimeMs,
+            personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs,
+            endTimeMs = currentAttemptPrePoseEntry?.resolvedAttemptEndTimeMs
+                ?: currentAttemptPrePoseEntry?.handPeakAnnotation?.endTimeMs
+        )
     }
     val currentAttemptEndHoldNo = remember(
         viewModel.currentAttemptDisplayHolds,
@@ -204,6 +221,8 @@ fun FinalAnalysisRoute(
         currentSummary.videoDurationMs,
         currentAttemptContactDebugResult,
         analysisStartTimeMs,
+        analysisEndTimeMs,
+        boundaryTimelinePoints,
         currentAttemptEndHoldNo
     ) {
         buildAttemptFocusTimelinePoints(
@@ -211,6 +230,8 @@ fun FinalAnalysisRoute(
             fallbackPoints = aiPresentationPoints,
             contactDebugResult = currentAttemptContactDebugResult,
             analysisStartTimeMs = analysisStartTimeMs,
+            analysisEndTimeMs = analysisEndTimeMs,
+            boundaryPoints = boundaryTimelinePoints,
             endHoldNo = currentAttemptEndHoldNo
         )
     }
@@ -337,16 +358,13 @@ fun FinalAnalysisRoute(
         )
     }
 
+    BackHandler(enabled = !isShareSheetVisible && !showExitConfirmDialog) {
+        showExitConfirmDialog = true
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         FinalAnalysisPage(
             state = pageState,
-            onNavigateBack = {
-                scope.launch {
-                    if (viewModel.abandonCurrentChallengeIfNeeded()) {
-                        onNavigateBack()
-                    }
-                }
-            },
             onAnalysisPointSelected = { timeMs ->
                 pendingSeekTimeMs = timeMs
                 seekRequestId += 1L
@@ -425,6 +443,24 @@ fun FinalAnalysisRoute(
         )
     }
 
+    if (showExitConfirmDialog) {
+        UploadConfirmationDialog(
+            title = "메인 화면으로 돌아가시겠어요?",
+            message = "지금 화면을 나가면 메인 화면으로 이동해요.",
+            dismissText = "머무르기",
+            confirmText = "돌아가기",
+            onDismiss = { showExitConfirmDialog = false },
+            onConfirm = {
+                showExitConfirmDialog = false
+                scope.launch {
+                    if (viewModel.abandonCurrentChallengeIfNeeded()) {
+                        onNavigateToMain()
+                    }
+                }
+            }
+        )
+    }
+
     if (isShareSheetVisible) {
         AnalysisCommunityShareSheet(
             options = shareOptions,
@@ -473,6 +509,7 @@ private fun buildAttemptShareTitle(
     gymName: String,
     attemptNo: Int
 ): String {
+    // Boundary labels are normalized in refinedTimelineDescription.
     val safeGymName = gymName.ifBlank { "DDGo" }
     return "$safeGymName ${attemptNo}차 시도 분석 결과"
 }
@@ -507,8 +544,16 @@ private fun buildAttemptFocusTimelinePoints(
     fallbackPoints: List<AnalysisPoint>,
     contactDebugResult: PolygonHoldContactDebugResult?,
     analysisStartTimeMs: Long?,
+    analysisEndTimeMs: Long?,
+    boundaryPoints: List<AnalysisPoint>,
     endHoldNo: Int?
 ): List<AnalysisPoint> {
+    val boundaryStartPoint = boundaryPoints.firstOrNull { point ->
+        point.kind == AnalysisPointKind.PERSON_OBSERVATION_START
+    }
+    val boundaryEndPoint = boundaryPoints.firstOrNull { point ->
+        point.kind == AnalysisPointKind.CLIMB_END
+    }
     val sourcePoints = summary.analysisPoints.ifEmpty {
         fallbackPoints.filter { it.kind == AnalysisPointKind.GENERIC }
     }
@@ -517,14 +562,19 @@ private fun buildAttemptFocusTimelinePoints(
         point.kind == AnalysisPointKind.STALL || point.kind == AnalysisPointKind.CLIMB_END
     }
     if (hasRefinedFocusPoints) {
-        return sourcePoints
-            .filter { point ->
+        return buildBoundaryAwareTimelinePoints(
+            middlePoints = sourcePoints.filter { point ->
                 point.timeMs >= 0L &&
+                    point.kind != AnalysisPointKind.PERSON_OBSERVATION_START &&
+                    point.kind != AnalysisPointKind.CLIMB_END &&
                     (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs) &&
+                    (analysisEndTimeMs == null || point.timeMs <= analysisEndTimeMs) &&
                     (point.kind == AnalysisPointKind.STALL ||
-                        point.kind == AnalysisPointKind.GENERIC ||
-                        point.kind == AnalysisPointKind.CLIMB_END)
-            }
+                        point.kind == AnalysisPointKind.GENERIC)
+            },
+            boundaryStartPoint = boundaryStartPoint,
+            boundaryEndPoint = boundaryEndPoint
+        )
             .sortedBy { point -> point.timeMs }
             .distinctBy { point ->
                 point.kind to refinedTimelineDescription(
@@ -545,22 +595,32 @@ private fun buildAttemptFocusTimelinePoints(
 
     val keyPoints = buildImportantTimelinePoints(
         points = sourcePoints,
-        analysisStartTimeMs = analysisStartTimeMs
+        analysisStartTimeMs = analysisStartTimeMs,
+        analysisEndTimeMs = analysisEndTimeMs
     ).toMutableList()
     buildSuccessTimelinePoint(
         summary = summary,
         sourcePoints = sourcePoints,
         contactDebugResult = contactDebugResult,
         endHoldNo = endHoldNo,
-        analysisStartTimeMs = analysisStartTimeMs
+        analysisStartTimeMs = analysisStartTimeMs,
+        analysisEndTimeMs = analysisEndTimeMs
     )?.let(keyPoints::add)
 
-    val points = keyPoints
-        .filter { it.timeMs >= 0L }
-        .sortedBy { it.timeMs }
-        .toMutableList()
+    val points = buildBoundaryAwareTimelinePoints(
+        middlePoints = keyPoints.filter { point ->
+            point.timeMs >= 0L &&
+                point.kind != AnalysisPointKind.PERSON_OBSERVATION_START &&
+                point.kind != AnalysisPointKind.CLIMB_END &&
+                (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs) &&
+                (analysisEndTimeMs == null || point.timeMs <= analysisEndTimeMs)
+        },
+        boundaryStartPoint = boundaryStartPoint,
+        boundaryEndPoint = boundaryEndPoint
+    ).sortedBy { it.timeMs }
 
-    val climbEndTimeMs = summary.videoDurationMs
+    /* Fixed boundary end points come from pre-pose Attempt Result data.
+    val climbEndTimeMs_DISABLED = summary.videoDurationMs
         ?.takeIf { it > 0L }
         ?: points.maxOfOrNull { it.timeMs }
 
@@ -574,6 +634,7 @@ private fun buildAttemptFocusTimelinePoints(
             )
         }
     }
+    */
 
     return points
         .distinctBy { point ->
@@ -596,7 +657,8 @@ private fun buildAttemptFocusTimelinePoints(
 
 private fun buildImportantTimelinePoints(
     points: List<AnalysisPoint>,
-    analysisStartTimeMs: Long?
+    analysisStartTimeMs: Long?,
+    analysisEndTimeMs: Long?
 ): List<AnalysisPoint> {
     if (points.isEmpty()) return emptyList()
 
@@ -604,7 +666,8 @@ private fun buildImportantTimelinePoints(
         .filter { point ->
             point.kind == AnalysisPointKind.GENERIC &&
                 point.timeMs >= 0L &&
-                (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs)
+                (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs) &&
+                (analysisEndTimeMs == null || point.timeMs <= analysisEndTimeMs)
         }
         .sortedBy { point -> point.timeMs }
         .sortedByDescending(::refinedTimelinePointPriority)
@@ -621,7 +684,8 @@ private fun buildImportantTimelinePoints(
             .filter { point ->
                 point.kind == AnalysisPointKind.GENERIC &&
                     point.timeMs >= 0L &&
-                    (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs)
+                    (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs) &&
+                    (analysisEndTimeMs == null || point.timeMs <= analysisEndTimeMs)
             }
             .sortedBy { point -> point.timeMs }
             .take(1)
@@ -633,7 +697,8 @@ private fun buildSuccessTimelinePoint(
     sourcePoints: List<AnalysisPoint>,
     contactDebugResult: PolygonHoldContactDebugResult?,
     endHoldNo: Int?,
-    analysisStartTimeMs: Long?
+    analysisStartTimeMs: Long?,
+    analysisEndTimeMs: Long?
 ): AnalysisPoint? {
     if (!summary.isSuccess) return null
 
@@ -652,7 +717,8 @@ private fun buildSuccessTimelinePoint(
             .filter { point ->
                 point.kind == AnalysisPointKind.GENERIC &&
                     point.timeMs >= 0L &&
-                    (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs)
+                    (analysisStartTimeMs == null || point.timeMs >= analysisStartTimeMs) &&
+                    (analysisEndTimeMs == null || point.timeMs <= analysisEndTimeMs)
             }
             .maxOfOrNull { point -> point.timeMs }
             ?.coerceAtMost((climbEndTimeMs - 800L).coerceAtLeast(0L))
@@ -666,47 +732,41 @@ private fun buildSuccessTimelinePoint(
     )
 }
 
-private fun PolygonHoldContactDebugResult.findClimbStartTimeMs(): Long? {
-    return frames.firstOrNull { frame ->
-        val limbStatesByLimb = frame.limbStates.associateBy { it.limb }
-        listOf(
-            PolygonTrackedLimb.LEFT_HAND,
-            PolygonTrackedLimb.RIGHT_HAND,
-            PolygonTrackedLimb.LEFT_FOOT,
-            PolygonTrackedLimb.RIGHT_FOOT
-        ).all { limb ->
-            limbStatesByLimb[limb]?.activeHoldNo != null
-        }
-    }?.frameTimeMs
+private fun buildAttemptBoundaryTimelinePoints(
+    wallArrivalTimeMs: Long?,
+    personObservationStartTimeMs: Long?,
+    endTimeMs: Long?
+): List<AnalysisPoint> = buildList {
+    (wallArrivalTimeMs ?: personObservationStartTimeMs)?.let { startTimeMs ->
+        add(
+            AnalysisPoint(
+                index = 0,
+                timeMs = startTimeMs,
+                description = "등반 시작",
+                kind = AnalysisPointKind.PERSON_OBSERVATION_START
+            )
+        )
+    }
+    endTimeMs?.let { safeEndTimeMs ->
+        add(
+            AnalysisPoint(
+                index = 0,
+                timeMs = safeEndTimeMs,
+                description = "등반 완료",
+                kind = AnalysisPointKind.CLIMB_END
+            )
+        )
+    }
 }
 
-private fun PolygonHoldContactDebugResult.findFourPointContactStartTimeMs(): Long? {
-    return frames.firstOrNull { frame ->
-        val limbStatesByLimb = frame.limbStates.associateBy { it.limb }
-        listOf(
-            PolygonTrackedLimb.LEFT_HAND,
-            PolygonTrackedLimb.RIGHT_HAND,
-            PolygonTrackedLimb.LEFT_FOOT,
-            PolygonTrackedLimb.RIGHT_FOOT
-        ).all { limb ->
-            limbStatesByLimb[limb]?.activeHoldNo != null
-        }
-    }?.frameTimeMs
-}
-
-private fun PolygonHoldContactDebugResult.findSuccessfulTopContactTimeMs(
-    endHoldNo: Int?,
-    analysisStartTimeMs: Long?
-): Long? {
-    val resolvedEndHoldNo = endHoldNo?.takeIf { it > 0 } ?: return null
-    return frames.firstOrNull { frame ->
-        if (analysisStartTimeMs != null && frame.frameTimeMs < analysisStartTimeMs) {
-            return@firstOrNull false
-        }
-        val limbStatesByLimb = frame.limbStates.associateBy { it.limb }
-        limbStatesByLimb[PolygonTrackedLimb.LEFT_HAND]?.activeHoldNo == resolvedEndHoldNo &&
-            limbStatesByLimb[PolygonTrackedLimb.RIGHT_HAND]?.activeHoldNo == resolvedEndHoldNo
-    }?.frameTimeMs
+private fun buildBoundaryAwareTimelinePoints(
+    middlePoints: List<AnalysisPoint>,
+    boundaryStartPoint: AnalysisPoint?,
+    boundaryEndPoint: AnalysisPoint?
+): List<AnalysisPoint> = buildList {
+    boundaryStartPoint?.let(::add)
+    addAll(middlePoints)
+    boundaryEndPoint?.let(::add)
 }
 
 private fun refinedTimelinePointPriority(point: AnalysisPoint): Int {
@@ -729,6 +789,8 @@ private fun refinedTimelineDescription(
     description: String,
     kind: AnalysisPointKind
 ): String {
+    if (kind == AnalysisPointKind.PERSON_OBSERVATION_START) return "등반 시작"
+    if (kind == AnalysisPointKind.CLIMB_END && description == "등반 완료") return "등반 완료"
     if (kind == AnalysisPointKind.CLIMB_END) return "등반 종료"
     if (description.contains("완등") || description.contains("성공")) return "완등"
 

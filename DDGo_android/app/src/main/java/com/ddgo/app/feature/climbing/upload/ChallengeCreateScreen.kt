@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.graphics.Color as AndroidColor
 import android.location.Location
 import android.location.LocationManager
 import android.os.CancellationSignal
@@ -74,6 +75,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -95,8 +97,8 @@ import com.ddgo.app.R
 import com.ddgo.app.core.ui.atom.DdgoPrimaryButton
 import com.ddgo.app.core.ui.atom.DdgoPrimaryButtonVariant
 import com.ddgo.app.core.ui.components.SafeAreaScreen
-import com.ddgo.app.core.ui.tokens.DdgoHoldColorTokens
 import com.ddgo.app.core.ui.tokens.DdgoColorTokens
+import com.ddgo.app.core.ui.tokens.DdgoHoldColorPalette
 import com.ddgo.app.domain.model.GymGrade
 import com.ddgo.app.domain.model.NearbyPlace
 
@@ -691,7 +693,7 @@ private fun GymColorStep(
     val selectedLevelSortOrder = viewModel.selectedLevelSortOrder
     val selectedPaletteKey = viewModel.selectedHoldColorKey
     val selectedHoldSlot = remember(selectedPaletteKey) {
-        findHoldPaletteSlot(selectedPaletteKey)
+        findHoldPaletteSlot(normalizeProblemHoldPaletteKey(selectedPaletteKey))
     }
 
     LaunchedEffect(challengeCreationUiState, canBypassChallengeCreationForDev, isEmbedded) {
@@ -1429,19 +1431,22 @@ private fun ColorSelectionSheet(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        row.forEach { slot ->
-                            ColorCircleButton(
-                                slot = slot,
-                                selected = slot.key == selectedPaletteKey,
-                                enabled = true,
-                                size = chipSize,
-                                onClick = { onSelect(slot.key) }
-                            )
-                        }
+                ) {
+                    row.forEach { slot ->
+                        ColorCircleButton(
+                            slot = slot,
+                            selected = slot.key == normalizeProblemHoldPaletteKey(selectedPaletteKey),
+                            enabled = true,
+                            size = chipSize,
+                            onClick = { onSelect(slot.key) }
+                        )
+                    }
+                    repeat(4 - row.size) {
+                        Spacer(modifier = Modifier.size(chipSize))
                     }
                 }
             }
+        }
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -1450,6 +1455,12 @@ private fun ColorSelectionSheet(
                 enabled = actionEnabled,
                 onClick = onAction,
                 variant = DdgoPrimaryButtonVariant.EmphasisGradient,
+                enabledBackgroundBrush = Brush.horizontalGradient(
+                    colors = listOf(
+                        DdgoColorTokens.BrandGradientEnd,
+                        DdgoColorTokens.BrandGradientStart
+                    )
+                ),
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .width(buttonWidth)
@@ -1631,13 +1642,19 @@ private fun HoldColorSelectionPanel(
             holdPaletteRows.forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) {
                     row.forEach { slot ->
-                        val grade = availableGradesByKey[slot.key]
+                        val grade = availableGradeForProblemHoldSlot(
+                            availableGradesByKey = availableGradesByKey,
+                            slotKey = slot.key
+                        )
                         HoldColorTile(
                             slot = slot,
                             enabled = grade != null,
-                            selected = slot.key == selectedPaletteKey,
+                            selected = slot.key == normalizeProblemHoldPaletteKey(selectedPaletteKey),
                             onClick = { grade?.let(onSelect) }
                         )
+                    }
+                    repeat(2 - row.size) {
+                        Spacer(modifier = Modifier.size(50.dp))
                     }
                 }
             }
@@ -1845,68 +1862,66 @@ private data class HoldPaletteSlot(
 )
 
 private val difficultyReferenceSlots = listOf(
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Black.key, color = DdgoHoldColorTokens.Black.color),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Gray.key, color = DdgoHoldColorTokens.Gray.color),
-    HoldPaletteSlot(
-        key = DdgoHoldColorTokens.White.key,
-        color = DdgoHoldColorTokens.White.color,
-        borderColor = DdgoHoldColorTokens.White.borderColor
-    ),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Brown.key, color = DdgoHoldColorTokens.Brown.color),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Purple.key, color = DdgoHoldColorTokens.Purple.color),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Navy.key, color = DdgoHoldColorTokens.Navy.color),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.SkyBlue.key, color = DdgoHoldColorTokens.SkyBlue.color),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Green.key, color = DdgoHoldColorTokens.Green.color),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Orange.key, color = DdgoHoldColorTokens.Orange.color),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Red.key, color = DdgoHoldColorTokens.Red.color),
-    HoldPaletteSlot(key = DdgoHoldColorTokens.Yellow.key, color = DdgoHoldColorTokens.Yellow.color)
+    HoldPaletteSlot(key = "black", color = DdgoHoldColorPalette.Black.color),
+    HoldPaletteSlot(key = "gray", color = DdgoHoldColorPalette.Gray.color),
+    HoldPaletteSlot(key = "white", color = DdgoHoldColorPalette.Ivory.color, borderColor = DdgoColorTokens.NeutralLightGray),
+    HoldPaletteSlot(key = "brown", color = DdgoHoldColorPalette.Brown.color),
+    HoldPaletteSlot(key = "purple", color = DdgoHoldColorPalette.Purple.color),
+    HoldPaletteSlot(key = "navy", color = DdgoHoldColorPalette.Navy.color),
+    HoldPaletteSlot(key = "blue", color = DdgoHoldColorPalette.Blue.color),
+    HoldPaletteSlot(key = "skyblue", color = DdgoHoldColorPalette.Sky.color),
+    HoldPaletteSlot(key = "green", color = DdgoHoldColorPalette.Green.color),
+    HoldPaletteSlot(key = "orange", color = DdgoHoldColorPalette.Orange.color),
+    HoldPaletteSlot(key = "red", color = DdgoHoldColorPalette.Red.color),
+    HoldPaletteSlot(key = "yellow", color = DdgoHoldColorPalette.Yellow.color),
+    HoldPaletteSlot(key = "pink", color = DdgoHoldColorPalette.Pink.color)
 )
 
 private val holdPaletteRows = listOf(
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Black.key, color = DdgoHoldColorTokens.Black.color, borderColor = DdgoHoldColorTokens.Black.borderColor),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Gray.key, color = DdgoHoldColorTokens.Gray.color)
+        HoldPaletteSlot(key = "black", color = DdgoHoldColorPalette.Black.color, borderColor = DdgoColorTokens.BrandGray),
+        HoldPaletteSlot(key = "gray", color = DdgoHoldColorPalette.Gray.color)
     ),
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.White.key, color = DdgoHoldColorTokens.White.color, borderColor = DdgoHoldColorTokens.White.borderColor),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Brown.key, color = DdgoHoldColorTokens.Brown.color)
+        HoldPaletteSlot(key = "white", color = DdgoHoldColorPalette.Ivory.color, borderColor = DdgoColorTokens.NeutralLightGray),
+        HoldPaletteSlot(key = "brown", color = DdgoHoldColorPalette.Brown.color)
     ),
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Purple.key, color = DdgoHoldColorTokens.Purple.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Navy.key, color = DdgoHoldColorTokens.Navy.color)
+        HoldPaletteSlot(key = "purple", color = DdgoHoldColorPalette.Purple.color),
+        HoldPaletteSlot(key = "navy", color = DdgoHoldColorPalette.Navy.color)
     ),
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.SkyBlue.key, color = DdgoHoldColorTokens.SkyBlue.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Green.key, color = DdgoHoldColorTokens.Green.color)
+        HoldPaletteSlot(key = "skyblue", color = DdgoHoldColorPalette.Sky.color),
+        HoldPaletteSlot(key = "green", color = DdgoHoldColorPalette.Green.color)
     ),
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Orange.key, color = DdgoHoldColorTokens.Orange.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Red.key, color = DdgoHoldColorTokens.Red.color)
+        HoldPaletteSlot(key = "orange", color = DdgoHoldColorPalette.Orange.color),
+        HoldPaletteSlot(key = "red", color = DdgoHoldColorPalette.Red.color)
     ),
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Yellow.key, color = DdgoHoldColorTokens.Yellow.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Pink.key, color = DdgoHoldColorTokens.Pink.color)
+        HoldPaletteSlot(key = "yellow", color = DdgoHoldColorPalette.Yellow.color),
+        HoldPaletteSlot(key = "pink", color = DdgoHoldColorPalette.Pink.color)
     )
 )
 
 private val holdPickerRows = listOf(
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Red.key, color = DdgoHoldColorTokens.Red.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Orange.key, color = DdgoHoldColorTokens.Orange.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Yellow.key, color = DdgoHoldColorTokens.Yellow.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Green.key, color = DdgoHoldColorTokens.Green.color)
+        HoldPaletteSlot(key = "red", color = DdgoHoldColorPalette.Red.color),
+        HoldPaletteSlot(key = "orange", color = DdgoHoldColorPalette.Orange.color),
+        HoldPaletteSlot(key = "yellow", color = DdgoHoldColorPalette.Yellow.color),
+        HoldPaletteSlot(key = "green", color = DdgoHoldColorPalette.Green.color)
     ),
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.SkyBlue.key, color = DdgoHoldColorTokens.SkyBlue.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Navy.key, color = DdgoHoldColorTokens.Navy.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Purple.key, color = DdgoHoldColorTokens.Purple.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Brown.key, color = DdgoHoldColorTokens.Brown.color)
+        HoldPaletteSlot(key = "skyblue", color = DdgoHoldColorPalette.Sky.color),
+        HoldPaletteSlot(key = "navy", color = DdgoHoldColorPalette.Navy.color),
+        HoldPaletteSlot(key = "purple", color = DdgoHoldColorPalette.Purple.color),
+        HoldPaletteSlot(key = "brown", color = DdgoHoldColorPalette.Brown.color)
     ),
     listOf(
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Pink.key, color = DdgoHoldColorTokens.Pink.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.White.key, color = DdgoHoldColorTokens.White.color, borderColor = DdgoHoldColorTokens.White.borderColor),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Gray.key, color = DdgoHoldColorTokens.Gray.color),
-        HoldPaletteSlot(key = DdgoHoldColorTokens.Black.key, color = DdgoHoldColorTokens.Black.color)
+        HoldPaletteSlot(key = "pink", color = DdgoHoldColorPalette.Pink.color),
+        HoldPaletteSlot(key = "white", color = DdgoHoldColorPalette.Ivory.color, borderColor = DdgoColorTokens.NeutralLightGray),
+        HoldPaletteSlot(key = "gray", color = DdgoHoldColorPalette.Gray.color),
+        HoldPaletteSlot(key = "black", color = DdgoHoldColorPalette.Black.color)
     )
 )
 
@@ -1921,8 +1936,26 @@ private const val COLOR_STEP_CTA_WIDTH_FRACTION = 0.85f
 private val COLOR_STEP_SHEET_SHAPE = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
 private val defaultHoldPreviewSlot = holdPickerRows.flatten().first { it.key == DEFAULT_HOLD_COLOR_KEY }
 
+private fun normalizeProblemHoldPaletteKey(key: String?): String? {
+    return when (key) {
+        "blue" -> "navy"
+        else -> key
+    }
+}
+
+private fun availableGradeForProblemHoldSlot(
+    availableGradesByKey: Map<String, GymGrade>,
+    slotKey: String
+): GymGrade? {
+    return when (slotKey) {
+        "navy" -> availableGradesByKey["navy"] ?: availableGradesByKey["blue"]
+        else -> availableGradesByKey[slotKey]
+    }
+}
+
 private fun findHoldPaletteSlot(key: String?): HoldPaletteSlot? {
-    if (key == null) {
+    val normalizedKey = normalizeProblemHoldPaletteKey(key)
+    if (normalizedKey == null) {
         return null
     }
 
@@ -1931,13 +1964,14 @@ private fun findHoldPaletteSlot(key: String?): HoldPaletteSlot? {
         holdPaletteRows.flatten(),
         difficultyReferenceSlots
     ).flatMap { it.asSequence() }
-        .firstOrNull { it.key == key }
+        .firstOrNull { it.key == normalizedKey }
 }
 
 private fun holdAssetPathForKey(key: String): String? {
     return when (key) {
         "black" -> "holds/hold_black.png"
         "brown" -> "holds/hold_brown.png"
+        "blue" -> "holds/hold_blue.png"
         "gray" -> "holds/hold_gray.png"
         "green" -> "holds/hold_green.png"
         "white" -> "holds/hold_white.png"
@@ -2213,9 +2247,22 @@ private fun SummaryBadge(
 }
 
 private fun resolveGymGradeAccentColor(grade: GymGrade): Color {
-    return DdgoHoldColorTokens.resolveColor(
-        colorName = grade.colorName,
-        colorHex = grade.colorHex
+    holdAssetColorOverride(grade.colorName)?.let { return it }
+
+    val colorHex = grade.colorHex?.takeIf { it.isNotBlank() }
+    if (colorHex != null) {
+        return runCatching { Color(AndroidColor.parseColor(colorHex)) }
+            .getOrElse {
+                fallbackColorByName(grade.colorName)
+            }
+    }
+
+    return fallbackColorByName(grade.colorName)
+}
+
+private fun holdAssetColorOverride(colorName: String): Color? {
+    return DdgoHoldColorPalette.colorForKey(
+        resolveHoldColorKey(colorName = colorName, colorHex = null)
     )
 }
 
@@ -2233,6 +2280,16 @@ private fun formatHoldColorDisplayName(colorName: String): String {
     return resolveHoldColorDisplayName(colorName = colorName, colorHex = null)
 }
 
+private fun fallbackColorByName(colorName: String): Color {
+    return holdAssetColorOverride(colorName) ?: DdgoColorTokens.BrandBlue
+}
+
+private fun holdPaletteKeyForColor(color: Color): String? {
+    val colorInt = color.toArgb()
+    return DdgoHoldColorPalette.all
+        .firstOrNull { it.color.toArgb() == colorInt }
+        ?.key
+}
 @Composable
 private fun HoldAssetThumbnail(
     color: Color,
@@ -2242,21 +2299,7 @@ private fun HoldAssetThumbnail(
     val slot = remember(color) {
             holdPaletteRows.flatten().firstOrNull { it.color == color }
             ?: holdPickerRows.flatten().firstOrNull { it.color == color }
-            ?: when (color) {
-                DdgoHoldColorTokens.resolveColorByKey("skyblue") -> findHoldPaletteSlot("skyblue")
-                DdgoHoldColorTokens.resolveColorByKey("green") -> findHoldPaletteSlot("green")
-                DdgoHoldColorTokens.resolveColorByKey("orange") -> findHoldPaletteSlot("orange")
-                DdgoHoldColorTokens.resolveColorByKey("red") -> findHoldPaletteSlot("red")
-                DdgoHoldColorTokens.resolveColorByKey("yellow") -> findHoldPaletteSlot("yellow")
-                DdgoHoldColorTokens.resolveColorByKey("pink") -> findHoldPaletteSlot("pink")
-                DdgoHoldColorTokens.resolveColorByKey("purple") -> findHoldPaletteSlot("purple")
-                DdgoHoldColorTokens.resolveColorByKey("navy") -> findHoldPaletteSlot("navy")
-                DdgoHoldColorTokens.resolveColorByKey("brown") -> findHoldPaletteSlot("brown")
-                DdgoHoldColorTokens.resolveColorByKey("white") -> findHoldPaletteSlot("white")
-                DdgoHoldColorTokens.resolveColorByKey("gray") -> findHoldPaletteSlot("gray")
-                DdgoHoldColorTokens.resolveColorByKey("black") -> findHoldPaletteSlot("black")
-                else -> null
-            }
+            ?: findHoldPaletteSlot(holdPaletteKeyForColor(color))
     }
 
     if (slot != null) {
@@ -2281,9 +2324,9 @@ private fun HoldAssetThumbnail(
             .clip(shape)
             .background(color)
             .then(
-                if (color == DdgoHoldColorTokens.White.color) {
-                    Modifier.border(1.dp, DdgoHoldColorTokens.White.borderColor ?: Color(0xFFE0D9D9), shape)
-                } else if (color == DdgoHoldColorTokens.Black.color) {
+                if (color == DdgoHoldColorPalette.Ivory.color) {
+                    Modifier.border(1.dp, DdgoColorTokens.NeutralLightGray, shape)
+                } else if (color == DdgoHoldColorPalette.Black.color) {
                     Modifier.border(1.dp, Color(0xFF535353), shape)
                 } else {
                     Modifier

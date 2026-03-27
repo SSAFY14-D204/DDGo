@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.poseanalysis.toPoseFrame
 import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
@@ -588,6 +589,7 @@ internal class UploadSessionDelegate(
             overlayCache = null,
             personObservationStartTimeMs = null,
             wallArrivalTimeMs = null,
+            resolvedAttemptEndTimeMs = null,
             stallSegment = null,
             climbEndDetection = null,
             handPeakAnnotation = null,
@@ -630,6 +632,7 @@ internal class UploadSessionDelegate(
                 overlayCache = null,
                 personObservationStartTimeMs = null,
                 wallArrivalTimeMs = null,
+                resolvedAttemptEndTimeMs = null,
                 stallSegment = null,
                 climbEndDetection = null,
                 handPeakAnnotation = null,
@@ -711,6 +714,46 @@ internal class UploadSessionDelegate(
 
     fun publishedResultPlaybackUris(): Set<String> =
         publishedAttemptResultSession?.resultPlaybackUris?.toSet().orEmpty()
+
+    fun applyAttemptEndRefinements(
+        refinements: List<AttemptEndRefinement>,
+        callbacks: UploadSessionCallbacks
+    ) {
+        if (refinements.isEmpty()) return
+
+        val refinementsByPlaybackUri = refinements.associateBy(AttemptEndRefinement::playbackUri)
+        var didUpdate = false
+        val updatedEntries = prePoseCacheEntries.toMutableMap()
+
+        updatedEntries.replaceAll { playbackUri, entry ->
+            val refinement = refinementsByPlaybackUri[playbackUri] ?: return@replaceAll entry
+            if (entry.status != PrePoseStatus.Ready) return@replaceAll entry
+
+            val resolvedAttemptEndTimeMs = refinement.resolvedAttemptEndTimeMs
+            val hasMatchingEndPoint =
+                entry.timelinePoints.any { point ->
+                    point.kind == AnalysisPointKind.CLIMB_END &&
+                        point.timeMs == resolvedAttemptEndTimeMs
+                }
+            if (
+                entry.resolvedAttemptEndTimeMs == resolvedAttemptEndTimeMs &&
+                hasMatchingEndPoint
+            ) {
+                return@replaceAll entry
+            }
+
+            didUpdate = true
+            rebuildReadyPrePoseEntry(
+                entry = entry,
+                resolvedAttemptEndTimeMs = resolvedAttemptEndTimeMs
+            )
+        }
+
+        if (!didUpdate) return
+
+        prePoseCacheEntries = updatedEntries
+        callbacks.syncDisplayedAnalysisPoints()
+    }
 
     private fun ensurePrePoseWorkerRunning() {
         if (prePoseWorkerJob?.isActive == true) return
@@ -816,24 +859,31 @@ internal class UploadSessionDelegate(
                             val personObservationStartTimeMs = detectStablePersonObservationUseCase(
                                 processedFrames
                             )
-                            val wallArrivalTimeMs = runCatching {
-                                detectWallArrivalTimeUseCase(
+                            val wallArrivalAnalysis = runCatching {
+                                detectWallArrivalTimeUseCase.analyze(
                                     frames = filteredPoses.map { pose -> pose.toPoseFrame() },
                                     personObservationStartTimeMs = personObservationStartTimeMs
                                 )
                             }.onFailure { error ->
                                 Log.w(TAG, "Pre-pose wall arrival analysis failed: ${task.playbackUri}", error)
                             }.getOrNull()
+                            val wallArrivalTimeMs = wallArrivalAnalysis?.arrivalTimeMs
                             val handPeakAnnotation = runCatching {
-                                analyzeHandPeakAndEndUseCase(smoothedPoses.map { pose -> pose.toPoseFrame() })
+                                analyzeHandPeakAndEndUseCase(
+                                    frames = smoothedPoses.map { pose -> pose.toPoseFrame() },
+                                    wallSegmentIdByFrameTimeMs = wallArrivalAnalysis
+                                        ?.wallSegmentIdByFrameTimeMs
+                                        .orEmpty()
+                                )
                             }.onFailure { error ->
                                 Log.w(TAG, "Pre-pose hand peak analysis failed: ${task.playbackUri}", error)
                             }.getOrNull()
+                            val resolvedAttemptEndTimeMs = handPeakAnnotation?.endTimeMs
                             val stallSegment = runCatching {
                                 detectStallSegmentFromPoseUseCase(
                                     poses = smoothedPoses,
                                     wallArrivalTimeMs = wallArrivalTimeMs,
-                                    endTimeMs = handPeakAnnotation?.endTimeMs
+                                    endTimeMs = resolvedAttemptEndTimeMs
                                 )
                             }.onFailure { error ->
                                 Log.w(TAG, "Pre-pose stall analysis failed: ${task.playbackUri}", error)
@@ -850,13 +900,14 @@ internal class UploadSessionDelegate(
                                 overlayCache = overlayCache,
                                 personObservationStartTimeMs = personObservationStartTimeMs,
                                 wallArrivalTimeMs = wallArrivalTimeMs,
+                                resolvedAttemptEndTimeMs = resolvedAttemptEndTimeMs,
                                 stallSegment = stallSegment,
                                 climbEndDetection = null,
                                 handPeakAnnotation = handPeakAnnotation,
                                 timelinePoints = buildAttemptTimelinePoints(
                                     wallArrivalTimeMs = wallArrivalTimeMs ?: personObservationStartTimeMs,
                                     stallSegment = stallSegment,
-                                    endTimeMs = handPeakAnnotation?.endTimeMs
+                                    endTimeMs = resolvedAttemptEndTimeMs
                                 ),
                                 errorMessage = null,
                                 taskId = null
@@ -1097,6 +1148,7 @@ internal class UploadSessionDelegate(
                     overlayCache = null,
                     personObservationStartTimeMs = null,
                     wallArrivalTimeMs = null,
+                    resolvedAttemptEndTimeMs = null,
                     stallSegment = null,
                     climbEndDetection = null,
                     handPeakAnnotation = null,
@@ -1222,6 +1274,32 @@ internal class UploadSessionDelegate(
         } finally {
             extractor.release()
         }
+    }
+
+    private fun rebuildReadyPrePoseEntry(
+        entry: PrePoseCacheEntry,
+        resolvedAttemptEndTimeMs: Long?
+    ): PrePoseCacheEntry {
+        val rebuiltStallSegment = runCatching {
+            detectStallSegmentFromPoseUseCase(
+                poses = entry.smoothedPoses,
+                wallArrivalTimeMs = entry.wallArrivalTimeMs,
+                endTimeMs = resolvedAttemptEndTimeMs
+            )
+        }.getOrElse { error ->
+            Log.w(TAG, "Pre-pose stall refinement failed: ${entry.playbackUri}", error)
+            entry.stallSegment
+        }
+
+        return entry.copy(
+            resolvedAttemptEndTimeMs = resolvedAttemptEndTimeMs,
+            stallSegment = rebuiltStallSegment,
+            timelinePoints = buildAttemptTimelinePoints(
+                wallArrivalTimeMs = entry.wallArrivalTimeMs ?: entry.personObservationStartTimeMs,
+                stallSegment = rebuiltStallSegment,
+                endTimeMs = resolvedAttemptEndTimeMs
+            )
+        )
     }
 
     companion object {

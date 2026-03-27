@@ -46,6 +46,7 @@ data class FrameBodyPartHeights(
     val torsoHeight: Double? = null,
     val footHeight: Double? = null,
     val torsoScale: Double? = null,
+    val torsoUpright: Boolean = false,
     val handHeightSmooth: Double? = null,
     val torsoHeightSmooth: Double? = null,
     val footHeightSmooth: Double? = null,

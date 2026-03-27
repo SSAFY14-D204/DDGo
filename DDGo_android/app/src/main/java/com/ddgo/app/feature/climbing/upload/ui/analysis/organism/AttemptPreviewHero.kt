@@ -1,16 +1,14 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
 
 import android.graphics.Bitmap
-import android.net.Uri
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,7 +20,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -33,30 +30,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.VideoSize
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
@@ -64,32 +46,15 @@ import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisText
 import com.ddgo.app.feature.climbing.upload.AttemptPoseOverlayCache
-import com.ddgo.app.feature.climbing.upload.COLOR_END
-import com.ddgo.app.feature.climbing.upload.COLOR_START
-import com.ddgo.app.feature.climbing.upload.CroppedVideoViewport
 import com.ddgo.app.feature.climbing.upload.HoldOverviewPreview
-import com.ddgo.app.feature.climbing.upload.PoseOverlay
 import com.ddgo.app.feature.climbing.upload.PoseScrubberColors
 import com.ddgo.app.feature.climbing.upload.PoseScrubberMarker
-import com.ddgo.app.feature.climbing.upload.PoseVideoScrubber
 import com.ddgo.app.feature.climbing.upload.RawVerticalCropBounds
-import com.ddgo.app.feature.climbing.upload.ScreenRect
-import com.ddgo.app.feature.climbing.upload.VideoContentRect
-import com.ddgo.app.feature.climbing.upload.calculateVerticalVideoViewportCropSpecFromRawHolds
-import com.ddgo.app.feature.climbing.upload.calculateVideoContentRect
-import com.ddgo.app.feature.climbing.upload.findNearestOverlayFrameForPlayback
-import com.ddgo.app.feature.climbing.upload.holdLabelToComposeColor
 import com.ddgo.app.feature.climbing.upload.holdColorToUiColor
 import com.ddgo.app.feature.climbing.upload.resolveActiveAnalysisCardIndex
-import com.ddgo.app.feature.climbing.upload.resolveDisplayedVideoAspectRatio
-import com.ddgo.app.feature.climbing.upload.resolveInitialAttemptPlaybackStartTimeMs
-import com.ddgo.app.feature.climbing.upload.toScreenRect
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.HeaderChip
 import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSection
 import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSectionState
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlin.math.abs
 
 internal data class AttemptPreviewHeroState(
     val gymName: String,
@@ -119,7 +84,9 @@ internal data class AttemptPreviewHeroState(
 private val AttemptPreviewOverlayLineColor = Color(0xFF00E5FF).copy(alpha = 0.88f)
 private val AttemptPreviewOverlayPointColor = Color.White
 private val AttemptPreviewScrubberAccent = Color(0xFF82B1FF)
-private val AttemptPreviewHiddenFaceLandmarks = (1..10).toSet()
+private val AttemptPreviewHiddenFaceLandmarks = (0..10).toSet()
+private val AttemptPreviewHiddenFingerTipPoints = setOf(17, 18, 19, 20, 21, 22)
+private const val AttemptPreviewPointRadiusScale = 0.75f
 private val AttemptPreviewTopSafeInset = 24.dp
 private val AttemptPreviewBottomSafeInset = 64.dp
 private val AttemptPreviewControlHeight = 132.dp
@@ -130,7 +97,24 @@ internal fun AttemptPreviewHero(
     onShareClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    var showHoldOverviewDialog by remember(state.previewBitmap, state.previewHolds) { mutableStateOf(false) }
+    Column(modifier = modifier) {
+        AttemptPreviewHeroMetaSection(state = state)
+        AttemptPreviewHeroVideoSection(
+            state = state,
+            onShareClick = onShareClick
+        )
+        Spacer(modifier = Modifier.height(18.dp))
+    }
+}
+
+@Composable
+internal fun AttemptPreviewHeroMetaSection(
+    state: AttemptPreviewHeroState,
+    modifier: Modifier = Modifier
+) {
+    var showHoldOverviewDialog by remember(state.previewBitmap, state.previewHolds) {
+        mutableStateOf(false)
+    }
     val difficultyChipTone = remember(state.difficultyLabel) {
         buildHeaderChipTone(holdColorToUiColor(state.difficultyLabel))
     }
@@ -141,34 +125,6 @@ internal fun AttemptPreviewHero(
         buildHeaderChipTone(
             if (state.isSuccess) Color(0xFF39C66D) else Color(0xFFFF5E63)
         )
-    }
-    var displayedPositionMs by remember(state.selectedAttemptVideoUri) { mutableLongStateOf(0L) }
-    val activeTimelineIndex by remember(state.analysisPoints, displayedPositionMs) {
-        derivedStateOf {
-            resolveActiveAnalysisCardIndex(
-                points = state.analysisPoints,
-                displayedPositionMs = displayedPositionMs,
-                tappedCardOverrideIdx = -1
-            )
-        }
-    }
-    val scrubberMarkers = remember(state.analysisPoints, activeTimelineIndex) {
-        state.analysisPoints.mapIndexed { index, point ->
-            PoseScrubberMarker(
-                index = point.index,
-                timeMs = point.timeMs,
-                kind = point.kind,
-                isSelected = index == activeTimelineIndex
-            )
-        }
-    }
-
-    LaunchedEffect(state.selectedAttemptVideoUri) {
-        displayedPositionMs = 0L
-    }
-
-    LaunchedEffect(state.seekRequestId, state.seekRequestTimeMs) {
-        displayedPositionMs = state.seekRequestTimeMs?.coerceAtLeast(0L) ?: displayedPositionMs
     }
 
     Column(modifier = modifier) {
@@ -259,79 +215,120 @@ internal fun AttemptPreviewHero(
                 }
             }
         }
+    }
+}
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF101114))
-        ) {
-            if (state.selectedAttemptVideoUri != null) {
-                AttemptVideoSection(
-                    state = AttemptVideoSectionState(
-                        videoUri = state.selectedAttemptVideoUri,
-                        numberedHolds = state.numberedHolds,
-                        rawHolds = state.rawHolds,
-                        viewportCropBounds = state.viewportCropBounds,
-                        analysisPoints = state.analysisPoints,
-                        markers = scrubberMarkers,
-                        attemptPoseSequence = state.attemptPoseSequence,
-                        overlayCache = state.overlayCache,
-                        wallArrivalTimeMs = state.wallArrivalTimeMs,
-                        personObservationStartTimeMs = state.personObservationStartTimeMs,
-                        seekRequestId = state.seekRequestId,
-                        seekRequestTimeMs = state.seekRequestTimeMs
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    lineColor = AttemptPreviewOverlayLineColor,
-                    pointColor = AttemptPreviewOverlayPointColor,
-                    scrubberColors = PoseScrubberColors(
-                        trackColor = Color.White.copy(alpha = 0.18f),
-                        progressColor = AttemptPreviewScrubberAccent,
-                        thumbColor = Color.White,
-                        textColor = Color.White.copy(alpha = 0.82f)
-                    ),
-                    controlSurfaceColor = Color(0xFF101114),
-                    hiddenLandmarkIndices = AttemptPreviewHiddenFaceLandmarks,
-                    topSafeInset = AttemptPreviewTopSafeInset,
-                    bottomSafeInset = AttemptPreviewBottomSafeInset,
-                    controlAreaHeight = AttemptPreviewControlHeight,
-                    onDisplayedPositionChanged = { displayedPositionMs = it }
-                )
-
-                if (onShareClick != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp, bottom = 72.dp)
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF101114).copy(alpha = 0.82f))
-                            .clickable(onClick = onShareClick),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Share,
-                            contentDescription = "시도 분석 결과 공유",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            } else {
-                HoldOverviewPreview(
-                    bitmap = state.previewBitmap,
-                    holds = state.previewHolds,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(242.dp)
-                )
-            }
-
+@Composable
+internal fun AttemptPreviewHeroVideoSection(
+    state: AttemptPreviewHeroState,
+    onShareClick: (() -> Unit)? = null,
+    viewportHeightOverride: Dp? = null,
+    controlAreaHeight: Dp = AttemptPreviewControlHeight,
+    onContainerHeightChanged: (Int) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    var displayedPositionMs by remember(state.selectedAttemptVideoUri) { mutableLongStateOf(0L) }
+    val activeTimelineIndex by remember(state.analysisPoints, displayedPositionMs) {
+        derivedStateOf {
+            resolveActiveAnalysisCardIndex(
+                points = state.analysisPoints,
+                displayedPositionMs = displayedPositionMs,
+                tappedCardOverrideIdx = -1
+            )
         }
+    }
+    val scrubberMarkers = remember(state.analysisPoints, activeTimelineIndex) {
+        state.analysisPoints.mapIndexed { index, point ->
+            PoseScrubberMarker(
+                index = point.index,
+                timeMs = point.timeMs,
+                kind = point.kind,
+                isSelected = index == activeTimelineIndex,
+                flagAnchorFractionX = when (point.kind) {
+                    com.ddgo.app.domain.model.AnalysisPointKind.CLIMB_END -> 0f
+                    else -> 0.5f
+                }
+            )
+        }
+    }
 
-        Spacer(modifier = Modifier.height(18.dp))
+    LaunchedEffect(state.selectedAttemptVideoUri) {
+        displayedPositionMs = 0L
+    }
+
+    LaunchedEffect(state.seekRequestId, state.seekRequestTimeMs) {
+        displayedPositionMs = state.seekRequestTimeMs?.coerceAtLeast(0L) ?: displayedPositionMs
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .onSizeChanged { onContainerHeightChanged(it.height) }
+    ) {
+        if (state.selectedAttemptVideoUri != null) {
+            AttemptVideoSection(
+                state = AttemptVideoSectionState(
+                    videoUri = state.selectedAttemptVideoUri,
+                    numberedHolds = state.numberedHolds,
+                    rawHolds = state.rawHolds,
+                    viewportCropBounds = state.viewportCropBounds,
+                    analysisPoints = state.analysisPoints,
+                    markers = scrubberMarkers,
+                    attemptPoseSequence = state.attemptPoseSequence,
+                    overlayCache = state.overlayCache,
+                    wallArrivalTimeMs = state.wallArrivalTimeMs,
+                    personObservationStartTimeMs = state.personObservationStartTimeMs,
+                    seekRequestId = state.seekRequestId,
+                    seekRequestTimeMs = state.seekRequestTimeMs
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                lineColor = AttemptPreviewOverlayLineColor,
+                pointColor = AttemptPreviewOverlayPointColor,
+                scrubberColors = PoseScrubberColors(
+                    trackColor = Color.White.copy(alpha = 0.18f),
+                    progressColor = AttemptPreviewScrubberAccent,
+                    thumbColor = Color.White,
+                    textColor = Color.White.copy(alpha = 0.82f)
+                ),
+                controlSurfaceColor = Color(0xFF101114),
+                hiddenLandmarkIndices = AttemptPreviewHiddenFaceLandmarks,
+                hiddenPointIndices = AttemptPreviewHiddenFingerTipPoints,
+                pointRadiusScale = AttemptPreviewPointRadiusScale,
+                topSafeInset = AttemptPreviewTopSafeInset,
+                bottomSafeInset = AttemptPreviewBottomSafeInset,
+                controlAreaHeight = controlAreaHeight,
+                viewportHeightOverride = viewportHeightOverride,
+                onDisplayedPositionChanged = { displayedPositionMs = it }
+            )
+
+            if (onShareClick != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 72.dp)
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF101114).copy(alpha = 0.82f))
+                        .clickable(onClick = onShareClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = "시도 분석 결과 공유",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        } else {
+            HoldOverviewPreview(
+                bitmap = state.previewBitmap,
+                holds = state.previewHolds,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(viewportHeightOverride ?: 242.dp)
+            )
+        }
     }
 }
 

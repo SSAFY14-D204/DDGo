@@ -81,7 +81,8 @@ fun NavGraphBuilder.uploadGraph(
                 },
                 onNavigateToHoldSelect = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_HOLD_SELECT)
-                }
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -91,6 +92,7 @@ fun NavGraphBuilder.uploadGraph(
             HoldSelectScreen(
                 viewModel = viewModel,
                 allowAdditionalUpload = false,
+                onNavigateBack = { navController.popBackStack() },
                 onNavigateToNext = {
                     viewModel.prepareAttemptResultAnalysisLoading()
                     navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) {
@@ -245,7 +247,8 @@ fun NavGraphBuilder.uploadGraph(
                 },
                 onNavigateToHoldSelect = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.HOLD_SELECT)
-                }
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -276,6 +279,7 @@ fun NavGraphBuilder.uploadGraph(
             HoldSelectScreen(
                 viewModel = viewModel,
                 allowAdditionalUpload = true,
+                onNavigateBack = { navController.popBackStack() },
                 onNavigateToAdditional = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD)
                 },
@@ -388,7 +392,6 @@ fun NavGraphBuilder.uploadGraph(
 
             FinalAnalysisRoute(
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() },
                 onNavigateToChallenge = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_FINAL_ANALYSIS) {
                         launchSingleTop = true

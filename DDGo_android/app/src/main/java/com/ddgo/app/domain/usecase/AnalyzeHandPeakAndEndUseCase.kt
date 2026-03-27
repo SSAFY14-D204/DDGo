@@ -10,9 +10,11 @@ import javax.inject.Inject
 class AnalyzeHandPeakAndEndUseCase @Inject constructor() {
     operator fun invoke(
         frames: List<PoseFrame>,
-        config: HandPeakConfig = HandPeakConfig()
+        config: HandPeakConfig = HandPeakConfig(),
+        wallSegmentIdByFrameTimeMs: Map<Long, Int> = emptyMap()
     ): HandPeakAnnotation? = analyzeHandPeakAndEnd(
         points = extractBodyPartHeights(frames, config),
-        config = config
+        config = config,
+        wallSegmentIdByFrameTimeMs = wallSegmentIdByFrameTimeMs
     )
 }

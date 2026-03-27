@@ -36,10 +36,13 @@ internal fun computeGroupHeight(
 }
 
 internal fun computeTorsoScale(landmarkMap: Map<Int, Landmark>): Double? {
-    if (!TORSO_LANDMARKS.all(landmarkMap::containsKey)) return null
-    val shoulderMidY = (landmarkMap.getValue(11).y + landmarkMap.getValue(12).y) / 2.0
-    val hipMidY = (landmarkMap.getValue(23).y + landmarkMap.getValue(24).y) / 2.0
-    return kotlin.math.abs(hipMidY - shoulderMidY)
+    val torsoVector = computeTorsoVector(landmarkMap) ?: return null
+    return torsoVector.second
+}
+
+internal fun computeTorsoUpright(landmarkMap: Map<Int, Landmark>): Boolean {
+    val torsoVector = computeTorsoVector(landmarkMap) ?: return false
+    return torsoVector.first < torsoVector.second
 }
 
 internal fun computeTorsoOrientation(landmarkMap: Map<Int, Landmark>): TorsoOrientation {
@@ -83,6 +86,20 @@ internal fun buildBodyPartHeightsPoint(
         torsoHeight = computeGroupHeight(sourceLandmarkMap, TORSO_LANDMARKS, config.landmarkSource),
         footHeight = computeGroupHeight(sourceLandmarkMap, FOOT_LANDMARKS, config.landmarkSource),
         torsoScale = computeTorsoScale(landmarkMap2d),
+        torsoUpright = computeTorsoUpright(landmarkMap2d),
         torsoOrientation = computeTorsoOrientation(landmarkMap2d)
     )
+}
+
+private fun computeTorsoVector(landmarkMap: Map<Int, Landmark>): Pair<Double, Double>? {
+    if (!TORSO_LANDMARKS.all(landmarkMap::containsKey)) return null
+
+    val shoulderMidX = (landmarkMap.getValue(11).x + landmarkMap.getValue(12).x) / 2.0
+    val shoulderMidY = (landmarkMap.getValue(11).y + landmarkMap.getValue(12).y) / 2.0
+    val hipMidX = (landmarkMap.getValue(23).x + landmarkMap.getValue(24).x) / 2.0
+    val hipMidY = (landmarkMap.getValue(23).y + landmarkMap.getValue(24).y) / 2.0
+
+    val deltaX = kotlin.math.abs(hipMidX - shoulderMidX)
+    val deltaY = kotlin.math.abs(hipMidY - shoulderMidY)
+    return deltaX to deltaY
 }

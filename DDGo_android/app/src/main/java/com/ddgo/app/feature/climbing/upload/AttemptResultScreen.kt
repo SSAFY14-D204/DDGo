@@ -330,6 +330,7 @@ fun AttemptResultScreen(
                 topSafeInset = VIDEO_FRAME_TOP_SAFE_INSET,
                 bottomSafeInset = VIDEO_FRAME_BOTTOM_SAFE_INSET,
                 controlAreaHeight = VIDEO_CONTROL_AREA_HEIGHT,
+                logDisplayedPoseRawData = true,
                 onDisplayedPositionChanged = { displayedPositionMs = it },
                 topOverlayContent = {
                     if (currentAttemptPrePoseEntry?.status == PrePoseStatus.Failed) {

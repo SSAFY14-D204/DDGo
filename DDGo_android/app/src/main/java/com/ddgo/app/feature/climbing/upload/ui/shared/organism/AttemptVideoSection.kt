@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload.ui.shared.organism
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,10 +52,14 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.ddgo.app.BuildConfig
 import com.ddgo.app.R
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.domain.model.PosePixelPoint
+import com.ddgo.app.domain.model.PoseWorldPoint
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.feature.climbing.upload.AttemptPoseOverlayCache
 import com.ddgo.app.feature.climbing.upload.CroppedVideoViewport
@@ -77,6 +82,7 @@ import com.ddgo.app.feature.climbing.upload.toScreenRect
 import com.ddgo.app.feature.climbing.upload.uncroppedVideoViewportCropSpec
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.util.Locale
 import kotlin.math.abs
 
 internal data class AttemptVideoSectionState(
@@ -103,9 +109,13 @@ internal fun AttemptVideoSection(
     scrubberColors: PoseScrubberColors,
     controlSurfaceColor: Color,
     hiddenLandmarkIndices: Set<Int> = emptySet(),
+    hiddenPointIndices: Set<Int> = emptySet(),
+    pointRadiusScale: Float = 1f,
     topSafeInset: Dp = 24.dp,
     bottomSafeInset: Dp = 64.dp,
     controlAreaHeight: Dp = 132.dp,
+    viewportHeightOverride: Dp? = null,
+    logDisplayedPoseRawData: Boolean = false,
     onDisplayedPositionChanged: (Long) -> Unit = {},
     topOverlayContent: @Composable BoxScope.() -> Unit = {}
 ) {
@@ -187,6 +197,9 @@ internal fun AttemptVideoSection(
             0f
         }
     }
+    val viewportHeightOverridePx = remember(viewportHeightOverride, density) {
+        viewportHeightOverride?.let { with(density) { it.roundToPx() } }
+    }
     val currentOverlayFrame = remember(state.overlayCache, displayedPositionMs) {
         state.overlayCache?.let { overlayCache ->
             findNearestOverlayFrameForPlayback(
@@ -195,6 +208,8 @@ internal fun AttemptVideoSection(
             )
         }
     }
+    var lastLoggedOverlayFrameTimeMs by remember(state.videoUri) { mutableStateOf<Long?>(null) }
+    var hasLoggedMissingOverlayFrame by remember(state.videoUri) { mutableStateOf(false) }
     val resolvedMarkers = remember(state.markers, state.analysisPoints) {
         if (state.markers.isNotEmpty()) {
             state.markers
@@ -227,6 +242,39 @@ internal fun AttemptVideoSection(
 
     LaunchedEffect(displayedPositionMs) {
         onDisplayedPositionChanged(displayedPositionMs)
+    }
+
+    LaunchedEffect(
+        logDisplayedPoseRawData,
+        state.videoUri,
+        displayedPositionMs,
+        currentOverlayFrame?.frameTimeMs
+    ) {
+        if (!logDisplayedPoseRawData || !BuildConfig.DEBUG) return@LaunchedEffect
+
+        val overlayFrame = currentOverlayFrame ?: run {
+            lastLoggedOverlayFrameTimeMs = null
+            if (!hasLoggedMissingOverlayFrame) {
+                AttemptPoseRawLogger.logMissingFrame(
+                    videoUri = state.videoUri,
+                    displayedPositionMs = displayedPositionMs
+                )
+                hasLoggedMissingOverlayFrame = true
+            }
+            return@LaunchedEffect
+        }
+
+        hasLoggedMissingOverlayFrame = false
+        if (lastLoggedOverlayFrameTimeMs == overlayFrame.frameTimeMs) {
+            return@LaunchedEffect
+        }
+
+        lastLoggedOverlayFrameTimeMs = overlayFrame.frameTimeMs
+        AttemptPoseRawLogger.log(
+            videoUri = state.videoUri,
+            displayedPositionMs = displayedPositionMs,
+            pose = overlayFrame.pose
+        )
     }
 
     LaunchedEffect(exoPlayer, state.seekRequestId, state.seekRequestTimeMs) {
@@ -306,6 +354,7 @@ internal fun AttemptVideoSection(
         cropSpec = viewportCropSpec,
         fullVideoAspectRatio = videoAspectRatio,
         topCropPx = topCropOffsetPx,
+        viewportHeightOverridePx = viewportHeightOverridePx,
         modifier = modifier.fillMaxWidth(),
         onFullVideoSizeChanged = { fullVideoLayerSize = it },
         transformedLayer = {
@@ -331,7 +380,9 @@ internal fun AttemptVideoSection(
                     modifier = Modifier.fillMaxSize(),
                     lineColor = lineColor,
                     pointColor = pointColor,
-                    hiddenLandmarkIndices = hiddenLandmarkIndices
+                    hiddenLandmarkIndices = hiddenLandmarkIndices,
+                    hiddenPointIndices = hiddenPointIndices,
+                    pointRadiusScale = pointRadiusScale
                 )
             }
 
@@ -654,4 +705,84 @@ private fun List<Offset>.boundsOrNull(): OverlayBounds? {
         right = maxX,
         bottom = maxY
     )
+}
+
+private object AttemptPoseRawLogger {
+    private const val TAG = "AttemptPoseRaw"
+    private const val LANDMARK_CHUNK_SIZE = 6
+
+    fun log(
+        videoUri: String?,
+        displayedPositionMs: Long,
+        pose: Pose
+    ) {
+        Log.i(
+            TAG,
+            "video=${videoUri?.substringAfterLast('/')} displayedPositionMs=$displayedPositionMs frameTimeMs=${pose.frameTimeMs} landmarkCount=${pose.landmarks.size}"
+        )
+
+        pose.landmarks
+            .chunked(LANDMARK_CHUNK_SIZE)
+            .forEachIndexed { chunkIndex, chunk ->
+                Log.i(
+                    TAG,
+                    "landmarks[$chunkIndex]=${chunk.joinToString(separator = " | ") { landmark -> landmark.toRawLogString() }}"
+                )
+            }
+
+        if (pose.landmarksPx.isNotEmpty()) {
+            Log.i(
+                TAG,
+                "landmarksPx=${pose.landmarksPx.entries.joinToString(separator = " | ") { (key, point) -> "$key=${point.toRawLogString()}" }}"
+            )
+        }
+
+        if (pose.worldLandmarksSample.isNotEmpty()) {
+            Log.i(
+                TAG,
+                "worldLandmarksSample=${pose.worldLandmarksSample.entries.joinToString(separator = " | ") { (key, point) -> "$key=${point.toRawLogString()}" }}"
+            )
+        }
+    }
+
+    fun logMissingFrame(
+        videoUri: String?,
+        displayedPositionMs: Long
+    ) {
+        Log.i(
+            TAG,
+            "video=${videoUri?.substringAfterLast('/')} displayedPositionMs=$displayedPositionMs overlayFrame=null"
+        )
+    }
+
+    private fun PoseLandmark.toRawLogString(): String {
+        return buildString {
+            append("i=")
+            append(index)
+            append(",x=")
+            append(formatFloat(x))
+            append(",y=")
+            append(formatFloat(y))
+            append(",z=")
+            append(formatFloat(z))
+            append(",visibility=")
+            append(formatNullableFloat(visibility))
+            append(",presence=")
+            append(formatNullableFloat(presence))
+        }
+    }
+
+    private fun PosePixelPoint.toRawLogString(): String {
+        return "x=${formatFloat(x)},y=${formatFloat(y)}"
+    }
+
+    private fun PoseWorldPoint.toRawLogString(): String {
+        return "x=${formatFloat(x)},y=${formatFloat(y)},z=${formatFloat(z)}"
+    }
+
+    private fun formatFloat(value: Float): String = String.format(Locale.US, "%.4f", value)
+
+    private fun formatNullableFloat(value: Float?): String {
+        return value?.let(::formatFloat) ?: "null"
+    }
 }

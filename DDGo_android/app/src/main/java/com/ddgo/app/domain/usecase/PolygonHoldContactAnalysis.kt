@@ -114,6 +114,21 @@ data class PolygonHoldContactDebugResult(
         get() = frames.filter { it.activeContacts.isNotEmpty() }
 }
 
+fun PolygonHoldContactDebugResult.findSuccessfulTopContactTimeMs(
+    endHoldNo: Int?,
+    analysisStartTimeMs: Long?
+): Long? {
+    val resolvedEndHoldNo = endHoldNo?.takeIf { it > 0 } ?: return null
+    return frames.firstOrNull { frame ->
+        if (analysisStartTimeMs != null && frame.frameTimeMs < analysisStartTimeMs) {
+            return@firstOrNull false
+        }
+        val limbStatesByLimb = frame.limbStates.associateBy(PolygonLimbFrameState::limb)
+        limbStatesByLimb[PolygonTrackedLimb.LEFT_HAND]?.activeHoldNo == resolvedEndHoldNo &&
+            limbStatesByLimb[PolygonTrackedLimb.RIGHT_HAND]?.activeHoldNo == resolvedEndHoldNo
+    }?.frameTimeMs
+}
+
 fun PolygonHoldContactDebugResult.toAttemptHoldReachResult(
     holds: List<HoldNumbered>,
     analysisStartTimeMs: Long? = null,

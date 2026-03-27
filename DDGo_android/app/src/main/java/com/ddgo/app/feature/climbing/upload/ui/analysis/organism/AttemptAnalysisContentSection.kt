@@ -22,11 +22,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -69,6 +65,7 @@ internal fun AttemptAnalysisContentSection(
     feedbackLine: String,
     riskLine: String,
     coachingLine: String,
+    selectedTabIndex: Int,
     modifier: Modifier = Modifier
 ) {
     val durationMs = remember(
@@ -115,17 +112,10 @@ internal fun AttemptAnalysisContentSection(
     ) {
         buildContributionScoreInsight(currentSummary)
     }
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
-
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        AttemptContentTabs(
-            selectedTabIndex = selectedTabIndex,
-            onTabSelected = { selectedTabIndex = it }
-        )
-
         if (selectedTabIndex == 0) {
             AttemptResultOverviewCard(
                 currentSummary = currentSummary,
@@ -230,7 +220,7 @@ internal fun AttemptAnalysisContentSection(
 }
 
 @Composable
-private fun AttemptContentTabs(
+internal fun AttemptAnalysisTabRow(
     selectedTabIndex: Int,
     onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier

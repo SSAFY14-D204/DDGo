@@ -3,7 +3,9 @@ package com.ddgo.app.domain.usecase
 import com.ddgo.app.domain.poseanalysis.Landmark
 import com.ddgo.app.domain.poseanalysis.PoseFrame
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DetectWallArrivalTimeUseCaseTest {
@@ -102,6 +104,55 @@ class DetectWallArrivalTimeUseCaseTest {
         assertNull(result)
     }
 
+    @Test
+    fun `lying frames are excluded from stable min and arrival candidates`() {
+        val result = useCase(
+            frames = listOf(
+                lyingTorsoFrame(1_000L, 0.10),
+                lyingTorsoFrame(1_100L, 0.10),
+                lyingTorsoFrame(1_200L, 0.10),
+                lyingTorsoFrame(1_300L, 0.10),
+                lyingTorsoFrame(1_400L, 0.10),
+                torsoFrame(1_500L, 0.80),
+                torsoFrame(1_600L, 0.75),
+                torsoFrame(1_700L, 0.70),
+                torsoFrame(1_800L, 0.32),
+                torsoFrame(1_900L, 0.31),
+                torsoFrame(2_000L, 0.30),
+                torsoFrame(2_100L, 0.30),
+                torsoFrame(2_200L, 0.31),
+                torsoFrame(2_300L, 0.30),
+                torsoFrame(2_400L, 0.30),
+                torsoFrame(2_500L, 0.30),
+                torsoFrame(2_600L, 0.30),
+                torsoFrame(2_700L, 0.31),
+                torsoFrame(2_800L, 0.30)
+            ),
+            personObservationStartTimeMs = 1_000L
+        )
+
+        assertNotNull(result)
+        assertTrue(result!! >= 1_800L)
+    }
+
+    @Test
+    fun `returns null when all small torso scales are lying poses`() {
+        val result = useCase(
+            frames = listOf(
+                lyingTorsoFrame(1_000L, 0.10),
+                lyingTorsoFrame(1_100L, 0.10),
+                lyingTorsoFrame(1_200L, 0.10),
+                lyingTorsoFrame(1_300L, 0.10),
+                lyingTorsoFrame(1_400L, 0.10),
+                lyingTorsoFrame(1_500L, 0.10),
+                lyingTorsoFrame(1_600L, 0.10)
+            ),
+            personObservationStartTimeMs = 1_000L
+        )
+
+        assertNull(result)
+    }
+
     private fun torsoFrame(frameTimeMs: Long, torsoScale: Double): PoseFrame {
         val shoulderY = 0.5 - (torsoScale / 2.0)
         val hipY = 0.5 + (torsoScale / 2.0)
@@ -112,6 +163,22 @@ class DetectWallArrivalTimeUseCaseTest {
                 landmark(index = 12, x = 0.40, y = shoulderY),
                 landmark(index = 23, x = 0.58, y = hipY),
                 landmark(index = 24, x = 0.42, y = hipY)
+            )
+        )
+    }
+
+    private fun lyingTorsoFrame(frameTimeMs: Long, torsoScale: Double): PoseFrame {
+        val centerX = 0.5
+        val centerY = 0.5
+        val shoulderX = centerX - (torsoScale / 2.0)
+        val hipX = centerX + (torsoScale / 2.0)
+        return PoseFrame(
+            frameTimeMs = frameTimeMs,
+            landmarks = listOf(
+                landmark(index = 11, x = shoulderX, y = centerY - 0.01),
+                landmark(index = 12, x = shoulderX, y = centerY + 0.01),
+                landmark(index = 23, x = hipX, y = centerY - 0.01),
+                landmark(index = 24, x = hipX, y = centerY + 0.01)
             )
         )
     }

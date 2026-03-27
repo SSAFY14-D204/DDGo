@@ -2,6 +2,7 @@ package com.ddgo.app.feature.climbing.upload
 
 import android.os.SystemClock
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -17,6 +18,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,7 +27,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,44 +61,87 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ddgo.app.R
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.domain.model.Hold
 import kotlinx.coroutines.delay
 
-private data class AnimHoldItem(
-    val color: Color,
-    val center: Offset,
-    val sizeFraction: Float,
-    val rotation: Float,
-    val phaseOffset: Float
+private data class LoadingHoldAsset(
+    val drawableRes: Int,
+    val width: androidx.compose.ui.unit.Dp,
+    val height: androidx.compose.ui.unit.Dp,
+    val alignment: Alignment,
+    val offsetX: androidx.compose.ui.unit.Dp,
+    val offsetY: androidx.compose.ui.unit.Dp
 )
 
-private val ANIM_HOLDS = listOf(
-    AnimHoldItem(Color(0xFFFFD600), Offset(0.72f, 0.28f), 1.00f, -30f, 0f),
-    AnimHoldItem(Color(0xFF43A047), Offset(0.80f, 0.52f), 0.75f, 15f, 600f),
-    AnimHoldItem(Color(0xFFE91E63), Offset(0.38f, 0.65f), 0.85f, -10f, 1200f),
+private val LOADING_HOLD_ASSETS = listOf(
+    LoadingHoldAsset(
+        drawableRes = R.drawable.loading_hold_yellow,
+        width = 132.dp,
+        height = 88.dp,
+        alignment = Alignment.TopStart,
+        offsetX = 4.dp,
+        offsetY = 8.dp
+    ),
+    LoadingHoldAsset(
+        drawableRes = R.drawable.loading_hold_green,
+        width = 118.dp,
+        height = 130.dp,
+        alignment = Alignment.TopEnd,
+        offsetX = (-2).dp,
+        offsetY = 54.dp
+    ),
+    LoadingHoldAsset(
+        drawableRes = R.drawable.loading_hold_pink,
+        width = 86.dp,
+        height = 108.dp,
+        alignment = Alignment.BottomStart,
+        offsetX = 28.dp,
+        offsetY = (-2).dp
+    ),
 )
+
+private const val HOLD_SELECT_MIN_LOADING_DISPLAY_MILLIS = 3_000L
 
 @Composable
 fun ChallengeHoldScreen(
     viewModel: UploadViewModel = hiltViewModel(),
     allowAdditionalUpload: Boolean = true,
     onNavigateToAdditional: () -> Unit = {},
-    onNavigateToHoldSelect: () -> Unit = {}
+    onNavigateToHoldSelect: () -> Unit = {},
+    onNavigateBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val videoUri = viewModel.videoUri
     val debugBestFrameImageUri = viewModel.debugBestFrameImageUri
+    val shouldBypassInitialLoadingGate = remember(uiState, videoUri, debugBestFrameImageUri) {
+        uiState == UploadUiState.Success || uiState is UploadUiState.Error
+    }
     var showDialog by remember { mutableStateOf(false) }
     var displayedUiState by remember(videoUri, debugBestFrameImageUri) {
-        mutableStateOf<UploadUiState>(UploadUiState.Loading)
+        mutableStateOf(
+            if (shouldBypassInitialLoadingGate) {
+                uiState
+            } else {
+                UploadUiState.Loading
+            }
+        )
     }
     var loadingStartedAtMillis by remember(videoUri, debugBestFrameImageUri) {
-        mutableStateOf(SystemClock.elapsedRealtime())
+        mutableStateOf(
+            if (shouldBypassInitialLoadingGate) {
+                SystemClock.elapsedRealtime() - HOLD_SELECT_MIN_LOADING_DISPLAY_MILLIS
+            } else {
+                SystemClock.elapsedRealtime()
+            }
+        )
     }
 
     if (false && showDialog) {
@@ -154,7 +201,8 @@ fun ChallengeHoldScreen(
             UploadUiState.Success -> {
                 val waitMillis = remainingLoadingDisplayMillis(
                     startedAtMillis = loadingStartedAtMillis,
-                    nowMillis = SystemClock.elapsedRealtime()
+                    nowMillis = SystemClock.elapsedRealtime(),
+                    minimumDisplayMillis = HOLD_SELECT_MIN_LOADING_DISPLAY_MILLIS
                 )
                 if (waitMillis > 0L) {
                     delay(waitMillis)
@@ -175,6 +223,10 @@ fun ChallengeHoldScreen(
     }
 
     SafeAreaScreen(containerColor = Color.Black) {
+        BackHandler(enabled = displayedUiState is UploadUiState.Success) {
+            onNavigateBack()
+        }
+
         AnimatedContent(
             targetState = displayedUiState is UploadUiState.Success,
             transitionSpec = {
@@ -186,6 +238,7 @@ fun ChallengeHoldScreen(
             if (isSuccess) {
                 HoldReviewContent(
                     viewModel = viewModel,
+                    onNavigateBack = onNavigateBack,
                     onProceed = {
                         onNavigateToHoldSelect()
                     }
@@ -200,6 +253,7 @@ fun ChallengeHoldScreen(
 @Composable
 private fun HoldReviewContent(
     viewModel: UploadViewModel,
+    onNavigateBack: () -> Unit,
     onProceed: () -> Unit
 ) {
     val bitmap = viewModel.bestFrameBitmap
@@ -224,13 +278,18 @@ private fun HoldReviewContent(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        UploadFlowTopBar(
+            title = "홀드 확인",
+            onNavigateBack = onNavigateBack
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 20.dp)
         ) {
             Text(
-                text = "AI가 놓친 홀드가 있다면 추가해주세요",
+                text = "AI가 홀드를 놓쳤다면\n직접 터치해 선택/해제하세요",
                 color = Color.White,
                 style = MaterialTheme.typography.headlineMedium.copy(
                     lineHeight = 28.6.sp,
@@ -243,14 +302,14 @@ private fun HoldReviewContent(
 //                fontSize = 13.sp,
 //                color = Color.White.copy(alpha = 0.5f)
 //            )
-            if (allRawHolds.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "홀드 주변을 터치하면 선택/취소할 수 있어요",
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.35f)
-                )
-            }
+//            if (allRawHolds.isNotEmpty()) {
+//                Spacer(Modifier.height(4.dp))
+//                Text(
+//                    text = "홀드 주변을 터치하면 선택/취소할 수 있어요",
+//                    fontSize = 11.sp,
+//                    color = Color.White.copy(alpha = 0.35f)
+//                )
+//            }
         }
 
         BoxWithConstraints(
@@ -360,7 +419,7 @@ private fun HoldReviewContent(
                                 )
                                 drawPath(
                                     path = polygonPath,
-                                    color = outlineColor.copy(alpha = 0.85f),
+                                    color = Color.White.copy(alpha = 0.85f),
                                     style = Stroke(
                                         width = strokePx,
                                         cap = StrokeCap.Round,
@@ -374,7 +433,7 @@ private fun HoldReviewContent(
                                     size = Size(rect.r - rect.l, rect.b - rect.t)
                                 )
                                 drawRect(
-                                    color = outlineColor.copy(alpha = 0.85f),
+                                    color = Color.White.copy(alpha = 0.85f),
                                     topLeft = Offset(rect.l, rect.t),
                                     size = Size(rect.r - rect.l, rect.b - rect.t),
                                     style = Stroke(width = strokePx)
@@ -442,31 +501,26 @@ private fun HoldReviewContent(
 @Composable
 private fun HoldLoadingContent(uiState: UploadUiState) {
     val infiniteTransition = rememberInfiniteTransition(label = "hold_float")
-    val floatOffset by infiniteTransition.animateFloat(
-        initialValue = -12f,
-        targetValue = 12f,
+    val sharedFloatOffset by infiniteTransition.animateFloat(
+        initialValue = -18f,
+        targetValue = 18f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
+            animation = tween(1500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "float_y"
+        label = "shared_hold_float_y"
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val base = 140.dp.toPx()
-            ANIM_HOLDS.forEach { hold ->
-                val cx = size.width * hold.center.x
-                val cy = size.height * hold.center.y + floatOffset * (1f + hold.phaseOffset / 2400f)
-                drawHoldShape(hold.color, Offset(cx, cy), base * hold.sizeFraction, hold.rotation)
-            }
-        }
-
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 56.dp),
-            horizontalAlignment = Alignment.Start
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(28.dp)
         ) {
             when (uiState) {
                 is UploadUiState.Error -> {
@@ -475,61 +529,52 @@ private fun HoldLoadingContent(uiState: UploadUiState) {
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
-                        lineHeight = 36.sp
+                        lineHeight = 36.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = uiState.message,
                         fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
                     )
                 }
                 else -> {
                     Text(
-                        text = "디디고가\n홀드를 찾고 있어요",
-                        fontSize = 28.sp,
+                        text = "디디고가 홀드를 찾고 있어요",
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
-                        lineHeight = 36.sp
+                        lineHeight = 30.sp,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier.size(width = 320.dp, height = 268.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                LOADING_HOLD_ASSETS.forEachIndexed { index, hold ->
+                    Image(
+                        painter = painterResource(id = hold.drawableRes),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .align(hold.alignment)
+                            .padding(start = hold.offsetX.takeIf { it > 0.dp } ?: 0.dp)
+                            .padding(end = (-hold.offsetX).takeIf { it > 0.dp } ?: 0.dp)
+                            .padding(top = hold.offsetY.takeIf { it > 0.dp } ?: 0.dp)
+                            .padding(bottom = (-hold.offsetY).takeIf { it > 0.dp } ?: 0.dp)
+                            .offset(y = sharedFloatOffset.dp)
+                            .size(width = hold.width, height = hold.height)
                     )
                 }
             }
         }
-    }
-}
-
-private fun DrawScope.drawHoldShape(
-    color: Color,
-    center: Offset,
-    holdSize: Float,
-    rotation: Float
-) {
-    val w = holdSize * 1.4f
-    val h = holdSize
-
-    rotate(degrees = rotation, pivot = center) {
-        val left = center.x - w / 2f
-        val top = center.y - h / 2f
-
-        val path = Path().apply {
-            moveTo(left + w * 0.50f, top + h * 0.05f)
-            cubicTo(left + w * 0.85f, top + h * 0.00f, left + w * 1.00f, top + h * 0.38f, left + w * 0.88f, top + h * 0.68f)
-            cubicTo(left + w * 0.75f, top + h * 0.97f, left + w * 0.40f, top + h * 1.00f, left + w * 0.22f, top + h * 0.86f)
-            cubicTo(left + w * 0.00f, top + h * 0.68f, left + w * 0.02f, top + h * 0.38f, left + w * 0.14f, top + h * 0.22f)
-            cubicTo(left + w * 0.24f, top + h * 0.05f, left + w * 0.36f, top + h * 0.08f, left + w * 0.50f, top + h * 0.05f)
-            close()
-        }
-        drawPath(path = path, color = color)
-
-        val highlightPath = Path().apply {
-            val hx = center.x - w * 0.05f
-            val hy = center.y - h * 0.20f
-            moveTo(hx, hy)
-            cubicTo(hx + w * 0.15f, hy - h * 0.10f, hx + w * 0.25f, hy + h * 0.05f, hx + w * 0.10f, hy + h * 0.12f)
-            cubicTo(hx - w * 0.05f, hy + h * 0.12f, hx - w * 0.10f, hy + h * 0.00f, hx, hy)
-            close()
-        }
-        drawPath(path = highlightPath, color = Color.White.copy(alpha = 0.25f))
     }
 }
 
