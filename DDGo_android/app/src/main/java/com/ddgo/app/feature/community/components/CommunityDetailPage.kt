@@ -230,6 +230,7 @@ private fun CommunityDetailPostSection(
     onTogglePostLike: () -> Unit
 ) {
     val gymName = detail.gymName?.takeIf { it.isNotBlank() }
+    val createdAtDisplay = formatCommunityFeedTimestamp(detail.createdAt)
 
     Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
         Row(
@@ -256,7 +257,7 @@ private fun CommunityDetailPostSection(
 
         CommunityDetailAuthorRowChrome(
             authorName = detail.authorNickname,
-            metaText = "${detail.createdAt} | 조회 ${detail.viewCount}회",
+            metaText = "$createdAtDisplay | 조회 ${detail.viewCount}회",
             avatarContent = {
                 CommunityDetailAvatar(
                     name = detail.authorNickname,
@@ -635,6 +636,8 @@ private fun CommunityCommentRow(
     onDeleteComment: (CommunityComment) -> Unit,
     onToggleCommentLike: (CommunityComment) -> Unit
 ) {
+    val createdAtDisplay = formatCommunityFeedTimestamp(comment.createdAt)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -662,7 +665,7 @@ private fun CommunityCommentRow(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = comment.createdAt,
+                    text = createdAtDisplay,
                     color = CommunityPalette.TextSecondary,
                     style = MaterialTheme.typography.titleMedium
                 )
