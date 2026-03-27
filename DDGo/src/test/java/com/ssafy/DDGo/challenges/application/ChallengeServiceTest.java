@@ -94,6 +94,9 @@ class ChallengeServiceTest {
         verify(challengeSummaryRepository).save(summaryCaptor.capture());
 
         ChallengeSummary savedSummary = summaryCaptor.getValue();
+        assertThat(challenge.getChallengeStatus()).isEqualTo(ChallengeStatus.CLOSED);
+        assertThat(challenge.getChallengeResult()).isEqualTo(ChallengeResult.SUCCESS);
+        assertThat(challenge.getEndedAt()).isNotNull();
         assertThat(savedSummary.getAverageCenterStabilityRatio().doubleValue()).isEqualTo(0.72);
         assertThat(savedSummary.getMostCruxHoldNo()).isEqualTo(7);
         assertThat(savedSummary.getMaxCruxDurationMs()).isEqualTo(2860);

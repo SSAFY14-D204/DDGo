@@ -52,8 +52,13 @@ public class AttemptService {
         }
 
         // 2. 카운터 원자적 증가 (next_attempt_no += 1)
-        int updatedRows = counterRepository.incrementAttemptNo(challengeId);
+        int updatedRows = counterRepository.incrementAttemptNoIfChallengeActive(challengeId);
         if (updatedRows == 0) {
+            Challenge refreshedChallenge = challengeRepository.findById(challengeId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.CHALLENGE_NOT_FOUND, "해당 챌린지를 찾을 수 없습니다."));
+            if (refreshedChallenge.getChallengeStatus() == com.ssafy.DDGo.challenges.domain.ChallengeStatus.CLOSED) {
+                throw new CustomException(ErrorCode.CHALLENGE_ALREADY_CLOSED, "이미 종료된 챌린지에는 시도를 시작할 수 없습니다.");
+            }
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR, "시도 번호 발급에 실패했습니다. (카운터 누락)");
         }
 
