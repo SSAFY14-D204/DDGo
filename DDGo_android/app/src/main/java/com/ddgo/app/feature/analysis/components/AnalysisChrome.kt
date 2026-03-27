@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
@@ -35,11 +37,19 @@ import com.ddgo.app.feature.analysis.style.AnalysisPalette
 internal fun AnalysisTopBar(
     title: String
 ) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.headlineSmall,
-        color = AnalysisPalette.TextPrimary
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = AnalysisPalette.TextPrimary
+        )
+    }
 }
 
 /** 배경 위에 부드러운 하이라이트를 만드는 장식 요소입니다. */
@@ -128,7 +138,7 @@ internal fun AnalysisCardSurface(
         color = AnalysisPalette.Surface,
         shape = RoundedCornerShape(28.dp),
         border = BorderStroke(1.dp, AnalysisPalette.Border),
-        shadowElevation = 4.dp
+        shadowElevation = 0.dp
     ) {
         content()
     }

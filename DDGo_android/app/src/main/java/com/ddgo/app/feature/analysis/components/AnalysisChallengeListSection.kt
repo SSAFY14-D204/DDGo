@@ -34,12 +34,19 @@ import com.ddgo.app.feature.analysis.style.AnalysisPalette
 @Composable
 internal fun AnalysisChallengeListSection(
     challenges: List<AnalysisChallengeListItemUiModel>,
-    onChallengeSelected: (Long) -> Unit
+    onChallengeSelected: (Long) -> Unit,
+    title: String = AnalysisStrings.ChallengeListSection,
+    subtitle: String? = null,
+    footerActionLabel: String? = null,
+    onFooterAction: (() -> Unit)? = null
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        AnalysisSectionTitle(title = AnalysisStrings.ChallengeListSection)
+        AnalysisSectionTitle(
+            title = title,
+            subtitle = subtitle
+        )
 
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -48,6 +55,13 @@ internal fun AnalysisChallengeListSection(
                 ChallengeListCard(
                     challenge = challenge,
                     onClick = { onChallengeSelected(challenge.challengeId) }
+                )
+            }
+
+            if (footerActionLabel != null && onFooterAction != null) {
+                ChallengeListFooterAction(
+                    label = footerActionLabel,
+                    onClick = onFooterAction
                 )
             }
         }
@@ -75,30 +89,41 @@ private fun ChallengeListCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(18.dp),
         color = backgroundColor,
         border = BorderStroke(1.dp, borderColor),
-        shadowElevation = if (challenge.isRecent) 5.dp else 2.dp
+        shadowElevation = 0.dp
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Text(
                     text = challenge.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
                     color = AnalysisPalette.TextPrimary,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                AnalysisBadge(badge = challenge.resultBadge)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AnalysisBadge(badge = challenge.resultBadge)
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = null,
+                        tint = AnalysisPalette.TextHint
+                    )
+                }
             }
 
             Text(
@@ -108,18 +133,40 @@ private fun ChallengeListCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = null,
-                    tint = AnalysisPalette.TextHint
-                )
-            }
+@Composable
+private fun ChallengeListFooterAction(
+    label: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = AnalysisPalette.Surface,
+        border = BorderStroke(1.dp, AnalysisPalette.Border)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                color = AnalysisPalette.TextPrimary,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = AnalysisPalette.TextHint
+            )
         }
     }
 }

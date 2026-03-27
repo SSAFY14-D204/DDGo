@@ -373,7 +373,8 @@ internal class UploadSubmissionDelegate(
                 totalHoldCount = resolveTotalHoldCount(
                     request = request,
                     alignedHoldSets = alignedHoldSets
-                )
+                ),
+                callbacks = callbacks
             ).onFailure { throwable ->
                 Log.e(SUBMISSION_TAG, "submitUploadForAttemptResult: end attempt failed", throwable)
                 _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
@@ -504,7 +505,8 @@ internal class UploadSubmissionDelegate(
             challengeId = request.challengeId,
             uploadedVideos = uploadedAttemptVideos,
             playbackUris = request.attemptUris,
-            totalHoldCount = request.numberedHolds.size
+            totalHoldCount = request.numberedHolds.size,
+            callbacks = callbacks
         ).onFailure { throwable ->
             _finalAnalysisPreparationUiState.value =
                 FinalAnalysisPreparationUiState.Error(
@@ -935,11 +937,18 @@ internal class UploadSubmissionDelegate(
         }
 
         val uploadedVideos = uploadedVideosResult.getOrThrow()
+        val terminalSnapshot = runCatching {
+            callbacks.awaitSubmitReadyPrePose(
+                playbackUris = request.attemptUris,
+                emitLoading = false
+            )
+        }.getOrNull()
+
         finalizeUploadedAttempts(
             challengeId = currentChallengeId,
             uploadedVideos = uploadedVideos,
             playbackUris = request.attemptUris,
-            terminalSnapshot = null,
+            terminalSnapshot = terminalSnapshot,
             totalHoldCount = resolveTotalHoldCount(
                 request = request,
                 alignedHoldSets = alignedHoldSets
@@ -1081,7 +1090,8 @@ internal class UploadSubmissionDelegate(
                     challengeId = request.challengeId,
                     uploadedVideos = videos,
                     playbackUris = request.attemptUris,
-                    totalHoldCount = request.totalHoldCount
+                    totalHoldCount = request.totalHoldCount,
+                    callbacks = callbacks
                 ).onFailure { throwable ->
                     Log.e(SUBMISSION_TAG, "background upload finalize failed", throwable)
                     _backgroundUploadState.value = BackgroundUploadState.Failed
@@ -2440,7 +2450,8 @@ internal class UploadSubmissionDelegate(
         challengeId: Long?,
         uploadedVideos: List<UploadedAttemptVideo>,
         playbackUris: List<String>,
-        totalHoldCount: Int
+        totalHoldCount: Int,
+        callbacks: UploadSubmissionCallbacks
     ): Result<Unit> {
         if (uploadedVideos.isEmpty()) {
             return Result.success(Unit)
@@ -2449,15 +2460,31 @@ internal class UploadSubmissionDelegate(
         val expectedAttemptCount = playbackUris.size
         val holdReachReady = attemptHoldReachResults.size >= expectedAttemptCount
         val aiReady = attemptAiAnalysisResults.count { it != null } >= expectedAttemptCount
-        if (!holdReachReady && !aiReady && totalHoldCount > 0) {
+        if (!aiReady) {
             return Result.success(Unit)
         }
+        if (totalHoldCount > 0 && !holdReachReady) {
+            return Result.success(Unit)
+        }
+
+        val terminalSnapshot = runCatching {
+            callbacks.awaitSubmitReadyPrePose(
+                playbackUris = playbackUris,
+                emitLoading = false
+            )
+        }.onFailure { throwable ->
+            Log.w(
+                SUBMISSION_TAG,
+                "finalizeUploadedAttemptsIfReady: unable to resolve terminal snapshot for duration",
+                throwable
+            )
+        }.getOrNull()
 
         return finalizeUploadedAttempts(
             challengeId = challengeId,
             uploadedVideos = uploadedVideos,
             playbackUris = playbackUris,
-            terminalSnapshot = null,
+            terminalSnapshot = terminalSnapshot,
             totalHoldCount = totalHoldCount
         )
     }
@@ -2487,10 +2514,16 @@ internal class UploadSubmissionDelegate(
             attemptResult = attemptResult,
             durationMs = durationMs,
             maxHoldNo = maxHoldNo,
-            centerStabilityRatio = aiSummary.insideSupportRatio?.let { it / 100.0 },
+            centerStabilityRatio = (aiSummary.stabilityRetentionScore ?: aiSummary.insideSupportRatio)
+                ?.let { it / 100.0 },
+            stabilityRecoveryScore = aiSummary.stabilityRecoveryScore,
+            stableContactRatio = aiSummary.stableContactRatio?.let { it / 100.0 },
+            lowerBodyDriveScore = aiSummary.lowerBodyDriveScore,
+            overallMovementScore = aiSummary.overallMovementScore,
             cruxHoldNo = aiSummary.primaryCruxHoldNo,
             cruxDurationMs = aiSummary.primaryCruxDurationMs,
             dangerEventCount = aiSummary.dangerEventCount ?: 0,
+            loadFocusLabel = aiSummary.loadFocusLabel,
             failureReason = failureReason,
             riskAlert = riskAlert,
             nextMission = nextMission

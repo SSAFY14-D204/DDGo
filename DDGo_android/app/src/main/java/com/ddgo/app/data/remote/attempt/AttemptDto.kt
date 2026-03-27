@@ -67,9 +67,14 @@ data class AttemptFullResponseDto(
     val metricsData: AttemptMetricsResponseDto? = null,
     val feedbacksData: AttemptFeedbacksResponseDto? = null,
     val centerStabilityRatio: Double? = null,
+    val stabilityRecoveryScore: Int? = null,
+    val stableContactRatio: Double? = null,
+    val lowerBodyDriveScore: Int? = null,
+    val overallMovementScore: Int? = null,
     val cruxHoldNo: Int? = null,
     val cruxDurationMs: Int? = null,
     val dangerEventCount: Int? = null,
+    val loadFocusLabel: String? = null,
     val failureReason: String? = null,
     val riskAlert: String? = null,
     val nextMission: String? = null
@@ -78,9 +83,14 @@ data class AttemptFullResponseDto(
 @Serializable
 data class AttemptMetricsResponseDto(
     val centerStabilityRatio: Double? = null,
+    val stabilityRecoveryScore: Int? = null,
+    val stableContactRatio: Double? = null,
+    val lowerBodyDriveScore: Int? = null,
+    val overallMovementScore: Int? = null,
     val cruxHoldNo: Int? = null,
     val cruxDurationMs: Int? = null,
-    val dangerEventCount: Int? = null
+    val dangerEventCount: Int? = null,
+    val loadFocusLabel: String? = null
 )
 
 @Serializable
@@ -100,9 +110,14 @@ data class AttemptEndBaseDataDto(
 @Serializable
 data class AttemptEndMetricsDataDto(
     val centerStabilityRatio: Double? = null,
+    val stabilityRecoveryScore: Int? = null,
+    val stableContactRatio: Double? = null,
+    val lowerBodyDriveScore: Int? = null,
+    val overallMovementScore: Int? = null,
     val cruxHoldNo: Int? = null,
     val cruxDurationMs: Int? = null,
-    val dangerEventCount: Int? = null
+    val dangerEventCount: Int? = null,
+    val loadFocusLabel: String? = null
 )
 
 @Serializable

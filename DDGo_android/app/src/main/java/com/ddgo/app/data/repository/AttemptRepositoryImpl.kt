@@ -183,9 +183,14 @@ class AttemptRepositoryImpl @Inject constructor(
                     ),
                     metricsData = AttemptEndMetricsDataDto(
                         centerStabilityRatio = payload.centerStabilityRatio,
+                        stabilityRecoveryScore = payload.stabilityRecoveryScore,
+                        stableContactRatio = payload.stableContactRatio,
+                        lowerBodyDriveScore = payload.lowerBodyDriveScore,
+                        overallMovementScore = payload.overallMovementScore,
                         cruxHoldNo = payload.cruxHoldNo,
                         cruxDurationMs = payload.cruxDurationMs,
-                        dangerEventCount = payload.dangerEventCount
+                        dangerEventCount = payload.dangerEventCount,
+                        loadFocusLabel = payload.loadFocusLabel
                     ),
                     feedbacksData = AttemptEndFeedbacksDataDto(
                         failureReason = payload.failureReason,

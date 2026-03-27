@@ -127,6 +127,7 @@ class AnalysisRepositoryImpl @Inject constructor(
             attemptId = attemptId,
             attemptNo = attemptNo,
             attemptResult = attemptResult.toAnalysisResult(),
+            videoUrl = videoUrl,
             durationMs = durationMs?.toLong() ?: 0L,
             maxHoldNo = maxHoldNo ?: 0,
             centerStabilityRatio = (
@@ -134,9 +135,17 @@ class AnalysisRepositoryImpl @Inject constructor(
                     ?: centerStabilityRatio
                     ?: 0.0
                 ).toFloat(),
+            stabilityRecoveryScore = resolvedMetrics?.stabilityRecoveryScore ?: stabilityRecoveryScore,
+            stableContactRatio = (
+                resolvedMetrics?.stableContactRatio
+                    ?: stableContactRatio
+                )?.toFloat(),
+            lowerBodyDriveScore = resolvedMetrics?.lowerBodyDriveScore ?: lowerBodyDriveScore,
+            overallMovementScore = resolvedMetrics?.overallMovementScore ?: overallMovementScore,
             cruxHoldNo = resolvedMetrics?.cruxHoldNo ?: cruxHoldNo,
             cruxDurationMs = (resolvedMetrics?.cruxDurationMs ?: cruxDurationMs)?.toLong(),
             dangerEventCount = resolvedMetrics?.dangerEventCount ?: dangerEventCount ?: 0,
+            loadFocusLabel = resolvedMetrics?.loadFocusLabel ?: loadFocusLabel,
             failureReason = resolvedFeedbacks?.failureReason ?: failureReason,
             riskAlert = resolvedFeedbacks?.riskAlert ?: riskAlert,
             nextMission = resolvedFeedbacks?.nextMission ?: nextMission
@@ -148,12 +157,18 @@ class AnalysisRepositoryImpl @Inject constructor(
             attemptId = attemptId,
             attemptNo = attemptNo,
             attemptResult = attemptResult.toAnalysisResult(),
+            videoUrl = null,
             durationMs = durationMs?.toLong() ?: 0L,
             maxHoldNo = maxHoldNo ?: 0,
             centerStabilityRatio = 0f,
+            stabilityRecoveryScore = null,
+            stableContactRatio = null,
+            lowerBodyDriveScore = null,
+            overallMovementScore = null,
             cruxHoldNo = null,
             cruxDurationMs = null,
             dangerEventCount = 0,
+            loadFocusLabel = null,
             failureReason = null,
             riskAlert = null,
             nextMission = null

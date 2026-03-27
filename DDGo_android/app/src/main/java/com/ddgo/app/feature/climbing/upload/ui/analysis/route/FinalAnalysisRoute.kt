@@ -453,7 +453,24 @@ fun FinalAnalysisRoute(
             onConfirm = {
                 showExitConfirmDialog = false
                 scope.launch {
-                    if (viewModel.abandonCurrentChallengeIfNeeded()) {
+                    if (isSingleUploadedAttempt) {
+                        val currentChallengeId = viewModel.challengeId ?: 0L
+                        if (currentChallengeId <= 0L) {
+                            onNavigateToMain()
+                            return@launch
+                        }
+
+                        val closed = viewModel.closeChallengeForFinalAnalysis(
+                            challengeResult = challengeResult,
+                            averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                            mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                            maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                            finalComment = closeSummaryPayload.finalComment
+                        )
+                        if (closed) {
+                            onNavigateToMain()
+                        }
+                    } else if (viewModel.abandonCurrentChallengeIfNeeded()) {
                         onNavigateToMain()
                     }
                 }

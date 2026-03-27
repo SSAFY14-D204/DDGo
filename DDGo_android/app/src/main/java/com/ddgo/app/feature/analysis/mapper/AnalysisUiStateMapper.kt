@@ -30,9 +30,13 @@ internal object AnalysisUiStateMapper {
 
         return AnalysisUiState(
             title = AnalysisStrings.ScreenTitle,
+            currentScreen = currentScreen,
             growthSummary = AnalysisDashboardUiMapper.buildGrowthSummary(orderedChallenges),
             challenges = AnalysisDashboardUiMapper.buildChallengeList(orderedChallenges),
-            challengeDetail = if (currentScreen != AnalysisScreenState.Dashboard) {
+            challengeDetail = if (
+                currentScreen == AnalysisScreenState.ChallengeDetail ||
+                currentScreen == AnalysisScreenState.AttemptDetail
+            ) {
                 AnalysisChallengeDetailUiMapper.build(selectedChallenge)
             } else {
                 null

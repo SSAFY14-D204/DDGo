@@ -9,6 +9,7 @@ package com.ddgo.app.feature.analysis.model
  */
 enum class AnalysisScreenState {
     Dashboard,
+    AllChallenges,
     ChallengeDetail,
     AttemptDetail
 }

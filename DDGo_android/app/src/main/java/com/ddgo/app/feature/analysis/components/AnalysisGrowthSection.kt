@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ddgo.app.feature.analysis.mapper.AnalysisFormatters
 import com.ddgo.app.feature.analysis.model.AnalysisGrowthSummaryUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisTrendPointUiModel
@@ -47,7 +48,7 @@ internal fun AnalysisGrowthSection(
             ) {
                 Text(
                     text = summary.headline,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 34.sp),
                     color = AnalysisPalette.TextPrimary
                 )
             }
@@ -66,12 +67,22 @@ internal fun AnalysisGrowthSection(
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                summary.metrics.forEach { stat ->
-                    AnalysisMiniStatCard(
-                        label = stat.label,
-                        value = stat.value,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                summary.metrics.chunked(2).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        rowItems.forEach { stat ->
+                            AnalysisMiniStatCard(
+                                label = stat.label,
+                                value = stat.value,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowItems.size == 1) {
+                            Box(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
@@ -111,10 +122,14 @@ private fun GrowthVisualBoard(
                         color = AnalysisPalette.Success
                     )
                     GrowthProgressBar(
-                        label = "평균 위험 이벤트",
-                        value = summary.dangerEventProgress,
-                        valueLabel = AnalysisFormatters.formatAverageEventCount(summary.averageDangerEvents),
-                        color = AnalysisPalette.WarningBright
+                        label = "평균 하체 주도성",
+                        value = summary.lowerBodyDriveProgress,
+                        valueLabel = if (summary.averageLowerBodyDriveScore > 0f) {
+                            "${summary.averageLowerBodyDriveScore.toInt()}점"
+                        } else {
+                            "-"
+                        },
+                        color = AnalysisPalette.AccentStrong
                     )
                 }
             }
