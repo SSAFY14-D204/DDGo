@@ -678,6 +678,7 @@ internal class UploadSessionDelegate(
             overlayCache = null,
             personObservationStartTimeMs = null,
             wallArrivalTimeMs = null,
+            resolvedAttemptStartTimeMs = null,
             resolvedAttemptEndTimeMs = null,
             stallSegment = null,
             climbEndDetection = null,
@@ -721,6 +722,7 @@ internal class UploadSessionDelegate(
                 overlayCache = null,
                 personObservationStartTimeMs = null,
                 wallArrivalTimeMs = null,
+                resolvedAttemptStartTimeMs = null,
                 resolvedAttemptEndTimeMs = null,
                 stallSegment = null,
                 climbEndDetection = null,
@@ -818,14 +820,25 @@ internal class UploadSessionDelegate(
             val refinement = refinementsByPlaybackUri[playbackUri] ?: return@replaceAll entry
             if (entry.status != PrePoseStatus.Ready) return@replaceAll entry
 
+            val resolvedAttemptStartTimeMs = refinement.resolvedAttemptStartTimeMs
             val resolvedAttemptEndTimeMs = refinement.resolvedAttemptEndTimeMs
+            val officialStartTimeMs = resolvedAttemptStartTimeMs
+                ?: entry.wallArrivalTimeMs
+                ?: entry.personObservationStartTimeMs
             val hasMatchingEndPoint =
                 entry.timelinePoints.any { point ->
                     point.kind == AnalysisPointKind.CLIMB_END &&
                         point.timeMs == resolvedAttemptEndTimeMs
                 }
+            val hasMatchingStartPoint =
+                officialStartTimeMs == null || entry.timelinePoints.any { point ->
+                    point.kind == AnalysisPointKind.PERSON_OBSERVATION_START &&
+                        point.timeMs == officialStartTimeMs
+                }
             if (
+                entry.resolvedAttemptStartTimeMs == resolvedAttemptStartTimeMs &&
                 entry.resolvedAttemptEndTimeMs == resolvedAttemptEndTimeMs &&
+                hasMatchingStartPoint &&
                 hasMatchingEndPoint
             ) {
                 return@replaceAll entry
@@ -834,6 +847,7 @@ internal class UploadSessionDelegate(
             didUpdate = true
             rebuildReadyPrePoseEntry(
                 entry = entry,
+                resolvedAttemptStartTimeMs = resolvedAttemptStartTimeMs,
                 resolvedAttemptEndTimeMs = resolvedAttemptEndTimeMs
             )
         }
@@ -967,11 +981,13 @@ internal class UploadSessionDelegate(
                             }.onFailure { error ->
                                 Log.w(TAG, "Pre-pose hand peak analysis failed: ${task.playbackUri}", error)
                             }.getOrNull()
+                            val baselineAttemptStartTimeMs =
+                                wallArrivalTimeMs ?: personObservationStartTimeMs
                             val resolvedAttemptEndTimeMs = handPeakAnnotation?.endTimeMs
                             val stallSegment = runCatching {
                                 detectStallSegmentFromPoseUseCase(
                                     poses = smoothedPoses,
-                                    wallArrivalTimeMs = wallArrivalTimeMs,
+                                    wallArrivalTimeMs = baselineAttemptStartTimeMs,
                                     endTimeMs = resolvedAttemptEndTimeMs
                                 )
                             }.onFailure { error ->
@@ -989,12 +1005,13 @@ internal class UploadSessionDelegate(
                                 overlayCache = overlayCache,
                                 personObservationStartTimeMs = personObservationStartTimeMs,
                                 wallArrivalTimeMs = wallArrivalTimeMs,
+                                resolvedAttemptStartTimeMs = null,
                                 resolvedAttemptEndTimeMs = resolvedAttemptEndTimeMs,
                                 stallSegment = stallSegment,
                                 climbEndDetection = null,
                                 handPeakAnnotation = handPeakAnnotation,
                                 timelinePoints = buildAttemptTimelinePoints(
-                                    wallArrivalTimeMs = wallArrivalTimeMs ?: personObservationStartTimeMs,
+                                    wallArrivalTimeMs = baselineAttemptStartTimeMs,
                                     stallSegment = stallSegment,
                                     endTimeMs = resolvedAttemptEndTimeMs
                                 ),
@@ -1262,6 +1279,7 @@ internal class UploadSessionDelegate(
                     overlayCache = null,
                     personObservationStartTimeMs = null,
                     wallArrivalTimeMs = null,
+                    resolvedAttemptStartTimeMs = null,
                     resolvedAttemptEndTimeMs = null,
                     stallSegment = null,
                     climbEndDetection = null,
@@ -1392,12 +1410,15 @@ internal class UploadSessionDelegate(
 
     private fun rebuildReadyPrePoseEntry(
         entry: PrePoseCacheEntry,
+        resolvedAttemptStartTimeMs: Long?,
         resolvedAttemptEndTimeMs: Long?
     ): PrePoseCacheEntry {
+        val officialStartTimeMs =
+            resolvedAttemptStartTimeMs ?: entry.wallArrivalTimeMs ?: entry.personObservationStartTimeMs
         val rebuiltStallSegment = runCatching {
             detectStallSegmentFromPoseUseCase(
                 poses = entry.smoothedPoses,
-                wallArrivalTimeMs = entry.wallArrivalTimeMs,
+                wallArrivalTimeMs = officialStartTimeMs,
                 endTimeMs = resolvedAttemptEndTimeMs
             )
         }.getOrElse { error ->
@@ -1406,10 +1427,11 @@ internal class UploadSessionDelegate(
         }
 
         return entry.copy(
+            resolvedAttemptStartTimeMs = resolvedAttemptStartTimeMs,
             resolvedAttemptEndTimeMs = resolvedAttemptEndTimeMs,
             stallSegment = rebuiltStallSegment,
             timelinePoints = buildAttemptTimelinePoints(
-                wallArrivalTimeMs = entry.wallArrivalTimeMs ?: entry.personObservationStartTimeMs,
+                wallArrivalTimeMs = officialStartTimeMs,
                 stallSegment = rebuiltStallSegment,
                 endTimeMs = resolvedAttemptEndTimeMs
             )

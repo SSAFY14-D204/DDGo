@@ -21,10 +21,10 @@ internal fun buildAttemptTimelinePoints(
 ): List<AnalysisPoint> {
     val points = mutableListOf<AnalysisPoint>()
 
-    wallArrivalTimeMs?.let { startTimeMs ->
+    wallArrivalTimeMs?.let { safeStartTimeMs ->
         points += AnalysisPoint(
             index = 0,
-            timeMs = startTimeMs,
+            timeMs = safeStartTimeMs,
             description = WALL_ARRIVAL_DESCRIPTION,
             kind = AnalysisPointKind.PERSON_OBSERVATION_START
         )
@@ -121,3 +121,9 @@ internal fun resolveInitialAttemptPlaybackStartTimeMs(
     return poseTimestamps.findNearestTimestamp(anchorMs.coerceAtLeast(0L))
         ?: anchorMs.coerceAtLeast(0L)
 }
+
+internal fun PrePoseCacheEntry?.officialAttemptStartTimeMs(): Long? =
+    this?.resolvedAttemptStartTimeMs ?: this?.wallArrivalTimeMs ?: this?.personObservationStartTimeMs
+
+internal fun TerminalPrePoseEntry?.officialAttemptStartTimeMs(): Long? =
+    this?.resolvedAttemptStartTimeMs ?: this?.wallArrivalTimeMs ?: this?.personObservationStartTimeMs

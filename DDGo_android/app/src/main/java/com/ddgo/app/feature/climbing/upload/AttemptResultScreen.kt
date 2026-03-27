@@ -147,8 +147,7 @@ fun AttemptResultScreen(
     val currentAttemptPoses = viewModel.currentAttemptPoseSequence
     val currentAttemptOverlayCache = viewModel.currentAttemptOverlayCache
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
-    val wallArrivalTimeMs = currentAttemptPrePoseEntry?.wallArrivalTimeMs
-    val personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs
+    val officialAttemptStartTimeMs = currentAttemptPrePoseEntry.officialAttemptStartTimeMs()
     val usesPoseDetectorTimeline = currentAttemptPrePoseEntry != null
     val numberedHolds = viewModel.currentAttemptDisplayHolds
     val allRawHolds = viewModel.allRawHolds
@@ -311,8 +310,8 @@ fun AttemptResultScreen(
                     markers = scrubberMarkers,
                     attemptPoseSequence = currentAttemptPoses,
                     overlayCache = currentAttemptOverlayCache,
-                    wallArrivalTimeMs = wallArrivalTimeMs,
-                    personObservationStartTimeMs = personObservationStartTimeMs,
+                    wallArrivalTimeMs = officialAttemptStartTimeMs,
+                    personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs,
                     seekRequestId = seekRequestId,
                     seekRequestTimeMs = pendingSeekTimeMs
                 ),

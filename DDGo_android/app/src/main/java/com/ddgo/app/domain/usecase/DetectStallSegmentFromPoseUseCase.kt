@@ -23,9 +23,9 @@ class DetectStallSegmentFromPoseUseCase @Inject constructor() {
     ): StallSegmentAnnotation? {
         if (poses.isEmpty() || wallArrivalTimeMs == null) return null
 
-        val analysisStartTimeMs = wallArrivalTimeMs + gracePeriodMs
+        val adjustedAnalysisStartTimeMs = wallArrivalTimeMs + gracePeriodMs
         val analysisEndTimeMs = endTimeMs?.minus(endGuardMs)
-        if (analysisEndTimeMs != null && analysisEndTimeMs <= analysisStartTimeMs) return null
+        if (analysisEndTimeMs != null && analysisEndTimeMs <= adjustedAnalysisStartTimeMs) return null
 
         val allValidSamples = poses
             .sortedBy(Pose::frameTimeMs)
@@ -50,7 +50,7 @@ class DetectStallSegmentFromPoseUseCase @Inject constructor() {
             .zip(allSupportFlags)
             .filter { (sample, isSupported) ->
                 isSupported &&
-                    sample.frameTimeMs >= analysisStartTimeMs &&
+                    sample.frameTimeMs >= adjustedAnalysisStartTimeMs &&
                     (analysisEndTimeMs == null || sample.frameTimeMs <= analysisEndTimeMs)
             }
             .map { (sample, _) -> sample }

@@ -22,6 +22,7 @@ import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
 import com.ddgo.app.domain.usecase.PolygonHoldContactFrame
 import com.ddgo.app.domain.usecase.PolygonLimbFrameState
 import com.ddgo.app.domain.usecase.PolygonTrackedLimb
+import com.ddgo.app.domain.usecase.findFirstStartFootContactTimeMs
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import com.ddgo.app.domain.usecase.findSuccessfulTopContactTimeMs
@@ -69,6 +70,43 @@ class UploadSubmissionDelegateTest {
             260L,
             debugResult.findSuccessfulTopContactTimeMs(
                 endHoldNo = 2,
+                analysisStartTimeMs = 150L
+            )
+        )
+    }
+
+    @Test
+    fun `findFirstStartFootContactTimeMs returns earliest foot contact on start hold after analysis start`() {
+        val startHold = numberedHold(
+            holdNo = 1,
+            role = HoldRole.START,
+            left = 0.12f,
+            top = 0.62f,
+            right = 0.24f,
+            bottom = 0.78f
+        )
+        val debugResult = PolygonHoldContactDebugResult(
+            frames = listOf(
+                polygonFrame(
+                    timeMs = 120L,
+                    hold = startHold,
+                    leftFootHoldNo = 1
+                ),
+                polygonFrame(
+                    timeMs = 260L,
+                    hold = startHold,
+                    rightFootHoldNo = 1
+                )
+            ),
+            highestReachedHoldNo = 1,
+            highestReachedFrameTimeMs = 260L,
+            contactedHoldNos = setOf(1)
+        )
+
+        assertEquals(
+            260L,
+            debugResult.findFirstStartFootContactTimeMs(
+                startHoldNo = 1,
                 analysisStartTimeMs = 150L
             )
         )
@@ -194,6 +232,7 @@ class UploadSubmissionDelegateTest {
                         overlayCache = null,
                         personObservationStartTimeMs = null,
                         wallArrivalTimeMs = null,
+                        resolvedAttemptStartTimeMs = null,
                         resolvedAttemptEndTimeMs = null,
                         stallSegment = null,
                         climbEndDetection = null,
@@ -283,8 +322,10 @@ class UploadSubmissionDelegateTest {
     private fun polygonFrame(
         timeMs: Long,
         hold: HoldNumbered,
-        leftHandHoldNo: Int?,
-        rightHandHoldNo: Int?
+        leftHandHoldNo: Int? = null,
+        rightHandHoldNo: Int? = null,
+        leftFootHoldNo: Int? = null,
+        rightFootHoldNo: Int? = null
     ): PolygonHoldContactFrame {
         val limbStates = listOf(
             PolygonLimbFrameState(
@@ -303,6 +344,28 @@ class UploadSubmissionDelegateTest {
                 state = "GRIP",
                 activeHoldNo = rightHandHoldNo,
                 candidateHoldNo = rightHandHoldNo,
+                distancePx = 0f,
+                speedPxPerSec = 0f,
+                transition = null,
+                insidePolygon = true,
+                contactPointNormalized = null
+            ),
+            PolygonLimbFrameState(
+                limb = PolygonTrackedLimb.LEFT_FOOT,
+                state = "STEP",
+                activeHoldNo = leftFootHoldNo,
+                candidateHoldNo = leftFootHoldNo,
+                distancePx = 0f,
+                speedPxPerSec = 0f,
+                transition = null,
+                insidePolygon = true,
+                contactPointNormalized = null
+            ),
+            PolygonLimbFrameState(
+                limb = PolygonTrackedLimb.RIGHT_FOOT,
+                state = "STEP",
+                activeHoldNo = rightFootHoldNo,
+                candidateHoldNo = rightFootHoldNo,
                 distancePx = 0f,
                 speedPxPerSec = 0f,
                 transition = null,
@@ -331,6 +394,32 @@ class UploadSubmissionDelegateTest {
                         hold = hold,
                         limb = PolygonTrackedLimb.RIGHT_HAND,
                         state = "GRIP",
+                        insidePolygon = true,
+                        distancePx = 0f,
+                        speedPxPerSec = 0f,
+                        contactPointNormalized = null
+                    )
+                )
+            }
+            if (leftFootHoldNo == hold.holdNo) {
+                add(
+                    PolygonHoldContact(
+                        hold = hold,
+                        limb = PolygonTrackedLimb.LEFT_FOOT,
+                        state = "STEP",
+                        insidePolygon = true,
+                        distancePx = 0f,
+                        speedPxPerSec = 0f,
+                        contactPointNormalized = null
+                    )
+                )
+            }
+            if (rightFootHoldNo == hold.holdNo) {
+                add(
+                    PolygonHoldContact(
+                        hold = hold,
+                        limb = PolygonTrackedLimb.RIGHT_FOOT,
+                        state = "STEP",
                         insidePolygon = true,
                         distancePx = 0f,
                         speedPxPerSec = 0f,

@@ -28,6 +28,7 @@ import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
 import com.ddgo.app.domain.usecase.UploadAttemptVideoUseCase
 import com.ddgo.app.domain.usecase.analyzePolygonHoldContacts
+import com.ddgo.app.domain.usecase.findFirstStartFootInsideTimeMs
 import com.ddgo.app.domain.usecase.findSuccessfulTopContactTimeMs
 import com.ddgo.app.domain.usecase.resolveEndHoldNo
 import com.ddgo.app.domain.usecase.summarizeHoldReachResults
@@ -1948,22 +1949,35 @@ internal class UploadSubmissionDelegate(
         prePoseEntry: TerminalPrePoseEntry?,
         holds: List<HoldNumbered>
     ): AttemptPoseAnalysis {
-        val analysisStartTimeMs = prePoseEntry.holdReachAnalysisStartTimeMs()
+        val baselineStartTimeMs = prePoseEntry.rawAttemptStartTimeMs()
         val initialPoses = prePoseEntry.holdContactPoses(
-            startTimeMs = analysisStartTimeMs,
+            startTimeMs = baselineStartTimeMs,
             endTimeMs = null
         )
         val initialPolygonHoldContactDebugResult = analyzePolygonHoldContacts(
             poses = initialPoses,
             holds = holds
         )
+        val firstFootOnStartHoldTimeMs = findFirstStartFootInsideTimeMs(
+            poses = initialPoses,
+            holds = holds,
+            startHoldNo = holds.resolveStartHoldNo(),
+            analysisStartTimeMs = prePoseEntry?.wallArrivalTimeMs
+        )
+        val refinedAttemptStartTimeMs = firstFootOnStartHoldTimeMs ?: baselineStartTimeMs
         val twoHandsOnTargetHoldTimeMs = initialPolygonHoldContactDebugResult.findSuccessfulTopContactTimeMs(
             endHoldNo = holds.resolveEndHoldNo(),
-            analysisStartTimeMs = analysisStartTimeMs
+            analysisStartTimeMs = refinedAttemptStartTimeMs
         )
         val resolvedAttemptEndTimeMs = twoHandsOnTargetHoldTimeMs ?: prePoseEntry?.handPeakAnnotation?.endTimeMs
+        val resolvedAttemptStartTimeMs =
+            refinedAttemptStartTimeMs.takeUnless { startTimeMs ->
+                resolvedAttemptEndTimeMs != null &&
+                    startTimeMs != null &&
+                    startTimeMs > resolvedAttemptEndTimeMs
+            } ?: baselineStartTimeMs
         val stablePoses = prePoseEntry.holdContactPoses(
-            startTimeMs = analysisStartTimeMs,
+            startTimeMs = resolvedAttemptStartTimeMs,
             endTimeMs = resolvedAttemptEndTimeMs
         )
         val poseSequenceDto = stablePoses.toPoseSequenceDto()
@@ -1988,7 +2002,7 @@ internal class UploadSubmissionDelegate(
         val holdReachResult = polygonHoldContactDebugResult
             .toAttemptHoldReachResult(
                 holds = holds,
-                analysisStartTimeMs = analysisStartTimeMs,
+                analysisStartTimeMs = resolvedAttemptStartTimeMs,
                 analysisEndTimeMs = resolvedAttemptEndTimeMs
             )
             .also { result ->
@@ -2006,7 +2020,9 @@ internal class UploadSubmissionDelegate(
             poseSequenceDto = poseSequenceDto,
             poses = stablePoses,
             polygonHoldContactDebugResult = polygonHoldContactDebugResult,
+            resolvedAttemptStartTimeMs = resolvedAttemptStartTimeMs,
             resolvedAttemptEndTimeMs = resolvedAttemptEndTimeMs,
+            firstFootOnStartHoldTimeMs = firstFootOnStartHoldTimeMs,
             twoHandsOnTargetHoldTimeMs = twoHandsOnTargetHoldTimeMs
         )
     }
@@ -2189,6 +2205,7 @@ internal class UploadSubmissionDelegate(
             analyses.map { analysis ->
                 AttemptEndRefinement(
                     playbackUri = analysis.playbackUri,
+                    resolvedAttemptStartTimeMs = analysis.resolvedAttemptStartTimeMs,
                     resolvedAttemptEndTimeMs = analysis.resolvedAttemptEndTimeMs
                 )
             }
@@ -2640,8 +2657,11 @@ private fun TerminalPrePoseEntry?.filteredHoldContactPoses(): List<Pose> {
     )
 }
 
-private fun TerminalPrePoseEntry?.holdReachAnalysisStartTimeMs(): Long? =
+private fun TerminalPrePoseEntry?.rawAttemptStartTimeMs(): Long? =
     this?.wallArrivalTimeMs ?: this?.personObservationStartTimeMs
+
+private fun TerminalPrePoseEntry?.holdReachAnalysisStartTimeMs(): Long? =
+    this.officialAttemptStartTimeMs()
 
 private fun TerminalPrePoseEntry?.holdReachAnalysisEndTimeMs(): Long? {
     val entry = this ?: return null
@@ -2651,6 +2671,9 @@ private fun TerminalPrePoseEntry?.holdReachAnalysisEndTimeMs(): Long? {
         startTimeMs == null || endMs >= startTimeMs
     }
 }
+
+private fun List<HoldNumbered>.resolveStartHoldNo(): Int? =
+    firstOrNull(HoldNumbered::isStart)?.holdNo?.takeIf { holdNo -> holdNo > 0 }
 
 private fun TerminalPrePoseEntry?.holdContactPoses(
     startTimeMs: Long?,
@@ -2675,7 +2698,9 @@ private data class AttemptPoseAnalysis(
     val poseSequenceDto: PoseSequenceDto,
     val poses: List<Pose>,
     val polygonHoldContactDebugResult: PolygonHoldContactDebugResult,
+    val resolvedAttemptStartTimeMs: Long?,
     val resolvedAttemptEndTimeMs: Long?,
+    val firstFootOnStartHoldTimeMs: Long?,
     val twoHandsOnTargetHoldTimeMs: Long?
 )
 
