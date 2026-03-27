@@ -454,37 +454,30 @@ class AuthViewModel @Inject constructor(
         forceProfileOnboarding: Boolean = false
     ): AuthSuccessDestination {
         onboardingPreferenceDataStore.setHasAuthenticatedOnce()
-        val hasCompletedIntroOnboarding = onboardingPreferenceDataStore.hasCompletedOnboarding.first()
-        val shouldOpenOnboarding = forceProfileOnboarding ||
+        val hasCompletedOnboarding = onboardingPreferenceDataStore.hasCompletedOnboarding.first()
+        val shouldShowOnboardingWithGuide = forceProfileOnboarding ||
             authToken.needsOnboarding == true ||
-            authToken.isNewUser == true
+            authToken.isNewUser == true ||
+            !hasCompletedOnboarding
 
-        if (shouldOpenOnboarding) {
-            return if (hasCompletedIntroOnboarding) {
-                AuthSuccessDestination.ProfileOnboarding
-            } else {
-                AuthSuccessDestination.FullOnboarding
-            }
+        if (shouldShowOnboardingWithGuide) {
+            return AuthSuccessDestination.Onboarding(showEntryGuide = true)
         }
 
         val currentUser = getMyInfoUseCase().getOrNull()
         return when {
-            !hasCompletedIntroOnboarding -> AuthSuccessDestination.FullOnboarding
-            currentUser != null && currentUser.requiresProfileOnboarding() ->
-                AuthSuccessDestination.ProfileOnboarding
+            currentUser != null && currentUser.requiresRecoveryOnboarding() ->
+                AuthSuccessDestination.Onboarding(showEntryGuide = false)
             else -> AuthSuccessDestination.Main
         }
     }
 }
 
-private fun User.requiresProfileOnboarding(): Boolean {
-    return sex.isNullOrBlank() ||
-        heightCm == null ||
-        heightCm <= 0f ||
-        weightKg == null ||
-        weightKg <= 0f ||
-        wingspanCm == null ||
-        wingspanCm <= 0f
+private fun User.requiresRecoveryOnboarding(): Boolean {
+    return sex.isNullOrBlank() &&
+        heightCm.isMissingBodyMetric() &&
+        weightKg.isMissingBodyMetric() &&
+        wingspanCm.isMissingBodyMetric()
 }
 
 sealed class AuthUiState {
@@ -495,8 +488,9 @@ sealed class AuthUiState {
     data class Error(val message: String) : AuthUiState()
 }
 
-enum class AuthSuccessDestination {
-    Main,
-    ProfileOnboarding,
-    FullOnboarding
+sealed interface AuthSuccessDestination {
+    data object Main : AuthSuccessDestination
+    data class Onboarding(val showEntryGuide: Boolean) : AuthSuccessDestination
 }
+
+private fun Float?.isMissingBodyMetric(): Boolean = this == null || this <= 0f

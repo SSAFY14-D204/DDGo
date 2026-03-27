@@ -7,12 +7,12 @@ sealed class ScreenRoutes(val route: String) {
 
     object Onboarding : ScreenRoutes("onboarding") {
         const val ARG_NEXT_ROUTE = "nextRoute"
-        const val ARG_MODE = "mode"
+        const val ARG_SHOW_ENTRY_GUIDE = "showEntryGuide"
         const val ROUTE_WITH_ARG =
-            "onboarding?$ARG_NEXT_ROUTE={$ARG_NEXT_ROUTE}&$ARG_MODE={$ARG_MODE}"
+            "onboarding?$ARG_NEXT_ROUTE={$ARG_NEXT_ROUTE}&$ARG_SHOW_ENTRY_GUIDE={$ARG_SHOW_ENTRY_GUIDE}"
 
-        fun createRoute(nextRoute: String, mode: String): String {
-            return "$route?$ARG_NEXT_ROUTE=${Uri.encode(nextRoute)}&$ARG_MODE=${Uri.encode(mode)}"
+        fun createRoute(nextRoute: String, showEntryGuide: Boolean): String {
+            return "$route?$ARG_NEXT_ROUTE=${Uri.encode(nextRoute)}&$ARG_SHOW_ENTRY_GUIDE=$showEntryGuide"
         }
     }
 

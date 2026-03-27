@@ -23,6 +23,7 @@ class OnboardingPreferenceDataStore @Inject constructor(
     private companion object {
         val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val KEY_HAS_AUTHENTICATED_ONCE = booleanPreferencesKey("has_authenticated_once")
+        val KEY_MAIN_ENTRY_GUIDE_STEP = stringPreferencesKey("main_entry_guide_step")
     }
 
     val hasCompletedOnboarding: Flow<Boolean> = context.ddgoPreferencesDataStore.data
@@ -30,6 +31,13 @@ class OnboardingPreferenceDataStore @Inject constructor(
 
     val hasAuthenticatedOnce: Flow<Boolean> = context.ddgoPreferencesDataStore.data
         .map { preferences -> preferences[KEY_HAS_AUTHENTICATED_ONCE] ?: false }
+
+    val mainEntryGuideStep: Flow<MainEntryGuideStep> = context.ddgoPreferencesDataStore.data
+        .map { preferences ->
+            preferences[KEY_MAIN_ENTRY_GUIDE_STEP]
+                ?.let(MainEntryGuideStep::fromStoredValue)
+                ?: MainEntryGuideStep.NONE
+        }
 
     suspend fun setOnboardingCompleted(completed: Boolean = true) {
         context.ddgoPreferencesDataStore.edit { preferences ->
@@ -40,6 +48,25 @@ class OnboardingPreferenceDataStore @Inject constructor(
     suspend fun setHasAuthenticatedOnce(authenticated: Boolean = true) {
         context.ddgoPreferencesDataStore.edit { preferences ->
             preferences[KEY_HAS_AUTHENTICATED_ONCE] = authenticated
+        }
+    }
+
+    suspend fun setMainEntryGuideStep(step: MainEntryGuideStep) {
+        context.ddgoPreferencesDataStore.edit { preferences ->
+            preferences[KEY_MAIN_ENTRY_GUIDE_STEP] = step.name
+        }
+    }
+}
+
+enum class MainEntryGuideStep {
+    NONE,
+    FAB,
+    MENU,
+    DONE;
+
+    companion object {
+        fun fromStoredValue(value: String): MainEntryGuideStep {
+            return entries.firstOrNull { it.name == value } ?: NONE
         }
     }
 }

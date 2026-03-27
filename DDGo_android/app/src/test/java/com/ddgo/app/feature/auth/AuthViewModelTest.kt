@@ -11,9 +11,11 @@ import com.ddgo.app.domain.usecase.RegisterUseCase
 import com.ddgo.app.domain.usecase.RequestPasswordResetUseCase
 import com.ddgo.app.domain.usecase.SocialLoginUseCase
 import com.ddgo.app.feature.climbing.upload.MainDispatcherRule
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -29,8 +31,8 @@ class AuthViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `google social login keeps success flow without nickname sync`() = runTest {
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
+    fun `google social login routes to main when onboarding already complete`() = runTest {
+        val onboardingPreferenceDataStore = onboardingStore(hasCompletedOnboarding = true)
         val loginUseCase = mockk<LoginUseCase>(relaxed = true)
         val registerUseCase = mockk<RegisterUseCase>(relaxed = true)
         val socialLoginUseCase = mockk<SocialLoginUseCase>()
@@ -51,7 +53,6 @@ class AuthViewModelTest {
             )
         )
         coEvery { getMyInfoUseCase() } returns Result.success(completeUser())
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
 
         val viewModel = AuthViewModel(
             onboardingPreferenceDataStore = onboardingPreferenceDataStore,
@@ -74,8 +75,8 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `register submits username and password then forces profile onboarding`() = runTest {
-        val onboardingPreferenceDataStore = mockk<OnboardingPreferenceDataStore>()
+    fun `register forces onboarding with entry guide`() = runTest {
+        val onboardingPreferenceDataStore = onboardingStore(hasCompletedOnboarding = true)
         val loginUseCase = mockk<LoginUseCase>()
         val registerUseCase = mockk<RegisterUseCase>()
         val socialLoginUseCase = mockk<SocialLoginUseCase>(relaxed = true)
@@ -90,7 +91,6 @@ class AuthViewModelTest {
                 refreshToken = "refresh-token"
             )
         )
-        every { onboardingPreferenceDataStore.hasCompletedOnboarding } returns flowOf(true)
 
         val viewModel = AuthViewModel(
             onboardingPreferenceDataStore = onboardingPreferenceDataStore,
@@ -107,24 +107,126 @@ class AuthViewModelTest {
         viewModel.register()
         mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
 
-        coVerify(exactly = 1) { registerUseCase("user@example.com", "Password!12") }
-        coVerify(exactly = 1) { loginUseCase("user@example.com", "Password!12") }
         assertEquals(
-            AuthUiState.Success(AuthSuccessDestination.ProfileOnboarding),
+            AuthUiState.Success(AuthSuccessDestination.Onboarding(showEntryGuide = true)),
             viewModel.uiState.value
         )
     }
 
-    private fun completeUser(): User {
+    @Test
+    fun `all body metrics missing routes to recovery onboarding without guide`() = runTest {
+        val onboardingPreferenceDataStore = onboardingStore(hasCompletedOnboarding = true)
+        val loginUseCase = mockk<LoginUseCase>()
+        val registerUseCase = mockk<RegisterUseCase>(relaxed = true)
+        val socialLoginUseCase = mockk<SocialLoginUseCase>(relaxed = true)
+        val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
+        val requestPasswordResetUseCase = mockk<RequestPasswordResetUseCase>(relaxed = true)
+        val confirmPasswordResetUseCase = mockk<ConfirmPasswordResetUseCase>(relaxed = true)
+
+        coEvery { loginUseCase("user@example.com", "Password!12") } returns Result.success(
+            AuthToken(
+                accessToken = "access-token",
+                refreshToken = "refresh-token"
+            )
+        )
+        coEvery { getMyInfoUseCase() } returns Result.success(
+            completeUser(
+                sex = null,
+                heightCm = null,
+                weightKg = null,
+                wingspanCm = null
+            )
+        )
+
+        val viewModel = AuthViewModel(
+            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
+            loginUseCase = loginUseCase,
+            registerUseCase = registerUseCase,
+            socialLoginUseCase = socialLoginUseCase,
+            getMyInfoUseCase = getMyInfoUseCase,
+            requestPasswordResetUseCase = requestPasswordResetUseCase,
+            confirmPasswordResetUseCase = confirmPasswordResetUseCase
+        )
+
+        viewModel.updateUsername("user@example.com")
+        viewModel.updatePassword("Password!12")
+        viewModel.login()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            AuthUiState.Success(AuthSuccessDestination.Onboarding(showEntryGuide = false)),
+            viewModel.uiState.value
+        )
+    }
+
+    @Test
+    fun `partially missing body profile still routes to main`() = runTest {
+        val onboardingPreferenceDataStore = onboardingStore(hasCompletedOnboarding = true)
+        val loginUseCase = mockk<LoginUseCase>()
+        val registerUseCase = mockk<RegisterUseCase>(relaxed = true)
+        val socialLoginUseCase = mockk<SocialLoginUseCase>(relaxed = true)
+        val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
+        val requestPasswordResetUseCase = mockk<RequestPasswordResetUseCase>(relaxed = true)
+        val confirmPasswordResetUseCase = mockk<ConfirmPasswordResetUseCase>(relaxed = true)
+
+        coEvery { loginUseCase("user@example.com", "Password!12") } returns Result.success(
+            AuthToken(
+                accessToken = "access-token",
+                refreshToken = "refresh-token"
+            )
+        )
+        coEvery { getMyInfoUseCase() } returns Result.success(
+            completeUser(
+                sex = "M",
+                heightCm = 180f,
+                weightKg = null,
+                wingspanCm = 181f
+            )
+        )
+
+        val viewModel = AuthViewModel(
+            onboardingPreferenceDataStore = onboardingPreferenceDataStore,
+            loginUseCase = loginUseCase,
+            registerUseCase = registerUseCase,
+            socialLoginUseCase = socialLoginUseCase,
+            getMyInfoUseCase = getMyInfoUseCase,
+            requestPasswordResetUseCase = requestPasswordResetUseCase,
+            confirmPasswordResetUseCase = confirmPasswordResetUseCase
+        )
+
+        viewModel.updateUsername("user@example.com")
+        viewModel.updatePassword("Password!12")
+        viewModel.login()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            AuthUiState.Success(AuthSuccessDestination.Main),
+            viewModel.uiState.value
+        )
+    }
+
+    private fun onboardingStore(hasCompletedOnboarding: Boolean): OnboardingPreferenceDataStore {
+        return mockk(relaxed = true) {
+            every { this@mockk.hasCompletedOnboarding } returns flowOf(hasCompletedOnboarding)
+            coEvery { this@mockk.setHasAuthenticatedOnce(any()) } just Runs
+        }
+    }
+
+    private fun completeUser(
+        sex: String? = "M",
+        heightCm: Float? = 180f,
+        weightKg: Float? = 70f,
+        wingspanCm: Float? = 182f
+    ): User {
         return User(
             id = 1L,
-            username = "google_social-user",
+            username = "google_social_user",
             email = "social@example.com",
-            nickname = "차분한바다",
-            sex = "M",
-            heightCm = 180f,
-            weightKg = 70f,
-            wingspanCm = 182f
+            nickname = "차분한클라이머",
+            sex = sex,
+            heightCm = heightCm,
+            weightKg = weightKg,
+            wingspanCm = wingspanCm
         )
     }
 }

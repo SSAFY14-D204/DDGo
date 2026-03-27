@@ -18,6 +18,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.ddgo.app.BuildConfig
@@ -27,7 +28,6 @@ import com.ddgo.app.feature.auth.authGraph
 import com.ddgo.app.feature.auth.AuthSuccessDestination
 import com.ddgo.app.feature.debug.debugGraph
 import com.ddgo.app.feature.main.mainGraph
-import com.ddgo.app.feature.onboarding.OnboardingMode
 import com.ddgo.app.feature.onboarding.OnboardingScreen
 import com.ddgo.app.feature.splash.SplashScreen
 import kotlinx.coroutines.flow.collectLatest
@@ -40,6 +40,9 @@ fun NavGraph(
     val navController: NavHostController = rememberNavController()
     val appSessionViewModel: AppSessionViewModel = hiltViewModel()
     var showSessionExpiredDialog by rememberSaveable { mutableStateOf(false) }
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route.orEmpty()
+    val shouldShowDevOverlay = !currentRoute.startsWith(ScreenRoutes.Onboarding.route)
 
     LaunchedEffect(appSessionViewModel) {
         appSessionViewModel.authSessionEvent.collectLatest { event ->
@@ -101,11 +104,11 @@ fun NavGraph(
                             popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
                         }
                     },
-                    onNavigateToOnboarding = { nextRoute, mode ->
+                    onNavigateToOnboarding = { nextRoute, showEntryGuide ->
                         navController.navigate(
                             ScreenRoutes.Onboarding.createRoute(
                                 nextRoute = nextRoute,
-                                mode = mode.name
+                                showEntryGuide = showEntryGuide
                             )
                         ) {
                             popUpTo(ScreenRoutes.Splash.route) { inclusive = true }
@@ -122,10 +125,9 @@ fun NavGraph(
                         nullable = true
                         defaultValue = ScreenRoutes.Auth.route
                     },
-                    navArgument(ScreenRoutes.Onboarding.ARG_MODE) {
-                        type = NavType.StringType
-                        nullable = true
-                        defaultValue = OnboardingMode.INTRO.name
+                    navArgument(ScreenRoutes.Onboarding.ARG_SHOW_ENTRY_GUIDE) {
+                        type = NavType.BoolType
+                        defaultValue = false
                     }
                 )
             ) { backStackEntry ->
@@ -133,12 +135,13 @@ fun NavGraph(
                     ?.getString(ScreenRoutes.Onboarding.ARG_NEXT_ROUTE)
                     .orEmpty()
                     .ifBlank { ScreenRoutes.Auth.route }
-                val mode = OnboardingMode.fromRouteArg(
-                    backStackEntry.arguments?.getString(ScreenRoutes.Onboarding.ARG_MODE)
-                )
+                val showEntryGuide = backStackEntry.arguments
+                    ?.getBoolean(ScreenRoutes.Onboarding.ARG_SHOW_ENTRY_GUIDE)
+                    ?: false
 
                 OnboardingScreen(
-                    mode = mode,
+                    showEntryGuide = showEntryGuide,
+                    onExit = { navController.popBackStack() },
                     onFinish = {
                         navController.navigate(nextRoute) {
                             popUpTo(0) { inclusive = true }
@@ -153,13 +156,9 @@ fun NavGraph(
                 onLoginSuccess = { destination ->
                     val targetRoute = when (destination) {
                         AuthSuccessDestination.Main -> ScreenRoutes.MainGraph.route
-                        AuthSuccessDestination.ProfileOnboarding -> ScreenRoutes.Onboarding.createRoute(
+                        is AuthSuccessDestination.Onboarding -> ScreenRoutes.Onboarding.createRoute(
                             nextRoute = ScreenRoutes.MainGraph.route,
-                            mode = OnboardingMode.PROFILE.name
-                        )
-                        AuthSuccessDestination.FullOnboarding -> ScreenRoutes.Onboarding.createRoute(
-                            nextRoute = ScreenRoutes.MainGraph.route,
-                            mode = OnboardingMode.INTRO_AND_PROFILE.name
+                            showEntryGuide = destination.showEntryGuide
                         )
                     }
 
@@ -186,7 +185,9 @@ fun NavGraph(
             debugGraph(navController = navController)
         }
 
-        DevNavigationOverlay(navController = navController)
+        if (shouldShowDevOverlay) {
+            DevNavigationOverlay(navController = navController)
+        }
 
         if (showSessionExpiredDialog) {
             SessionExpiredDialog(

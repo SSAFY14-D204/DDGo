@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.R
 import com.ddgo.app.core.ui.theme.PretendardFamily
-import com.ddgo.app.feature.onboarding.OnboardingMode
 import kotlin.math.sqrt
 
 private const val SplashIntroDurationMs = 1830
@@ -68,7 +67,7 @@ fun SplashScreen(
     onNavigateToWelcome: () -> Unit,
     onNavigateToLoginEmail: () -> Unit,
     onNavigateToMain: () -> Unit,
-    onNavigateToOnboarding: (String, OnboardingMode) -> Unit,
+    onNavigateToOnboarding: (String, Boolean) -> Unit,
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     val introProgress = remember { Animatable(0f) }
@@ -115,7 +114,7 @@ fun SplashScreen(
             is SplashNavigationEvent.NavigateToLoginEmail -> onNavigateToLoginEmail()
             is SplashNavigationEvent.NavigateToMain -> onNavigateToMain()
             is SplashNavigationEvent.NavigateToOnboarding -> {
-                onNavigateToOnboarding(destination.nextRoute, destination.mode)
+                onNavigateToOnboarding(destination.nextRoute, destination.showEntryGuide)
             }
         }
     }
