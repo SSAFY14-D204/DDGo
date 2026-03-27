@@ -1,6 +1,7 @@
 package com.ddgo.app.navigation
 
 import android.net.Uri
+import java.util.UUID
 
 sealed class ScreenRoutes(val route: String) {
     object Splash : ScreenRoutes("splash")
@@ -8,11 +9,19 @@ sealed class ScreenRoutes(val route: String) {
     object Onboarding : ScreenRoutes("onboarding") {
         const val ARG_NEXT_ROUTE = "nextRoute"
         const val ARG_SHOW_ENTRY_GUIDE = "showEntryGuide"
+        const val ARG_START_STEP = "startStep"
+        const val ARG_SESSION_KEY = "sessionKey"
         const val ROUTE_WITH_ARG =
-            "onboarding?$ARG_NEXT_ROUTE={$ARG_NEXT_ROUTE}&$ARG_SHOW_ENTRY_GUIDE={$ARG_SHOW_ENTRY_GUIDE}"
+            "onboarding?$ARG_NEXT_ROUTE={$ARG_NEXT_ROUTE}&$ARG_SHOW_ENTRY_GUIDE={$ARG_SHOW_ENTRY_GUIDE}&$ARG_START_STEP={$ARG_START_STEP}&$ARG_SESSION_KEY={$ARG_SESSION_KEY}"
 
-        fun createRoute(nextRoute: String, showEntryGuide: Boolean): String {
-            return "$route?$ARG_NEXT_ROUTE=${Uri.encode(nextRoute)}&$ARG_SHOW_ENTRY_GUIDE=$showEntryGuide"
+        fun createRoute(
+            nextRoute: String,
+            showEntryGuide: Boolean,
+            startStep: String? = null,
+            sessionKey: String = UUID.randomUUID().toString()
+        ): String {
+            val encodedStartStep = Uri.encode(startStep.orEmpty())
+            return "$route?$ARG_NEXT_ROUTE=${Uri.encode(nextRoute)}&$ARG_SHOW_ENTRY_GUIDE=$showEntryGuide&$ARG_START_STEP=$encodedStartStep&$ARG_SESSION_KEY=${Uri.encode(sessionKey)}"
         }
     }
 
@@ -28,7 +37,15 @@ sealed class ScreenRoutes(val route: String) {
         const val REGISTER_PASSWORD = "register_password"
     }
 
-    object Main : ScreenRoutes("main")
+    object Main : ScreenRoutes("main") {
+        const val ARG_GUIDE_STEP = "guideStep"
+        val ROUTE_WITH_ARG = "$route?$ARG_GUIDE_STEP={$ARG_GUIDE_STEP}"
+
+        fun createRoute(guideStep: String? = null): String {
+            val encodedGuideStep = Uri.encode(guideStep.orEmpty())
+            return "$route?$ARG_GUIDE_STEP=$encodedGuideStep"
+        }
+    }
 
     object MainGraph : ScreenRoutes("main_graph")
 

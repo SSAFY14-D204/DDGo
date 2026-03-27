@@ -31,8 +31,8 @@ import kotlinx.coroutines.launch
 private const val TAG = "FigmaOnboardingVm"
 private const val DEFAULT_SEARCH_LATITUDE = 37.5665
 private const val DEFAULT_SEARCH_LONGITUDE = 126.9780
-private const val DEFAULT_HEIGHT = 158
-private const val DEFAULT_WEIGHT_TENTHS = 540
+private const val DEFAULT_HEIGHT = 165
+private const val DEFAULT_WEIGHT_TENTHS = 650
 private const val GYM_SEARCH_DEBOUNCE_MS = 250L
 private const val NICKNAME_CHECK_DEBOUNCE_MS = 350L
 
@@ -55,6 +55,7 @@ class FigmaOnboardingViewModel @Inject constructor(
     private var nicknameSeed: String = "ddgo"
     private var lastCheckedNickname: String? = null
     private var lastCheckedNicknameAvailable: Boolean = false
+    private var hasCustomWingspan: Boolean = false
 
     var isPreparing by mutableStateOf(false)
         private set
@@ -141,6 +142,7 @@ class FigmaOnboardingViewModel @Inject constructor(
                         min = WINGSPAN_RANGE.first,
                         max = WINGSPAN_RANGE.last
                     )
+                    hasCustomWingspan = user.wingspanCm?.let { it > 0f } == true
                     currentNickname = user.nickname.takeIf { it.isNotBlank() }
                     nicknameSeed = "${user.id}:${user.username}"
                     recommendedNickname = buildRecommendedNickname(nicknameSeed, currentNickname)
@@ -175,6 +177,9 @@ class FigmaOnboardingViewModel @Inject constructor(
 
     fun setHeight(value: Int) {
         heightCm = value.coerceIn(HEIGHT_RANGE)
+        if (!hasCustomWingspan) {
+            wingspanCm = heightCm
+        }
         profileErrorMessage = null
     }
 
@@ -190,11 +195,13 @@ class FigmaOnboardingViewModel @Inject constructor(
 
     fun setWingspan(value: Int) {
         wingspanCm = value.coerceIn(WINGSPAN_RANGE)
+        hasCustomWingspan = true
         profileErrorMessage = null
     }
 
     fun applyHeightToWingspan() {
         wingspanCm = heightCm
+        hasCustomWingspan = false
         profileErrorMessage = null
     }
 
@@ -383,8 +390,7 @@ class FigmaOnboardingViewModel @Inject constructor(
     fun weightSummaryText(): String = formatWeightTenths(weightTenthsKg).removeSuffix(".0")
 
     fun shouldShowRecommendedNickname(): Boolean {
-        return recommendedNickname.isNotBlank() &&
-            recommendedNickname != nicknameInput.trim()
+        return recommendedNickname.isNotBlank()
     }
 
     private fun scheduleGymSearch(immediate: Boolean = false) {

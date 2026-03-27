@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -71,6 +72,7 @@ fun MainScreen(
     pendingAnalysisShareRequest: PendingCommunityComposeRequest? = null,
     onPendingAnalysisShareHandled: () -> Unit = {},
     onNavigateToDebug: () -> Unit = {},
+    previewGuideStep: MainEntryGuideStep? = null,
     mainGuideViewModel: MainGuideViewModel = hiltViewModel()
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
@@ -80,7 +82,22 @@ fun MainScreen(
         mutableStateOf<PendingClimbingDestination?>(null)
     }
     val guideStep by mainGuideViewModel.guideStep.collectAsState()
+    val effectiveGuideStep = previewGuideStep ?: guideStep
     val isClimbing = selectedTab == MainTab.CLIMBING
+    val activateFabGuide = remember(previewGuideStep) {
+        {
+            if (previewGuideStep == null) {
+                mainGuideViewModel.onFabGuideActivated()
+            }
+        }
+    }
+    val dismissMenuGuide = remember(previewGuideStep) {
+        {
+            if (previewGuideStep == null) {
+                mainGuideViewModel.dismissMenuGuide()
+            }
+        }
+    }
 
     LaunchedEffect(pendingClimbingDestination, isClimbing) {
         val destination = pendingClimbingDestination ?: return@LaunchedEffect
@@ -110,8 +127,8 @@ fun MainScreen(
         selectedTab = MainTab.COMMUNITY
     }
 
-    LaunchedEffect(guideStep) {
-        when (guideStep) {
+    LaunchedEffect(effectiveGuideStep) {
+        when (effectiveGuideStep) {
             MainEntryGuideStep.MENU -> {
                 if (selectedTab != MainTab.CLIMBING) {
                     selectedTab = MainTab.CLIMBING
@@ -130,8 +147,8 @@ fun MainScreen(
     }
 
     BackHandler(enabled = isClimbing) {
-        if (guideStep == MainEntryGuideStep.MENU) {
-            mainGuideViewModel.dismissMenuGuide()
+        if (effectiveGuideStep == MainEntryGuideStep.MENU) {
+            dismissMenuGuide()
         }
         selectedTab = lastActiveTab
     }
@@ -194,33 +211,33 @@ fun MainScreen(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {
-                        if (guideStep == MainEntryGuideStep.MENU) {
-                            mainGuideViewModel.dismissMenuGuide()
+                        if (effectiveGuideStep == MainEntryGuideStep.MENU) {
+                            dismissMenuGuide()
                         }
                         selectedTab = lastActiveTab
                     }
             )
         }
 
-        if (guideStep == MainEntryGuideStep.FAB) {
+        if (effectiveGuideStep == MainEntryGuideStep.FAB) {
             FabGuideOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(MainZIndex.GUIDE_OVERLAY),
                 onFabClick = {
-                    mainGuideViewModel.onFabGuideActivated()
+                    activateFabGuide()
                     selectedTab = MainTab.CLIMBING
                 }
             )
         }
 
-        if (guideStep == MainEntryGuideStep.MENU) {
+        if (effectiveGuideStep == MainEntryGuideStep.MENU) {
             MenuGuideOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(MainZIndex.GUIDE_OVERLAY),
                 onDismiss = {
-                    mainGuideViewModel.dismissMenuGuide()
+                    dismissMenuGuide()
                     selectedTab = lastActiveTab
                 }
             )
@@ -235,10 +252,10 @@ fun MainScreen(
             ClimbingFloatingButton(
                 isSelected = isClimbing,
                 onClick = {
-                    if (guideStep == MainEntryGuideStep.FAB) {
-                        mainGuideViewModel.onFabGuideActivated()
-                    } else if (guideStep == MainEntryGuideStep.MENU && isClimbing) {
-                        mainGuideViewModel.dismissMenuGuide()
+                    if (effectiveGuideStep == MainEntryGuideStep.FAB) {
+                        activateFabGuide()
+                    } else if (effectiveGuideStep == MainEntryGuideStep.MENU && isClimbing) {
+                        dismissMenuGuide()
                     }
 
                     if (isClimbing) {
@@ -255,27 +272,33 @@ fun MainScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = MainChromeDefaults.MenuOverlayBottomPadding)
+                    .padding(
+                        bottom = if (effectiveGuideStep == MainEntryGuideStep.MENU) {
+                            137.dp
+                        } else {
+                            MainChromeDefaults.MenuOverlayBottomPadding
+                        }
+                    )
                     .zIndex(MainZIndex.MENU_OVERLAY)
             ) {
                 ClimbingMenuOverlay(
                     onNavigateToUpload = {
-                        if (guideStep == MainEntryGuideStep.MENU) {
-                            mainGuideViewModel.dismissMenuGuide()
+                        if (effectiveGuideStep == MainEntryGuideStep.MENU) {
+                            dismissMenuGuide()
                         }
                         pendingClimbingDestination = PendingClimbingDestination.Upload
                         selectedTab = lastActiveTab
                     },
                     onNavigateToRecord = {
-                        if (guideStep == MainEntryGuideStep.MENU) {
-                            mainGuideViewModel.dismissMenuGuide()
+                        if (effectiveGuideStep == MainEntryGuideStep.MENU) {
+                            dismissMenuGuide()
                         }
                         pendingClimbingDestination = PendingClimbingDestination.Record
                         selectedTab = lastActiveTab
                     },
                     onDismiss = {
-                        if (guideStep == MainEntryGuideStep.MENU) {
-                            mainGuideViewModel.dismissMenuGuide()
+                        if (effectiveGuideStep == MainEntryGuideStep.MENU) {
+                            dismissMenuGuide()
                         }
                         if (pendingClimbingDestination == null) {
                             selectedTab = lastActiveTab
@@ -309,14 +332,16 @@ private fun FabGuideOverlay(
     modifier: Modifier = Modifier,
     onFabClick: () -> Unit
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.58f))
+            .background(Color(0xFF48464E).copy(alpha = 0.75f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {}
     ) {
+        val scale = maxWidth / 412.dp
+
         Text(
             text = buildAnnotatedString {
                 append("분석을 위해 ")
@@ -333,25 +358,25 @@ private fun FabGuideOverlay(
                 textAlign = TextAlign.Center
             ),
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(x = 72.dp, y = (-188).dp)
+                .align(Alignment.TopStart)
+                .padding(start = 160.dp * scale, top = 689.dp * scale)
         )
 
         SvgAssetImage(
             assetPath = GUIDE_1_ARROW_ASSET,
             contentDescription = null,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(x = 104.dp, y = (-112).dp)
-                .size(width = 58.dp, height = 72.dp)
+                .align(Alignment.TopStart)
+                .padding(start = 257.dp * scale, top = 719.dp * scale)
+                .size(width = 88.dp * scale, height = 81.dp * scale)
                 .rotate(68.29f)
         )
 
         Surface(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 28.dp)
-                .size(width = 86.dp, height = 110.dp)
+                .align(Alignment.TopStart)
+                .padding(start = 155.dp * scale, top = 754.dp * scale)
+                .size(width = 104.dp * scale, height = 110.dp * scale)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -365,15 +390,15 @@ private fun FabGuideOverlay(
                     assetPath = GUIDE_2_FAB_BG_ASSET,
                     contentDescription = null,
                     modifier = Modifier
-                        .padding(top = 10.dp)
-                        .size(70.dp)
+                        .padding(top = 11.dp * scale)
+                        .size(70.dp * scale)
                 )
                 SvgAssetImage(
                     assetPath = GUIDE_1_FAB_ICON_ASSET,
                     contentDescription = null,
                     modifier = Modifier
-                        .offset(y = (-61).dp)
-                        .size(width = 29.dp, height = 36.dp)
+                        .offset(y = (-60.dp * scale))
+                        .size(width = 29.dp * scale, height = 36.dp * scale)
                 )
                 Text(
                     text = "클라이밍",
@@ -383,7 +408,7 @@ private fun FabGuideOverlay(
                         color = Color(0xFF505050),
                         textAlign = TextAlign.Center
                     ),
-                    modifier = Modifier.offset(y = (-34).dp)
+                    modifier = Modifier.offset(y = (-24.dp * scale))
                 )
             }
         }
@@ -395,23 +420,33 @@ private fun MenuGuideOverlay(
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit
 ) {
-    Box(modifier = modifier) {
+    BoxWithConstraints(
+        modifier = modifier
+            .background(Color(0xFF48464E).copy(alpha = 0.75f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            )
+    ) {
+        val scale = maxWidth / 412.dp
+
         GuideCaption(
             lines = listOf("과거 영상 분석은", "영상 업로드에서"),
             accent = "영상 업로드",
             accentColor = Color(0xFFFF70A2),
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 24.dp, bottom = 292.dp)
+                .align(Alignment.TopStart)
+                .padding(start = 25.dp * scale, top = 471.dp * scale)
         )
 
         SvgAssetImage(
             assetPath = GUIDE_2_ARROW_LEFT_ASSET,
             contentDescription = null,
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 10.dp, bottom = 210.dp)
-                .size(width = 102.dp, height = 49.dp)
+                .align(Alignment.TopStart)
+                .padding(start = 14.dp * scale, top = 527.dp * scale)
+                .size(width = 85.dp * scale, height = 113.dp * scale)
                 .scale(scaleX = 1f, scaleY = -1f)
                 .rotate(66.56f)
         )
@@ -421,25 +456,25 @@ private fun MenuGuideOverlay(
             accent = "실시간 기록",
             accentColor = Color(0xFF92F697),
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 18.dp, bottom = 236.dp)
+                .align(Alignment.TopEnd)
+                .padding(end = 32.dp * scale, top = 527.dp * scale)
         )
 
         SvgAssetImage(
             assetPath = GUIDE_2_ARROW_RIGHT_ASSET,
             contentDescription = null,
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 18.dp, bottom = 168.dp)
-                .size(width = 121.dp, height = 58.dp)
+                .align(Alignment.TopStart)
+                .padding(start = 313.dp * scale, top = 579.dp * scale)
+                .size(width = 81.dp * scale, height = 130.dp * scale)
                 .rotate(101.33f)
         )
 
         Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 40.dp)
-                .size(86.dp)
+                .align(Alignment.TopStart)
+                .padding(start = 171.dp * scale, top = 765.dp * scale)
+                .size(70.dp * scale)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

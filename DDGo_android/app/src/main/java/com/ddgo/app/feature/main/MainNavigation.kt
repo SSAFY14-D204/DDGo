@@ -2,10 +2,12 @@ package com.ddgo.app.feature.main
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.navigation.NavType
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
+import androidx.navigation.navArgument
 import com.ddgo.app.feature.calendar.CALENDAR_DETAIL_RESULT_CHALLENGE_ID
 import com.ddgo.app.feature.calendar.calendarDetailRoute
 import com.ddgo.app.feature.calendar.navigateToCalendarDetail
@@ -13,6 +15,7 @@ import com.ddgo.app.feature.calendar.rememberSharedCalendarViewModel
 import com.ddgo.app.feature.climbing.record.recordGraph
 import com.ddgo.app.feature.climbing.upload.navigateToUpload
 import com.ddgo.app.feature.climbing.upload.uploadGraph
+import com.ddgo.app.core.datastore.MainEntryGuideStep
 import com.ddgo.app.navigation.PENDING_COMMUNITY_COMPOSE_REQUEST_KEY
 import com.ddgo.app.navigation.toPendingCommunityComposeRequestOrNull
 import com.ddgo.app.navigation.ScreenRoutes
@@ -38,7 +41,16 @@ fun NavGraphBuilder.mainGraph(
         startDestination = ScreenRoutes.Main.route,
         route = ScreenRoutes.MainGraph.route
     ) {
-        composable(route = ScreenRoutes.Main.route) { backStackEntry ->
+        composable(
+            route = ScreenRoutes.Main.ROUTE_WITH_ARG,
+            arguments = listOf(
+                navArgument(ScreenRoutes.Main.ARG_GUIDE_STEP) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
             val calendarViewModel = rememberSharedCalendarViewModel(navController, backStackEntry)
             val pendingCalendarChallengeId by backStackEntry.savedStateHandle
                 .getStateFlow<Long?>(CALENDAR_DETAIL_RESULT_CHALLENGE_ID, null)
@@ -48,6 +60,10 @@ fun NavGraphBuilder.mainGraph(
                 .collectAsState()
             val pendingCommunityComposeRequest = pendingCommunityComposeRequestJson
                 ?.toPendingCommunityComposeRequestOrNull()
+            val previewGuideStep = backStackEntry.arguments
+                ?.getString(ScreenRoutes.Main.ARG_GUIDE_STEP)
+                ?.takeIf { it.isNotBlank() }
+                ?.let(MainEntryGuideStep::fromStoredValue)
 
             MainScreen(
                 onNavigateToUpload = {
@@ -67,7 +83,8 @@ fun NavGraphBuilder.mainGraph(
                 onPendingAnalysisShareHandled = {
                     backStackEntry.savedStateHandle[PENDING_COMMUNITY_COMPOSE_REQUEST_KEY] = null
                 },
-                onNavigateToDebug = onNavigateToDebug
+                onNavigateToDebug = onNavigateToDebug,
+                previewGuideStep = previewGuideStep
             )
         }
 
