@@ -30,6 +30,7 @@ import com.ddgo.app.feature.climbing.upload.buildChallengeFinalAnalysisSummary
 import com.ddgo.app.feature.climbing.upload.buildFinalAnalysisAttemptSummaries
 import com.ddgo.app.feature.climbing.upload.calculateExpandedVerticalCropBoundsFromSelectedHoldExtents
 import com.ddgo.app.feature.climbing.upload.formatAnalysisDate
+import com.ddgo.app.feature.climbing.upload.officialAttemptStartTimeMs
 import com.ddgo.app.feature.climbing.upload.withAlignedDisplayCrux
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.FinalAnalysisPage
@@ -179,8 +180,7 @@ fun FinalAnalysisRoute(
     val currentAttemptContactDebugResult = viewModel.currentAttemptPolygonHoldContactDebugResult
     val currentAttemptPrePoseEntry = viewModel.currentAttemptPrePoseEntry
     val analysisStartTimeMs = remember(currentAttemptPrePoseEntry) {
-        currentAttemptPrePoseEntry?.wallArrivalTimeMs
-            ?: currentAttemptPrePoseEntry?.personObservationStartTimeMs
+        currentAttemptPrePoseEntry.officialAttemptStartTimeMs()
     }
     val analysisEndTimeMs = remember(currentAttemptPrePoseEntry) {
         currentAttemptPrePoseEntry?.resolvedAttemptEndTimeMs
@@ -188,7 +188,7 @@ fun FinalAnalysisRoute(
     }
     val boundaryTimelinePoints = remember(currentAttemptPrePoseEntry) {
         buildAttemptBoundaryTimelinePoints(
-            wallArrivalTimeMs = currentAttemptPrePoseEntry?.wallArrivalTimeMs,
+            wallArrivalTimeMs = currentAttemptPrePoseEntry.officialAttemptStartTimeMs(),
             personObservationStartTimeMs = currentAttemptPrePoseEntry?.personObservationStartTimeMs,
             endTimeMs = currentAttemptPrePoseEntry?.resolvedAttemptEndTimeMs
                 ?: currentAttemptPrePoseEntry?.handPeakAnnotation?.endTimeMs
@@ -327,7 +327,7 @@ fun FinalAnalysisRoute(
                 overlayCache = viewModel.currentAttemptOverlayCache,
                 rawHolds = viewModel.allRawHolds,
                 viewportCropBounds = selectedAttemptCropBounds,
-                wallArrivalTimeMs = viewModel.currentAttemptPrePoseEntry?.wallArrivalTimeMs,
+                wallArrivalTimeMs = viewModel.currentAttemptPrePoseEntry.officialAttemptStartTimeMs(),
                 personObservationStartTimeMs = viewModel.currentAttemptPrePoseEntry?.personObservationStartTimeMs,
                 usesPoseTimeline = viewModel.currentAttemptPrePoseEntry != null,
                 seekRequestId = seekRequestId,
@@ -754,11 +754,11 @@ private fun buildAttemptBoundaryTimelinePoints(
     personObservationStartTimeMs: Long?,
     endTimeMs: Long?
 ): List<AnalysisPoint> = buildList {
-    (wallArrivalTimeMs ?: personObservationStartTimeMs)?.let { startTimeMs ->
+    (wallArrivalTimeMs ?: personObservationStartTimeMs)?.let { safeStartTimeMs ->
         add(
             AnalysisPoint(
                 index = 0,
-                timeMs = startTimeMs,
+                timeMs = safeStartTimeMs,
                 description = "등반 시작",
                 kind = AnalysisPointKind.PERSON_OBSERVATION_START
             )

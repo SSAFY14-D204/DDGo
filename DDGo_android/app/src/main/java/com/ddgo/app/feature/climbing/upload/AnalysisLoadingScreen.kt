@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -52,8 +53,18 @@ fun AnalysisLoadingScreen(
     val ddLoadingBaseSize = 220.dp
     val ddLoadingScale = 1.2f
     val ddLoadingSize = ddLoadingBaseSize * ddLoadingScale
-    val scanLightScale = 2.5f
     val scanTravelAmplitude = ddLoadingSize.value * 0.6f
+    val ddLoadingPainter = painterResource(id = R.drawable.dd_loading)
+    val scanLightPainter = painterResource(id = R.drawable.scan_light_loading)
+    val scanLightIntrinsicSize = scanLightPainter.intrinsicSize
+    val scanLightAspectRatio = if (
+        scanLightIntrinsicSize.width > 0f &&
+        scanLightIntrinsicSize.height > 0f
+    ) {
+        scanLightIntrinsicSize.width / scanLightIntrinsicSize.height
+    } else {
+        4f
+    }
     val phaseTitle = when (phase) {
         AnalysisLoadingPhase.AttemptResultPreparation -> "디디고가 자세를 분석하고 있어요"
         AnalysisLoadingPhase.FinalAnalysisPreparation -> "최종 결과물을 가져오고 있습니다."
@@ -183,10 +194,12 @@ fun AnalysisLoadingScreen(
 
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(300.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.dd_loading),
+                    painter = ddLoadingPainter,
                     contentDescription = "DDGO loading character",
                     modifier = Modifier
                         .size(ddLoadingBaseSize)
@@ -198,16 +211,13 @@ fun AnalysisLoadingScreen(
                 )
 
                 Image(
-                    painter = painterResource(id = R.drawable.scan_light_loading),
+                    painter = scanLightPainter,
                     contentDescription = "Scan light",
                     modifier = Modifier
                         .fillMaxWidth()
+                        .aspectRatio(scanLightAspectRatio)
                         .align(Alignment.Center)
                         .offset(y = offsetY.dp)
-                        .graphicsLayer {
-                            scaleX = scanLightScale
-                            scaleY = scanLightScale
-                        }
                 )
             }
         }

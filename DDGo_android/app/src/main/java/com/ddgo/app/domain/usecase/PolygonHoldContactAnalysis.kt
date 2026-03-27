@@ -24,10 +24,25 @@ private const val LEFT_INDEX_INDEX = 19
 private const val RIGHT_INDEX_INDEX = 20
 private const val LEFT_THUMB_INDEX = 21
 private const val RIGHT_THUMB_INDEX = 22
+private const val LEFT_SHOULDER_INDEX = 11
+private const val RIGHT_SHOULDER_INDEX = 12
+private const val LEFT_ANKLE_INDEX = 27
+private const val RIGHT_ANKLE_INDEX = 28
+private const val LEFT_HIP_INDEX = 23
+private const val RIGHT_HIP_INDEX = 24
 private const val LEFT_HEEL_INDEX = 29
 private const val RIGHT_HEEL_INDEX = 30
 private const val LEFT_FOOT_INDEX = 31
 private const val RIGHT_FOOT_INDEX = 32
+private const val DEFAULT_MIN_VISIBILITY = 0.5f
+private const val DEFAULT_MIN_PRESENCE = 0.5f
+
+private val START_TORSO_LANDMARK_INDICES = listOf(
+    LEFT_SHOULDER_INDEX,
+    RIGHT_SHOULDER_INDEX,
+    LEFT_HIP_INDEX,
+    RIGHT_HIP_INDEX
+)
 
 private val POSE_PIXEL_REFERENCE_NAMES = mapOf(
     "left_shoulder" to 11,
@@ -42,8 +57,8 @@ private val POSE_PIXEL_REFERENCE_NAMES = mapOf(
     "right_hip" to 24,
     "left_knee" to 25,
     "right_knee" to 26,
-    "left_ankle" to 27,
-    "right_ankle" to 28
+    "left_ankle" to LEFT_ANKLE_INDEX,
+    "right_ankle" to RIGHT_ANKLE_INDEX
 )
 
 data class PolygonHoldContactConfig(
@@ -129,6 +144,74 @@ fun PolygonHoldContactDebugResult.findSuccessfulTopContactTimeMs(
     }?.frameTimeMs
 }
 
+fun PolygonHoldContactDebugResult.findFirstStartFootContactTimeMs(
+    startHoldNo: Int?,
+    analysisStartTimeMs: Long?
+): Long? {
+    val resolvedStartHoldNo = startHoldNo?.takeIf { it > 0 } ?: return null
+    return frames.firstOrNull { frame ->
+        if (analysisStartTimeMs != null && frame.frameTimeMs < analysisStartTimeMs) {
+            return@firstOrNull false
+        }
+        val limbStatesByLimb = frame.limbStates.associateBy(PolygonLimbFrameState::limb)
+        limbStatesByLimb[PolygonTrackedLimb.LEFT_FOOT]?.activeHoldNo == resolvedStartHoldNo ||
+        limbStatesByLimb[PolygonTrackedLimb.RIGHT_FOOT]?.activeHoldNo == resolvedStartHoldNo
+    }?.frameTimeMs
+}
+
+fun findFirstStartFootInsideTimeMs(
+    poses: List<Pose>,
+    holds: List<HoldNumbered>,
+    startHoldNo: Int?,
+    analysisStartTimeMs: Long?,
+    minVisibility: Float = DEFAULT_MIN_VISIBILITY,
+    minPresence: Float = DEFAULT_MIN_PRESENCE,
+    config: PolygonHoldContactConfig = PolygonHoldContactConfig()
+): Long? {
+    if (poses.isEmpty() || holds.isEmpty()) return null
+
+    val frameSize = estimateFrameSizePx(
+        poses = poses,
+        config = config
+    )
+    val selectedHoldDetections = holds
+        .filter { hold -> hold.holdNo > 0 }
+        .map { hold ->
+            buildPolygonHoldDetection(
+                hold = hold,
+                frameSize = frameSize
+            )
+        }
+    if (selectedHoldDetections.isEmpty()) return null
+
+    return poses
+        .asSequence()
+        .sortedBy(Pose::frameTimeMs)
+        .filter { pose ->
+            analysisStartTimeMs == null || pose.frameTimeMs >= analysisStartTimeMs
+        }
+        .firstOrNull { pose ->
+            pose.hasConfidentTorsoLandmarks(
+                minVisibility = minVisibility,
+                minPresence = minPresence
+            ) &&
+                computeContactPointsPx(
+                    pose = pose,
+                    frameSize = frameSize
+                ).footPointCandidates()
+                    .mapNotNull(LimbPointCandidate::pointPx)
+                    .any { pointPx ->
+                        selectedHoldDetections.any { holdDetection ->
+                            polygonProximity(
+                                point = pointPx,
+                                polygon = holdDetection.polygonPx
+                            ).insidePolygon
+                        }
+                    }
+        }
+        ?.frameTimeMs
+}
+
 fun PolygonHoldContactDebugResult.toAttemptHoldReachResult(
     holds: List<HoldNumbered>,
     analysisStartTimeMs: Long? = null,
@@ -212,8 +295,8 @@ private data class TrackerLimbState(
     var activeHoldNo: Int? = null,
     var candidateHoldNo: Int? = null,
     var candidateSinceMs: Long? = null,
-    var lastPointPx: PointPx? = null,
-    var lastTimestampMs: Long? = null,
+    val lastPointPxByKey: MutableMap<String, PointPx> = mutableMapOf(),
+    val lastTimestampMsByKey: MutableMap<String, Long> = mutableMapOf(),
     var lastTransition: String? = null,
     var lastDistancePx: Float? = null,
     var lastSpeedPxPerSec: Float = 0f
@@ -228,6 +311,29 @@ private data class LimbComputationResult(
     val transition: String?,
     val insidePolygon: Boolean?,
     val contactPointPx: PointPx?
+)
+
+private data class LimbPointCandidate(
+    val key: String,
+    val priority: Int,
+    val pointPx: PointPx?
+)
+
+private data class EvaluatedLimbPoint(
+    val key: String,
+    val priority: Int,
+    val pointPx: PointPx,
+    val speedPxPerSec: Float
+)
+
+private data class EvaluatedHoldCandidate(
+    val point: EvaluatedLimbPoint,
+    val hold: PolygonHoldDetection,
+    val insidePolygon: Boolean,
+    val distancePx: Float,
+    val enterMargin: Float,
+    val exitMargin: Float,
+    val reachRadius: Float
 )
 
 fun analyzePolygonHoldContacts(
@@ -269,7 +375,7 @@ fun analyzePolygonHoldContacts(
     val trackerStates = PolygonTrackedLimb.entries.associateWith { TrackerLimbState() }.toMutableMap()
 
     val frames = poses.sortedBy(Pose::frameTimeMs).map { pose ->
-        val limbPoints = computeContactPointsPx(
+        val limbPointCandidates = computeContactPointsPx(
             pose = pose,
             frameSize = frameSize
         )
@@ -278,7 +384,7 @@ fun analyzePolygonHoldContacts(
             val result = updateSingleLimb(
                 limb = limb,
                 state = trackerStates.getValue(limb),
-                pointPx = limbPoints[limb],
+                pointCandidates = limbPointCandidates[limb].orEmpty(),
                 timestampMs = pose.frameTimeMs,
                 detections = holdDetections,
                 config = config
@@ -389,12 +495,18 @@ private fun buildPolygonHoldDetection(
 private fun updateSingleLimb(
     limb: PolygonTrackedLimb,
     state: TrackerLimbState,
-    pointPx: PointPx?,
+    pointCandidates: List<LimbPointCandidate>,
     timestampMs: Long,
     detections: List<PolygonHoldDetection>,
     config: PolygonHoldContactConfig
 ): LimbComputationResult {
-    if (pointPx == null || detections.isEmpty()) {
+    val evaluatedPoints = evaluatePointCandidates(
+        state = state,
+        pointCandidates = pointCandidates,
+        timestampMs = timestampMs
+    )
+
+    if (evaluatedPoints.isEmpty() || detections.isEmpty()) {
         state.state = "FREE"
         state.activeHoldNo = null
         state.candidateHoldNo = null
@@ -402,8 +514,8 @@ private fun updateSingleLimb(
         state.lastTransition = "missing"
         state.lastDistancePx = null
         state.lastSpeedPxPerSec = 0f
-        state.lastTimestampMs = timestampMs
-        state.lastPointPx = pointPx
+        state.lastPointPxByKey.clear()
+        state.lastTimestampMsByKey.clear()
         return LimbComputationResult(
             state = state.state,
             activeHoldNo = null,
@@ -412,25 +524,10 @@ private fun updateSingleLimb(
             speedPxPerSec = 0f,
             transition = state.lastTransition,
             insidePolygon = null,
-            contactPointPx = pointPx
+            contactPointPx = null
         )
     }
 
-    val speedPxPerSec = if (state.lastPointPx != null && state.lastTimestampMs != null) {
-        val dtSeconds = max((timestampMs - state.lastTimestampMs!!).toFloat() / 1000f, 1e-6f)
-        distance(state.lastPointPx!!, pointPx) / dtSeconds
-    } else {
-        0f
-    }
-
-    state.lastPointPx = pointPx
-    state.lastTimestampMs = timestampMs
-    state.lastSpeedPxPerSec = speedPxPerSec
-
-    var nearest = findNearestHold(pointPx, detections)
-    var hold = nearest.hold
-    var insidePolygon = nearest.insidePolygon
-    var distancePx = nearest.distancePx
     val dwellMs = if (limb.isHand) config.handDwellMs else config.footDwellMs
     val speedThreshold = if (limb.isHand) {
         config.handSpeedThresholdPxPerSec
@@ -438,20 +535,21 @@ private fun updateSingleLimb(
         config.footSpeedThresholdPxPerSec
     }
 
-    val enterMargin = max(config.minEnterMarginPx, hold.radiusPx * config.enterMarginScale)
-    val exitMargin = max(config.minExitMarginPx, hold.radiusPx * config.exitMarginScale)
-    val reachRadius = max(enterMargin * 1.5f, hold.radiusPx * config.reachRadiusScale)
-
     var transition: String? = null
+    var selectedCandidate: EvaluatedHoldCandidate? = null
+    var selectedSpeedPxPerSec = 0f
 
     if (state.activeHoldNo != null) {
         val activeHold = detections.firstOrNull { it.hold.holdNo == state.activeHoldNo }
         if (activeHold != null) {
-            val activeProximity = polygonProximity(pointPx, activeHold.polygonPx)
-            if (activeProximity.insidePolygon || activeProximity.distancePx <= exitMargin) {
-                hold = activeHold
-                insidePolygon = activeProximity.insidePolygon
-                distancePx = activeProximity.distancePx
+            val activeCandidate = selectActiveHoldCandidate(
+                points = evaluatedPoints,
+                activeHold = activeHold,
+                config = config
+            )
+            if (activeCandidate != null) {
+                selectedCandidate = activeCandidate
+                selectedSpeedPxPerSec = activeCandidate.point.speedPxPerSec
             } else {
                 transition = "release"
                 state.state = "RELEASE"
@@ -463,45 +561,154 @@ private fun updateSingleLimb(
     }
 
     if (state.activeHoldNo == null) {
-        if (insidePolygon || distancePx <= enterMargin) {
-            if (state.candidateHoldNo != hold.hold.holdNo) {
-                state.candidateHoldNo = hold.hold.holdNo
+        val engageCandidate = selectPreferredHoldCandidate(
+            points = evaluatedPoints,
+            detections = detections,
+            config = config
+        ) { candidate ->
+            candidate.insidePolygon || candidate.distancePx <= candidate.enterMargin
+        }
+
+        if (engageCandidate != null) {
+            selectedCandidate = engageCandidate
+            selectedSpeedPxPerSec = engageCandidate.point.speedPxPerSec
+
+            if (state.candidateHoldNo != engageCandidate.hold.hold.holdNo) {
+                state.candidateHoldNo = engageCandidate.hold.hold.holdNo
                 state.candidateSinceMs = timestampMs
             }
 
             val elapsedMs = if (state.candidateSinceMs == null) 0L else timestampMs - state.candidateSinceMs!!
-            if (elapsedMs >= dwellMs && speedPxPerSec <= speedThreshold) {
-                state.activeHoldNo = hold.hold.holdNo
+            if (elapsedMs >= dwellMs && engageCandidate.point.speedPxPerSec <= speedThreshold) {
+                state.activeHoldNo = engageCandidate.hold.hold.holdNo
                 state.state = limb.engagedState
                 transition = "engage"
             } else {
                 state.state = "REACH"
             }
-        } else if (distancePx <= reachRadius) {
-            state.state = "REACH"
-            state.candidateHoldNo = null
-            state.candidateSinceMs = null
         } else {
-            state.state = "FREE"
-            state.candidateHoldNo = null
-            state.candidateSinceMs = null
+            val reachCandidate = selectPreferredHoldCandidate(
+                points = evaluatedPoints,
+                detections = detections,
+                config = config
+            ) { candidate ->
+                candidate.distancePx <= candidate.reachRadius
+            }
+            selectedCandidate = reachCandidate
+            selectedSpeedPxPerSec = reachCandidate?.point?.speedPxPerSec ?: 0f
+
+            if (reachCandidate != null) {
+                state.state = "REACH"
+                state.candidateHoldNo = null
+                state.candidateSinceMs = null
+            } else {
+                state.state = "FREE"
+                state.candidateHoldNo = null
+                state.candidateSinceMs = null
+            }
         }
     } else {
         state.state = limb.engagedState
     }
 
     state.lastTransition = transition
-    state.lastDistancePx = distancePx
+    state.lastDistancePx = selectedCandidate?.distancePx
+    state.lastSpeedPxPerSec = selectedSpeedPxPerSec
 
     return LimbComputationResult(
         state = state.state,
         activeHoldNo = state.activeHoldNo,
         candidateHoldNo = state.candidateHoldNo,
-        distancePx = distancePx,
-        speedPxPerSec = speedPxPerSec,
+        distancePx = selectedCandidate?.distancePx,
+        speedPxPerSec = selectedSpeedPxPerSec,
         transition = transition,
-        insidePolygon = insidePolygon,
-        contactPointPx = pointPx
+        insidePolygon = selectedCandidate?.insidePolygon,
+        contactPointPx = selectedCandidate?.point?.pointPx
+    )
+}
+
+private fun evaluatePointCandidates(
+    state: TrackerLimbState,
+    pointCandidates: List<LimbPointCandidate>,
+    timestampMs: Long
+): List<EvaluatedLimbPoint> = pointCandidates.mapNotNull { candidate ->
+    val pointPx = candidate.pointPx
+    if (pointPx == null) {
+        state.lastPointPxByKey.remove(candidate.key)
+        state.lastTimestampMsByKey.remove(candidate.key)
+        return@mapNotNull null
+    }
+
+    val previousPointPx = state.lastPointPxByKey[candidate.key]
+    val previousTimestampMs = state.lastTimestampMsByKey[candidate.key]
+    val speedPxPerSec = if (previousPointPx != null && previousTimestampMs != null) {
+        val dtSeconds = max((timestampMs - previousTimestampMs).toFloat() / 1000f, 1e-6f)
+        distance(previousPointPx, pointPx) / dtSeconds
+    } else {
+        0f
+    }
+
+    state.lastPointPxByKey[candidate.key] = pointPx
+    state.lastTimestampMsByKey[candidate.key] = timestampMs
+
+    EvaluatedLimbPoint(
+        key = candidate.key,
+        priority = candidate.priority,
+        pointPx = pointPx,
+        speedPxPerSec = speedPxPerSec
+    )
+}
+
+private fun selectPreferredHoldCandidate(
+    points: List<EvaluatedLimbPoint>,
+    detections: List<PolygonHoldDetection>,
+    config: PolygonHoldContactConfig,
+    predicate: (EvaluatedHoldCandidate) -> Boolean
+): EvaluatedHoldCandidate? = points
+    .sortedBy(EvaluatedLimbPoint::priority)
+    .map { point ->
+        buildHoldCandidate(
+            point = point,
+            hold = findNearestHold(point.pointPx, detections).hold,
+            config = config
+        )
+    }
+    .firstOrNull(predicate)
+
+private fun selectActiveHoldCandidate(
+    points: List<EvaluatedLimbPoint>,
+    activeHold: PolygonHoldDetection,
+    config: PolygonHoldContactConfig
+): EvaluatedHoldCandidate? = points
+    .sortedBy(EvaluatedLimbPoint::priority)
+    .map { point ->
+        buildHoldCandidate(
+            point = point,
+            hold = activeHold,
+            config = config
+        )
+    }
+    .firstOrNull { candidate ->
+        candidate.insidePolygon || candidate.distancePx <= candidate.exitMargin
+    }
+
+private fun buildHoldCandidate(
+    point: EvaluatedLimbPoint,
+    hold: PolygonHoldDetection,
+    config: PolygonHoldContactConfig
+): EvaluatedHoldCandidate {
+    val proximity = polygonProximity(point.pointPx, hold.polygonPx)
+    val enterMargin = max(config.minEnterMarginPx, hold.radiusPx * config.enterMarginScale)
+    val exitMargin = max(config.minExitMarginPx, hold.radiusPx * config.exitMarginScale)
+    val reachRadius = max(enterMargin * 1.5f, hold.radiusPx * config.reachRadiusScale)
+    return EvaluatedHoldCandidate(
+        point = point,
+        hold = hold,
+        insidePolygon = proximity.insidePolygon,
+        distancePx = proximity.distancePx,
+        enterMargin = enterMargin,
+        exitMargin = exitMargin,
+        reachRadius = reachRadius
     )
 }
 
@@ -577,30 +784,72 @@ private fun candidateHolds(
 private fun computeContactPointsPx(
     pose: Pose,
     frameSize: FrameSizePx
-): Map<PolygonTrackedLimb, PointPx?> = mapOf(
-    PolygonTrackedLimb.LEFT_HAND to inferPalmContactPx(
-        wrist = pose.landmarkPx(LEFT_WRIST_INDEX, frameSize),
-        elbow = pose.landmarkPx(LEFT_ELBOW_INDEX, frameSize),
-        indexTip = pose.landmarkPx(LEFT_INDEX_INDEX, frameSize),
-        pinkyTip = pose.landmarkPx(LEFT_PINKY_INDEX, frameSize),
-        thumbTip = pose.landmarkPx(LEFT_THUMB_INDEX, frameSize)
+): Map<PolygonTrackedLimb, List<LimbPointCandidate>> = mapOf(
+    PolygonTrackedLimb.LEFT_HAND to listOf(
+        LimbPointCandidate(
+            key = "left_hand",
+            priority = 0,
+            pointPx = inferPalmContactPx(
+                wrist = pose.landmarkPx(LEFT_WRIST_INDEX, frameSize),
+                elbow = pose.landmarkPx(LEFT_ELBOW_INDEX, frameSize),
+                indexTip = pose.landmarkPx(LEFT_INDEX_INDEX, frameSize),
+                pinkyTip = pose.landmarkPx(LEFT_PINKY_INDEX, frameSize),
+                thumbTip = pose.landmarkPx(LEFT_THUMB_INDEX, frameSize)
+            )
+        )
     ),
-    PolygonTrackedLimb.RIGHT_HAND to inferPalmContactPx(
-        wrist = pose.landmarkPx(RIGHT_WRIST_INDEX, frameSize),
-        elbow = pose.landmarkPx(RIGHT_ELBOW_INDEX, frameSize),
-        indexTip = pose.landmarkPx(RIGHT_INDEX_INDEX, frameSize),
-        pinkyTip = pose.landmarkPx(RIGHT_PINKY_INDEX, frameSize),
-        thumbTip = pose.landmarkPx(RIGHT_THUMB_INDEX, frameSize)
+    PolygonTrackedLimb.RIGHT_HAND to listOf(
+        LimbPointCandidate(
+            key = "right_hand",
+            priority = 0,
+            pointPx = inferPalmContactPx(
+                wrist = pose.landmarkPx(RIGHT_WRIST_INDEX, frameSize),
+                elbow = pose.landmarkPx(RIGHT_ELBOW_INDEX, frameSize),
+                indexTip = pose.landmarkPx(RIGHT_INDEX_INDEX, frameSize),
+                pinkyTip = pose.landmarkPx(RIGHT_PINKY_INDEX, frameSize),
+                thumbTip = pose.landmarkPx(RIGHT_THUMB_INDEX, frameSize)
+            )
+        )
     ),
-    PolygonTrackedLimb.LEFT_FOOT to inferForefootContactPx(
-        heel = pose.landmarkPx(LEFT_HEEL_INDEX, frameSize),
-        toe = pose.landmarkPx(LEFT_FOOT_INDEX, frameSize)
+    PolygonTrackedLimb.LEFT_FOOT to listOf(
+        LimbPointCandidate(
+            key = "left_foot_index",
+            priority = 0,
+            pointPx = pose.landmarkPx(LEFT_FOOT_INDEX, frameSize)
+        ),
+        LimbPointCandidate(
+            key = "left_heel",
+            priority = 1,
+            pointPx = pose.landmarkPx(LEFT_HEEL_INDEX, frameSize)
+        ),
+        LimbPointCandidate(
+            key = "left_ankle",
+            priority = 2,
+            pointPx = pose.landmarkPx(LEFT_ANKLE_INDEX, frameSize)
+        )
     ),
-    PolygonTrackedLimb.RIGHT_FOOT to inferForefootContactPx(
-        heel = pose.landmarkPx(RIGHT_HEEL_INDEX, frameSize),
-        toe = pose.landmarkPx(RIGHT_FOOT_INDEX, frameSize)
+    PolygonTrackedLimb.RIGHT_FOOT to listOf(
+        LimbPointCandidate(
+            key = "right_foot_index",
+            priority = 0,
+            pointPx = pose.landmarkPx(RIGHT_FOOT_INDEX, frameSize)
+        ),
+        LimbPointCandidate(
+            key = "right_heel",
+            priority = 1,
+            pointPx = pose.landmarkPx(RIGHT_HEEL_INDEX, frameSize)
+        ),
+        LimbPointCandidate(
+            key = "right_ankle",
+            priority = 2,
+            pointPx = pose.landmarkPx(RIGHT_ANKLE_INDEX, frameSize)
+        )
     )
 )
+
+private fun Map<PolygonTrackedLimb, List<LimbPointCandidate>>.footPointCandidates(): List<LimbPointCandidate> =
+    getOrDefault(PolygonTrackedLimb.LEFT_FOOT, emptyList()) +
+        getOrDefault(PolygonTrackedLimb.RIGHT_FOOT, emptyList())
 
 private fun inferPalmContactPx(
     wrist: PointPx?,
@@ -644,17 +893,6 @@ private fun inferPalmContactPx(
     )
 }
 
-private fun inferForefootContactPx(
-    heel: PointPx?,
-    toe: PointPx?
-): PointPx? {
-    if (heel == null || toe == null) return null
-    return PointPx(
-        x = heel.x + 0.80f * (toe.x - heel.x),
-        y = heel.y + 0.80f * (toe.y - heel.y)
-    )
-}
-
 private fun Pose.landmarkPx(
     index: Int,
     frameSize: FrameSizePx
@@ -663,6 +901,26 @@ private fun Pose.landmarkPx(
         x = landmark.x * frameSize.width,
         y = landmark.y * frameSize.height
     )
+}
+
+private fun Pose.hasConfidentTorsoLandmarks(
+    minVisibility: Float,
+    minPresence: Float
+): Boolean {
+    val confidentLandmarks = landmarks
+        .asSequence()
+        .filter { landmark -> landmark.isConfident(minVisibility, minPresence) }
+        .associateBy(PoseLandmark::index)
+    return START_TORSO_LANDMARK_INDICES.all(confidentLandmarks::containsKey)
+}
+
+private fun PoseLandmark.isConfident(
+    minVisibility: Float,
+    minPresence: Float
+): Boolean {
+    if (visibility != null && visibility < minVisibility) return false
+    if (presence != null && presence < minPresence) return false
+    return true
 }
 
 private fun estimateFrameSizePx(
