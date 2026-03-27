@@ -62,6 +62,7 @@ import com.ddgo.app.domain.model.PosePixelPoint
 import com.ddgo.app.domain.model.PoseWorldPoint
 import com.ddgo.app.domain.usecase.HoldNumbered
 import com.ddgo.app.feature.climbing.upload.AttemptPoseOverlayCache
+import com.ddgo.app.feature.climbing.upload.AttemptPoseOverlayFrame
 import com.ddgo.app.feature.climbing.upload.CroppedVideoViewport
 import com.ddgo.app.feature.climbing.upload.RawVerticalCropBounds
 import com.ddgo.app.feature.climbing.upload.PoseOverlay
@@ -101,6 +102,13 @@ internal data class AttemptVideoSectionState(
     val seekRequestTimeMs: Long? = null
 )
 
+internal data class AttemptVideoOverlayRenderState(
+    val displayedPositionMs: Long,
+    val videoContentRect: VideoContentRect,
+    val currentOverlayFrame: AttemptPoseOverlayFrame?,
+    val currentOverlayPose: Pose?
+)
+
 @Composable
 internal fun AttemptVideoSection(
     state: AttemptVideoSectionState,
@@ -118,7 +126,8 @@ internal fun AttemptVideoSection(
     viewportHeightOverride: Dp? = null,
     logDisplayedPoseRawData: Boolean = false,
     onDisplayedPositionChanged: (Long) -> Unit = {},
-    topOverlayContent: @Composable BoxScope.() -> Unit = {}
+    topOverlayContent: @Composable BoxScope.() -> Unit = {},
+    overlayContent: @Composable BoxScope.(AttemptVideoOverlayRenderState) -> Unit = { _ -> }
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -208,6 +217,18 @@ internal fun AttemptVideoSection(
                 positionMs = displayedPositionMs
             )
         }
+    }
+    val overlayRenderState = remember(
+        displayedPositionMs,
+        videoContentRect,
+        currentOverlayFrame
+    ) {
+        AttemptVideoOverlayRenderState(
+            displayedPositionMs = displayedPositionMs,
+            videoContentRect = videoContentRect,
+            currentOverlayFrame = currentOverlayFrame,
+            currentOverlayPose = currentOverlayFrame?.pose
+        )
     }
     var lastLoggedOverlayFrameTimeMs by remember(state.videoUri) { mutableStateOf<Long?>(null) }
     var hasLoggedMissingOverlayFrame by remember(state.videoUri) { mutableStateOf(false) }
@@ -397,6 +418,8 @@ internal fun AttemptVideoSection(
                     )
                 }
             }
+
+            overlayContent(overlayRenderState)
         },
         overlayLayer = {
             Box(

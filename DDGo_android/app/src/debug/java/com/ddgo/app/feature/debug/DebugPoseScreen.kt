@@ -90,7 +90,8 @@ fun DebugPoseScreen(
     viewModel: DebugPoseViewModel = hiltViewModel(),
     onNavigateToSplash: () -> Unit = {},
     onNavigateToPrePose: () -> Unit = {},
-    onNavigateToSmoothFilter: () -> Unit = {}
+    onNavigateToSmoothFilter: () -> Unit = {},
+    onNavigateToUploadPhysicsOverlay: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -312,6 +313,16 @@ fun DebugPoseScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("smooth-filter")
+            }
+
+            OutlinedButton(
+                onClick = onNavigateToUploadPhysicsOverlay,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("upload physics overlay")
             }
         }
     }

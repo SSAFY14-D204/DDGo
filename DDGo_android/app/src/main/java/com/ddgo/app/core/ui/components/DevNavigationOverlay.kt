@@ -199,6 +199,7 @@ private val devRoutes = listOf(
 
     // ── Record ──
     DevRoute("실시간 기록", ScreenRoutes.Climbing.Record.RECORD_MAIN),
+    DevRoute("Upload Physics Overlay", ScreenRoutes.Debug.UPLOAD_PHYSICS_OVERLAY),
 )
 
 private val sectionLabels = mapOf(
@@ -207,6 +208,7 @@ private val sectionLabels = mapOf(
     10 to "Main",
     13 to "Upload Flow",
     24 to "Record",
+    25 to "Debug",
 )
 
 @Composable

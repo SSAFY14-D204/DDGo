@@ -6,16 +6,17 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.composable
+import com.ddgo.app.feature.climbing.upload.UploadViewModel
+import com.ddgo.app.navigation.ScreenRoutes
 
-internal const val DEBUG_MAIN_ROUTE = "debug_main"
 internal const val PRE_POSE_LANDMARKER_ROUTE = "pre_pose_landmarker"
 internal const val PRE_POSE_SMOOTH_FILTER_COMPARE_ROUTE = "pre_pose_smooth_filter_compare"
 
 fun NavGraphBuilder.debugGraph(navController: NavController) {
-    composable(DEBUG_MAIN_ROUTE) {
+    composable(ScreenRoutes.Debug.MAIN) {
         DebugPoseScreen(
             onNavigateToSplash = {
-                navController.navigate(com.ddgo.app.navigation.ScreenRoutes.Splash.route) {
+                navController.navigate(ScreenRoutes.Splash.route) {
                     popUpTo(0) { inclusive = true }
                 }
             },
@@ -24,6 +25,9 @@ fun NavGraphBuilder.debugGraph(navController: NavController) {
             },
             onNavigateToSmoothFilter = {
                 navController.navigate(PRE_POSE_SMOOTH_FILTER_COMPARE_ROUTE)
+            },
+            onNavigateToUploadPhysicsOverlay = {
+                navController.navigate(ScreenRoutes.Debug.UPLOAD_PHYSICS_OVERLAY)
             }
         )
     }
@@ -60,5 +64,23 @@ fun NavGraphBuilder.debugGraph(navController: NavController) {
                 }
             )
         }
+    }
+
+    composable(ScreenRoutes.Debug.UPLOAD_PHYSICS_OVERLAY) { backStackEntry: NavBackStackEntry ->
+        val mainGraphEntry = remember(backStackEntry) {
+            runCatching {
+                navController.getBackStackEntry(ScreenRoutes.MainGraph.route)
+            }.getOrNull()
+        }
+        val uploadViewModel = mainGraphEntry?.let { parentEntry ->
+            hiltViewModel<UploadViewModel>(parentEntry)
+        }
+
+        UploadPhysicsOverlayDebugScreen(
+            uploadViewModel = uploadViewModel,
+            onNavigateBack = {
+                navController.popBackStack()
+            }
+        )
     }
 }

@@ -49,6 +49,11 @@ sealed class ScreenRoutes(val route: String) {
 
     object MainGraph : ScreenRoutes("main_graph")
 
+    object Debug : ScreenRoutes("debug_graph") {
+        const val MAIN = "debug_main"
+        const val UPLOAD_PHYSICS_OVERLAY = "debug_upload_physics_overlay"
+    }
+
     object CalendarDetail : ScreenRoutes("calendar_detail") {
         const val ARG_SELECTED_DATE = "selectedDate"
         val ROUTE_WITH_ARG = "$route?$ARG_SELECTED_DATE={$ARG_SELECTED_DATE}"
