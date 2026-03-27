@@ -65,3 +65,10 @@ password-reset:
   reset-url: ${PASSWORD_RESET_URL:http://localhost:3000/reset-password}
   token-ttl-seconds: ${PASSWORD_RESET_TOKEN_TTL_SECONDS:900}
   request-cooldown-seconds: ${PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS:60}
+
+challenge:
+  stale-active-auto-close:
+    enabled: ${CHALLENGE_STALE_ACTIVE_AUTO_CLOSE_ENABLED:true}
+    stale-after-hours: ${CHALLENGE_STALE_ACTIVE_AUTO_CLOSE_STALE_AFTER_HOURS:6}
+    interval-ms: ${CHALLENGE_STALE_ACTIVE_AUTO_CLOSE_INTERVAL_MS:3600000}
+    batch-size: ${CHALLENGE_STALE_ACTIVE_AUTO_CLOSE_BATCH_SIZE:200}
