@@ -198,7 +198,7 @@ fun NavGraph(
                     }
                 },
                 onNavigateToDebug = {
-                    navController.navigate("debug_main")
+                    navController.navigate(ScreenRoutes.Debug.MAIN)
                 }
             )
 
