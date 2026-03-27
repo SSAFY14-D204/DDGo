@@ -114,6 +114,95 @@ internal class UploadSessionDelegate(
     val isAttemptOnlyUploadMode: Boolean
         get() = uploadFlowMode == UploadFlowMode.AttemptOnly
 
+    fun buildRecoverySessionMediaSnapshot(): UploadRecoverySessionMediaSnapshot =
+        UploadRecoverySessionMediaSnapshot(
+            managedPrimaryPlaybackUri = primaryManagedVideo?.playbackUri ?: videoUri,
+            managedAdditionalPlaybackUris = additionalManagedVideos.map(ManagedAttemptVideo::playbackUri),
+            managedAttemptOnlyPlaybackUris = attemptOnlyManagedVideos.map(ManagedAttemptVideo::playbackUri),
+            resultPlaybackUris = resultPlaybackUris
+        )
+
+    suspend fun rehydrateManagedSessionMedia(
+        primaryPlaybackUri: String?,
+        additionalPlaybackUris: List<String>,
+        attemptOnlyPlaybackUris: List<String>,
+        restoredResultPlaybackUris: List<String>,
+        uploadFlowMode: UploadFlowMode,
+        entryMode: UploadEntryMode,
+        callbacks: UploadSessionCallbacks,
+        preservePublishedResult: Boolean = true
+    ): Result<RehydratedUploadSessionMedia> {
+        val generation = beginSelectionUpdate(
+            callbacks = callbacks,
+            preservePublishedResult = preservePublishedResult
+        )
+
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val restoredPrimary = primaryPlaybackUri?.let(::restoreManagedVideo)
+                val restoredAdditional = additionalPlaybackUris.map(::restoreManagedVideo)
+                val restoredAttemptOnly = attemptOnlyPlaybackUris.map(::restoreManagedVideo)
+                val resolvedResultPlaybackUris = restoredResultPlaybackUris.ifEmpty {
+                    when (uploadFlowMode) {
+                        UploadFlowMode.FullChallenge -> {
+                            listOfNotNull(restoredPrimary?.playbackUri) +
+                                restoredAdditional.map(ManagedAttemptVideo::playbackUri)
+                        }
+
+                        UploadFlowMode.AttemptOnly -> {
+                            restoredAttemptOnly.map(ManagedAttemptVideo::playbackUri)
+                        }
+                    }
+                }
+
+                val rehydrated = RehydratedUploadSessionMedia(
+                    generation = generation,
+                    primaryManagedVideo = restoredPrimary,
+                    additionalManagedVideos = restoredAdditional,
+                    attemptOnlyManagedVideos = restoredAttemptOnly,
+                    resultPlaybackUris = resolvedResultPlaybackUris
+                )
+
+                withContext(Dispatchers.Main) {
+                    if (generation != selectionGeneration) {
+                        return@withContext
+                    }
+
+                    this@UploadSessionDelegate.uploadFlowMode = uploadFlowMode
+                    this@UploadSessionDelegate.entryMode = entryMode
+                    primaryManagedVideo = restoredPrimary
+                    videoUri = restoredPrimary?.playbackUri
+                    additionalManagedVideos = restoredAdditional
+                    additionalVideoUris = restoredAdditional.map(ManagedAttemptVideo::playbackUri)
+                    attemptOnlyManagedVideos = restoredAttemptOnly
+                    attemptOnlyVideoUris = restoredAttemptOnly.map(ManagedAttemptVideo::playbackUri)
+                    resultPlaybackUris = resolvedResultPlaybackUris
+
+                    registerManagedVideos(
+                        listOfNotNull(restoredPrimary) + restoredAdditional + restoredAttemptOnly
+                    )
+                    refreshCurrentSelectionPrePoseTargets(generation)
+                    cleanupUnusedManagedTempFiles()
+
+                    restoredPrimary?.let { managedVideo ->
+                        callbacks.onPrimaryVideoPrepared(
+                            generation = generation,
+                            playbackUri = managedVideo.playbackUri
+                        )
+                    }
+                }
+
+                restoredPrimary?.let { managedVideo ->
+                    if (generation == selectionGeneration) {
+                        extractVideoMetadata(Uri.parse(managedVideo.playbackUri))
+                    }
+                }
+
+                rehydrated
+            }
+        }
+    }
+
     fun updateAdditionalVideoUris(
         uris: List<String>,
         callbacks: UploadSessionCallbacks
@@ -1078,6 +1167,31 @@ internal class UploadSessionDelegate(
         )?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else fallback
         } ?: fallback
+    }
+
+    private fun restoreManagedVideo(playbackUri: String): ManagedAttemptVideo {
+        managedVideosByPlaybackUri[playbackUri]?.let { existing ->
+            return existing
+        }
+
+        val uri = Uri.parse(playbackUri)
+        if (uri.scheme != "file") {
+            throw IllegalStateException("Managed playback URI must use file scheme: $playbackUri")
+        }
+
+        val file = uri.path?.let(::File)
+            ?: throw IllegalStateException("Managed playback file path is missing: $playbackUri")
+        if (!file.exists() || !file.canRead()) {
+            throw IllegalStateException("Managed playback file is unavailable: $playbackUri")
+        }
+
+        val managedVideo = ManagedAttemptVideo(
+            sourceUri = playbackUri,
+            playbackUri = playbackUri,
+            tempFilePath = file.absolutePath
+        )
+        managedTempFilePaths += file.absolutePath
+        return managedVideo
     }
 
     private fun deleteManagedVideo(video: ManagedAttemptVideo?) {

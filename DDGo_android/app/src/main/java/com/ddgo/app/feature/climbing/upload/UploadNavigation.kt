@@ -5,6 +5,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
@@ -22,8 +27,15 @@ import com.ddgo.app.navigation.ScreenRoutes
 import androidx.compose.runtime.Composable
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
+import com.ddgo.app.core.datastore.UploadRecoveryEntryIntent
 import com.ddgo.app.core.ui.components.DarkSystemBarsEffect
+import com.ddgo.app.feature.climbing.upload.ui.recovery.UploadRecoveryDialog
+import com.ddgo.app.feature.climbing.upload.ui.recovery.UploadRecoveryDialogState
+import com.ddgo.app.feature.climbing.upload.ui.recovery.uploadClosedResultRecoveryDialogState
+import com.ddgo.app.feature.climbing.upload.ui.recovery.uploadRecoveryRestartDialogState
+import com.ddgo.app.feature.climbing.upload.ui.recovery.uploadRecoveryRetryDialogState
 import com.ddgo.app.navigation.toSavedStateValue
+import kotlinx.coroutines.launch
 
 private fun NavGraphBuilder.uploadComposable(
     route: String,
@@ -48,30 +60,113 @@ fun NavGraphBuilder.uploadGraph(
     ) {
         uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+            val coroutineScope = rememberCoroutineScope()
 
-            LaunchedEffect(Unit) {
-                if (!viewModel.beginRealtimeChallengeUploadFlow()) {
-                    return@LaunchedEffect
-                }
-                viewModel.setLocalAnalysisWithoutChallengeEnabled(false)
-                navController.navigate(ScreenRoutes.Climbing.Record.route) {
-                    popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) {
-                        inclusive = true
+            suspend fun prepareRealtimeEntry() {
+                when (val result = viewModel.prepareUploadEntry(UploadRecoveryEntryIntent.REALTIME)) {
+                    UploadEntryPreparationResult.NoRecovery -> {
+                        if (!viewModel.beginRealtimeChallengeUploadFlow()) {
+                            navController.popBackStack()
+                            return
+                        }
+                        viewModel.setLocalAnalysisWithoutChallengeEnabled(false)
+                        navController.navigate(ScreenRoutes.Climbing.Record.route) {
+                            popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
                     }
-                    launchSingleTop = true
+
+                    is UploadEntryPreparationResult.Recovered -> {
+                        viewModel.setLocalAnalysisWithoutChallengeEnabled(false)
+                        navController.navigate(result.target.toNavigationRoute()) {
+                            popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
+                    }
+
+                    UploadEntryPreparationResult.Blocked -> return
                 }
             }
 
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+            LaunchedEffect(Unit) {
+                prepareRealtimeEntry()
+            }
+
+            UploadRecoveryDialogLayer(
+                dialogState = viewModel.pendingRecoveryPrompt.toDialogStateOrNull(),
+                onConfirm = {
+                    when (viewModel.pendingRecoveryPrompt?.type) {
+                        UploadRecoveryPromptType.ClosedResult -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                prepareRealtimeEntry()
+                            }
+                        }
+
+                        UploadRecoveryPromptType.RetryRequired -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                prepareRealtimeEntry()
+                            }
+                        }
+
+                        UploadRecoveryPromptType.RestartRequired -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                if (viewModel.restartAfterFailedRecovery(UploadRecoveryEntryIntent.REALTIME)) {
+                                    prepareRealtimeEntry()
+                                }
+                            }
+                        }
+
+                        null -> Unit
+                    }
+                },
+                onDismiss = {
+                    when (viewModel.pendingRecoveryPrompt?.type) {
+                        UploadRecoveryPromptType.ClosedResult -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                prepareRealtimeEntry()
+                            }
+                        }
+
+                        UploadRecoveryPromptType.RetryRequired -> {
+                            viewModel.consumeRecoveryPrompt()
+                            navController.popBackStack()
+                        }
+
+                        UploadRecoveryPromptType.RestartRequired -> {
+                            viewModel.consumeRecoveryPrompt()
+                            navController.popBackStack()
+                        }
+
+                        null -> Unit
+                    }
+                }
             ) {
-                CircularProgressIndicator()
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
         }
 
         uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_HOLD) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(
+                    route = UploadRecoveryRoute.REALTIME_HOLD,
+                    entryIntent = UploadRecoveryEntryIntent.REALTIME
+                )
+            }
 
             ChallengeHoldScreen(
                 viewModel = viewModel,
@@ -88,6 +183,13 @@ fun NavGraphBuilder.uploadGraph(
 
         uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_HOLD_SELECT) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(
+                    route = UploadRecoveryRoute.REALTIME_HOLD_SELECT,
+                    entryIntent = UploadRecoveryEntryIntent.REALTIME
+                )
+            }
 
             HoldSelectScreen(
                 viewModel = viewModel,
@@ -120,21 +222,130 @@ fun NavGraphBuilder.uploadGraph(
             )
         ) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+            val coroutineScope = rememberCoroutineScope()
             val initialRecordedVideoUri = backStackEntry.arguments
                 ?.getString(ScreenRoutes.Climbing.Upload.ARG_RECORDED_VIDEO_URI)
                 ?.let(Uri::decode)
             val autoOpenPicker = backStackEntry.arguments
                 ?.getBoolean(ScreenRoutes.Climbing.Upload.ARG_AUTO_OPEN_PICKER)
                 ?: false
+            var uploadEntryReady by rememberSaveable {
+                mutableStateOf(false)
+            }
 
-            AttemptUploadScreen(
-                viewModel = viewModel,
-                initialRecordedVideoUri = initialRecordedVideoUri,
-                autoOpenPicker = autoOpenPicker,
-                onNavigateToNext = {
-                    navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE)
+            suspend fun prepareAttemptEntry() {
+                when (val result = viewModel.prepareUploadEntry(UploadRecoveryEntryIntent.UPLOAD)) {
+                    UploadEntryPreparationResult.NoRecovery -> {
+                        uploadEntryReady = viewModel.beginNewChallengeUploadFlow()
+                    }
+
+                    is UploadEntryPreparationResult.Recovered -> {
+                        val targetRoute = result.target.toNavigationRoute()
+                        if (targetRoute == ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD) {
+                            uploadEntryReady = true
+                        } else {
+                            navController.navigate(targetRoute) {
+                                popUpTo(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD) {
+                                    inclusive = true
+                                }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+
+                    UploadEntryPreparationResult.Blocked -> {
+                        uploadEntryReady = false
+                    }
                 }
-            )
+            }
+
+            LaunchedEffect(initialRecordedVideoUri, autoOpenPicker) {
+                prepareAttemptEntry()
+            }
+
+            LaunchedEffect(uploadEntryReady) {
+                if (uploadEntryReady) {
+                    viewModel.rememberRecoveryRoute(
+                        route = UploadRecoveryRoute.ATTEMPT_UPLOAD,
+                        entryIntent = UploadRecoveryEntryIntent.UPLOAD
+                    )
+                }
+            }
+
+            UploadRecoveryDialogLayer(
+                dialogState = viewModel.pendingRecoveryPrompt.toDialogStateOrNull(),
+                onConfirm = {
+                    when (viewModel.pendingRecoveryPrompt?.type) {
+                        UploadRecoveryPromptType.ClosedResult -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                viewModel.beginNewChallengeUploadFlow()
+                                uploadEntryReady = true
+                            }
+                        }
+
+                        UploadRecoveryPromptType.RetryRequired -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                prepareAttemptEntry()
+                            }
+                        }
+
+                        UploadRecoveryPromptType.RestartRequired -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                if (viewModel.restartAfterFailedRecovery(UploadRecoveryEntryIntent.UPLOAD)) {
+                                    uploadEntryReady = true
+                                }
+                            }
+                        }
+
+                        null -> Unit
+                    }
+                },
+                onDismiss = {
+                    when (viewModel.pendingRecoveryPrompt?.type) {
+                        UploadRecoveryPromptType.RetryRequired -> {
+                            viewModel.consumeRecoveryPrompt()
+                            navController.popBackStack()
+                        }
+
+                        UploadRecoveryPromptType.ClosedResult -> {
+                            viewModel.consumeRecoveryPrompt()
+                            coroutineScope.launch {
+                                viewModel.beginNewChallengeUploadFlow()
+                                uploadEntryReady = true
+                            }
+                        }
+
+                        UploadRecoveryPromptType.RestartRequired -> {
+                            viewModel.consumeRecoveryPrompt()
+                            navController.popBackStack()
+                        }
+
+                        null -> Unit
+                    }
+                }
+            ) {
+                if (uploadEntryReady) {
+                    AttemptUploadScreen(
+                        viewModel = viewModel,
+                        initialRecordedVideoUri = initialRecordedVideoUri,
+                        autoOpenPicker = autoOpenPicker,
+                        prepareOnLaunch = false,
+                        onNavigateToNext = {
+                            navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE)
+                        }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            }
         }
 
         uploadComposable(
@@ -186,13 +397,28 @@ fun NavGraphBuilder.uploadGraph(
 
         uploadComposable(ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+            val initialStep = viewModel.recoveryCreateEntryStep
 
             LaunchedEffect(Unit) {
                 viewModel.setLocalAnalysisWithoutChallengeEnabled(false)
+                viewModel.rememberRecoveryRoute(
+                    route = UploadRecoveryRoute.CHALLENGE_CREATE,
+                    createStep = initialStep,
+                    entryIntent = UploadRecoveryEntryIntent.UPLOAD
+                )
             }
 
             ChallengeCreateScreen(
                 viewModel = viewModel,
+                initialStep = initialStep,
+                minimumStep = ChallengeCreateEntryStep.GYM_NAME,
+                onStepChanged = { step ->
+                    viewModel.rememberRecoveryRoute(
+                        route = UploadRecoveryRoute.CHALLENGE_CREATE,
+                        createStep = step,
+                        entryIntent = UploadRecoveryEntryIntent.UPLOAD
+                    )
+                },
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD)
                 },
@@ -206,11 +432,21 @@ fun NavGraphBuilder.uploadGraph(
             LaunchedEffect(Unit) {
                 viewModel.setLocalAnalysisWithoutChallengeEnabled(true)
                 viewModel.markHoldPrecomputeEligibleForCurrentSelection()
+                viewModel.rememberRecoveryRoute(
+                    route = UploadRecoveryRoute.CHALLENGE_CREATE,
+                    createStep = ChallengeCreateEntryStep.COLOR
+                )
             }
 
             ChallengeCreateScreen(
                 viewModel = viewModel,
                 initialStep = ChallengeCreateEntryStep.COLOR,
+                onStepChanged = { step ->
+                    viewModel.rememberRecoveryRoute(
+                        route = UploadRecoveryRoute.CHALLENGE_CREATE,
+                        createStep = step
+                    )
+                },
                 onNavigateToNext = {
                     navController.navigate(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD)
                 },
@@ -240,6 +476,10 @@ fun NavGraphBuilder.uploadGraph(
         uploadComposable(ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(route = UploadRecoveryRoute.CHALLENGE_HOLD)
+            }
+
             ChallengeHoldScreen(
                 viewModel = viewModel,
                 onNavigateToAdditional = {
@@ -254,6 +494,10 @@ fun NavGraphBuilder.uploadGraph(
 
         uploadComposable(ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(route = UploadRecoveryRoute.ADDITIONAL_UPLOAD)
+            }
 
             AdditionalUploadScreen(
                 viewModel = viewModel,
@@ -276,6 +520,10 @@ fun NavGraphBuilder.uploadGraph(
         uploadComposable(ScreenRoutes.Climbing.Upload.HOLD_SELECT) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(route = UploadRecoveryRoute.HOLD_SELECT)
+            }
+
             HoldSelectScreen(
                 viewModel = viewModel,
                 allowAdditionalUpload = true,
@@ -292,54 +540,168 @@ fun NavGraphBuilder.uploadGraph(
 
         uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+            val coroutineScope = rememberCoroutineScope()
 
-            AnalysisLoadingScreen(
-                viewModel = viewModel,
-                onLoadingFinished = {
-                    when (viewModel.analysisLoadingPhase) {
-                        AnalysisLoadingPhase.AttemptResultPreparation -> {
-                            viewModel.prepareFinalAnalysisLoading()
-                        }
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(
+                    route = UploadRecoveryRoute.REALTIME_ANALYSIS_LOADING,
+                    entryIntent = UploadRecoveryEntryIntent.REALTIME
+                )
+            }
 
-                        AnalysisLoadingPhase.FinalAnalysisPreparation -> {
-                            navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) {
+            UploadRecoveryDialogLayer(
+                dialogState = viewModel.pendingRecoveryPrompt.toDialogStateOrNull(),
+                onConfirm = {
+                    when (viewModel.pendingRecoveryPrompt?.type) {
+                        UploadRecoveryPromptType.ClosedResult -> {
+                            viewModel.consumeRecoveryPrompt()
+                            navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) {
                                 popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) {
                                     inclusive = true
                                 }
                                 launchSingleTop = true
                             }
                         }
-                    }
-                }
-            )
-        }
 
-        uploadComposable(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) { backStackEntry ->
-            val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
-
-            AnalysisLoadingScreen(
-                viewModel = viewModel,
-                onLoadingFinished = {
-                    when (viewModel.analysisLoadingPhase) {
-                        AnalysisLoadingPhase.AttemptResultPreparation -> {
-                            viewModel.prepareFinalAnalysisLoading()
+                        UploadRecoveryPromptType.RetryRequired -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                viewModel.retryCurrentAnalysisLoadingPhase()
+                            }
                         }
 
-                        AnalysisLoadingPhase.FinalAnalysisPreparation -> {
-                            navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) {
-                                popUpTo(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) {
+                        UploadRecoveryPromptType.RestartRequired -> {
+                            coroutineScope.launch {
+                                viewModel.consumeRecoveryPrompt()
+                                if (viewModel.restartAfterFailedRecovery(UploadRecoveryEntryIntent.REALTIME)) {
+                                    navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) {
+                                        popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) {
+                                            inclusive = true
+                                        }
+                                        launchSingleTop = true
+                                    }
+                                }
+                            }
+                        }
+
+                        null -> Unit
+                    }
+                },
+                onDismiss = {
+                    when (viewModel.pendingRecoveryPrompt?.type) {
+                        UploadRecoveryPromptType.ClosedResult -> {
+                            viewModel.consumeRecoveryPrompt()
+                            navController.navigate(ScreenRoutes.Climbing.Upload.REALTIME_SETUP) {
+                                popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) {
                                     inclusive = true
                                 }
                                 launchSingleTop = true
                             }
                         }
+
+                        UploadRecoveryPromptType.RetryRequired -> {
+                            viewModel.consumeRecoveryPrompt()
+                            navController.popBackStack()
+                        }
+
+                        UploadRecoveryPromptType.RestartRequired -> {
+                            viewModel.consumeRecoveryPrompt()
+                            navController.popBackStack()
+                        }
+
+                        null -> Unit
                     }
                 }
-            )
+            ) {
+                AnalysisLoadingScreen(
+                    viewModel = viewModel,
+                    onLoadingFinished = {
+                        when (viewModel.analysisLoadingPhase) {
+                            AnalysisLoadingPhase.AttemptResultPreparation -> {
+                                viewModel.prepareFinalAnalysisLoading()
+                            }
+
+                            AnalysisLoadingPhase.FinalAnalysisPreparation -> {
+                                navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) {
+                                    popUpTo(ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING) {
+                                        inclusive = true
+                                    }
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        uploadComposable(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) { backStackEntry ->
+            val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+
+            val coroutineScope = rememberCoroutineScope()
+
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(route = UploadRecoveryRoute.ANALYSIS_LOADING)
+            }
+
+            UploadRecoveryDialogLayer(
+                dialogState = viewModel.pendingRecoveryPrompt.toDialogStateOrNull(),
+                onConfirm = {
+                    coroutineScope.launch {
+                        viewModel.consumeRecoveryPrompt()
+                        viewModel.beginNewChallengeUploadFlow()
+                        navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD) {
+                            popUpTo(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                onDismiss = {
+                    coroutineScope.launch {
+                        viewModel.consumeRecoveryPrompt()
+                        viewModel.beginNewChallengeUploadFlow()
+                        navController.navigate(ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD) {
+                            popUpTo(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
+                    }
+                }
+            ) {
+                AnalysisLoadingScreen(
+                    viewModel = viewModel,
+                    onLoadingFinished = {
+                        when (viewModel.analysisLoadingPhase) {
+                            AnalysisLoadingPhase.AttemptResultPreparation -> {
+                                viewModel.prepareFinalAnalysisLoading()
+                            }
+
+                            AnalysisLoadingPhase.FinalAnalysisPreparation -> {
+                                navController.navigate(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) {
+                                    popUpTo(ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING) {
+                                        inclusive = true
+                                    }
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
+                    }
+                )
+            }
         }
 
         uploadComposable(ScreenRoutes.Climbing.Upload.REALTIME_ATTEMPT_RESULT) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(
+                    route = UploadRecoveryRoute.REALTIME_ATTEMPT_RESULT,
+                    entryIntent = UploadRecoveryEntryIntent.REALTIME
+                )
+            }
 
             AttemptResultScreen(
                 viewModel = viewModel,
@@ -359,6 +721,10 @@ fun NavGraphBuilder.uploadGraph(
 
         uploadComposable(ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(route = UploadRecoveryRoute.ATTEMPT_RESULT)
+            }
 
             AttemptResultScreen(
                 viewModel = viewModel,
@@ -390,6 +756,10 @@ fun NavGraphBuilder.uploadGraph(
         uploadComposable(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(route = UploadRecoveryRoute.FINAL_ANALYSIS)
+            }
+
             FinalAnalysisRoute(
                 viewModel = viewModel,
                 onNavigateToChallenge = {
@@ -410,6 +780,10 @@ fun NavGraphBuilder.uploadGraph(
 
         uploadComposable(ScreenRoutes.Climbing.Upload.CHALLENGE_FINAL_ANALYSIS) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+
+            LaunchedEffect(Unit) {
+                viewModel.rememberRecoveryRoute(route = UploadRecoveryRoute.CHALLENGE_FINAL_ANALYSIS)
+            }
 
             ChallengeFinalAnalysisRoute(
                 viewModel = viewModel,
@@ -473,6 +847,71 @@ private fun NavController.navigateToCommunityCompose(
     val mainEntry = getBackStackEntry(ScreenRoutes.Main.route)
     mainEntry.savedStateHandle[PENDING_COMMUNITY_COMPOSE_REQUEST_KEY] = request.toSavedStateValue()
     popBackStack(ScreenRoutes.Main.route, false)
+}
+
+private fun UploadRecoveryPrompt?.toDialogStateOrNull(): UploadRecoveryDialogState? {
+    return when (this?.type) {
+        UploadRecoveryPromptType.ClosedResult -> uploadClosedResultRecoveryDialogState(
+            challengeResultLabel = challengeResult.toReadableRecoveryResultLabel()
+        )
+
+        UploadRecoveryPromptType.RetryRequired -> uploadRecoveryRetryDialogState(reason = reason)
+        UploadRecoveryPromptType.RestartRequired ->
+            uploadRecoveryRestartDialogState(reason = reason)
+        null -> null
+    }
+}
+
+private fun UploadRecoveryResumeTarget.toNavigationRoute(): String =
+    when (route) {
+        UploadRecoveryRoute.ATTEMPT_UPLOAD -> ScreenRoutes.Climbing.Upload.ATTEMPT_UPLOAD
+        UploadRecoveryRoute.CHALLENGE_CREATE -> ScreenRoutes.Climbing.Upload.CHALLENGE_CREATE
+        UploadRecoveryRoute.CHALLENGE_HOLD -> ScreenRoutes.Climbing.Upload.CHALLENGE_HOLD
+        UploadRecoveryRoute.HOLD_SELECT -> ScreenRoutes.Climbing.Upload.HOLD_SELECT
+        UploadRecoveryRoute.ADDITIONAL_UPLOAD -> ScreenRoutes.Climbing.Upload.ADDITIONAL_UPLOAD
+        UploadRecoveryRoute.ANALYSIS_LOADING -> ScreenRoutes.Climbing.Upload.ANALYSIS_LOADING
+        UploadRecoveryRoute.ATTEMPT_RESULT -> ScreenRoutes.Climbing.Upload.ATTEMPT_RESULT
+        UploadRecoveryRoute.FINAL_ANALYSIS -> ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS
+        UploadRecoveryRoute.CHALLENGE_FINAL_ANALYSIS -> ScreenRoutes.Climbing.Upload.CHALLENGE_FINAL_ANALYSIS
+        UploadRecoveryRoute.REALTIME_SETUP -> ScreenRoutes.Climbing.Record.route
+        UploadRecoveryRoute.REALTIME_HOLD -> ScreenRoutes.Climbing.Upload.REALTIME_HOLD
+        UploadRecoveryRoute.REALTIME_HOLD_SELECT -> ScreenRoutes.Climbing.Upload.REALTIME_HOLD_SELECT
+        UploadRecoveryRoute.REALTIME_ANALYSIS_LOADING ->
+            ScreenRoutes.Climbing.Upload.REALTIME_ANALYSIS_LOADING
+        UploadRecoveryRoute.REALTIME_ATTEMPT_RESULT ->
+            ScreenRoutes.Climbing.Upload.REALTIME_ATTEMPT_RESULT
+    }
+
+private fun String?.toReadableRecoveryResultLabel(): String? =
+    when (this?.uppercase()) {
+        "SUCCESS" -> "완등"
+        "FAIL" -> "미완등"
+        "UNKNOWN" -> "종료"
+        else -> null
+    }
+
+private fun String?.toLegacyRecoveryResultLabel(): String? {
+    return when (this?.uppercase()) {
+        "SUCCESS" -> "완등"
+        "FAIL" -> "미완등"
+        "UNKNOWN" -> "종료"
+        else -> null
+    }
+}
+
+@Composable
+fun UploadRecoveryDialogLayer(
+    dialogState: UploadRecoveryDialogState?,
+    onConfirm: () -> Unit,
+    onDismiss: (() -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    content()
+    UploadRecoveryDialog(
+        state = dialogState,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss
+    )
 }
 
 

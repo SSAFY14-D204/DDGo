@@ -4,15 +4,20 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.core.datastore.UploadRecoveryDataStore
+import com.ddgo.app.core.datastore.UploadRecoveryEntryIntent
+import com.ddgo.app.core.datastore.UploadRecoverySnapshot
 import com.ddgo.app.core.dev.DevOptions
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisResult
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
+import com.ddgo.app.domain.model.ChallengeOverview
 import com.ddgo.app.domain.model.HoldPoint
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.GymGrade
@@ -43,6 +48,7 @@ import com.ddgo.app.domain.usecase.DetectStallSegmentFromPoseUseCase
 import com.ddgo.app.domain.usecase.DetectWallArrivalTimeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
 import com.ddgo.app.domain.usecase.EndAttemptUseCase
+import com.ddgo.app.domain.usecase.GetChallengesUseCase
 import com.ddgo.app.domain.usecase.GetMyInfoUseCase
 import com.ddgo.app.domain.usecase.ResolveGymUseCase
 import com.ddgo.app.domain.usecase.SaveChallengeHoldsUseCase
@@ -56,10 +62,12 @@ import java.time.LocalDateTime
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.max
 
 /**
  * 업로드 기반 클라이밍 분석 플로우 요약.
@@ -73,6 +81,8 @@ import kotlinx.coroutines.withContext
 
 private const val TAG = "UploadViewModel"
 private const val ATTEMPT_HOLD_ALIGNMENT_LOG_PREFIX = "[DDGO_ATTEMPT_HOLD_ALIGN]"
+private const val CHALLENGE_ALREADY_CLOSED_MESSAGE_KO = "이미 종료된 챌린지"
+private const val CHALLENGE_ALREADY_CLOSED_MESSAGE_EN = "Challenge Already Closed"
 
 /**
  * Graph-scoped facade and cross-delegate orchestration owner.
@@ -99,7 +109,9 @@ class UploadViewModel @Inject constructor(
     private val detectStallSegmentFromPoseUseCase: DetectStallSegmentFromPoseUseCase,
     private val detectWallArrivalTimeUseCase: DetectWallArrivalTimeUseCase,
     private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
+    private val uploadRecoveryDataStore: UploadRecoveryDataStore,
     private val getMyInfoUseCase: GetMyInfoUseCase,
+    private val getChallengesUseCase: GetChallengesUseCase,
     private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase
 ) : ViewModel() {
 
@@ -142,10 +154,24 @@ class UploadViewModel @Inject constructor(
         holdColorClassifier = holdColorClassifier,
         scope = viewModelScope
     )
+    private var cachedCurrentUserId: Long? = null
     private var pendingRealtimeHeartRateSeriesBySourceUri by mutableStateOf<Map<String, List<HeartRatePoint>>>(emptyMap())
     private var realtimeHeartRateSeriesByPlaybackUri by mutableStateOf<Map<String, List<HeartRatePoint>>>(emptyMap())
     private var closedChallengeId by mutableStateOf<Long?>(null)
     private var closingChallengeId by mutableStateOf<Long?>(null)
+    private var recoveredServerDoneAttemptCount by mutableStateOf(0)
+    var pendingRecoveryPrompt by mutableStateOf<UploadRecoveryPrompt?>(null)
+        private set
+    private var currentRecoveryRoute by mutableStateOf<UploadRecoveryRoute?>(null)
+    private var recoveredCreateEntryStep by mutableStateOf(ChallengeCreateEntryStep.GYM_NAME)
+    private var recoveredStartHoldBoundingBox by mutableStateOf<UploadRecoveryBoundingBox?>(null)
+    private var recoveredEndHoldBoundingBox by mutableStateOf<UploadRecoveryBoundingBox?>(null)
+    var holdSelectionPhase by mutableStateOf(UploadRecoveryHoldSelectionPhase.START)
+        private set
+    var holdSelectionStartIndex by mutableIntStateOf(-1)
+        private set
+    var holdSelectionEndIndex by mutableIntStateOf(-1)
+        private set
 
     var videoUri: String?
         get() = sessionDelegate.videoUri
@@ -266,6 +292,8 @@ class UploadViewModel @Inject constructor(
     private var realtimeGymSearchQuery by mutableStateOf("")
     private var realtimeHoldColorSheetVisible by mutableStateOf(false)
     private var realtimeSetupStep by mutableStateOf(RealtimeSetupStep.GymPrompt)
+    val recoveryCreateEntryStep: ChallengeCreateEntryStep
+        get() = resolveChallengeCreateStep(preferredStep = recoveredCreateEntryStep)
 
     // 썸네일/메타데이터(PersonDetector 기반 대표 프레임과 파일 정보)
     var thumbnail: Bitmap?
@@ -367,7 +395,7 @@ class UploadViewModel @Inject constructor(
         override fun currentAttemptIndex(): Int = currentAttemptIndex
 
         override fun setCurrentAttemptIndex(index: Int) {
-            currentAttemptIndex = index
+            selectAttempt(index)
         }
 
         override fun clearCurrentPoseLandmarks() {
@@ -423,7 +451,7 @@ class UploadViewModel @Inject constructor(
         override fun currentAttemptIndex(): Int = currentAttemptIndex
 
         override fun setCurrentAttemptIndex(index: Int) {
-            currentAttemptIndex = index
+            selectAttempt(index)
         }
 
         override fun clearCurrentPoseLandmarks() {
@@ -685,6 +713,7 @@ class UploadViewModel @Inject constructor(
         )
         currentPoseLandmarks = emptyList()
         syncDisplayedAnalysisPoints()
+        persistRecoverySnapshotAsyncIfPossible()
     }
 
     /** 현재 재생 프레임의 MediaPipe 33 랜드마크 */
@@ -866,6 +895,453 @@ class UploadViewModel @Inject constructor(
         realtimeGymSearchQuery = ""
         realtimeHoldColorSheetVisible = false
         realtimeSetupStep = RealtimeSetupStep.GymPrompt
+        recoveredCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME
+        return true
+    }
+
+    fun consumeRecoveryPrompt() {
+        pendingRecoveryPrompt = null
+    }
+
+    fun prepareFreshUploadEntryAfterRecoveryPrompt(
+        entryIntent: UploadRecoveryEntryIntent
+    ) {
+        pendingRecoveryPrompt = null
+        recoveredCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME
+        beginNewChallengeUploadFlowInternal()
+        if (entryIntent == UploadRecoveryEntryIntent.REALTIME) {
+            analysisLoadingPhase = AnalysisLoadingPhase.AttemptResultPreparation
+            entryMode = UploadEntryMode.Realtime
+            realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+            realtimeGymSearchQuery = ""
+            realtimeHoldColorSheetVisible = false
+            realtimeSetupStep = RealtimeSetupStep.GymPrompt
+        }
+    }
+
+    fun rememberRecoveryRoute(
+        route: UploadRecoveryRoute,
+        createStep: ChallengeCreateEntryStep? = null,
+        entryIntent: UploadRecoveryEntryIntent = currentUploadRecoveryEntryIntent()
+    ) {
+        currentRecoveryRoute = route
+        if (createStep != null) {
+            recoveredCreateEntryStep = createStep
+        }
+        viewModelScope.launch {
+            persistCurrentRecoverySnapshot(entryIntent = entryIntent)
+        }
+    }
+
+    suspend fun prepareUploadEntry(
+        entryIntent: UploadRecoveryEntryIntent
+    ): UploadEntryPreparationResult {
+        pendingRecoveryPrompt = null
+        if ((challengeId ?: 0L) > 0L) {
+            return UploadEntryPreparationResult.NoRecovery
+        }
+
+        val snapshot = uploadRecoveryDataStore.getUploadRecoverySnapshot()
+            ?: return UploadEntryPreparationResult.NoRecovery
+
+        if (snapshot.entryIntent != entryIntent) {
+            return UploadEntryPreparationResult.NoRecovery
+        }
+
+        val currentUserId = resolveCurrentUserIdOrNull()
+        if (currentUserId == null) {
+            pendingRecoveryPrompt = UploadRecoveryPrompt(
+                type = UploadRecoveryPromptType.RetryRequired,
+                reason = "사용자 정보를 확인하지 못했어요."
+            )
+            return UploadEntryPreparationResult.Blocked
+        }
+
+        if (snapshot.userId != currentUserId) {
+            uploadRecoveryDataStore.clearAll()
+            recoveredServerDoneAttemptCount = 0
+            return UploadEntryPreparationResult.NoRecovery
+        }
+
+        val challengeOverview = if ((snapshot.challengeIdOrNull ?: 0L) > 0L) {
+            getChallengesUseCase().fold(
+                onSuccess = { challenges ->
+                    challenges.firstOrNull { it.challengeId == snapshot.challengeId }
+                },
+                onFailure = { throwable ->
+                    pendingRecoveryPrompt = UploadRecoveryPrompt(
+                        type = UploadRecoveryPromptType.RetryRequired,
+                        reason = throwable.message
+                    )
+                    return UploadEntryPreparationResult.Blocked
+                }
+            )
+        } else {
+            null
+        }
+
+        if ((snapshot.challengeIdOrNull ?: 0L) > 0L && challengeOverview == null) {
+            clearRecoveredChallengeState()
+            uploadRecoveryDataStore.clearAll()
+            pendingRecoveryPrompt = UploadRecoveryPrompt(
+                type = UploadRecoveryPromptType.ClosedResult,
+                challengeResult = "UNKNOWN"
+            )
+            return UploadEntryPreparationResult.Blocked
+        }
+
+        if (
+            challengeOverview != null &&
+            !challengeOverview.challengeStatus.equals("ACTIVE", ignoreCase = true)
+        ) {
+            clearRecoveredChallengeState()
+            uploadRecoveryDataStore.clearAll()
+            pendingRecoveryPrompt = UploadRecoveryPrompt(
+                type = UploadRecoveryPromptType.ClosedResult,
+                challengeResult = challengeOverview.challengeResult
+            )
+            return UploadEntryPreparationResult.Blocked
+        }
+
+        return recoverPersistedSnapshot(
+            snapshot = snapshot,
+            entryIntent = entryIntent,
+            challengeOverview = challengeOverview
+        ).fold(
+            onSuccess = { target ->
+                UploadEntryPreparationResult.Recovered(target = target)
+            },
+            onFailure = { throwable ->
+                pendingRecoveryPrompt = UploadRecoveryPrompt(
+                    type = UploadRecoveryPromptType.RestartRequired,
+                    reason = throwable.message,
+                    entryIntent = entryIntent
+                )
+                UploadEntryPreparationResult.Blocked
+            }
+        )
+    }
+
+    private suspend fun recoverPersistedSnapshot(
+        snapshot: UploadRecoverySnapshot,
+        entryIntent: UploadRecoveryEntryIntent,
+        challengeOverview: ChallengeOverview?
+    ): Result<UploadRecoveryResumeTarget> = runCatching {
+        restorePersistedSnapshotState(
+            snapshot = snapshot,
+            entryIntent = entryIntent,
+            challengeOverview = challengeOverview
+        )
+
+        val requiresHoldDetection = snapshot.lastRoute in setOf(
+            UploadRecoveryRoute.CHALLENGE_HOLD,
+            UploadRecoveryRoute.HOLD_SELECT,
+            UploadRecoveryRoute.ADDITIONAL_UPLOAD,
+            UploadRecoveryRoute.ANALYSIS_LOADING,
+            UploadRecoveryRoute.REALTIME_HOLD,
+            UploadRecoveryRoute.REALTIME_HOLD_SELECT,
+            UploadRecoveryRoute.REALTIME_ANALYSIS_LOADING
+        )
+        if (requiresHoldDetection) {
+            awaitRecoveryHoldDetection()
+            applyRecoveredHoldSelectionFromBoundingBoxes()
+        }
+
+        resolveRecoveredTargetFromSnapshot(
+            snapshot = snapshot,
+            entryIntent = entryIntent,
+            restoredFromServerChallenge = challengeOverview != null
+        ) ?: throw IllegalStateException("진행 중이던 화면을 복구할 수 없어요.")
+    }
+
+    private suspend fun restorePersistedSnapshotState(
+        snapshot: UploadRecoverySnapshot,
+        entryIntent: UploadRecoveryEntryIntent,
+        challengeOverview: ChallengeOverview?
+    ) {
+        beginNewChallengeUploadFlowInternal()
+        pendingRecoveryPrompt = null
+        currentRecoveryRoute = snapshot.lastRoute
+        recoveredCreateEntryStep = snapshot.createStep?.toEntryStep() ?: ChallengeCreateEntryStep.GYM_NAME
+        recoveredStartHoldBoundingBox = snapshot.selectedStartHoldBoundingBox
+        recoveredEndHoldBoundingBox = snapshot.selectedEndHoldBoundingBox
+        holdSelectionPhase = snapshot.holdSelectionPhase ?: UploadRecoveryHoldSelectionPhase.START
+        holdSelectionStartIndex = -1
+        holdSelectionEndIndex = -1
+        analysisLoadingPhase = snapshot.analysisLoadingPhase?.toDomain()
+            ?: AnalysisLoadingPhase.AttemptResultPreparation
+        uploadFlowMode = if (snapshot.isAttemptOnlyMode) {
+            UploadFlowMode.AttemptOnly
+        } else {
+            UploadFlowMode.FullChallenge
+        }
+        entryMode = if (entryIntent == UploadRecoveryEntryIntent.REALTIME) {
+            UploadEntryMode.Realtime
+        } else {
+            UploadEntryMode.Gallery
+        }
+        realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+        realtimeGymSearchQuery = snapshot.searchQuery ?: snapshot.gymName
+        realtimeSetupStep = snapshot.realtimeSetupStep
+            ?.toRealtimeSetupStepOrNull()
+            ?: if (entryIntent == UploadRecoveryEntryIntent.REALTIME) {
+                RealtimeSetupStep.GymPrompt
+            } else {
+                RealtimeSetupStep.GymPrompt
+            }
+
+        gymId = snapshot.gymId.takeIf { it > 0L }?.toInt()
+        gymName = snapshot.gymName
+        selectedGymGradeId = snapshot.gymGradeId.takeIf { it > 0L }
+        selectedNearbyPlace = snapshot.selectedNearbyPlace?.toDomain()
+        resolvedGym = snapshot.resolvedGym?.toDomain()
+        resolvedGymGrades = resolvedGym?.grades.orEmpty()
+        selectedGymGrade = selectedGymGradeId?.let { persistedGymGradeId ->
+            resolvedGymGrades.firstOrNull { grade ->
+                grade.gymGradeId.toLong() == persistedGymGradeId
+            }
+        }
+        difficultyLevel = snapshot.gradeLabel
+            ?: selectedGymGrade?.let(::formatSelectedLevelLabel)
+            ?: difficultyLevel
+        lastSearchLatitude = snapshot.lastSearchLatitude
+        lastSearchLongitude = snapshot.lastSearchLongitude
+
+        if (!snapshot.selectedHoldColorKey.isNullOrBlank()) {
+            updateHoldColor(snapshot.selectedHoldColorKey)
+        } else if (snapshot.problemColor.isNotBlank()) {
+            holdColor = snapshot.problemColor
+        }
+
+        if (challengeOverview != null) {
+            val restoredChallenge = ChallengeSession(
+                challengeId = snapshot.challengeId,
+                gymId = snapshot.gymId,
+                gymGradeId = snapshot.gymGradeId,
+                gymName = snapshot.gymName,
+                problemColor = snapshot.problemColor,
+                gradeLabel = snapshot.gradeLabel,
+                challengeStatus = challengeOverview.challengeStatus,
+                challengeResult = challengeOverview.challengeResult,
+                doneAttemptCount = challengeOverview.doneAttemptCount,
+                startedAt = snapshot.startedAt,
+                createdAt = snapshot.createdAt
+            )
+            recoveredServerDoneAttemptCount = max(
+                snapshot.lastKnownDoneAttemptCount,
+                challengeOverview.doneAttemptCount
+            )
+            challengeDelegate.applyExistingChallenge(
+                challenge = restoredChallenge,
+                resolveHoldColorKey = { colorName ->
+                    resolveHoldColorKey(
+                        colorName = colorName,
+                        colorHex = null
+                    )
+                },
+                resolveHoldColorDisplayName = { colorName ->
+                    resolveHoldColorDisplayName(
+                        colorName = colorName,
+                        colorHex = null
+                    )
+                }
+            )
+        } else {
+            recoveredServerDoneAttemptCount = snapshot.lastKnownDoneAttemptCount
+        }
+
+        val mediaSnapshot = UploadRecoverySessionMediaSnapshot(
+            managedPrimaryPlaybackUri = snapshot.managedPrimaryPlaybackUri,
+            managedAdditionalPlaybackUris = snapshot.managedAdditionalPlaybackUris,
+            managedAttemptOnlyPlaybackUris = snapshot.managedAttemptOnlyPlaybackUris,
+            resultPlaybackUris = snapshot.publishedAttemptResultSession?.resultPlaybackUris
+                ?: snapshot.managedAttemptOnlyPlaybackUris.ifEmpty {
+                    snapshot.managedAdditionalPlaybackUris
+                }
+        )
+        if (mediaSnapshot.hasMedia()) {
+            sessionDelegate.rehydrateManagedSessionMedia(
+                primaryPlaybackUri = mediaSnapshot.managedPrimaryPlaybackUri,
+                additionalPlaybackUris = mediaSnapshot.managedAdditionalPlaybackUris,
+                attemptOnlyPlaybackUris = mediaSnapshot.managedAttemptOnlyPlaybackUris,
+                restoredResultPlaybackUris = mediaSnapshot.resultPlaybackUris,
+                uploadFlowMode = uploadFlowMode,
+                entryMode = entryMode,
+                callbacks = sessionCallbacks
+            ).getOrThrow()
+        }
+
+        submissionDelegate.restoreRecoveryPublishedAttemptResultSession(
+            recoverySession = snapshot.publishedAttemptResultSession,
+            callbacks = submissionCallbacks
+        )
+        selectAttempt(snapshot.currentAttemptIndex)
+    }
+
+    private suspend fun awaitRecoveryHoldDetection() {
+        val targetVideoUri = videoUri ?: return
+        if (bestFrameBitmap != null && detectedHolds.isNotEmpty()) {
+            return
+        }
+
+        ensureHoldDetectionReadyForCurrentColor()
+        repeat(120) {
+            when (uiState.value) {
+                UploadUiState.Success -> return
+                is UploadUiState.Error -> {
+                    throw IllegalStateException("홀드 정보를 다시 준비하지 못했어요.")
+                }
+
+                UploadUiState.Idle,
+                UploadUiState.Loading -> delay(100L)
+            }
+            if (videoUri != targetVideoUri) {
+                throw IllegalStateException("복구할 영상 상태가 바뀌었어요.")
+            }
+        }
+        throw IllegalStateException("홀드 정보를 다시 불러오는 중 시간이 초과됐어요.")
+    }
+
+    private fun applyRecoveredHoldSelectionFromBoundingBoxes() {
+        if (detectedHolds.isEmpty()) {
+            holdSelectionStartIndex = -1
+            holdSelectionEndIndex = -1
+            return
+        }
+
+        val restoredStartIndex = recoveredStartHoldBoundingBox
+            ?.let(::findBestMatchingDetectedHoldIndex)
+            ?: selectedStartHold.indexInDetectedHolds()
+        val restoredEndIndex = recoveredEndHoldBoundingBox
+            ?.let(::findBestMatchingDetectedHoldIndex)
+            ?: selectedEndHold.indexInDetectedHolds()
+
+        holdSelectionStartIndex = restoredStartIndex
+        holdSelectionEndIndex = if (restoredEndIndex == restoredStartIndex) -1 else restoredEndIndex
+
+        val restoredStartHold = detectedHolds.getOrNull(restoredStartIndex)
+        if (restoredStartHold != null) {
+            updateSelectedStartHold(restoredStartHold)
+        }
+        val restoredEndHold = detectedHolds.getOrNull(holdSelectionEndIndex)
+        if (restoredEndHold != null) {
+            updateSelectedEndHold(restoredEndHold)
+        }
+
+        holdSelectionPhase = when {
+            holdSelectionEndIndex >= 0 -> UploadRecoveryHoldSelectionPhase.END
+            holdSelectionStartIndex >= 0 &&
+                recoveredEndHoldBoundingBox != null -> UploadRecoveryHoldSelectionPhase.END
+            holdSelectionStartIndex >= 0 -> UploadRecoveryHoldSelectionPhase.END
+            else -> UploadRecoveryHoldSelectionPhase.START
+        }
+    }
+
+    private fun resolveRecoveredTargetFromSnapshot(
+        snapshot: UploadRecoverySnapshot,
+        entryIntent: UploadRecoveryEntryIntent,
+        restoredFromServerChallenge: Boolean
+    ): UploadRecoveryResumeTarget? {
+        val fallbackTarget = resolvePreparedRecoveryTarget(
+            entryIntent = entryIntent,
+            restoredFromServerChallenge = restoredFromServerChallenge
+        )
+
+        val exactTarget = when (snapshot.lastRoute) {
+            UploadRecoveryRoute.ATTEMPT_UPLOAD -> UploadRecoveryResumeTarget(
+                route = UploadRecoveryRoute.ATTEMPT_UPLOAD
+            )
+
+            UploadRecoveryRoute.CHALLENGE_CREATE -> UploadRecoveryResumeTarget(
+                route = UploadRecoveryRoute.CHALLENGE_CREATE,
+                createStep = snapshot.createStep?.toEntryStep() ?: resolveChallengeCreateStep()
+            )
+
+            UploadRecoveryRoute.CHALLENGE_HOLD,
+            UploadRecoveryRoute.REALTIME_HOLD -> {
+                if (videoUri != null) {
+                    UploadRecoveryResumeTarget(route = snapshot.lastRoute)
+                } else {
+                    fallbackTarget
+                }
+            }
+
+            UploadRecoveryRoute.HOLD_SELECT,
+            UploadRecoveryRoute.REALTIME_HOLD_SELECT -> {
+                if (bestFrameBitmap != null && detectedHolds.isNotEmpty()) {
+                    UploadRecoveryResumeTarget(route = snapshot.lastRoute)
+                } else {
+                    fallbackTarget
+                }
+            }
+
+            UploadRecoveryRoute.ADDITIONAL_UPLOAD -> {
+                when {
+                    numberedHolds.isNotEmpty() -> UploadRecoveryResumeTarget(
+                        route = UploadRecoveryRoute.ADDITIONAL_UPLOAD
+                    )
+                    bestFrameBitmap != null && detectedHolds.isNotEmpty() -> UploadRecoveryResumeTarget(
+                        route = UploadRecoveryRoute.HOLD_SELECT
+                    )
+                    else -> fallbackTarget
+                }
+            }
+
+            UploadRecoveryRoute.ANALYSIS_LOADING,
+            UploadRecoveryRoute.REALTIME_ANALYSIS_LOADING -> {
+                when {
+                    numberedHolds.isNotEmpty() -> UploadRecoveryResumeTarget(route = snapshot.lastRoute)
+                    bestFrameBitmap != null && detectedHolds.isNotEmpty() -> UploadRecoveryResumeTarget(
+                        route = holdSelectionRouteFor(entryIntent)
+                    )
+                    else -> fallbackTarget
+                }
+            }
+
+            UploadRecoveryRoute.ATTEMPT_RESULT,
+            UploadRecoveryRoute.REALTIME_ATTEMPT_RESULT,
+            UploadRecoveryRoute.FINAL_ANALYSIS,
+            UploadRecoveryRoute.CHALLENGE_FINAL_ANALYSIS -> {
+                if (publishedAttemptResultSession != null) {
+                    UploadRecoveryResumeTarget(route = snapshot.lastRoute)
+                } else {
+                    fallbackTarget
+                }
+            }
+
+            UploadRecoveryRoute.REALTIME_SETUP -> UploadRecoveryResumeTarget(
+                route = UploadRecoveryRoute.REALTIME_SETUP
+            )
+        }
+
+        return exactTarget ?: fallbackTarget
+    }
+
+    private fun findBestMatchingDetectedHoldIndex(
+        boundingBox: UploadRecoveryBoundingBox
+    ): Int {
+        if (detectedHolds.isEmpty()) {
+            return -1
+        }
+        val target = boundingBox.toDomainBoundingBox()
+        return detectedHolds
+            .mapIndexed { index, hold ->
+                index to hold.boundingBox.distanceTo(target)
+            }
+            .minByOrNull { (_, distance) -> distance }
+            ?.first
+            ?: -1
+    }
+
+    suspend fun restartAfterFailedRecovery(
+        entryIntent: UploadRecoveryEntryIntent
+    ): Boolean {
+        if (!abandonCurrentChallengeIfNeeded()) {
+            return false
+        }
+        clearRecoveredChallengeState()
+        uploadRecoveryDataStore.clearAll()
+        prepareFreshUploadEntryAfterRecoveryPrompt(entryIntent)
         return true
     }
 
@@ -931,6 +1407,10 @@ class UploadViewModel @Inject constructor(
      */
     fun prepareExistingChallengeAttemptUpload(challenge: ChallengeSession) {
         invalidateSubmissionAnalysisPrewarm()
+        recoveredServerDoneAttemptCount = max(
+            recoveredServerDoneAttemptCount,
+            challenge.doneAttemptCount
+        )
         challengeDelegate.applyExistingChallenge(
             challenge = challenge,
             resolveHoldColorKey = { colorName ->
@@ -973,6 +1453,11 @@ class UploadViewModel @Inject constructor(
         resetUploadSubmissionState()
         resetFinalAnalysisPreparationState()
         cleanupUnusedManagedTempFiles()
+        persistChallengeRecoverySnapshotAsync(
+            challenge = challenge,
+            entryIntent = UploadRecoveryEntryIntent.UPLOAD,
+            lastKnownDoneAttemptCount = recoveredServerDoneAttemptCount
+        )
     }
 
     /**
@@ -1033,6 +1518,7 @@ class UploadViewModel @Inject constructor(
             if (isRealtimeSearch) {
                 realtimeSetupStep = RealtimeSetupStep.GymList
             }
+            recoveredCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME
             realtimeGymSearchQuery = query.trim()
             challengeDelegate.searchNearbyPlaces(
                 latitude = latitude,
@@ -1041,6 +1527,7 @@ class UploadViewModel @Inject constructor(
                 nearbyOnly = nearbyOnly,
                 onChallengeFlowCleared = onChallengeFlowCleared
             )
+            persistRecoverySnapshotAsyncIfPossible()
         }
     }
 
@@ -1057,6 +1544,7 @@ class UploadViewModel @Inject constructor(
                 return@launch
             }
             realtimeGymSearchQuery = place.placeName
+            recoveredCreateEntryStep = ChallengeCreateEntryStep.LEVEL
             challengeDelegate.resolveSelectedPlace(
                 place = place,
                 onChallengeFlowCleared = onChallengeFlowCleared
@@ -1064,6 +1552,7 @@ class UploadViewModel @Inject constructor(
             if (isRealtimeSearch && resolvedGym != null) {
                 realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
             }
+            persistRecoverySnapshotAsyncIfPossible()
         }
     }
 
@@ -1082,11 +1571,13 @@ class UploadViewModel @Inject constructor(
                     ::clearCreatedChallengeOnly
                 }
             )
+            recoveredCreateEntryStep = ChallengeCreateEntryStep.COLOR
             ensureRealtimeDefaultHoldColorSetup()
             if (isRealtimeSelection) {
                 realtimeHoldColorSheetVisible = false
                 realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
             }
+            persistRecoverySnapshotAsyncIfPossible()
         }
     }
 
@@ -1098,7 +1589,9 @@ class UploadViewModel @Inject constructor(
                 colorHex = null
             )
         }
+        recoveredCreateEntryStep = ChallengeCreateEntryStep.COLOR
         refreshAttemptHoldAlignmentTargets()
+        persistRecoverySnapshotAsyncIfPossible()
     }
 
     fun onRealtimeGymSearchQueryChanged(query: String) {
@@ -1108,6 +1601,8 @@ class UploadViewModel @Inject constructor(
     fun openRealtimeGymList() {
         entryMode = UploadEntryMode.Realtime
         realtimeSetupStep = RealtimeSetupStep.GymList
+        recoveredCreateEntryStep = ChallengeCreateEntryStep.LEVEL
+        persistRecoverySnapshotAsyncIfPossible(entryIntent = UploadRecoveryEntryIntent.REALTIME)
     }
 
     fun onRealtimeNearbyPlaceSortChanged(sortMode: NearbyPlaceSortMode) {
@@ -1133,6 +1628,7 @@ class UploadViewModel @Inject constructor(
             return
         }
         realtimeHoldColorSheetVisible = visible
+        persistRecoverySnapshotAsyncIfPossible(entryIntent = UploadRecoveryEntryIntent.REALTIME)
     }
 
     fun toggleRealtimeHoldColorSheetVisible() {
@@ -1144,6 +1640,7 @@ class UploadViewModel @Inject constructor(
         if (realtimeSetupStep == RealtimeSetupStep.Ready) {
             realtimeHoldColorSheetVisible = false
         }
+        persistRecoverySnapshotAsyncIfPossible(entryIntent = UploadRecoveryEntryIntent.REALTIME)
     }
 
     fun completeRealtimeChallengeSetup() {
@@ -1156,6 +1653,11 @@ class UploadViewModel @Inject constructor(
             onSuccess = {
                 realtimeSetupStep = RealtimeSetupStep.Ready
                 realtimeHoldColorSheetVisible = false
+                rememberRecoveryRoute(
+                    route = UploadRecoveryRoute.REALTIME_SETUP,
+                    createStep = recoveredCreateEntryStep,
+                    entryIntent = UploadRecoveryEntryIntent.REALTIME
+                )
             }
         )
     }
@@ -1208,8 +1710,78 @@ class UploadViewModel @Inject constructor(
         }
     }
 
+    fun prepareHoldSelectionUiState() {
+        val startIndex = selectedStartHold.indexInDetectedHolds()
+        val endIndex = selectedEndHold.indexInDetectedHolds()
+        holdSelectionStartIndex = startIndex
+        holdSelectionEndIndex = endIndex
+        holdSelectionPhase = if (startIndex >= 0) {
+            UploadRecoveryHoldSelectionPhase.END
+        } else {
+            UploadRecoveryHoldSelectionPhase.START
+        }
+        persistRecoverySnapshotAsyncIfPossible()
+    }
+
+    fun selectHoldSelectionStartIndex(index: Int) {
+        holdSelectionStartIndex = if (holdSelectionStartIndex == index) -1 else index
+        persistRecoverySnapshotAsyncIfPossible()
+    }
+
+    fun selectHoldSelectionEndIndex(index: Int) {
+        holdSelectionEndIndex = if (holdSelectionEndIndex == index) -1 else index
+        persistRecoverySnapshotAsyncIfPossible()
+    }
+
+    fun stepBackHoldSelection() {
+        holdSelectionEndIndex = -1
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.START
+        persistRecoverySnapshotAsyncIfPossible()
+    }
+
+    fun confirmCurrentHoldSelection(): Boolean {
+        return when (holdSelectionPhase) {
+            UploadRecoveryHoldSelectionPhase.START -> {
+                val selectedHold = detectedHolds.getOrNull(holdSelectionStartIndex) ?: return false
+                UploadAiTraceLogger.log(
+                    event = "HOLD_SELECT_CONFIRM_START",
+                    playbackUri = videoUri,
+                    phase = "HoldSelect",
+                    details = mapOf(
+                        "selectedIndex" to holdSelectionStartIndex,
+                        "bbox" to selectedHold.boundingBox.toString()
+                    )
+                )
+                updateSelectedStartHold(selectedHold)
+                holdSelectionPhase = UploadRecoveryHoldSelectionPhase.END
+                holdSelectionEndIndex = selectedEndHold.indexInDetectedHolds()
+                persistRecoverySnapshotAsyncIfPossible()
+                false
+            }
+
+            UploadRecoveryHoldSelectionPhase.END -> {
+                val selectedHold = detectedHolds.getOrNull(holdSelectionEndIndex) ?: return false
+                UploadAiTraceLogger.log(
+                    event = "HOLD_SELECT_CONFIRM_END",
+                    playbackUri = videoUri,
+                    phase = "HoldSelect",
+                    details = mapOf(
+                        "selectedIndex" to holdSelectionEndIndex,
+                        "bbox" to selectedHold.boundingBox.toString()
+                    )
+                )
+                updateSelectedEndHold(selectedHold)
+                resetState()
+                persistRecoverySnapshotAsyncIfPossible()
+                true
+            }
+        }
+    }
+
     fun updateSelectedStartHold(hold: Hold) {
         holdDetectionDelegate.updateSelectedStartHold(hold)
+        holdSelectionStartIndex = hold.indexInDetectedHolds()
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.END
         clearHoldReachAnalysis()
         refreshAttemptHoldAlignmentTargets()
         UploadAiTraceLogger.log(
@@ -1221,10 +1793,12 @@ class UploadViewModel @Inject constructor(
                 "detectedHoldCount" to detectedHolds.size
             )
         )
+        persistRecoverySnapshotAsyncIfPossible()
     }
 
     fun updateSelectedEndHold(hold: Hold) {
         holdDetectionDelegate.updateSelectedEndHold(hold)
+        holdSelectionEndIndex = hold.indexInDetectedHolds()
         clearHoldReachAnalysis()
         refreshAttemptHoldAlignmentTargets()
         UploadAiTraceLogger.log(
@@ -1245,6 +1819,7 @@ class UploadViewModel @Inject constructor(
             )
         }
         maybeStartSubmissionAnalysisPrewarmForCurrentSelection()
+        persistRecoverySnapshotAsyncIfPossible()
     }
 
     fun selectGymGrade(grade: GymGrade) {
@@ -1262,11 +1837,13 @@ class UploadViewModel @Inject constructor(
                     ::clearCreatedChallengeOnly
                 }
             )
+            recoveredCreateEntryStep = ChallengeCreateEntryStep.COLOR
             ensureRealtimeDefaultHoldColorSetup()
             if (isRealtimeSelection) {
                 realtimeHoldColorSheetVisible = false
                 realtimeSetupStep = RealtimeSetupStep.ChallengeCreate
             }
+            persistRecoverySnapshotAsyncIfPossible()
         }
     }
 
@@ -1287,6 +1864,9 @@ class UploadViewModel @Inject constructor(
         uri: String
     ) {
         val isRealtimeAttempt = entryMode == UploadEntryMode.Realtime
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.START
+        holdSelectionStartIndex = -1
+        holdSelectionEndIndex = -1
         clearHoldPrecomputeState()
         submissionDelegate.resetFinalAnalysisPreparationState()
         clearAttemptHoldAlignmentState()
@@ -1338,6 +1918,9 @@ class UploadViewModel @Inject constructor(
     }
 
     fun useDebugBestFrameImage(uri: String) {
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.START
+        holdSelectionStartIndex = -1
+        holdSelectionEndIndex = -1
         clearHoldPrecomputeState()
         clearAttemptHoldAlignmentState()
         holdDetectionDelegate.useDebugBestFrameImage(uri)
@@ -1760,6 +2343,8 @@ class UploadViewModel @Inject constructor(
             )
             if (challenge != null) {
                 allowLocalAnalysisWithoutChallenge = false
+                recoveredServerDoneAttemptCount = 0
+                persistChallengeRecoverySnapshotAsync(challenge)
                 onSuccess?.invoke()
             }
         }
@@ -1938,6 +2523,9 @@ class UploadViewModel @Inject constructor(
                 request = request,
                 callbacks = submissionCallbacks
             )
+            if (handleClosedChallengeDuringSubmissionIfNeeded()) {
+                return@launch
+            }
             if (
                 entryMode == UploadEntryMode.Realtime &&
                 uploadSubmissionUiState.value is UploadSubmissionUiState.Success
@@ -1971,6 +2559,335 @@ class UploadViewModel @Inject constructor(
                 callbacks = submissionCallbacks
             )
         }
+    }
+
+    private suspend fun resolveCurrentUserIdOrNull(): Long? {
+        cachedCurrentUserId?.let { return it }
+        return getMyInfoUseCase()
+            .getOrNull()
+            ?.id
+            ?.also { resolvedUserId ->
+                cachedCurrentUserId = resolvedUserId
+            }
+    }
+
+    private suspend fun handleClosedChallengeDuringSubmissionIfNeeded(): Boolean {
+        val errorState = uploadSubmissionUiState.value as? UploadSubmissionUiState.Error
+            ?: return false
+        if (!errorState.message.isChallengeAlreadyClosedMessage()) {
+            return false
+        }
+
+        val currentChallengeId = challengeId
+        val challengeResult = if (currentChallengeId != null) {
+            resolveChallengeResultForRecoveryPrompt(currentChallengeId)
+        } else {
+            "UNKNOWN"
+        }
+
+        clearRecoveredChallengeState()
+        clearUploadRecoverySnapshotAsync()
+        pendingRecoveryPrompt = UploadRecoveryPrompt(
+            type = UploadRecoveryPromptType.ClosedResult,
+            challengeResult = challengeResult
+        )
+        return true
+    }
+
+    private suspend fun resolveChallengeResultForRecoveryPrompt(challengeId: Long): String {
+        return getChallengesUseCase()
+            .getOrNull()
+            ?.firstOrNull { it.challengeId == challengeId }
+            ?.challengeResult
+            ?: "UNKNOWN"
+    }
+
+    private fun currentUploadRecoveryEntryIntent(): UploadRecoveryEntryIntent {
+        return if (isRealtimeEntryMode) {
+            UploadRecoveryEntryIntent.REALTIME
+        } else {
+            UploadRecoveryEntryIntent.UPLOAD
+        }
+    }
+
+    private fun persistRecoverySnapshotAsyncIfPossible(
+        entryIntent: UploadRecoveryEntryIntent = currentUploadRecoveryEntryIntent()
+    ) {
+        viewModelScope.launch {
+            persistCurrentRecoverySnapshot(entryIntent = entryIntent)
+        }
+    }
+
+    private fun persistChallengeRecoverySnapshotAsync(
+        challenge: ChallengeSession,
+        entryIntent: UploadRecoveryEntryIntent = currentUploadRecoveryEntryIntent(),
+        lastKnownDoneAttemptCount: Int = recoveredServerDoneAttemptCount
+    ) {
+        viewModelScope.launch {
+            persistCurrentRecoverySnapshot(
+                entryIntent = entryIntent,
+                challenge = challenge,
+                lastKnownDoneAttemptCount = lastKnownDoneAttemptCount
+            )
+        }
+    }
+
+    private suspend fun persistCurrentRecoverySnapshot(
+        entryIntent: UploadRecoveryEntryIntent = currentUploadRecoveryEntryIntent(),
+        challenge: ChallengeSession? = createdChallenge,
+        lastKnownDoneAttemptCount: Int = recoveredServerDoneAttemptCount
+    ) {
+        val currentUserId = resolveCurrentUserIdOrNull() ?: return
+        val effectiveChallenge = challenge ?: createdChallenge
+        val mediaSnapshot = sessionDelegate.buildRecoverySessionMediaSnapshot()
+        uploadRecoveryDataStore.saveUploadRecoverySnapshot(
+            UploadRecoverySnapshot(
+                userId = currentUserId,
+                challengeId = effectiveChallenge?.challengeId?.takeIf { it > 0L } ?: 0L,
+                gymId = effectiveChallenge?.gymId?.takeIf { it > 0L } ?: gymId?.toLong() ?: 0L,
+                gymGradeId = effectiveChallenge?.gymGradeId?.takeIf { it > 0L } ?: selectedGymGradeId ?: 0L,
+                gymName = effectiveChallenge?.gymName ?: gymName,
+                problemColor = effectiveChallenge?.problemColor?.takeIf { it.isNotBlank() } ?: holdColor,
+                gradeLabel = effectiveChallenge?.gradeLabel
+                    ?: selectedGymGrade?.gradeLabel
+                    ?: difficultyLevel.takeIf { it.isNotBlank() },
+                startedAt = effectiveChallenge?.startedAt.orEmpty(),
+                createdAt = effectiveChallenge?.createdAt.orEmpty(),
+                entryIntent = entryIntent,
+                recoveredAt = System.currentTimeMillis(),
+                lastKnownDoneAttemptCount = max(
+                    lastKnownDoneAttemptCount,
+                    effectiveChallenge?.doneAttemptCount ?: 0
+                ),
+                lastRoute = currentRecoveryRoute ?: defaultRecoveryRouteFor(entryIntent),
+                managedPrimaryPlaybackUri = mediaSnapshot.managedPrimaryPlaybackUri,
+                managedAdditionalPlaybackUris = mediaSnapshot.managedAdditionalPlaybackUris,
+                managedAttemptOnlyPlaybackUris = mediaSnapshot.managedAttemptOnlyPlaybackUris,
+                selectedHoldColorKey = selectedHoldColorKey,
+                searchQuery = realtimeGymSearchQuery.takeIf { it.isNotBlank() },
+                createStep = recoveredCreateEntryStep.toRecovery(),
+                realtimeSetupStep = realtimeSetupStep.name,
+                analysisLoadingPhase = analysisLoadingPhase.toRecovery(),
+                holdSelectionPhase = holdSelectionPhase,
+                selectedStartHoldBoundingBox = selectedStartHold?.boundingBox?.toRecoveryDto()
+                    ?: recoveredStartHoldBoundingBox,
+                selectedEndHoldBoundingBox = selectedEndHold?.boundingBox?.toRecoveryDto()
+                    ?: recoveredEndHoldBoundingBox,
+                currentAttemptIndex = currentAttemptIndex,
+                isAttemptOnlyMode = isAttemptOnlyUploadMode,
+                selectedNearbyPlace = selectedNearbyPlace?.toRecoveryDto(),
+                resolvedGym = resolvedGym?.toRecoveryDto(),
+                lastSearchLatitude = lastSearchLatitude,
+                lastSearchLongitude = lastSearchLongitude,
+                publishedAttemptResultSession = publishedAttemptResultSession?.toRecoveryDto()
+            )
+        )
+    }
+
+    private fun clearUploadRecoverySnapshotAsync() {
+        viewModelScope.launch {
+            uploadRecoveryDataStore.clearAll()
+        }
+    }
+
+    private fun resolvePreparedRecoveryTarget(
+        entryIntent: UploadRecoveryEntryIntent,
+        restoredFromServerChallenge: Boolean
+    ): UploadRecoveryResumeTarget? {
+        val inferredTarget = when {
+            analysisRouteShouldResume() -> UploadRecoveryResumeTarget(
+                route = analysisLoadingRouteFor(entryIntent)
+            )
+
+            publishedAttemptResultSession != null -> UploadRecoveryResumeTarget(
+                route = attemptResultRouteFor(entryIntent)
+            )
+
+            bestFrameBitmap != null && detectedHolds.isNotEmpty() -> UploadRecoveryResumeTarget(
+                route = holdSelectionRouteFor(entryIntent)
+            )
+
+            videoUri != null -> UploadRecoveryResumeTarget(
+                route = holdDetectionRouteFor(entryIntent)
+            )
+
+            entryIntent == UploadRecoveryEntryIntent.REALTIME -> UploadRecoveryResumeTarget(
+                route = UploadRecoveryRoute.REALTIME_SETUP
+            )
+
+            hasChallengeCreateSelectionState() -> UploadRecoveryResumeTarget(
+                route = UploadRecoveryRoute.CHALLENGE_CREATE,
+                createStep = resolveChallengeCreateStep()
+            )
+
+            else -> UploadRecoveryResumeTarget(
+                route = UploadRecoveryRoute.ATTEMPT_UPLOAD
+            )
+        }
+
+        if (!restoredFromServerChallenge) {
+            return inferredTarget
+        }
+
+        return when (inferredTarget.route) {
+            UploadRecoveryRoute.ATTEMPT_UPLOAD,
+            UploadRecoveryRoute.CHALLENGE_CREATE,
+            UploadRecoveryRoute.REALTIME_SETUP -> null
+
+            else -> inferredTarget
+        }
+    }
+
+    private fun analysisRouteShouldResume(): Boolean {
+        return uploadSubmissionUiState.value !is UploadSubmissionUiState.Idle ||
+            finalAnalysisPreparationUiState.value !is FinalAnalysisPreparationUiState.Idle
+    }
+
+    private fun analysisLoadingRouteFor(
+        entryIntent: UploadRecoveryEntryIntent
+    ): UploadRecoveryRoute {
+        return if (entryIntent == UploadRecoveryEntryIntent.REALTIME) {
+            UploadRecoveryRoute.REALTIME_ANALYSIS_LOADING
+        } else {
+            UploadRecoveryRoute.ANALYSIS_LOADING
+        }
+    }
+
+    private fun attemptResultRouteFor(
+        entryIntent: UploadRecoveryEntryIntent
+    ): UploadRecoveryRoute {
+        if (
+            analysisLoadingPhase == AnalysisLoadingPhase.FinalAnalysisPreparation &&
+            finalAnalysisPreparationUiState.value is FinalAnalysisPreparationUiState.Success
+        ) {
+            return UploadRecoveryRoute.FINAL_ANALYSIS
+        }
+        return if (entryIntent == UploadRecoveryEntryIntent.REALTIME) {
+            UploadRecoveryRoute.REALTIME_ATTEMPT_RESULT
+        } else {
+            UploadRecoveryRoute.ATTEMPT_RESULT
+        }
+    }
+
+    private fun holdSelectionRouteFor(
+        entryIntent: UploadRecoveryEntryIntent
+    ): UploadRecoveryRoute {
+        return if (entryIntent == UploadRecoveryEntryIntent.REALTIME) {
+            UploadRecoveryRoute.REALTIME_HOLD_SELECT
+        } else {
+            UploadRecoveryRoute.HOLD_SELECT
+        }
+    }
+
+    private fun holdDetectionRouteFor(
+        entryIntent: UploadRecoveryEntryIntent
+    ): UploadRecoveryRoute {
+        return if (entryIntent == UploadRecoveryEntryIntent.REALTIME) {
+            UploadRecoveryRoute.REALTIME_HOLD
+        } else {
+            UploadRecoveryRoute.CHALLENGE_HOLD
+        }
+    }
+
+    private fun hasResolvedGymSelection(): Boolean {
+        return gymId != null ||
+            selectedNearbyPlace != null ||
+            resolvedGym != null ||
+            gymName.isNotBlank()
+    }
+
+    private fun hasSelectedChallengeGrade(): Boolean {
+        return selectedGymGradeId != null ||
+            selectedGymGrade != null ||
+            selectedLevelSortOrder != null
+    }
+
+    private fun hasSelectedChallengeColor(): Boolean {
+        return selectedHoldColorKey != null ||
+            holdColor.isNotBlank()
+    }
+
+    private fun hasChallengeCreateSelectionState(): Boolean {
+        return hasResolvedGymSelection() ||
+            hasSelectedChallengeGrade() ||
+            hasSelectedChallengeColor()
+    }
+
+    private fun resolveChallengeCreateStep(
+        preferredStep: ChallengeCreateEntryStep = recoveredCreateEntryStep
+    ): ChallengeCreateEntryStep {
+        return when {
+            preferredStep == ChallengeCreateEntryStep.COLOR && hasSelectedChallengeGrade() -> {
+                ChallengeCreateEntryStep.COLOR
+            }
+
+            preferredStep == ChallengeCreateEntryStep.LEVEL && hasResolvedGymSelection() -> {
+                ChallengeCreateEntryStep.LEVEL
+            }
+
+            hasSelectedChallengeColor() && hasSelectedChallengeGrade() -> {
+                ChallengeCreateEntryStep.COLOR
+            }
+
+            hasSelectedChallengeGrade() -> {
+                ChallengeCreateEntryStep.LEVEL
+            }
+
+            hasResolvedGymSelection() -> {
+                ChallengeCreateEntryStep.LEVEL
+            }
+
+            else -> ChallengeCreateEntryStep.GYM_NAME
+        }
+    }
+
+    private fun defaultRecoveryRouteFor(
+        entryIntent: UploadRecoveryEntryIntent
+    ): UploadRecoveryRoute {
+        return if (entryIntent == UploadRecoveryEntryIntent.REALTIME) {
+            UploadRecoveryRoute.REALTIME_SETUP
+        } else {
+            UploadRecoveryRoute.ATTEMPT_UPLOAD
+        }
+    }
+
+    private fun String.toRealtimeSetupStepOrNull(): RealtimeSetupStep? {
+        return runCatching { RealtimeSetupStep.valueOf(this) }.getOrNull()
+    }
+
+    private fun UploadRecoverySessionMediaSnapshot.hasMedia(): Boolean {
+        return managedPrimaryPlaybackUri != null ||
+            managedAdditionalPlaybackUris.isNotEmpty() ||
+            managedAttemptOnlyPlaybackUris.isNotEmpty() ||
+            resultPlaybackUris.isNotEmpty()
+    }
+
+    private fun Hold.BoundingBox.distanceTo(other: Hold.BoundingBox): Float {
+        return kotlin.math.abs(left - other.left) +
+            kotlin.math.abs(top - other.top) +
+            kotlin.math.abs(right - other.right) +
+            kotlin.math.abs(bottom - other.bottom)
+    }
+
+    private fun Hold?.indexInDetectedHolds(): Int {
+        val target = this ?: return -1
+        return detectedHolds.indexOfFirst { hold ->
+            hold.boundingBox == target.boundingBox
+        }
+    }
+
+    private fun clearRecoveredChallengeState() {
+        recoveredServerDoneAttemptCount = 0
+        recoveredCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME
+        currentRecoveryRoute = null
+        recoveredStartHoldBoundingBox = null
+        recoveredEndHoldBoundingBox = null
+        challengeDelegate.clearCreatedChallengeState()
+        savedChallengeHolds = null
+        uploadedAttemptVideos = emptyList()
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.START
+        holdSelectionStartIndex = -1
+        holdSelectionEndIndex = -1
     }
 
     suspend fun closeChallengeForFinalAnalysis(
@@ -2007,6 +2924,8 @@ class UploadViewModel @Inject constructor(
                         challengeStatus = closedChallenge.challengeStatus
                     )
                     realtimeAttemptActionState = RealtimeAttemptActionState.Idle
+                    recoveredServerDoneAttemptCount = 0
+                    clearUploadRecoverySnapshotAsync()
                     true
                 },
                 onFailure = { throwable ->
@@ -2026,7 +2945,11 @@ class UploadViewModel @Inject constructor(
         if (currentChallengeId <= 0L) {
             return true
         }
-        val abandonResult = if (submissionDelegate.finalizedAttemptCount() > 0) {
+        val effectiveDoneAttemptCount = max(
+            submissionDelegate.finalizedAttemptCount(),
+            recoveredServerDoneAttemptCount
+        )
+        val abandonResult = if (effectiveDoneAttemptCount > 0) {
             "FAIL"
         } else {
             "UNKNOWN"
@@ -2066,6 +2989,14 @@ class UploadViewModel @Inject constructor(
         realtimeAttemptActionState = RealtimeAttemptActionState.Idle
         realtimeGymSearchQuery = ""
         realtimeHoldColorSheetVisible = false
+        recoveredServerDoneAttemptCount = 0
+        currentRecoveryRoute = null
+        recoveredStartHoldBoundingBox = null
+        recoveredEndHoldBoundingBox = null
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.START
+        holdSelectionStartIndex = -1
+        holdSelectionEndIndex = -1
+        pendingRecoveryPrompt = null
         _uiState.value = UploadUiState.Idle
         submissionDelegate.resetUploadSubmissionState()
         submissionDelegate.resetFinalAnalysisPreparationState()
@@ -2078,6 +3009,14 @@ class UploadViewModel @Inject constructor(
         realtimeAttemptActionState = RealtimeAttemptActionState.Idle
         realtimeGymSearchQuery = ""
         realtimeHoldColorSheetVisible = false
+        currentRecoveryRoute = null
+        recoveredCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME
+        recoveredStartHoldBoundingBox = null
+        recoveredEndHoldBoundingBox = null
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.START
+        holdSelectionStartIndex = -1
+        holdSelectionEndIndex = -1
+        pendingRecoveryPrompt = null
         uploadFlowMode = UploadFlowMode.FullChallenge
         allowLocalAnalysisWithoutChallenge = false
         clearHoldPrecomputeState()
@@ -2108,6 +3047,9 @@ class UploadViewModel @Inject constructor(
 
     private fun clearSelectedHoldSelection() {
         holdDetectionDelegate.clearSelectedHoldSelection()
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.START
+        holdSelectionStartIndex = -1
+        holdSelectionEndIndex = -1
         clearHoldReachAnalysis()
     }
 
@@ -2144,6 +3086,9 @@ class UploadViewModel @Inject constructor(
         realtimeHoldColorSheetVisible = false
         realtimeGymSearchQuery = gymName
         realtimeSetupStep = RealtimeSetupStep.Ready
+        holdSelectionPhase = UploadRecoveryHoldSelectionPhase.START
+        holdSelectionStartIndex = -1
+        holdSelectionEndIndex = -1
         allowLocalAnalysisWithoutChallenge = false
         captureCurrentAttemptResultSession()
         clearHoldPrecomputeState()
@@ -2230,6 +3175,11 @@ class UploadViewModel @Inject constructor(
         challengeDelegate.clearCreatedChallengeState()
         closedChallengeId = null
         closingChallengeId = null
+        recoveredServerDoneAttemptCount = 0
+        currentRecoveryRoute = null
+        recoveredCreateEntryStep = ChallengeCreateEntryStep.GYM_NAME
+        recoveredStartHoldBoundingBox = null
+        recoveredEndHoldBoundingBox = null
         savedChallengeHolds = null
         entryMode = if (preserveRealtimeMode) {
             UploadEntryMode.Realtime
@@ -2248,6 +3198,7 @@ class UploadViewModel @Inject constructor(
         publishedAttemptResultSession = null
         clearAttemptHoldAlignmentState()
         resetUploadSubmissionState()
+        clearUploadRecoverySnapshotAsync()
     }
 
     private fun resolveAttemptSuccess(
@@ -2471,6 +3422,11 @@ class UploadViewModel @Inject constructor(
             ?.takeIf { it.isNotBlank() }
             ?: "V${grade.sortOrder}"
     }
+}
+
+private fun String.isChallengeAlreadyClosedMessage(): Boolean {
+    return contains(CHALLENGE_ALREADY_CLOSED_MESSAGE_KO) ||
+        contains(CHALLENGE_ALREADY_CLOSED_MESSAGE_EN, ignoreCase = true)
 }
 
 private fun defaultUploadAnalysisPoints(): List<AnalysisPoint> = listOf(

@@ -3,11 +3,13 @@ package com.ddgo.app.data.mapper
 import com.ddgo.app.data.remote.challenge.BoundingBoxDto
 import com.ddgo.app.data.remote.challenge.ChallengeCloseResponseDto
 import com.ddgo.app.data.remote.challenge.ChallengeCreateResponseDto
+import com.ddgo.app.data.remote.challenge.ChallengeListResponseDto
 import com.ddgo.app.data.remote.challenge.HoldItemDto
 import com.ddgo.app.data.remote.challenge.HoldSaveRequestItemDto
 import com.ddgo.app.data.remote.challenge.HoldSaveResponseDto
 import com.ddgo.app.data.remote.challenge.PointItemDto
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
+import com.ddgo.app.domain.model.ChallengeOverview
 import com.ddgo.app.domain.model.ChallengeSession
 import com.ddgo.app.domain.model.ClosedChallenge
 import com.ddgo.app.domain.model.HoldBoundingBox
@@ -35,7 +37,23 @@ object ChallengeMapper {
         problemColor = problemColor,
         gradeLabel = gradeLabel,
         challengeStatus = challengeStatus,
+        challengeResult = null,
+        doneAttemptCount = 0,
         startedAt = startedAt,
+        createdAt = createdAt
+    )
+
+    fun ChallengeListResponseDto.toOverview(): ChallengeOverview = ChallengeOverview(
+        challengeId = id,
+        gymId = gymId,
+        gymName = gymName,
+        problemColor = problemColor,
+        gradeLabel = gradeLabel,
+        challengeStatus = challengeStatus,
+        challengeResult = challengeResult,
+        doneAttemptCount = doneAttemptCount,
+        startedAt = startedAt,
+        endedAt = endedAt,
         createdAt = createdAt
     )
 

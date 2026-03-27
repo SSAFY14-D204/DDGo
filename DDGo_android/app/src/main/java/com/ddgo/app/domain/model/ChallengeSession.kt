@@ -14,6 +14,8 @@ data class ChallengeSession(
     val problemColor: String,
     val gradeLabel: String?,
     val challengeStatus: String,
+    val challengeResult: String? = null,
+    val doneAttemptCount: Int = 0,
     val startedAt: String,
     val createdAt: String
 )

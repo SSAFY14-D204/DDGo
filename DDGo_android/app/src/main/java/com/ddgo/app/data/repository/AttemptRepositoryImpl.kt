@@ -17,6 +17,7 @@ import com.ddgo.app.data.remote.attempt.GenerateVideoUrlRequestDto
 import com.ddgo.app.data.remote.attempt.VideoUploadCompleteRequestDto
 import com.ddgo.app.domain.model.AttemptCompletionPayload
 import com.ddgo.app.domain.model.AttemptUploadTicket
+import com.ddgo.app.domain.model.ChallengeAlreadyClosedException
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.domain.repository.AttemptRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -142,13 +143,22 @@ class AttemptRepositoryImpl @Inject constructor(
                     )
                 )
             } catch (e: HttpException) {
-                val detail = resolveHttpErrorMessage(e)
+                val errorResponse = resolveHttpErrorResponse(e)
+                val detail = errorResponse?.message?.takeIf { it.isNotBlank() }
+                    ?: resolveHttpErrorMessage(e)
                 Log.e(
                     TAG,
                     "uploadAttemptVideo: request failed with HTTP ${e.code()}" +
                         detail?.let { ", detail=$it" }.orEmpty(),
                     e
                 )
+                if (errorResponse?.code == CHALLENGE_ALREADY_CLOSED_ERROR_CODE) {
+                    return@withContext Result.failure(
+                        ChallengeAlreadyClosedException(
+                            detail ?: "이미 종료된 챌린지에는 시도를 추가할 수 없습니다."
+                        )
+                    )
+                }
                 Result.failure(
                     IllegalStateException(
                         detail ?: "Failed to upload attempt video with HTTP ${e.code()}.",
@@ -375,7 +385,7 @@ class AttemptRepositoryImpl @Inject constructor(
     }
 
     /** 업로드 대상 영상의 메타데이터입니다. */
-    private fun resolveHttpErrorMessage(exception: HttpException): String? {
+    private fun resolveHttpErrorResponse(exception: HttpException): ApiErrorResponse? {
         val body = runCatching {
             exception.response()
                 ?.errorBody()
@@ -386,10 +396,12 @@ class AttemptRepositoryImpl @Inject constructor(
             ?: return null
 
         return runCatching {
-            json.decodeFromString(ApiErrorResponse.serializer(), body).message
+            json.decodeFromString(ApiErrorResponse.serializer(), body)
         }.getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?: body
+    }
+
+    private fun resolveHttpErrorMessage(exception: HttpException): String? {
+        return resolveHttpErrorResponse(exception)?.message?.takeIf { it.isNotBlank() }
     }
 
     private data class VideoFileMetadata(
@@ -397,4 +409,8 @@ class AttemptRepositoryImpl @Inject constructor(
         val contentType: String,
         val fileSize: Long
     )
+
+    private companion object {
+        const val CHALLENGE_ALREADY_CLOSED_ERROR_CODE = "CH002"
+    }
 }

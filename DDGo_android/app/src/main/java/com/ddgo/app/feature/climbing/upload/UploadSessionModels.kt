@@ -22,6 +22,24 @@ data class ManagedAttemptVideo(
     val tempFilePath: String?
 )
 
+internal data class UploadRecoverySessionMediaSnapshot(
+    val managedPrimaryPlaybackUri: String? = null,
+    val managedAdditionalPlaybackUris: List<String> = emptyList(),
+    val managedAttemptOnlyPlaybackUris: List<String> = emptyList(),
+    val resultPlaybackUris: List<String> = emptyList()
+)
+
+internal data class RehydratedUploadSessionMedia(
+    val generation: Long,
+    val primaryManagedVideo: ManagedAttemptVideo? = null,
+    val additionalManagedVideos: List<ManagedAttemptVideo> = emptyList(),
+    val attemptOnlyManagedVideos: List<ManagedAttemptVideo> = emptyList(),
+    val resultPlaybackUris: List<String> = emptyList()
+) {
+    val primaryPlaybackUri: String?
+        get() = primaryManagedVideo?.playbackUri
+}
+
 enum class PrePoseStatus {
     Pending,
     Running,
