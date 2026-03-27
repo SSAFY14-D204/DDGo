@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ddgo.app.feature.analysis.model.AnalysisAttemptListItemUiModel
+import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
 
 @Composable
@@ -31,10 +32,7 @@ internal fun AnalysisAttemptsSection(
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        AnalysisSectionTitle(
-            title = "시도 목록",
-            subtitle = "N차 시도, 영상 길이, 등반 결과만 먼저 확인하고 상세 분석으로 들어가세요."
-        )
+        AnalysisSectionTitle(title = "시도 기록")
 
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -86,7 +84,7 @@ private fun AttemptListRow(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "영상 길이 ${attempt.subtitle}",
+                        text = "등반 시간 ${attempt.subtitle}",
                         style = MaterialTheme.typography.bodySmall,
                         color = AnalysisPalette.TextSecondary
                     )
@@ -113,11 +111,11 @@ private fun AttemptListRow(
     }
 }
 
-private fun badgeTextColor(tone: com.ddgo.app.feature.analysis.model.AnalysisBadgeTone) =
+private fun badgeTextColor(tone: AnalysisBadgeTone) =
     when (tone) {
-        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Accent -> AnalysisPalette.AccentStrong
-        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Success -> AnalysisPalette.Success
-        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Danger -> AnalysisPalette.Danger
-        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Warning -> AnalysisPalette.Warning
-        com.ddgo.app.feature.analysis.model.AnalysisBadgeTone.Neutral -> AnalysisPalette.TextSecondary
+        AnalysisBadgeTone.Accent -> AnalysisPalette.AccentStrong
+        AnalysisBadgeTone.Success -> AnalysisPalette.Success
+        AnalysisBadgeTone.Danger -> AnalysisPalette.Danger
+        AnalysisBadgeTone.Warning -> AnalysisPalette.Warning
+        AnalysisBadgeTone.Neutral -> AnalysisPalette.TextSecondary
     }

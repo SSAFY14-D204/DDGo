@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -25,9 +27,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.feature.analysis.mapper.AnalysisFormatters
+import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
+import com.ddgo.app.feature.analysis.model.AnalysisBadgeUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisGrowthSummaryUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisTrendPointUiModel
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
@@ -47,7 +53,9 @@ internal fun AnalysisGrowthSection(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = summary.headline,
+                    text = summary.headline
+                        .replace("안정률이", "안정 점수가")
+                        .replace("%", "점"),
                     style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 34.sp),
                     color = AnalysisPalette.TextPrimary
                 )
@@ -56,12 +64,13 @@ internal fun AnalysisGrowthSection(
             GrowthVisualBoard(summary = summary)
             GrowthTrendChart(points = summary.trendPoints)
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                summary.trendBadges.forEach { badge ->
-                    AnalysisBadge(badge = badge)
-                }
+            if (summary.trendBadges.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(AnalysisPalette.Border)
+                )
             }
 
             Column(
@@ -90,6 +99,56 @@ internal fun AnalysisGrowthSection(
 }
 
 @Composable
+private fun GrowthTrendSummaryRow(
+    badges: List<AnalysisBadgeUiModel>
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        badges.forEachIndexed { index, badge ->
+            val displayLabel = badge.label
+                .replace("안정률", "안정 점수")
+                .replace("%", "점")
+
+            Text(
+                text = displayLabel,
+                modifier = Modifier.weight(1f),
+                color = growthBadgeTextColor(badge.tone),
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 24.sp
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (index != badges.lastIndex) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(AnalysisPalette.Border)
+                )
+            }
+        }
+    }
+}
+
+private fun growthBadgeTextColor(tone: AnalysisBadgeTone): Color {
+    return when (tone) {
+        AnalysisBadgeTone.Accent -> AnalysisPalette.AccentStrong
+        AnalysisBadgeTone.Success -> AnalysisPalette.Success
+        AnalysisBadgeTone.Danger -> AnalysisPalette.Danger
+        AnalysisBadgeTone.Warning -> AnalysisPalette.Warning
+        AnalysisBadgeTone.Neutral -> AnalysisPalette.TextSecondary
+    }
+}
+
+@Composable
 private fun GrowthVisualBoard(
     summary: AnalysisGrowthSummaryUiModel
 ) {
@@ -108,7 +167,7 @@ private fun GrowthVisualBoard(
                 CircularGrowthGauge(
                     score = summary.stabilityScore,
                     title = "평균 안정률",
-                    valueLabel = AnalysisFormatters.formatPercent(summary.stabilityScore)
+                    valueLabel = "${(summary.stabilityScore * 100f).toInt()}점"
                 )
 
                 Column(

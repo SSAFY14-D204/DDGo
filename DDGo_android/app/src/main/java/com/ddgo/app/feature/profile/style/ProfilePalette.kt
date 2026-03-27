@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.profile.style
 
 import androidx.compose.ui.graphics.Color
+import com.ddgo.app.core.ui.tokens.DdgoColorTokens
 
 /**
  * 프로필 화면 전용 색상 팔레트입니다.
@@ -21,8 +22,8 @@ internal object ProfilePalette {
     val Divider = Color(0xFFD7E5F5)
     val Border = Color(0xFFD7E5F5)
 
-    val HeroStart = Color(0xFF42A5F5)
-    val HeroEnd = Color(0xFF1E88E5)
+    val HeroStart = DdgoColorTokens.BrandBlue
+    val HeroEnd = DdgoColorTokens.BrandBlueStrong
 
     val TextPrimary = Color(0xFF1E232C)
     val TextSecondary = Color(0xFF6C7B8A)

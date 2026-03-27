@@ -127,16 +127,6 @@ internal fun AnalysisDashboardContent(
     ) {
         AnalysisGlow(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 56.dp, y = (-28).dp),
-            colors = listOf(
-                AnalysisPalette.Accent.copy(alpha = 0.18f),
-                AnalysisPalette.Accent.copy(alpha = 0f)
-            )
-        )
-
-        AnalysisGlow(
-            modifier = Modifier
                 .align(Alignment.CenterStart)
                 .offset(x = (-92).dp, y = 148.dp),
             colors = listOf(

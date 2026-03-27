@@ -48,12 +48,20 @@ internal fun ProfileGlow(
 internal fun ProfileTopBar(
     title: String
 ) {
-    Text(
-        text = title,
-        color = ProfilePalette.TextPrimary,
-        style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            color = ProfilePalette.TextPrimary,
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold
+        )
+    }
 }
 
 /** 각 섹션 상단 제목 행입니다. */

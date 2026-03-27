@@ -69,6 +69,7 @@ import com.ddgo.app.feature.climbing.upload.PoseScrubberColors
 import com.ddgo.app.feature.climbing.upload.PoseScrubberMarker
 import com.ddgo.app.feature.climbing.upload.PoseVideoScrubber
 import com.ddgo.app.feature.climbing.upload.ScreenRect
+import com.ddgo.app.feature.climbing.upload.VideoViewportCropSpec
 import com.ddgo.app.feature.climbing.upload.VideoContentRect
 import com.ddgo.app.feature.climbing.upload.calculateVerticalVideoViewportCropSpecFromBounds
 import com.ddgo.app.feature.climbing.upload.calculateVerticalVideoViewportCropSpecFromRawHolds
@@ -190,15 +191,15 @@ internal fun AttemptVideoSection(
             )
         }
     }
+    val viewportHeightOverridePx = remember(viewportHeightOverride, density) {
+        viewportHeightOverride?.let { with(density) { it.roundToPx() } }
+    }
     val topCropOffsetPx = remember(viewportCropSpec, fullVideoLayerSize) {
         if (viewportCropSpec.isActive) {
             fullVideoLayerSize.height * viewportCropSpec.topCropFraction
         } else {
             0f
         }
-    }
-    val viewportHeightOverridePx = remember(viewportHeightOverride, density) {
-        viewportHeightOverride?.let { with(density) { it.roundToPx() } }
     }
     val currentOverlayFrame = remember(state.overlayCache, displayedPositionMs) {
         state.overlayCache?.let { overlayCache ->

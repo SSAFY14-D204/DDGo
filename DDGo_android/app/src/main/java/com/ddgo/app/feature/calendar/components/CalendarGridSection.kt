@@ -64,7 +64,6 @@ private val GridMonthFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)
 
 private object CalendarMonthSectionDefaults {
-    val ControlsWidth = 330.dp
     val MonthChipWidth = 128.dp
     val MonthChipHeight = 38.dp
     val MonthMenuWidth = 128.dp
@@ -80,10 +79,9 @@ private object CalendarMonthSectionDefaults {
     val ToggleLabelGap = 3.dp
     val ToggleLabelStartPadding = 6.dp
     val ToggleLabelEndPadding = 3.dp
-    val WeekdayRowWidth = 312.dp
-    val GridWidth = 317.dp
     val DayCellHeight = 58.dp
     val DayRowSpacing = 13.dp
+    val DayColumnSpacing = 12.dp
     val SelectedDateWidth = 26.dp
     val SelectedDateHeight = 16.dp
     val PlaceholderSize = 27.dp
@@ -136,7 +134,6 @@ internal fun CalendarMonthSection(
     ) {
         Row(
             modifier = Modifier
-                .widthIn(max = CalendarMonthSectionDefaults.ControlsWidth)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -154,13 +151,13 @@ internal fun CalendarMonthSection(
         WeekdayHeader()
 
         Column(
-            modifier = Modifier.widthIn(max = CalendarMonthSectionDefaults.GridWidth),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(CalendarMonthSectionDefaults.DayRowSpacing)
         ) {
             weeks.forEach { week ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(21.dp)
+                    horizontalArrangement = Arrangement.spacedBy(CalendarMonthSectionDefaults.DayColumnSpacing)
                 ) {
                     week.forEach { day ->
                         DayCell(
@@ -426,8 +423,8 @@ private fun WeekdayHeader() {
     )
 
     Row(
-        modifier = Modifier.widthIn(max = CalendarMonthSectionDefaults.WeekdayRowWidth),
-        horizontalArrangement = Arrangement.spacedBy(24.dp)
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(CalendarMonthSectionDefaults.DayColumnSpacing)
     ) {
         weekDays.forEach { dayOfWeek ->
             Text(

@@ -2,6 +2,7 @@ package com.ddgo.app.feature.climbing
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,11 +21,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ddgo.app.core.ui.components.SvgAssetImage
+import com.ddgo.app.R
 
 private const val MENU_UPLOAD_ICON_ASSET = "file:///android_asset/figma/guide2_upload_icon.svg"
 private const val MENU_RECORD_ICON_ASSET = "file:///android_asset/figma/guide2_record_icon.svg"
@@ -50,7 +52,7 @@ fun ClimbingMenuOverlay(
     onDismiss: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.size(width = 195.dp, height = 175.dp),
+        modifier = Modifier.size(width = 228.dp, height = 182.dp),
         color = Color.White,
         shape = RoundedCornerShape(18.dp),
         shadowElevation = 16.dp
@@ -58,7 +60,7 @@ fun ClimbingMenuOverlay(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 21.dp, end = 21.dp, top = 16.dp, bottom = 15.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 15.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ClimbingMenuItem(
@@ -100,21 +102,55 @@ private fun ClimbingMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 2.dp)
+            .padding(vertical = 4.dp)
     ) {
-        SvgAssetImage(
-            assetPath = iconAsset,
-            contentDescription = label,
-            modifier = Modifier.size(52.dp)
+        ClimbingMenuLeadingIcon(
+            iconAsset = iconAsset,
+            contentDescription = label
         )
-        Spacer(modifier = Modifier.width(20.dp))
+        Spacer(modifier = Modifier.width(18.dp))
         Text(
             text = label,
             style = TextStyle(
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color(0xFF505050)
             )
         )
+    }
+}
+
+@Composable
+private fun ClimbingMenuLeadingIcon(
+    iconAsset: String,
+    contentDescription: String
+) {
+    val backgroundColor = if (iconAsset == MENU_UPLOAD_ICON_ASSET) {
+        Color(0xFFFFD0CF)
+    } else {
+        Color(0xFFD9FFDB)
+    }
+    val iconRes = if (iconAsset == MENU_UPLOAD_ICON_ASSET) {
+        R.drawable.ic_record
+    } else {
+        R.drawable.ic_timer
+    }
+    val iconSize = if (iconAsset == MENU_UPLOAD_ICON_ASSET) 20.dp else 18.dp
+
+    Surface(
+        modifier = Modifier.size(54.dp),
+        shape = RoundedCornerShape(27.dp),
+        color = backgroundColor
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = iconRes),
+                contentDescription = contentDescription,
+                modifier = Modifier.size(iconSize)
+            )
+        }
     }
 }

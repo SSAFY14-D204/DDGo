@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.request.videoFrameMillis
@@ -98,22 +99,24 @@ internal fun CommunityComposePage(
         }
 
         item {
-            Spacer(Modifier.height(34.dp))
+            Spacer(Modifier.height(26.dp))
             CommunityComposeTitleInput(
                 value = composeState.title,
                 onValueChange = onTitleChanged,
                 readOnly = isSubmitting
             )
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
+            CommunityComposeSectionDivider()
+            Spacer(Modifier.height(16.dp))
             CommunityComposeContentInput(
                 value = composeState.content,
                 onValueChange = onContentChanged,
                 readOnly = isSubmitting
             )
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(34.dp))
             if (showGymSection) {
                 CommunityComposeSectionDivider()
-                Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(26.dp))
                 CommunityComposeTagSection(
                     selectedGymName = composeState.gymName,
                     editable = !isAnalysisShareMode,
@@ -121,10 +124,10 @@ internal fun CommunityComposePage(
                     onOpenChallengeSheet = onOpenChallengeSheet,
                     onClearGym = onClearGym
                 )
-                Spacer(Modifier.height(42.dp))
+                Spacer(Modifier.height(34.dp))
             }
             CommunityComposeSectionDivider()
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(24.dp))
             CommunityComposeVideoSection(
                 videos = composeState.videos,
                 editable = !isAnalysisShareMode,
@@ -167,7 +170,7 @@ private fun CommunityComposeHeaderBar(
             text = title,
             modifier = Modifier.align(Alignment.Center),
             color = CommunityPalette.TextPrimary,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 20.sp),
             fontWeight = FontWeight.Bold
         )
 
@@ -205,9 +208,11 @@ private fun CommunityComposeTitleInput(
         modifier = Modifier.fillMaxWidth(),
         readOnly = readOnly,
         singleLine = true,
-        textStyle = MaterialTheme.typography.headlineSmall.copy(
+        textStyle = MaterialTheme.typography.titleLarge.copy(
             color = CommunityPalette.TextPrimary,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            fontSize = 24.sp,
+            lineHeight = 32.sp
         ),
         cursorBrush = SolidColor(CommunityPalette.AccentStrong),
         decorationBox = { innerTextField ->
@@ -215,7 +220,10 @@ private fun CommunityComposeTitleInput(
                 Text(
                     text = "제목을 입력하세요.",
                     color = CommunityPalette.TextSecondary,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 24.sp,
+                        lineHeight = 32.sp
+                    ),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -235,24 +243,29 @@ private fun CommunityComposeContentInput(
         onValueChange = onValueChange,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 154.dp),
+            .heightIn(min = 138.dp),
         readOnly = readOnly,
-        textStyle = MaterialTheme.typography.headlineSmall.copy(
+        textStyle = MaterialTheme.typography.bodyLarge.copy(
             color = CommunityPalette.TextPrimary,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            fontSize = 17.sp,
+            lineHeight = 27.sp
         ),
         cursorBrush = SolidColor(CommunityPalette.AccentStrong),
         decorationBox = { innerTextField ->
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 154.dp)
+                    .heightIn(min = 138.dp)
             ) {
                 if (value.isBlank()) {
                     Text(
                         text = "내용을 자유롭게 적어주세요.",
                         color = CommunityPalette.TextHint,
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = 17.sp,
+                            lineHeight = 27.sp
+                        ),
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -267,7 +280,7 @@ private fun CommunityComposeSectionLabel(text: String) {
     Text(
         text = text,
         color = CommunityPalette.TextSecondary,
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.titleSmall.copy(fontSize = 16.sp),
         fontWeight = FontWeight.Medium
     )
 }
@@ -281,7 +294,7 @@ private fun CommunityComposeTagSection(
     onClearGym: () -> Unit
 ) {
     if (!editable) {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             CommunityComposeSectionLabel(text = "암장 태그")
             selectedGymName?.let { gymName ->
                 CommunityComposeChip(text = gymName)
@@ -290,7 +303,7 @@ private fun CommunityComposeTagSection(
         return
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         CommunityComposeSectionLabel(text = "암장 태그")
         CommunityComposeSearchFieldChrome(
             enabled = enabled,
@@ -301,7 +314,7 @@ private fun CommunityComposeTagSection(
                     imageVector = Icons.Default.Search,
                     contentDescription = "암장 검색 열기",
                     tint = CommunityPalette.TextSecondary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         )
@@ -327,11 +340,11 @@ private fun CommunityComposeVideoSection(
     onMoveVideoDown: (String) -> Unit
 ) {
     if (!editable) {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             CommunityComposeSectionLabel(text = "첨부 영상")
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 videos.forEach { video ->
                     CommunityComposeVideoPreviewTile(
@@ -355,11 +368,11 @@ private fun CommunityComposeVideoSection(
         return
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         CommunityComposeSectionLabel(text = "첨부 영상")
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CommunityVideoPickerTile(
                 enabled = enabled && videos.size < 3,
@@ -392,13 +405,13 @@ private fun CommunityVideoPickerTile(
     onPickVideos: () -> Unit
 ) {
     CommunityComposeAttachmentTile(
-        modifier = Modifier.size(102.dp),
+        modifier = Modifier.size(92.dp),
         onClick = if (enabled) onPickVideos else null
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(vertical = 14.dp),
+                .padding(vertical = 12.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -406,13 +419,13 @@ private fun CommunityVideoPickerTile(
                 imageVector = Icons.Default.Videocam,
                 contentDescription = null,
                 tint = CommunityPalette.TextPrimary,
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(28.dp)
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = "영상선택",
                 color = CommunityPalette.TextPrimary,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                 fontWeight = FontWeight.Medium
             )
         }
@@ -444,7 +457,7 @@ private fun CommunityComposeVideoPreviewTile(
 
     Box {
         CommunityComposeAttachmentTile(
-            modifier = Modifier.size(102.dp)
+            modifier = Modifier.size(92.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (previewRequest != null) {
@@ -463,7 +476,7 @@ private fun CommunityComposeVideoPreviewTile(
                             imageVector = Icons.Default.PlayCircle,
                             contentDescription = null,
                             tint = CommunityPalette.TextHint,
-                            modifier = Modifier.size(30.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
@@ -474,7 +487,7 @@ private fun CommunityComposeVideoPreviewTile(
                     tint = CommunityPalette.OnAccent.copy(alpha = 0.92f),
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .size(30.dp)
+                        .size(26.dp)
                 )
 
                 if (editable && !isFirst) {
@@ -483,7 +496,7 @@ private fun CommunityComposeVideoPreviewTile(
                         contentDescription = "앞으로 이동",
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(6.dp),
+                            .padding(5.dp),
                         enabled = enabled,
                         onClick = onMoveLeft
                     )
@@ -495,7 +508,7 @@ private fun CommunityComposeVideoPreviewTile(
                         contentDescription = "뒤로 이동",
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(6.dp),
+                            .padding(5.dp),
                         enabled = enabled,
                         onClick = onMoveRight
                     )
@@ -506,20 +519,20 @@ private fun CommunityComposeVideoPreviewTile(
             Surface(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .offset(x = 8.dp, y = (-8).dp),
+                .offset(x = 6.dp, y = (-6).dp),
             shape = CircleShape,
             color = CommunityPalette.TextSecondary.copy(alpha = 0.78f)
         ) {
             IconButton(
                 onClick = onRemove,
                 enabled = enabled,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(24.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "영상 제거",
                     tint = CommunityPalette.OnAccent,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(12.dp)
                 )
             }
         }
@@ -543,13 +556,13 @@ private fun CommunityVideoOverlayButton(
         IconButton(
             onClick = onClick,
             enabled = enabled,
-            modifier = Modifier.size(26.dp)
+            modifier = Modifier.size(22.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
                 tint = CommunityPalette.TextPrimary,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
     }
