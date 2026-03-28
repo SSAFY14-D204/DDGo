@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
@@ -64,6 +65,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -73,9 +76,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.ddgo.app.R
+import com.ddgo.app.core.datastore.MainEntryGuideStep
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import com.ddgo.app.core.ui.components.SvgAssetImage
 import com.ddgo.app.domain.model.NearbyPlace
+import com.ddgo.app.feature.calendar.CalendarViewModel
+import com.ddgo.app.feature.main.MainScreen
 import com.ddgo.app.feature.profile.model.ProfileSexOption
 
 enum class OnboardingStage {
@@ -95,7 +101,9 @@ private enum class FigmaOnboardingStep {
     Wingspan,
     Gym,
     Nickname,
-    Complete
+    Complete,
+    GuideFab,
+    GuideMenu
 }
 
 private enum class MeasurementRulerKind {
@@ -145,9 +153,16 @@ private val OnboardingCtaGradient = Brush.linearGradient(
 private const val INTRO_SCREEN_ASSET = "file:///android_asset/onboarding/onboarding1.png"
 private const val SEX_LEFT_ASSET = "file:///android_asset/onboarding/sex_male.svg"
 private const val SEX_RIGHT_ASSET = "file:///android_asset/onboarding/sex_female.svg"
-private const val COMPLETE_GLOW_ASSET = "file:///android_asset/onboarding/complete_glow.svg"
 private const val COMPLETE_FEMALE_ASSET = "file:///android_asset/onboarding/complete_female.svg"
 private const val COMPLETE_MALE_ASSET = "file:///android_asset/onboarding/complete_male.svg"
+private const val GUIDE_1_ARROW_ASSET = "file:///android_asset/figma/guide1_arrow.svg"
+private const val GUIDE_2_ARROW_LEFT_ASSET = "file:///android_asset/figma/guide2_arrow_left.svg"
+private const val GUIDE_2_ARROW_RIGHT_ASSET = "file:///android_asset/figma/guide2_arrow_right.svg"
+private const val GUIDE_2_FAB_BG_ASSET = "file:///android_asset/figma/guide2_fab_bg.svg"
+private const val GUIDE_2_CLOSE_ICON_ASSET = "file:///android_asset/figma/guide2_close_icon.svg"
+private const val GUIDE_2_UPLOAD_ICON_ASSET = "file:///android_asset/figma/guide2_upload_icon.svg"
+private const val GUIDE_2_RECORD_ICON_ASSET = "file:///android_asset/figma/guide2_record_icon.svg"
+private val GuideHandwritingFont = FontFamily(Font(R.font.memoment_kkukkukk))
 
 @Composable
 fun OnboardingScreen(
@@ -158,7 +173,22 @@ fun OnboardingScreen(
     onFinish: () -> Unit,
     viewModel: FigmaOnboardingViewModel = hiltViewModel()
 ) {
-    val steps = remember { FigmaOnboardingStep.entries }
+    val steps = remember(showEntryGuide) {
+        buildList {
+            add(FigmaOnboardingStep.Sex)
+            add(FigmaOnboardingStep.Intro)
+            add(FigmaOnboardingStep.Height)
+            add(FigmaOnboardingStep.Weight)
+            add(FigmaOnboardingStep.Wingspan)
+            add(FigmaOnboardingStep.Gym)
+            add(FigmaOnboardingStep.Nickname)
+            add(FigmaOnboardingStep.Complete)
+            if (showEntryGuide) {
+                add(FigmaOnboardingStep.GuideFab)
+                add(FigmaOnboardingStep.GuideMenu)
+            }
+        }
+    }
     val initialStepIndex = remember(initialStepKey, steps) {
         steps.indexOfFirst { it.name.equals(initialStepKey, ignoreCase = true) }
             .takeIf { it >= 0 }
@@ -290,9 +320,23 @@ fun OnboardingScreen(
                 onContinue = {
                     viewModel.completeOnboarding(
                         showEntryGuide = showEntryGuide,
-                        onSuccess = onFinish
+                        onSuccess = {
+                            if (showEntryGuide) {
+                                moveNext()
+                            } else {
+                                onFinish()
+                            }
+                        }
                     )
                 }
+            )
+
+            FigmaOnboardingStep.GuideFab -> OnboardingGuideFabScreen(
+                onContinue = ::moveNext
+            )
+
+            FigmaOnboardingStep.GuideMenu -> OnboardingGuideMenuScreen(
+                onDismiss = onFinish
             )
         }
     }
@@ -827,14 +871,32 @@ private fun CompleteStepScreen(
     ) {
         val scale = maxWidth / 412.dp
 
-        SvgAssetImage(
-            assetPath = COMPLETE_GLOW_ASSET,
-            contentDescription = null,
+        Box(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .offset(x = (-3.74f).dp * scale, y = (-250.24f).dp * scale)
-                .size(width = 470.214.dp * scale, height = 837.087.dp * scale)
-                .graphicsLayer { rotationZ = 89.65f }
+                .fillMaxSize()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFD6E7FF),
+                            Color(0xFFE1DEFF)
+                        )
+                    )
+                )
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color.Transparent,
+                            0.34f to Color.Transparent,
+                            0.72f to Color.White.copy(alpha = 0.78f),
+                            1.0f to Color.White
+                        )
+                    )
+                )
         )
 
         Text(
@@ -961,6 +1023,400 @@ private fun CompleteStepScreen(
 }
 
 @Composable
+private fun OnboardingGuideFabScreen(
+    onContinue: () -> Unit,
+    calendarViewModel: CalendarViewModel = hiltViewModel()
+) {
+    MainScreen(
+        onNavigateToUpload = {},
+        onNavigateToRecord = {},
+        onNavigateToCalendarDetail = {},
+        onNavigateToAuth = {},
+        calendarViewModel = calendarViewModel,
+        onNavigateToDebug = {},
+        previewGuideStep = MainEntryGuideStep.FAB,
+        onPreviewGuideFabClick = onContinue,
+        enableBackHandlers = false
+    )
+}
+
+@Composable
+private fun OnboardingGuideMenuScreen(
+    onDismiss: () -> Unit,
+    calendarViewModel: CalendarViewModel = hiltViewModel()
+) {
+    MainScreen(
+        onNavigateToUpload = {},
+        onNavigateToRecord = {},
+        onNavigateToCalendarDetail = {},
+        onNavigateToAuth = {},
+        calendarViewModel = calendarViewModel,
+        onNavigateToDebug = {},
+        previewGuideStep = MainEntryGuideStep.MENU,
+        onPreviewGuideMenuDismiss = onDismiss,
+        enableBackHandlers = false
+    )
+}
+
+@Composable
+private fun OnboardingGuideFrame(
+    overlayContent: @Composable BoxScope.(Float) -> Unit
+) {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        val scale = maxWidth / 412.dp
+
+        GuideHomePreviewBackground(scale = scale)
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF48464E).copy(alpha = 0.75f))
+        )
+
+        overlayContent(scale)
+    }
+}
+
+@Composable
+private fun GuideHomePreviewBackground(
+    scale: Float
+) {
+    val dayColumns = listOf("일", "월", "화", "수", "목", "금", "토")
+    val dayRows = listOf(
+        listOf("31", "30", "1", "2", "3", "4", "5"),
+        listOf("6", "7", "8", "9", "10", "11", "12"),
+        listOf("13", "14", "15", "16", "17", "18", "19"),
+        listOf("20", "21", "22", "23", "24", "25", "26"),
+        listOf("27", "28", "29", "30", "31", "1", "2")
+    )
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(152.dp * scale)
+                .background(Color(0xFF0B0B0E))
+        )
+
+        Text(
+            text = "3월에는 5개의 문제를 풀었어요!",
+            style = TextStyle(
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                lineHeight = 28.sp
+            ),
+            modifier = Modifier
+                .padding(start = 24.dp * scale, top = 107.dp * scale)
+                .width(279.dp * scale)
+        )
+
+        Surface(
+            modifier = Modifier
+                .padding(start = 24.dp * scale, top = 177.dp * scale)
+                .size(width = 139.dp * scale, height = 36.dp * scale),
+            color = Color.White,
+            shape = RoundedCornerShape(24.dp * scale)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = "2026년 3월",
+                    style = TextStyle(
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF1E232C)
+                    )
+                )
+            }
+        }
+
+        Surface(
+            modifier = Modifier
+                .padding(start = 263.dp * scale, top = 177.dp * scale)
+                .size(width = 125.dp * scale, height = 36.dp * scale),
+            color = Color.White,
+            shape = RoundedCornerShape(24.dp * scale)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = 1.dp * scale)
+                        .size(width = 61.dp * scale, height = 34.dp * scale)
+                        .background(OnboardingBlue, RoundedCornerShape(24.dp * scale)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "색상",
+                        style = TextStyle(
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color.White
+                        )
+                    )
+                }
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "암장",
+                        style = TextStyle(
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFF505050)
+                        )
+                    )
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(start = 25.dp * scale, top = 247.dp * scale)
+                .width(362.dp * scale)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                dayColumns.forEach { day ->
+                    Text(
+                        text = day,
+                        style = TextStyle(
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = OnboardingBlack,
+                            textAlign = TextAlign.Center
+                        ),
+                        modifier = Modifier.width(24.dp * scale)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp * scale))
+
+            dayRows.forEachIndexed { rowIndex, days ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    days.forEachIndexed { columnIndex, day ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val isMuted = (rowIndex == 0 && columnIndex < 2) || (rowIndex == 4 && columnIndex > 4)
+                            val isSelected = rowIndex == 0 && columnIndex == 3
+                            val showPink = rowIndex == 0 && columnIndex == 1
+                            val showCluster = rowIndex == 0 && columnIndex == 3
+
+                            Box(
+                                modifier = Modifier
+                                    .size(width = 29.dp * scale, height = 18.dp * scale)
+                                    .background(
+                                        color = if (isSelected) OnboardingBlue else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp * scale)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = day,
+                                    style = TextStyle(
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = when {
+                                            isSelected -> Color.White
+                                            isMuted -> Color(0xFF8F9BB3)
+                                            else -> Color(0xFF222B45)
+                                        }
+                                    )
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp * scale))
+
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp * scale)
+                                    .background(
+                                        color = when {
+                                            showPink -> Color(0xFFFF56A8)
+                                            else -> Color(0xFF77777D)
+                                        },
+                                        shape = RoundedCornerShape(10.dp * scale)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (showCluster) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp * scale)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopStart)
+                                                .size(10.dp * scale)
+                                                .background(Color(0xFF876FFF), CircleShape)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .size(10.dp * scale)
+                                                .border(2.dp, Color(0xFFFF56A8), CircleShape)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomStart)
+                                                .size(10.dp * scale)
+                                                .background(Color(0xFF65B969), CircleShape)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .size(10.dp * scale)
+                                                .background(Color(0xFFFED500), CircleShape)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(17.dp * scale))
+            }
+        }
+
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(112.dp * scale),
+            color = Color.White,
+            shadowElevation = 12.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 18.dp * scale, end = 18.dp * scale, top = 18.dp * scale),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                GuideBottomNavItem(R.drawable.ic_calendar, "캘린더", false)
+                GuideBottomNavItem(R.drawable.ic_community, "커뮤니티", false)
+                Spacer(modifier = Modifier.width(72.dp * scale))
+                GuideBottomNavItem(R.drawable.ic_records, "분석", false)
+                GuideBottomNavItem(R.drawable.ic_my_page, "프로필", true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideBottomNavItem(
+    iconRes: Int,
+    label: String,
+    selected: Boolean
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = label,
+            tint = if (selected) OnboardingBlue else Color(0xFF505050),
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = label,
+            style = TextStyle(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                color = if (selected) OnboardingBlue else Color(0xFF505050)
+            )
+        )
+    }
+}
+
+@Composable
+private fun GuideCaptionText(
+    firstLine: String = "분석을 위해",
+    accent: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = firstLine,
+            style = TextStyle(
+                fontSize = 20.sp,
+                fontFamily = GuideHandwritingFont,
+                fontWeight = FontWeight.Normal,
+                color = Color.White,
+                lineHeight = 20.sp,
+                textAlign = TextAlign.Center
+            )
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = accent,
+                style = TextStyle(
+                    fontSize = 20.sp,
+                    fontFamily = GuideHandwritingFont,
+                    fontWeight = FontWeight.Normal,
+                    color = accentColor,
+                    lineHeight = 20.sp
+                )
+            )
+            Text(
+                text = if (firstLine == "분석을 위해") "을 클릭해주세요!" else "에서",
+                style = TextStyle(
+                    fontSize = 20.sp,
+                    fontFamily = GuideHandwritingFont,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White,
+                    lineHeight = 20.sp
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuideMenuRow(
+    iconAsset: String,
+    label: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SvgAssetImage(
+            assetPath = iconAsset,
+            contentDescription = label,
+            modifier = Modifier.size(52.dp)
+        )
+        Spacer(modifier = Modifier.width(20.dp))
+        Text(
+            text = label,
+            style = TextStyle(
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFF505050)
+            )
+        )
+    }
+}
+
+@Composable
 private fun SelectionShell(
     onBack: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
@@ -1035,7 +1491,6 @@ private fun QuestionShell(
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
-                .imePadding()
         ) {
             Text(
                 text = title,
@@ -1055,7 +1510,10 @@ private fun QuestionShell(
             enabled = isContinueEnabled,
             isLoading = isLoading,
             onClick = onContinue,
-            modifier = Modifier.padding(start = 15.dp, end = 15.dp, bottom = 45.dp)
+            modifier = Modifier
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(start = 15.dp, end = 15.dp, bottom = 45.dp)
         )
     }
 }

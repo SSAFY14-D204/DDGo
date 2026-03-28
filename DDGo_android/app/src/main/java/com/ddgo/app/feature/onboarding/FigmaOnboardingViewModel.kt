@@ -358,13 +358,7 @@ class FigmaOnboardingViewModel @Inject constructor(
 
             runCatching {
                 onboardingPreferenceDataStore.setOnboardingCompleted(true)
-                onboardingPreferenceDataStore.setMainEntryGuideStep(
-                    if (showEntryGuide) {
-                        MainEntryGuideStep.FAB
-                    } else {
-                        MainEntryGuideStep.DONE
-                    }
-                )
+                onboardingPreferenceDataStore.setMainEntryGuideStep(MainEntryGuideStep.DONE)
             }.onFailure { throwable ->
                 Log.e(TAG, "Failed to persist onboarding completion", throwable)
             }

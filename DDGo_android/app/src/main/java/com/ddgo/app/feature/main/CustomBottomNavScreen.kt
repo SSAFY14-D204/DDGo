@@ -162,10 +162,16 @@ fun ClimbingFloatingButton(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                painter = painterResource(id = R.drawable.ic_climbing),
-                contentDescription = "클라이밍",
+                painter = painterResource(
+                    id = if (isSelected) {
+                        R.drawable.ic_climbing_close
+                    } else {
+                        R.drawable.ic_climbing
+                    }
+                ),
+                contentDescription = if (isSelected) "닫기" else "클라이밍",
                 tint = Color.White,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(if (isSelected) 30.dp else 28.dp)
             )
         }
         Spacer(modifier = Modifier.height(10.dp))
