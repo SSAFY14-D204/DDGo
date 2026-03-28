@@ -40,6 +40,7 @@ import com.ddgo.app.feature.analysis.model.AnalysisAttemptGrowthPointUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
 import com.ddgo.app.feature.analysis.model.AnalysisChallengeDetailUiModel
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
+import com.ddgo.app.feature.main.MainChromeDefaults
 
 @Composable
 internal fun AnalysisChallengeDetailScreen(
@@ -56,7 +57,12 @@ internal fun AnalysisChallengeDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                top = 16.dp,
+                bottom = MainChromeDefaults.ContentBottomPadding + 28.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {

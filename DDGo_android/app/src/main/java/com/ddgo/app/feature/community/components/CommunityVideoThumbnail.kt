@@ -3,6 +3,8 @@ package com.ddgo.app.feature.community.components
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.os.Build
+import android.util.LruCache
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
 import androidx.media3.common.VideoSize
@@ -64,10 +66,29 @@ private suspend fun loadCommunityVideoThumbnailState(
     playbackUrl: String,
     thumbnailUrl: String?
 ): CommunityVideoThumbnailState = withContext(Dispatchers.IO) {
-    val imageThumbnailState = thumbnailUrl
-        ?.takeIf { it.isNotBlank() }
+    val normalizedThumbnailUrl = thumbnailUrl?.takeIf { it.isNotBlank() }
+    val cacheKey = normalizedThumbnailUrl
+        ?.takeUnless { it == playbackUrl }
+        ?: playbackUrl
+
+    communityThumbnailCache.get(cacheKey)?.let { cached ->
+        return@withContext CommunityVideoThumbnailState.Success(
+            bitmap = cached.bitmap,
+            isPortrait = cached.isPortrait
+        )
+    }
+
+    val imageThumbnailState = normalizedThumbnailUrl
+        ?.takeUnless { it == playbackUrl }
         ?.let(::loadCommunityImageThumbnailState)
     if (imageThumbnailState is CommunityVideoThumbnailState.Success) {
+        communityThumbnailCache.put(
+            cacheKey,
+            CachedCommunityThumbnail(
+                bitmap = imageThumbnailState.bitmap,
+                isPortrait = imageThumbnailState.isPortrait
+            )
+        )
         return@withContext imageThumbnailState
     }
 
@@ -75,10 +96,20 @@ private suspend fun loadCommunityVideoThumbnailState(
     val bitmap = loadCommunityVideoFrame(playbackUrl)
 
     when {
-        bitmap != null -> CommunityVideoThumbnailState.Success(
-            bitmap = bitmap,
-            isPortrait = metadata?.isPortrait ?: (bitmap.height > bitmap.width)
-        )
+        bitmap != null -> {
+            val successState = CommunityVideoThumbnailState.Success(
+                bitmap = bitmap,
+                isPortrait = metadata?.isPortrait ?: (bitmap.height > bitmap.width)
+            )
+            communityThumbnailCache.put(
+                cacheKey,
+                CachedCommunityThumbnail(
+                    bitmap = successState.bitmap,
+                    isPortrait = successState.isPortrait
+                )
+            )
+            successState
+        }
 
         else -> CommunityVideoThumbnailState.Error(isPortrait = metadata?.isPortrait)
     }
@@ -136,13 +167,48 @@ private fun loadCommunityVideoMetadata(playbackUrl: String): CommunityVideoMetad
 }
 
 private fun loadCommunityVideoFrame(playbackUrl: String): Bitmap? {
+    loadCommunityVideoFrameWithPlatformRetriever(playbackUrl)?.let { return it }
+
     val retriever = FFmpegMediaMetadataRetriever()
     return try {
         retriever.setDataSource(playbackUrl)
         retriever.getFrameAtTime(
             COMMUNITY_THUMBNAIL_TIME_US,
-            FFmpegMediaMetadataRetriever.OPTION_CLOSEST
+            FFmpegMediaMetadataRetriever.OPTION_CLOSEST_SYNC
         )
+    } catch (_: Throwable) {
+        null
+    } finally {
+        runCatching { retriever.release() }
+    }
+}
+
+private fun loadCommunityVideoFrameWithPlatformRetriever(playbackUrl: String): Bitmap? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(playbackUrl, emptyMap())
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 -> {
+                retriever.getScaledFrameAtTime(
+                    COMMUNITY_THUMBNAIL_TIME_US,
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                    COMMUNITY_THUMBNAIL_TARGET_WIDTH,
+                    COMMUNITY_THUMBNAIL_TARGET_HEIGHT
+                )
+            }
+
+            else -> retriever.getFrameAtTime(
+                COMMUNITY_THUMBNAIL_TIME_US,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            )?.let { bitmap ->
+                Bitmap.createScaledBitmap(
+                    bitmap,
+                    COMMUNITY_THUMBNAIL_TARGET_WIDTH,
+                    COMMUNITY_THUMBNAIL_TARGET_HEIGHT,
+                    true
+                )
+            }
+        }
     } catch (_: Throwable) {
         null
     } finally {
@@ -179,6 +245,14 @@ private data class CommunityVideoMetadata(
     val isPortrait: Boolean
 )
 
-private const val COMMUNITY_THUMBNAIL_TIME_US = 1_000_000L
+private data class CachedCommunityThumbnail(
+    val bitmap: Bitmap,
+    val isPortrait: Boolean
+)
+
+private const val COMMUNITY_THUMBNAIL_TIME_US = 0L
 private const val COMMUNITY_THUMBNAIL_CONNECT_TIMEOUT_MS = 4_000
 private const val COMMUNITY_THUMBNAIL_READ_TIMEOUT_MS = 4_000
+private const val COMMUNITY_THUMBNAIL_TARGET_WIDTH = 208
+private const val COMMUNITY_THUMBNAIL_TARGET_HEIGHT = 156
+private val communityThumbnailCache = LruCache<String, CachedCommunityThumbnail>(24)

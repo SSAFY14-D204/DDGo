@@ -43,6 +43,9 @@ import java.io.InputStream
 import java.net.URLConnection
 import javax.inject.Inject
 import javax.inject.Named
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -73,7 +76,9 @@ class CommunityRepositoryImpl @Inject constructor(
         if (!response.success || response.data == null) {
             throw IllegalStateException(response.message.ifBlank { "커뮤니티 게시글을 불러오지 못했어요." })
         }
-        response.data.toDomain().toEmulatorAccessibleFeedPage()
+        response.data.toDomain()
+            .toEmulatorAccessibleFeedPage()
+            .withFeedThumbnailFallbacks()
     }
 
     override suspend fun getPostDetail(postId: Long): Result<CommunityPostDetail> = runCatching {
@@ -571,4 +576,35 @@ class CommunityRepositoryImpl @Inject constructor(
                 )
             }
         )
+
+    private suspend fun CommunityFeedPage.withFeedThumbnailFallbacks(): CommunityFeedPage = coroutineScope {
+        copy(
+            items = items.map { post ->
+                async { enrichMissingThumbnail(post) }
+            }.awaitAll()
+        )
+    }
+
+    private suspend fun enrichMissingThumbnail(
+        post: com.ddgo.app.domain.model.CommunityPostSummary
+    ): com.ddgo.app.domain.model.CommunityPostSummary {
+        if (post.videoCount <= 0 || !post.thumbnailUrl.isNullOrBlank()) {
+            return post
+        }
+
+        val detailResponse = runCatching { communityApi.getPostDetail(post.id) }.getOrNull()
+        val firstVideo = detailResponse
+            ?.data
+            ?.videos
+            ?.sortedBy { it.sortOrder }
+            ?.firstOrNull()
+            ?: return post
+
+        val previewUrl = firstVideo.thumbnailUrl
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::toEmulatorAccessibleUrl)
+            ?: toEmulatorAccessibleUrl(firstVideo.playbackUrl)
+
+        return post.copy(thumbnailUrl = previewUrl)
+    }
 }

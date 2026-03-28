@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.ddgo.app.feature.analysis.AnalysisStrings
 import com.ddgo.app.feature.analysis.model.AnalysisChallengeListItemUiModel
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
+import com.ddgo.app.feature.main.MainChromeDefaults
 
 @Composable
 internal fun AnalysisAllChallengesScreen(
@@ -50,7 +51,12 @@ internal fun AnalysisAllChallengesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                top = 20.dp,
+                bottom = MainChromeDefaults.ContentBottomPadding + 28.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
