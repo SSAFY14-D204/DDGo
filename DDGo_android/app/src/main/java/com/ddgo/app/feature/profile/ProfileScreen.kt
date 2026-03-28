@@ -22,7 +22,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -149,19 +148,12 @@ internal fun ProfileScreenContent(
     snackbarHostState: SnackbarHostState,
     onActionClick: (ProfileActionType) -> Unit
 ) {
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            ProfilePalette.BackgroundTop,
-            ProfilePalette.BackgroundBottom,
-            ProfilePalette.BackgroundTop
-        )
-    )
     val actionsEnabled = !uiState.isLoggingOut && !uiState.isDeletingAccount
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundBrush)
+            .background(ProfilePalette.BackgroundTop)
     ) {
         LazyColumn(
             modifier = Modifier

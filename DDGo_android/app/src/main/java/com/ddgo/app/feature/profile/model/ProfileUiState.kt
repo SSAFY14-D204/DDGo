@@ -47,6 +47,7 @@ data class ProfileInfoSectionUiModel(
  * - 액션 캡슐, disclosure 아이콘, 또는 없음 중 하나입니다.
  */
 data class ProfileInfoRowUiModel(
+    val icon: ProfileRowIcon,
     val title: String,
     val value: String? = null,
     val actionType: ProfileActionType? = null,
@@ -90,6 +91,18 @@ sealed class ProfileRowTrailing {
         val label: String,
         val tone: ProfileActionTone = ProfileActionTone.Normal
     ) : ProfileRowTrailing()
+}
+
+enum class ProfileRowIcon {
+    Account,
+    Nickname,
+    Sex,
+    Height,
+    Weight,
+    Wingspan,
+    BodyProfile,
+    Password,
+    Logout
 }
 
 /** 프로필 화면에서 처리하는 액션 종류입니다. */

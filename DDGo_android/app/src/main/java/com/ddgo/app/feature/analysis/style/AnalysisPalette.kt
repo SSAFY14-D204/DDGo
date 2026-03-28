@@ -19,11 +19,12 @@ internal object AnalysisPalette {
     val Danger = Color(0xFFD64242)
     val DangerSoft = Color(0xFFFFE9E9)
     val Warning = Color(0xFFDA8A17)
+    val WarningYellow = Color(0xFFFFD65A)
     val WarningBright = Color(0xFFFFA033)
     val WarningSoft = Color(0xFFFFF4DF)
 
-    val BackgroundTop = Color(0xFFF7FBFF)
-    val BackgroundBottom = Color(0xFFEAF3FF)
+    val BackgroundTop = Color.White
+    val BackgroundBottom = Color.White
     val Surface = Color.White
     val SurfaceMuted = Color(0xFFF5F8FD)
     val SurfaceSelected = Color(0xFFF0F6FF)
