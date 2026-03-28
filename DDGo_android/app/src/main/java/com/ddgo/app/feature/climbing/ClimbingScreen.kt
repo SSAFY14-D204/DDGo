@@ -1,8 +1,8 @@
 package com.ddgo.app.feature.climbing
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -51,43 +53,53 @@ fun ClimbingMenuOverlay(
     onNavigateToRecord: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.size(width = 228.dp, height = 182.dp),
-        color = Color.White,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = 16.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 15.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    Box(contentAlignment = Alignment.TopCenter) {
+        Surface(
+            modifier = Modifier.size(width = 228.dp, height = 182.dp),
+            color = Color.White,
+            shape = RoundedCornerShape(18.dp),
+            shadowElevation = 16.dp
         ) {
-            ClimbingMenuItem(
-                iconAsset = MENU_UPLOAD_ICON_ASSET,
-                label = "영상 업로드",
-                onClick = {
-                    onNavigateToUpload()
-                    onDismiss()
-                }
-            )
-
-            Box(
+            Column(
                 modifier = Modifier
-                    .height(1.dp)
-                    .fillMaxWidth()
-                    .background(Color(0xFFE6E8EC))
-            )
+                    .fillMaxSize()
+                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 15.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ClimbingMenuItem(
+                    iconAsset = MENU_UPLOAD_ICON_ASSET,
+                    label = "영상 업로드",
+                    onClick = {
+                        onNavigateToUpload()
+                        onDismiss()
+                    }
+                )
 
-            ClimbingMenuItem(
-                iconAsset = MENU_RECORD_ICON_ASSET,
-                label = "실시간 기록",
-                onClick = {
-                    onNavigateToRecord()
-                    onDismiss()
-                }
-            )
+                Box(
+                    modifier = Modifier
+                        .height(1.dp)
+                        .fillMaxWidth()
+                        .background(Color(0xFFE6E8EC))
+                )
+
+                ClimbingMenuItem(
+                    iconAsset = MENU_RECORD_ICON_ASSET,
+                    label = "실시간 기록",
+                    onClick = {
+                        onNavigateToRecord()
+                        onDismiss()
+                    }
+                )
+            }
         }
+
+        Box(
+            modifier = Modifier
+                .offset(y = 166.dp)
+                .size(18.dp)
+                .graphicsLayer { rotationZ = 45f }
+                .background(Color.White, RoundedCornerShape(4.dp))
+        )
     }
 }
 
