@@ -55,18 +55,16 @@ fun ClimbingMenuOverlay(
 ) {
     Box(contentAlignment = Alignment.TopCenter) {
         Surface(
-            modifier = Modifier.size(width = 228.dp, height = 182.dp),
+            modifier = Modifier.size(width = 176.dp, height = 140.dp),
             color = Color.White,
             shape = RoundedCornerShape(18.dp),
-            shadowElevation = 16.dp
+            shadowElevation = 0.dp
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 15.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
                 ClimbingMenuItem(
+                    modifier = Modifier.weight(1f),
                     iconAsset = MENU_UPLOAD_ICON_ASSET,
                     label = "영상 업로드",
                     onClick = {
@@ -79,10 +77,12 @@ fun ClimbingMenuOverlay(
                     modifier = Modifier
                         .height(1.dp)
                         .fillMaxWidth()
+                        .padding(horizontal = 11.dp)
                         .background(Color(0xFFE6E8EC))
                 )
 
                 ClimbingMenuItem(
+                    modifier = Modifier.weight(1f),
                     iconAsset = MENU_RECORD_ICON_ASSET,
                     label = "실시간 기록",
                     onClick = {
@@ -95,40 +95,48 @@ fun ClimbingMenuOverlay(
 
         Box(
             modifier = Modifier
-                .offset(y = 166.dp)
-                .size(18.dp)
+                .offset(y = 132.dp)
+                .size(12.dp)
                 .graphicsLayer { rotationZ = 45f }
-                .background(Color.White, RoundedCornerShape(4.dp))
+                .background(Color.White, RoundedCornerShape(3.dp))
         )
     }
 }
 
 @Composable
 private fun ClimbingMenuItem(
+    modifier: Modifier = Modifier,
     iconAsset: String,
     label: String,
     onClick: () -> Unit
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 4.dp)
+            .padding(horizontal = 12.dp)
     ) {
-        ClimbingMenuLeadingIcon(
-            iconAsset = iconAsset,
-            contentDescription = label
-        )
-        Spacer(modifier = Modifier.width(18.dp))
-        Text(
-            text = label,
-            style = TextStyle(
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF505050)
-            )
-        )
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ClimbingMenuLeadingIcon(
+                    iconAsset = iconAsset,
+                    contentDescription = label
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = label,
+                    style = TextStyle(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFF505050)
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -147,11 +155,11 @@ private fun ClimbingMenuLeadingIcon(
     } else {
         R.drawable.ic_timer
     }
-    val iconSize = if (iconAsset == MENU_UPLOAD_ICON_ASSET) 20.dp else 18.dp
+    val iconSize = if (iconAsset == MENU_UPLOAD_ICON_ASSET) 17.dp else 15.dp
 
     Surface(
-        modifier = Modifier.size(54.dp),
-        shape = RoundedCornerShape(27.dp),
+        modifier = Modifier.size(42.dp),
+        shape = RoundedCornerShape(21.dp),
         color = backgroundColor
     ) {
         Box(

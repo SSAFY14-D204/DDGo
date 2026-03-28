@@ -286,7 +286,7 @@ fun MainScreen(
                     .navigationBarsPadding()
                     .padding(
                         bottom = if (effectiveGuideStep == MainEntryGuideStep.MENU) {
-                            137.dp
+                            106.dp
                         } else {
                             MainChromeDefaults.MenuOverlayBottomPadding
                         }
