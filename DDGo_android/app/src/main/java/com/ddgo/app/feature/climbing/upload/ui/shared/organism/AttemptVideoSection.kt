@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -127,6 +128,7 @@ internal fun AttemptVideoSection(
     logDisplayedPoseRawData: Boolean = false,
     onDisplayedPositionChanged: (Long) -> Unit = {},
     topOverlayContent: @Composable BoxScope.() -> Unit = {},
+    midOverlayContent: @Composable BoxScope.(AttemptVideoOverlayRenderState) -> Unit = { _ -> },
     overlayContent: @Composable BoxScope.(AttemptVideoOverlayRenderState) -> Unit = { _ -> }
 ) {
     val context = LocalContext.current
@@ -396,30 +398,56 @@ internal fun AttemptVideoSection(
             )
 
             currentOverlayFrame?.let { overlayFrame ->
-                PoseOverlay(
-                    pose = overlayFrame.pose,
-                    contentRect = videoContentRect,
-                    modifier = Modifier.fillMaxSize(),
-                    lineColor = lineColor,
-                    pointColor = pointColor,
-                    hiddenLandmarkIndices = hiddenLandmarkIndices,
-                    hiddenPointIndices = hiddenPointIndices,
-                    pointRadiusScale = pointRadiusScale
-                )
-            }
-
-            if (state.numberedHolds.isNotEmpty()) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawHoldSegOverlays(
-                        holds = state.numberedHolds,
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(1f)
+                ) {
+                    PoseOverlay(
+                        pose = overlayFrame.pose,
                         contentRect = videoContentRect,
-                        startFlag = startFlag,
-                        endFlag = endFlag
+                        modifier = Modifier.fillMaxSize(),
+                        lineColor = lineColor,
+                        pointColor = pointColor,
+                        hiddenLandmarkIndices = hiddenLandmarkIndices,
+                        hiddenPointIndices = hiddenPointIndices,
+                        pointRadiusScale = pointRadiusScale
                     )
                 }
             }
 
-            overlayContent(overlayRenderState)
+            if (state.numberedHolds.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(2f)
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawHoldSegOverlays(
+                            holds = state.numberedHolds,
+                            contentRect = videoContentRect,
+                            startFlag = startFlag,
+                            endFlag = endFlag
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(3f)
+            ) {
+                midOverlayContent(overlayRenderState)
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(4f)
+            ) {
+                overlayContent(overlayRenderState)
+            }
         },
         overlayLayer = {
             Box(

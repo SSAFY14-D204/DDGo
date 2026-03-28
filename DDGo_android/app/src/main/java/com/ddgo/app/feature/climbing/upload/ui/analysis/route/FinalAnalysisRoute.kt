@@ -207,6 +207,7 @@ fun FinalAnalysisRoute(
     val displaySummary = remember(
         currentSummary,
         currentAttemptAiAnalysisResult,
+        currentAttemptAiAnalysisResult?.physicsResult,
         currentAttemptContactDebugResult
     ) {
         currentSummary.withAlignedDisplayCrux(
@@ -298,6 +299,7 @@ fun FinalAnalysisRoute(
         currentAttemptDisplayHolds,
         selectedAttemptCropBounds,
         viewModel.allRawHolds,
+        currentAttemptAiAnalysisResult?.physicsResult,
         analysisStartTimeMs,
         heartRateSeries,
         seekRequestId,
@@ -325,6 +327,7 @@ fun FinalAnalysisRoute(
                 analysisPoints = timelinePoints,
                 attemptPoseSequence = viewModel.currentAttemptPoseSequence,
                 overlayCache = viewModel.currentAttemptOverlayCache,
+                physicsResult = currentAttemptAiAnalysisResult?.physicsResult,
                 rawHolds = viewModel.allRawHolds,
                 viewportCropBounds = selectedAttemptCropBounds,
                 wallArrivalTimeMs = viewModel.currentAttemptPrePoseEntry.officialAttemptStartTimeMs(),

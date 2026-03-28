@@ -779,7 +779,9 @@ internal fun PoseOverlay(
     pointColor: Color,
     hiddenLandmarkIndices: Set<Int> = emptySet(),
     hiddenPointIndices: Set<Int> = emptySet(),
-    pointRadiusScale: Float = 1f
+    pointRadiusScale: Float = 1f,
+    showConnections: Boolean = true,
+    showPoints: Boolean = true
 ) {
     Canvas(modifier = modifier) {
         if (contentRect.width <= 0f || contentRect.height <= 0f) return@Canvas
@@ -788,41 +790,45 @@ internal fun PoseOverlay(
         val jointRadius = 4.dp.toPx() * pointRadiusScale.coerceAtLeast(0f)
         val strokeWidth = 2.dp.toPx()
 
-        SHARED_POSE_CONNECTIONS.forEach { (startIndex, endIndex) ->
-            if (startIndex in hiddenLandmarkIndices || endIndex in hiddenLandmarkIndices) {
-                return@forEach
-            }
-            val start = landmarksByIndex[startIndex] ?: return@forEach
-            val end = landmarksByIndex[endIndex] ?: return@forEach
+        if (showConnections) {
+            SHARED_POSE_CONNECTIONS.forEach { (startIndex, endIndex) ->
+                if (startIndex in hiddenLandmarkIndices || endIndex in hiddenLandmarkIndices) {
+                    return@forEach
+                }
+                val start = landmarksByIndex[startIndex] ?: return@forEach
+                val end = landmarksByIndex[endIndex] ?: return@forEach
 
-            drawLine(
-                color = lineColor,
-                start = Offset(
-                    x = contentRect.left + (start.x.coerceIn(0f, 1f) * contentRect.width),
-                    y = contentRect.top + (start.y.coerceIn(0f, 1f) * contentRect.height)
-                ),
-                end = Offset(
-                    x = contentRect.left + (end.x.coerceIn(0f, 1f) * contentRect.width),
-                    y = contentRect.top + (end.y.coerceIn(0f, 1f) * contentRect.height)
-                ),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
+                drawLine(
+                    color = lineColor,
+                    start = Offset(
+                        x = contentRect.left + (start.x.coerceIn(0f, 1f) * contentRect.width),
+                        y = contentRect.top + (start.y.coerceIn(0f, 1f) * contentRect.height)
+                    ),
+                    end = Offset(
+                        x = contentRect.left + (end.x.coerceIn(0f, 1f) * contentRect.width),
+                        y = contentRect.top + (end.y.coerceIn(0f, 1f) * contentRect.height)
+                    ),
+                    strokeWidth = strokeWidth,
+                    cap = StrokeCap.Round
+                )
+            }
         }
 
-        pose.landmarks.forEach { landmark ->
-            if (landmark.index in hiddenLandmarkIndices || landmark.index in hiddenPointIndices) {
-                return@forEach
-            }
+        if (showPoints) {
+            pose.landmarks.forEach { landmark ->
+                if (landmark.index in hiddenLandmarkIndices || landmark.index in hiddenPointIndices) {
+                    return@forEach
+                }
 
-            drawCircle(
-                color = pointColor,
-                radius = jointRadius,
-                center = Offset(
-                    x = contentRect.left + (landmark.x.coerceIn(0f, 1f) * contentRect.width),
-                    y = contentRect.top + (landmark.y.coerceIn(0f, 1f) * contentRect.height)
+                drawCircle(
+                    color = pointColor,
+                    radius = jointRadius,
+                    center = Offset(
+                        x = contentRect.left + (landmark.x.coerceIn(0f, 1f) * contentRect.width),
+                        y = contentRect.top + (landmark.y.coerceIn(0f, 1f) * contentRect.height)
+                    )
                 )
-            )
+            }
         }
     }
 }

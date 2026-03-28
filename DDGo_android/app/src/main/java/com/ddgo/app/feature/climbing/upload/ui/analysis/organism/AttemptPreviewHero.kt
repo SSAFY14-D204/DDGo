@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,12 +50,15 @@ import com.ddgo.app.feature.climbing.upload.AttemptPoseOverlayCache
 import com.ddgo.app.feature.climbing.upload.HoldOverviewPreview
 import com.ddgo.app.feature.climbing.upload.PoseScrubberColors
 import com.ddgo.app.feature.climbing.upload.PoseScrubberMarker
+import com.ddgo.app.feature.climbing.upload.PoseOverlay
 import com.ddgo.app.feature.climbing.upload.RawVerticalCropBounds
 import com.ddgo.app.feature.climbing.upload.holdColorToUiColor
 import com.ddgo.app.feature.climbing.upload.resolveActiveAnalysisCardIndex
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.HeaderChip
+import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptPhysicsLimbHeatmapAndComOverlay
 import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSection
 import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSectionState
+import kotlinx.serialization.json.JsonObject
 
 internal data class AttemptPreviewHeroState(
     val gymName: String,
@@ -72,6 +76,7 @@ internal data class AttemptPreviewHeroState(
     val analysisPoints: List<AnalysisPoint> = emptyList(),
     val attemptPoseSequence: List<Pose> = emptyList(),
     val overlayCache: AttemptPoseOverlayCache? = null,
+    val physicsResult: JsonObject? = null,
     val rawHolds: List<Hold> = emptyList(),
     val viewportCropBounds: RawVerticalCropBounds? = null,
     val wallArrivalTimeMs: Long? = null,
@@ -298,7 +303,43 @@ internal fun AttemptPreviewHeroVideoSection(
                 bottomSafeInset = AttemptPreviewBottomSafeInset,
                 controlAreaHeight = controlAreaHeight,
                 viewportHeightOverride = viewportHeightOverride,
-                onDisplayedPositionChanged = { displayedPositionMs = it }
+                onDisplayedPositionChanged = { displayedPositionMs = it },
+                midOverlayContent = { renderState ->
+                    AttemptPhysicsLimbHeatmapAndComOverlay(
+                        renderState = renderState,
+                        physicsResult = state.physicsResult,
+                        showLimbHeatmap = true,
+                        showCom = false
+                    )
+                    renderState.currentOverlayPose?.let { pose ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(6f)
+                        ) {
+                            PoseOverlay(
+                                pose = pose,
+                                contentRect = renderState.videoContentRect,
+                                modifier = Modifier.fillMaxSize(),
+                                lineColor = AttemptPreviewOverlayLineColor,
+                                pointColor = AttemptPreviewOverlayPointColor,
+                                hiddenLandmarkIndices = AttemptPreviewHiddenFaceLandmarks,
+                                hiddenPointIndices = AttemptPreviewHiddenFingerTipPoints,
+                                pointRadiusScale = AttemptPreviewPointRadiusScale,
+                                showConnections = false,
+                                showPoints = true
+                            )
+                        }
+                    }
+                },
+                overlayContent = { renderState ->
+                    AttemptPhysicsLimbHeatmapAndComOverlay(
+                        renderState = renderState,
+                        physicsResult = state.physicsResult,
+                        showLimbHeatmap = false,
+                        showCom = true
+                    )
+                }
             )
 
             if (onShareClick != null) {
