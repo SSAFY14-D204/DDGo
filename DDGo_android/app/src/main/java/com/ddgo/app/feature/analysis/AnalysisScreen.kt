@@ -15,7 +15,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -25,7 +24,6 @@ import com.ddgo.app.feature.analysis.components.AnalysisAllChallengesScreen
 import com.ddgo.app.feature.analysis.components.AnalysisAttemptDetailScreen
 import com.ddgo.app.feature.analysis.components.AnalysisChallengeDetailScreen
 import com.ddgo.app.feature.analysis.components.AnalysisChallengeListSection
-import com.ddgo.app.feature.analysis.components.AnalysisGlow
 import com.ddgo.app.feature.analysis.components.AnalysisGrowthSection
 import com.ddgo.app.feature.analysis.components.AnalysisTopBar
 import com.ddgo.app.feature.analysis.model.AnalysisUiState
@@ -112,29 +110,12 @@ internal fun AnalysisDashboardContent(
     onShowAllChallenges: () -> Unit
 ) {
     val recentChallenges = uiState.challenges.take(3)
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            AnalysisPalette.BackgroundTop,
-            AnalysisPalette.BackgroundBottom,
-            AnalysisPalette.BackgroundTop
-        )
-    )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundBrush)
+            .background(AnalysisPalette.BackgroundTop)
     ) {
-        AnalysisGlow(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = (-92).dp, y = 148.dp),
-            colors = listOf(
-                AnalysisPalette.AccentStrong.copy(alpha = 0.12f),
-                AnalysisPalette.AccentStrong.copy(alpha = 0f)
-            )
-        )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

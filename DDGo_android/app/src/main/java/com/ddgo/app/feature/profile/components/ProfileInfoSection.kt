@@ -1,6 +1,5 @@
 package com.ddgo.app.feature.profile.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,42 +9,48 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccessibilityNew
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MonitorWeight
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.Straighten
+import androidx.compose.material.icons.rounded.Wc
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ddgo.app.feature.profile.model.ProfileActionTone
 import com.ddgo.app.feature.profile.model.ProfileActionType
 import com.ddgo.app.feature.profile.model.ProfileInfoRowUiModel
 import com.ddgo.app.feature.profile.model.ProfileInfoSectionUiModel
+import com.ddgo.app.feature.profile.model.ProfileRowIcon
 import com.ddgo.app.feature.profile.model.ProfileRowTrailing
 import com.ddgo.app.feature.profile.model.ProfileSectionActionUiModel
 import com.ddgo.app.feature.profile.style.ProfilePalette
 
-/**
- * 계정/신체 정보/보안 섹션을 공통 목록 카드로 그립니다.
- *
- * 역할:
- * - 캘린더 상세 카드와 비슷한 표면, 라운드, border를 사용해 같은 앱처럼 보이게 합니다.
- * - 프로필의 현재 리스트 구조는 유지하면서 읽기 쉬운 밀도로 정돈합니다.
- */
 @Composable
 internal fun ProfileInfoSection(
     section: ProfileInfoSectionUiModel,
     actionsEnabled: Boolean = true,
     onActionClick: (ProfileActionType) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionHeader(
             title = section.title,
             headerAction = section.headerAction,
@@ -53,30 +58,16 @@ internal fun ProfileInfoSection(
             onActionClick = onActionClick
         )
 
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            color = ProfilePalette.Surface,
-            border = BorderStroke(1.dp, ProfilePalette.Border),
-            shadowElevation = 0.dp
-        ) {
-            Column {
-                section.rows.forEachIndexed { index, row ->
-                    InfoRow(
-                        row = row,
-                        actionsEnabled = actionsEnabled,
-                        onClick = { row.actionType?.let(onActionClick) }
-                    )
+        Column {
+            section.rows.forEachIndexed { index, row ->
+                InfoRow(
+                    row = row,
+                    actionsEnabled = actionsEnabled,
+                    onClick = { row.actionType?.let(onActionClick) }
+                )
 
-                    if (index != section.rows.lastIndex) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp)
-                                .height(1.dp)
-                                .background(ProfilePalette.Divider)
-                        )
-                    }
+                if (index != section.rows.lastIndex) {
+                    ProfileRowDivider()
                 }
             }
         }
@@ -94,35 +85,30 @@ private fun InfoRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
+        ProfileRowIconBadge(icon = row.icon)
+
+        Text(
+            text = row.title,
+            color = ProfilePalette.TextPrimary,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Box(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            contentAlignment = Alignment.CenterEnd
         ) {
-            Text(
-                text = row.title,
-                color = ProfilePalette.TextPrimary,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+            ProfileRowTrailingContent(
+                value = row.value,
+                trailing = row.trailing
             )
-
-            if (!row.value.isNullOrBlank()) {
-                Text(
-                    text = row.value,
-                    color = ProfilePalette.TextSecondary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
-
-        ProfileRowTrailingContent(trailing = row.trailing)
     }
 }
 
@@ -141,68 +127,163 @@ private fun SectionHeader(
         ProfileSectionTitle(title = title)
 
         if (headerAction != null) {
-            Box(
+            Text(
+                text = headerAction.label,
+                color = actionToneColor(headerAction.tone),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(
-                        when (headerAction.tone) {
-                            ProfileActionTone.Danger -> ProfilePalette.DangerSoft
-                            ProfileActionTone.Accent -> ProfilePalette.AccentSoft
-                            ProfileActionTone.Normal -> ProfilePalette.SurfaceMuted
-                        }
-                    )
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable(enabled = actionsEnabled) { onActionClick(headerAction.actionType) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = headerAction.label,
-                    color = when (headerAction.tone) {
-                        ProfileActionTone.Danger -> ProfilePalette.Danger
-                        ProfileActionTone.Accent -> ProfilePalette.AccentStrong
-                        ProfileActionTone.Normal -> ProfilePalette.TextSecondary
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            )
         }
     }
 }
 
 @Composable
 private fun ProfileRowTrailingContent(
+    value: String?,
     trailing: ProfileRowTrailing
 ) {
-    when (trailing) {
-        is ProfileRowTrailing.Action -> {
-            val badgeTextColor = when (trailing.tone) {
-                ProfileActionTone.Danger -> ProfilePalette.Danger
-                ProfileActionTone.Accent -> ProfilePalette.AccentStrong
-                ProfileActionTone.Normal -> ProfilePalette.TextSecondary
-            }
-
-            Box(modifier = Modifier.padding(start = 10.dp)) {
-                ProfileCapsuleLabel(
-                    text = trailing.label,
-                    background = when (trailing.tone) {
-                        ProfileActionTone.Danger -> ProfilePalette.DangerSoft
-                        ProfileActionTone.Accent -> ProfilePalette.AccentSoft
-                        ProfileActionTone.Normal -> ProfilePalette.SurfaceMuted
-                    },
-                    textColor = badgeTextColor
-                )
-            }
-        }
-
-        ProfileRowTrailing.Disclosure -> {
-            Icon(
-                imageVector = Icons.Rounded.ChevronRight,
-                contentDescription = null,
-                tint = ProfilePalette.TextHint,
-                modifier = Modifier.padding(start = 10.dp)
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (!value.isNullOrBlank()) {
+            Text(
+                text = value,
+                color = ProfilePalette.TextSecondary,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End
             )
         }
 
-        ProfileRowTrailing.None -> Unit
+        when (trailing) {
+            is ProfileRowTrailing.Action -> {
+                Text(
+                    text = trailing.label,
+                    color = actionToneColor(trailing.tone),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            ProfileRowTrailing.Disclosure -> {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = ProfilePalette.TextHint
+                )
+            }
+
+            ProfileRowTrailing.None -> Unit
+        }
+    }
+}
+
+@Composable
+private fun ProfileRowDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp)
+            .height(1.dp)
+            .background(ProfilePalette.Divider)
+    )
+}
+
+@Composable
+private fun ProfileRowIconBadge(icon: ProfileRowIcon) {
+    val iconStyle = rememberProfileRowIconStyle(icon)
+
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(iconStyle.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = iconStyle.imageVector,
+            contentDescription = null,
+            tint = iconStyle.tint,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+private data class ProfileRowIconStyle(
+    val imageVector: ImageVector,
+    val tint: Color,
+    val background: Color
+)
+
+private fun rememberProfileRowIconStyle(icon: ProfileRowIcon): ProfileRowIconStyle {
+    return when (icon) {
+        ProfileRowIcon.Account -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.Email,
+            tint = ProfilePalette.AccentStrong,
+            background = ProfilePalette.AccentSoft
+        )
+
+        ProfileRowIcon.Nickname -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.Person,
+            tint = ProfilePalette.AccentStrong,
+            background = ProfilePalette.AccentSoft
+        )
+
+        ProfileRowIcon.Sex -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.Wc,
+            tint = ProfilePalette.TextSecondary,
+            background = ProfilePalette.SurfaceMuted
+        )
+
+        ProfileRowIcon.Height -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.Straighten,
+            tint = ProfilePalette.AccentStrong,
+            background = ProfilePalette.SurfaceMuted
+        )
+
+        ProfileRowIcon.Weight -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.MonitorWeight,
+            tint = ProfilePalette.AccentStrong,
+            background = ProfilePalette.SurfaceMuted
+        )
+
+        ProfileRowIcon.Wingspan -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.AccessibilityNew,
+            tint = ProfilePalette.AccentStrong,
+            background = ProfilePalette.SurfaceMuted
+        )
+
+        ProfileRowIcon.BodyProfile -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.Edit,
+            tint = ProfilePalette.AccentStrong,
+            background = ProfilePalette.AccentSoft
+        )
+
+        ProfileRowIcon.Password -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.Lock,
+            tint = ProfilePalette.TextSecondary,
+            background = ProfilePalette.SurfaceMuted
+        )
+
+        ProfileRowIcon.Logout -> ProfileRowIconStyle(
+            imageVector = Icons.Rounded.PowerSettingsNew,
+            tint = ProfilePalette.TextSecondary,
+            background = ProfilePalette.SurfaceMuted
+        )
+    }
+}
+
+private fun actionToneColor(tone: ProfileActionTone): Color {
+    return when (tone) {
+        ProfileActionTone.Danger -> ProfilePalette.Danger
+        ProfileActionTone.Accent -> ProfilePalette.AccentStrong
+        ProfileActionTone.Normal -> ProfilePalette.TextSecondary
     }
 }

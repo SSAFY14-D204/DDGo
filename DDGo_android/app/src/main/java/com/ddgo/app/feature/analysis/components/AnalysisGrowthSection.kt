@@ -24,7 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -178,7 +180,7 @@ private fun GrowthVisualBoard(
                         label = "완등 챌린지",
                         value = summary.completionScore,
                         valueLabel = AnalysisFormatters.formatPercent(summary.completionScore),
-                        color = AnalysisPalette.Success
+                        fill = SolidColor(AnalysisPalette.Success)
                     )
                     GrowthProgressBar(
                         label = "평균 하체 주도성",
@@ -188,7 +190,7 @@ private fun GrowthVisualBoard(
                         } else {
                             "-"
                         },
-                        color = AnalysisPalette.AccentStrong
+                        fill = SolidColor(AnalysisPalette.WarningBright)
                     )
                 }
             }
@@ -247,7 +249,7 @@ private fun GrowthProgressBar(
     label: String,
     value: Float,
     valueLabel: String,
-    color: Color
+    fill: Brush
 ) {
     val progress = value.coerceIn(0f, 1f)
 
@@ -282,7 +284,7 @@ private fun GrowthProgressBar(
                     .fillMaxHeight()
                     .fillMaxWidth(progress)
                     .clip(RoundedCornerShape(999.dp))
-                    .background(color)
+                    .background(fill)
             )
         }
     }

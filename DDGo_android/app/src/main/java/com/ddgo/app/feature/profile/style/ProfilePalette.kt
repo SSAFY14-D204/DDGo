@@ -15,8 +15,8 @@ internal object ProfilePalette {
     val AccentStrong = Color(0xFF1E88E5)
     val AccentSoft = Color(0xFFE8F3FF)
 
-    val BackgroundTop = Color(0xFFF7FBFF)
-    val BackgroundBottom = Color(0xFFEAF3FF)
+    val BackgroundTop = Color.White
+    val BackgroundBottom = Color.White
     val Surface = Color.White
     val SurfaceMuted = Color(0xFFF4F8FD)
     val Divider = Color(0xFFD7E5F5)

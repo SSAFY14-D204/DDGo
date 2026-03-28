@@ -10,6 +10,7 @@ import com.ddgo.app.feature.profile.model.ProfileDangerZoneUiModel
 import com.ddgo.app.feature.profile.model.ProfileHeaderUiModel
 import com.ddgo.app.feature.profile.model.ProfileInfoRowUiModel
 import com.ddgo.app.feature.profile.model.ProfileInfoSectionUiModel
+import com.ddgo.app.feature.profile.model.ProfileRowIcon
 import com.ddgo.app.feature.profile.model.ProfileNicknameEditorUiState
 import com.ddgo.app.feature.profile.model.ProfilePasswordEditorUiState
 import com.ddgo.app.feature.profile.model.ProfileRowTrailing
@@ -154,6 +155,7 @@ internal object ProfileUiStateMapper {
             title = ProfileStrings.AccountSectionTitle,
             rows = listOf(
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.Account,
                     title = if (isSocialUser) {
                         ProfileStrings.AccountIdRowTitle
                     } else {
@@ -166,6 +168,7 @@ internal object ProfileUiStateMapper {
                     }
                 ),
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.Nickname,
                     title = ProfileStrings.NicknameRowTitle,
                     value = when {
                         isLoadingProfile -> ProfileStrings.Loading
@@ -176,10 +179,7 @@ internal object ProfileUiStateMapper {
                     trailing = if (isLoadingProfile) {
                         ProfileRowTrailing.None
                     } else {
-                        ProfileRowTrailing.Action(
-                            label = ProfileStrings.nicknameActionLabel(hasNickname),
-                            tone = ProfileActionTone.Accent
-                        )
+                        ProfileRowTrailing.Disclosure
                     }
                 )
             )
@@ -196,6 +196,7 @@ internal object ProfileUiStateMapper {
             title = ProfileStrings.BodyProfileSectionTitle,
             rows = listOf(
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.Sex,
                     title = ProfileStrings.SexRowTitle,
                     value = if (isLoadingProfile) {
                         ProfileStrings.BodyProfileFieldDescriptionLoading
@@ -204,6 +205,7 @@ internal object ProfileUiStateMapper {
                     }
                 ),
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.Height,
                     title = ProfileStrings.HeightRowTitle,
                     value = if (isLoadingProfile) {
                         ProfileStrings.BodyProfileFieldDescriptionLoading
@@ -212,6 +214,7 @@ internal object ProfileUiStateMapper {
                     }
                 ),
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.Weight,
                     title = ProfileStrings.WeightRowTitle,
                     value = if (isLoadingProfile) {
                         ProfileStrings.BodyProfileFieldDescriptionLoading
@@ -220,6 +223,7 @@ internal object ProfileUiStateMapper {
                     }
                 ),
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.Wingspan,
                     title = ProfileStrings.WingspanRowTitle,
                     value = if (isLoadingProfile) {
                         ProfileStrings.BodyProfileFieldDescriptionLoading
@@ -228,6 +232,7 @@ internal object ProfileUiStateMapper {
                     }
                 ),
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.BodyProfile,
                     title = ProfileStrings.BodyProfileEditRowTitle,
                     actionType = if (isLoadingProfile) null else ProfileActionType.EditBodyProfile,
                     trailing = if (isLoadingProfile) {
@@ -249,11 +254,16 @@ internal object ProfileUiStateMapper {
             title = ProfileStrings.SecuritySectionTitle,
             rows = listOf(
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.Password,
                     title = ProfileStrings.ChangePasswordRowTitle,
                     actionType = ProfileActionType.ChangePassword,
-                    trailing = ProfileRowTrailing.Disclosure
+                    trailing = ProfileRowTrailing.Action(
+                        label = ProfileStrings.ActionEdit,
+                        tone = ProfileActionTone.Accent
+                    )
                 ),
                 ProfileInfoRowUiModel(
+                    icon = ProfileRowIcon.Logout,
                     title = ProfileStrings.LogoutRowTitle,
                     actionType = ProfileActionType.Logout,
                     trailing = ProfileRowTrailing.Action(label = ProfileStrings.LogoutAction)
