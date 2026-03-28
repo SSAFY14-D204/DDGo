@@ -1,25 +1,24 @@
 package com.ddgo.app.feature.calendar
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,14 +28,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ddgo.app.feature.calendar.components.CalendarErrorSection
 import com.ddgo.app.feature.calendar.components.SelectedDateSection
 import com.ddgo.app.feature.calendar.style.CalendarPalette
+import com.ddgo.app.feature.main.MainChromeDefaults
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -57,51 +55,15 @@ fun CalendarDetailScreen(
         viewModel.selectDate(requestedDate)
     }
 
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            CalendarPalette.BackgroundTop,
-            CalendarPalette.BackgroundBottom,
-            CalendarPalette.BackgroundTop
-        )
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundBrush)
+            .background(CalendarPalette.BackgroundTop)
     ) {
-        DecorativeGlow(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 56.dp, y = (-32).dp),
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    CalendarPalette.Accent.copy(alpha = 0.16f),
-                    CalendarPalette.Accent.copy(alpha = 0f)
-                )
-            )
-        )
-        DecorativeGlow(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = (-90).dp, y = 120.dp),
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    CalendarPalette.AccentStrong.copy(alpha = 0.10f),
-                    CalendarPalette.AccentStrong.copy(alpha = 0f)
-                )
-            )
-        )
-
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding(),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 20.dp,
-                end = 20.dp,
-                top = 20.dp,
-                bottom = 24.dp
+                bottom = MainChromeDefaults.ContentBottomPadding
             ),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
@@ -116,17 +78,21 @@ fun CalendarDetailScreen(
 
             uiState.errorMessage?.let { errorMessage ->
                 item {
-                    CalendarErrorSection(message = errorMessage)
+                    Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+                        CalendarErrorSection(message = errorMessage)
+                    }
                 }
             }
 
             item {
-                SelectedDateSection(
-                    date = uiState.selectedDate,
-                    entries = uiState.selectedEntries,
-                    isToday = uiState.selectedDate == uiState.today,
-                    onEntrySelected = onEntrySelected
-                )
+                Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+                    SelectedDateSection(
+                        date = uiState.selectedDate,
+                        entries = uiState.selectedEntries,
+                        isToday = uiState.selectedDate == uiState.today,
+                        onEntrySelected = onEntrySelected
+                    )
+                }
             }
         }
 
@@ -146,19 +112,6 @@ fun CalendarDetailScreen(
 }
 
 @Composable
-private fun DecorativeGlow(
-    modifier: Modifier = Modifier,
-    brush: Brush
-) {
-    Box(
-        modifier = modifier
-            .size(220.dp)
-            .clip(CircleShape)
-            .background(brush)
-    )
-}
-
-@Composable
 private fun CalendarDetailHeroSection(
     date: LocalDate,
     entryCount: Int,
@@ -173,36 +126,48 @@ private fun CalendarDetailHeroSection(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+        shape = RoundedCornerShape(0.dp),
         color = CalendarPalette.HeroBackground
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp),
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = CalendarPalette.Surface.copy(alpha = 0.10f),
-                    border = BorderStroke(1.dp, CalendarPalette.Surface.copy(alpha = 0.14f))
+                Row(
+                    modifier = Modifier
+                        .clickable(onClick = onNavigateBack)
+                        .padding(horizontal = 2.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "뒤로 가기",
-                            tint = CalendarPalette.OnAccent
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "뒤로 가기",
+                        tint = CalendarPalette.OnAccent.copy(alpha = 0.92f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "뒤로가기",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Medium,
+                            platformStyle = PlatformTextStyle(includeFontPadding = false)
+                        ),
+                        color = CalendarPalette.OnAccent.copy(alpha = 0.82f)
+                    )
                 }
-
-                Box(modifier = Modifier.weight(1f))
 
                 if (isToday) {
                     Surface(
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = CalendarPalette.Accent.copy(alpha = 0.18f)
                     ) {
                         Text(
@@ -219,7 +184,7 @@ private fun CalendarDetailHeroSection(
             }
 
             Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = date.format(DetailDateFormatter),
@@ -235,13 +200,6 @@ private fun CalendarDetailHeroSection(
                         platformStyle = PlatformTextStyle(includeFontPadding = false)
                     ),
                     color = CalendarPalette.OnAccent
-                )
-                Text(
-                    text = "선택한 날짜의 세션을 한곳에서 볼 수 있어요.",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        platformStyle = PlatformTextStyle(includeFontPadding = false)
-                    ),
-                    color = CalendarPalette.OnAccent.copy(alpha = 0.72f)
                 )
             }
         }

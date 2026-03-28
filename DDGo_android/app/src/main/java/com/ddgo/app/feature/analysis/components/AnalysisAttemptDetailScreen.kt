@@ -80,6 +80,7 @@ import com.ddgo.app.feature.climbing.upload.AnalysisSuccess
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.HeaderChip
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroVideoSection
+import com.ddgo.app.feature.main.MainChromeDefaults
 import kotlin.math.min
 
 @Composable
@@ -298,7 +299,7 @@ internal fun AnalysisAttemptDetailScreen(
                 }
 
                 item {
-                    Box(modifier = Modifier.height(120.dp))
+                    Box(modifier = Modifier.height(MainChromeDefaults.ContentBottomPadding + 28.dp))
                 }
             }
         }

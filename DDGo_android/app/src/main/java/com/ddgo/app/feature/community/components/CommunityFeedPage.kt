@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.Image as FoundationImage
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -49,8 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,9 +62,6 @@ import com.ddgo.app.feature.community.CommunityFeedTab
 import com.ddgo.app.feature.community.CommunityPalette
 import com.ddgo.app.feature.community.CommunityUiState
 import com.ddgo.app.feature.main.MainChromeDefaults
-import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
-import coil.request.ImageRequest
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -703,16 +701,9 @@ private fun CommunityFeedThumbnail(
     contentDescription: String,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    var imageState by remember(thumbnailUrl) {
-        mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty)
-    }
-    val request = remember(thumbnailUrl) {
-        ImageRequest.Builder(context)
-            .data(thumbnailUrl)
-            .crossfade(true)
-            .build()
-    }
+    val thumbnailState = thumbnailUrl
+        ?.let { rememberCommunityVideoThumbnailState(playbackUrl = it, thumbnailUrl = it) }
+        ?: CommunityVideoThumbnailState.Error()
 
     Box(
         modifier = modifier
@@ -722,51 +713,46 @@ private fun CommunityFeedThumbnail(
             .background(CommunityPalette.SurfaceMuted),
         contentAlignment = Alignment.Center
     ) {
-        if (thumbnailUrl != null) {
-            AsyncImage(
-                model = request,
-                contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                onState = { state -> imageState = state }
-            )
-        }
-
-        when (imageState) {
-            is AsyncImagePainter.State.Error -> {
-                Icon(
-                    imageVector = Icons.Default.PlayCircle,
-                    contentDescription = null,
-                    tint = CommunityPalette.TextSecondary.copy(alpha = 0.84f),
-                    modifier = Modifier.size(24.dp)
+        when (thumbnailState) {
+            CommunityVideoThumbnailState.Loading -> {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = CommunityPalette.AccentStrong,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
-            is AsyncImagePainter.State.Success -> Unit
-            else -> {
-                if (thumbnailUrl != null) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        color = CommunityPalette.AccentStrong,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+            is CommunityVideoThumbnailState.Success -> {
+                FoundationImage(
+                    bitmap = thumbnailState.bitmap.asImageBitmap(),
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = if (thumbnailState.isPortrait) {
+                        ContentScale.Fit
+                    } else {
+                        ContentScale.Crop
+                    }
+                )
             }
+
+            is CommunityVideoThumbnailState.Error -> Unit
         }
 
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.Black.copy(alpha = 0.24f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayCircle,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(18.dp)
-            )
+        if (thumbnailState != CommunityVideoThumbnailState.Loading) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.Black.copy(alpha = 0.24f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayCircle,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

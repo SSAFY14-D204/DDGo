@@ -111,9 +111,9 @@ internal fun CommunityDetailPage(
     val density = LocalDensity.current
     val commentDockHeightPx = remember { mutableIntStateOf(0) }
     val commentDockBottomPadding = if (commentDockHeightPx.intValue == 0) {
-        MainChromeDefaults.ContentBottomPadding + 110.dp
+        MainChromeDefaults.ContentBottomPadding + 138.dp
     } else {
-        with(density) { commentDockHeightPx.intValue.toDp() } + 10.dp
+        with(density) { commentDockHeightPx.intValue.toDp() } + 18.dp
     }
 
     Box(
@@ -1093,7 +1093,7 @@ private fun CommunityDetailCommentInputDock(
                     start = DetailPagePadding,
                     end = DetailPagePadding,
                     top = 10.dp,
-                    bottom = MainChromeDefaults.ContentBottomPadding + 10.dp
+                    bottom = MainChromeDefaults.ContentBottomPadding + 28.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {

@@ -72,6 +72,6 @@ data class CalendarEntryUiModel(
     val problemColorLabel: String,
     val problemColorTone: CalendarMarkerToneUiModel,
     val venueLabel: String,
-    val secondaryText: String,
+    val resultLabel: String,
     val timeLabel: String
 )

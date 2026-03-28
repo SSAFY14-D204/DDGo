@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -269,18 +270,13 @@ private fun CalendarEntryRow(
                             textColor = CalendarPalette.TextSecondary
                         )
                     }
-                }
-
-                if (entry.secondaryText.isNotBlank()) {
-                    Text(
-                        text = entry.secondaryText,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            platformStyle = PlatformTextStyle(includeFontPadding = false)
-                        ),
-                        color = CalendarPalette.TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    if (entry.resultLabel.isNotBlank()) {
+                        DetailMetaChip(
+                            text = entry.resultLabel,
+                            backgroundColor = completionChipBackground(entry.resultLabel),
+                            textColor = completionChipText(entry.resultLabel)
+                        )
+                    }
                 }
             }
 
@@ -313,6 +309,22 @@ private fun CalendarEntryRow(
                 )
             }
         }
+    }
+}
+
+private fun completionChipBackground(resultLabel: String): Color {
+    return when (resultLabel) {
+        "완등" -> Color(0xFFE9F8EF)
+        "미완등" -> Color(0xFFFFF1F1)
+        else -> CalendarPalette.SurfaceMuted
+    }
+}
+
+private fun completionChipText(resultLabel: String): Color {
+    return when (resultLabel) {
+        "완등" -> Color(0xFF1E9E5A)
+        "미완등" -> Color(0xFFE45858)
+        else -> CalendarPalette.TextSecondary
     }
 }
 

@@ -67,9 +67,7 @@ internal object CalendarUiStateMapper {
             problemColorLabel = problemColor,
             problemColorTone = problemColor.toMarkerTone(),
             venueLabel = venue,
-            secondaryText = listOf(venue, note)
-                .filter { it.isNotBlank() }
-                .joinToString(" / "),
+            resultLabel = result.toChipLabel(),
             timeLabel = time?.format(TimeFormatter).orEmpty()
         )
     }
@@ -180,6 +178,16 @@ internal object CalendarUiStateMapper {
             CalendarEntryResult.ACTIVE,
             CalendarEntryResult.PENDING,
             CalendarEntryResult.UNKNOWN -> CalendarMarkerRenderStyleUiModel.OUTLINED
+        }
+    }
+
+    private fun CalendarEntryResult.toChipLabel(): String {
+        return when (this) {
+            CalendarEntryResult.SUCCESS -> "완등"
+            CalendarEntryResult.FAIL -> "미완등"
+            CalendarEntryResult.ACTIVE -> "진행중"
+            CalendarEntryResult.PENDING -> "예정"
+            CalendarEntryResult.UNKNOWN -> "미정"
         }
     }
 }
