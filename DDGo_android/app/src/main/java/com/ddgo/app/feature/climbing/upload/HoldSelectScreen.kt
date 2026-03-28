@@ -1,29 +1,18 @@
 package com.ddgo.app.feature.climbing.upload
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,12 +38,19 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ddgo.app.core.ui.components.SafeAreaScreen
 import kotlin.math.roundToInt
+
+private val HoldSelectStartHeadlineAccent = Color(0xFF64FFB0)
+private val HoldSelectGoalHeadlineAccent = Color(0xFFFF9A62)
 
 @Composable
 fun HoldSelectScreen(
@@ -161,37 +157,24 @@ private fun TwoPhaseHoldSelection(
     }
     BackHandler(onBack = handleBack)
 
-    AnimatedContent(
-        targetState = phase,
-        transitionSpec = {
-            val forward = targetState == UploadRecoveryHoldSelectionPhase.END
-            val enter = slideInHorizontally(tween(380)) { if (forward) it else -it } +
-                fadeIn(tween(300))
-            val exit = slideOutHorizontally(tween(300)) { if (forward) -it else it } +
-                fadeOut(tween(200))
-            enter togetherWith exit
-        },
-        label = "phase_transition"
-    ) { currentPhase ->
-        HoldSelectionContent(
-            viewModel = viewModel,
-            phase = currentPhase,
-            startIndex = selectedStartIndex,
-            endIndex = selectedEndIndex,
-            onStartSelect = viewModel::selectHoldSelectionStartIndex,
-            onEndSelect = viewModel::selectHoldSelectionEndIndex,
-            onConfirm = {
-                if (viewModel.confirmCurrentHoldSelection()) {
-                    if (allowAdditionalUpload) {
-                        onShowAdditionalUploadDialog()
-                    } else {
-                        onNavigateToNext()
-                    }
+    HoldSelectionContent(
+        viewModel = viewModel,
+        phase = phase,
+        startIndex = selectedStartIndex,
+        endIndex = selectedEndIndex,
+        onStartSelect = viewModel::selectHoldSelectionStartIndex,
+        onEndSelect = viewModel::selectHoldSelectionEndIndex,
+        onConfirm = {
+            if (viewModel.confirmCurrentHoldSelection()) {
+                if (allowAdditionalUpload) {
+                    onShowAdditionalUploadDialog()
+                } else {
+                    onNavigateToNext()
                 }
-            },
-            onBack = handleBack
-        )
-    }
+            }
+        },
+        onBack = handleBack
+    )
 }
 
 @Composable
@@ -215,19 +198,18 @@ private fun HoldSelectionContent(
     val onSelect: (Int) -> Unit = if (isStart) onStartSelect else onEndSelect
 
     Column(modifier = Modifier.fillMaxSize()) {
+        UploadFlowTopBar(
+            title = if (isStart) "시작 홀드 선택" else "목표 홀드 선택",
+            onNavigateBack = onBack
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 20.dp)
         ) {
-            StepBadgeRow(phase = phase)
-            Spacer(Modifier.height(10.dp))
             Text(
-                text = if (isStart) {
-                    "분석 정확도를 위해\n시작 홀드를 지정해 주세요"
-                } else {
-                    "목표 홀드를 선택해 주세요"
-                },
+                text = buildHoldSelectionHeadline(isStart = isStart),
                 color = Color.White,
                 style = MaterialTheme.typography.headlineMedium.copy(
                     lineHeight = 28.6.sp,
@@ -378,21 +360,30 @@ private fun HoldSelectionContent(
                             holds.forEachIndexed { idx, hold ->
                                 val rect = displayRects[idx]
 
-                                val isOtherSelected = if (isStart) idx == endIndex else idx == startIndex
+                                val isPersistedStartSelection = !isStart && idx == startIndex
+                                val isOtherSelected = if (isStart) idx == endIndex else false
                                 val isThisSelected = idx == selectedIndex
+                                val isHighlighted = isThisSelected || isPersistedStartSelection || isOtherSelected
                                 val color = when {
                                     isThisSelected -> accentColor
+                                    isPersistedStartSelection -> COLOR_START
                                     isOtherSelected -> if (isStart) COLOR_END else COLOR_START
                                     else -> COLOR_INACTIVE
                                 }
                                 val alpha = when {
                                     isThisSelected -> 1.0f
+                                    isPersistedStartSelection -> 1.0f
                                     isOtherSelected -> 0.5f
                                     else -> 0.7f
                                 }
+                                val strokeWidthPx = if (isHighlighted) {
+                                    uniformStrokePx * 2f
+                                } else {
+                                    uniformStrokePx
+                                }
 
                                 drawRect(
-                                    color = color.copy(alpha = if (isThisSelected) 0.22f else 0.07f),
+                                    color = color.copy(alpha = if (isThisSelected || isPersistedStartSelection) 0.22f else 0.07f),
                                     topLeft = Offset(rect.l, rect.t),
                                     size = Size(rect.r - rect.l, rect.b - rect.t)
                                 )
@@ -400,7 +391,7 @@ private fun HoldSelectionContent(
                                     color = color.copy(alpha = alpha),
                                     topLeft = Offset(rect.l, rect.t),
                                     size = Size(rect.r - rect.l, rect.b - rect.t),
-                                    style = Stroke(width = uniformStrokePx)
+                                    style = Stroke(width = strokeWidthPx)
                                 )
                                 drawConfidenceLabel(
                                     label = "${(hold.confidence * 100).toInt()}%",
@@ -408,7 +399,7 @@ private fun HoldSelectionContent(
                                     boxTop = rect.t,
                                     boxBottom = rect.b,
                                     color = color,
-                                    isSelected = isThisSelected
+                                    isSelected = isThisSelected || isPersistedStartSelection
                                 )
                             }
                         }
@@ -470,90 +461,22 @@ private fun HoldSelectionContent(
                     fontWeight = FontWeight.Bold
                 )
             }
-
-            if (!isStart) {
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White.copy(alpha = 0.10f),
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("시작 홀드 다시 선택", fontSize = 14.sp)
-                }
-            }
         }
     }
 }
 
-@Composable
-private fun StepBadgeRow(phase: UploadRecoveryHoldSelectionPhase) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        StepBadge(
-            step = "1",
-            label = "시작 홀드",
-            active = phase == UploadRecoveryHoldSelectionPhase.START,
-            done = phase == UploadRecoveryHoldSelectionPhase.END,
-            color = COLOR_START
-        )
-        Spacer(Modifier.size(8.dp))
-        Text("→", color = Color.White.copy(alpha = 0.4f), fontSize = 14.sp)
-        Spacer(Modifier.size(8.dp))
-        StepBadge(
-            step = "2",
-            label = "목표 홀드",
-            active = phase == UploadRecoveryHoldSelectionPhase.END,
-            done = false,
-            color = COLOR_END
-        )
-    }
-}
-
-@Composable
-private fun StepBadge(
-    step: String,
-    label: String,
-    active: Boolean,
-    done: Boolean,
-    color: Color
-) {
-    val backgroundColor = when {
-        active -> color
-        done -> color.copy(alpha = 0.5f)
-        else -> Color.White.copy(alpha = 0.12f)
-    }
-    val textColor = if (active || done) Color.Black else Color.White.copy(alpha = 0.75f)
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .background(backgroundColor, RoundedCornerShape(20.dp))
-            .padding(horizontal = 12.dp, vertical = 5.dp)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(18.dp)
-                .background(textColor.copy(alpha = 0.2f), CircleShape)
-        ) {
-            Text(
-                text = step,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = textColor
+private fun buildHoldSelectionHeadline(isStart: Boolean): AnnotatedString {
+    val accentColor = if (isStart) HoldSelectStartHeadlineAccent else HoldSelectGoalHeadlineAccent
+    return buildAnnotatedString {
+        append("분석 정확도를 위해\n")
+        withStyle(
+            style = SpanStyle(
+                color = accentColor,
+                fontWeight = FontWeight.Bold
             )
+        ) {
+            append(if (isStart) "시작 홀드" else "목표 홀드")
         }
-        Spacer(Modifier.size(5.dp))
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = textColor
-        )
+        append(if (isStart) "를 지정해 주세요" else "를 선택해 주세요")
     }
 }
