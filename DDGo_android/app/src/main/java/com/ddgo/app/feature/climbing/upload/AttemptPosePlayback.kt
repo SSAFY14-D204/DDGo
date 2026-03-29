@@ -841,6 +841,7 @@ internal fun PoseVideoScrubber(
     markers: List<PoseScrubberMarker>,
     colors: PoseScrubberColors,
     trackAnchoredToBottom: Boolean = false,
+    showTimeLabels: Boolean = true,
     modifier: Modifier = Modifier,
     onTapSeek: (Long) -> Unit,
     onScrubStart: () -> Unit,
@@ -1020,22 +1021,24 @@ internal fun PoseVideoScrubber(
     ) {
         if (trackAnchoredToBottom) {
             ScrubberTrackCanvas()
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = currentPositionMs.toVideoTimeString(),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textColor
-                )
-                Text(
-                    text = durationMs.toVideoTimeString(),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textColor.copy(alpha = 0.8f)
-                )
+            if (showTimeLabels) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = currentPositionMs.toVideoTimeString(),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textColor
+                    )
+                    Text(
+                        text = durationMs.toVideoTimeString(),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textColor.copy(alpha = 0.8f)
+                    )
+                }
             }
         } else {
             ScrubberTrackCanvas()

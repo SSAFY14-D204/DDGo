@@ -118,6 +118,7 @@ internal fun AttemptVideoSection(
     pointColor: Color,
     scrubberColors: PoseScrubberColors,
     controlSurfaceColor: Color,
+    showScrubberTimeLabels: Boolean = true,
     hiddenLandmarkIndices: Set<Int> = emptySet(),
     hiddenPointIndices: Set<Int> = emptySet(),
     pointRadiusScale: Float = 1f,
@@ -495,6 +496,7 @@ internal fun AttemptVideoSection(
                     markers = resolvedMarkers,
                     colors = scrubberColors,
                     trackAnchoredToBottom = true,
+                    showTimeLabels = showScrubberTimeLabels,
                     onTapSeek = { requestedTimeMs ->
                         if (poseTimestamps.isEmpty()) return@PoseVideoScrubber
                         val snappedTimeMs = poseTimestamps.minByOrNull { timestamp ->

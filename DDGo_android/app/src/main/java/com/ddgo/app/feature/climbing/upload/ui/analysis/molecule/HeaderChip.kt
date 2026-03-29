@@ -13,8 +13,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 
 internal data class HeaderChipTone(
     val background: Color,
@@ -43,23 +45,27 @@ internal fun HeaderChip(
     background: Color,
     contentColor: Color,
     borderColor: Color = Color.Transparent,
+    cornerRadius: Dp = 8.dp,
+    horizontalPadding: Dp = 9.dp,
+    verticalPadding: Dp = 4.dp,
+    fontSize: TextUnit = 11.sp,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(cornerRadius))
             .background(background)
             .border(
                 width = if (borderColor.alpha > 0f) 1.dp else 0.dp,
                 color = borderColor,
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(cornerRadius)
             )
-            .padding(horizontal = 9.dp, vertical = 4.dp)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
     ) {
         Text(
             text = text,
             color = contentColor,
-            fontSize = 11.sp,
+            fontSize = fontSize,
             fontWeight = FontWeight.SemiBold
         )
     }

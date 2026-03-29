@@ -338,6 +338,7 @@ fun FinalAnalysisRoute(
             ),
             selectedAttempt = safeSelectedAttempt,
             totalAttempts = attemptCount,
+            attemptSuccessStates = attemptSummaries.map { it.isSuccess },
             currentSummary = displaySummary,
             previousSummary = previousSummary,
             analysisStartTimeMs = analysisStartTimeMs,
@@ -368,6 +369,10 @@ fun FinalAnalysisRoute(
     Box(modifier = Modifier.fillMaxSize()) {
         FinalAnalysisPage(
             state = pageState,
+            onAttemptSelected = { attemptNo ->
+                selectedAttempt = attemptNo.coerceIn(1, attemptCount)
+                pendingSeekTimeMs = null
+            },
             onAnalysisPointSelected = { timeMs ->
                 pendingSeekTimeMs = timeMs
                 seekRequestId += 1L
