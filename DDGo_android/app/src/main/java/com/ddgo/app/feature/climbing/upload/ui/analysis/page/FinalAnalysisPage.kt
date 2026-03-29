@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.page
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,6 +78,7 @@ internal data class FinalAnalysisPageState(
 )
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 internal fun FinalAnalysisPage(
     state: FinalAnalysisPageState,
     onAttemptSelected: (Int) -> Unit,
@@ -255,14 +257,20 @@ internal fun FinalAnalysisPage(
                         }
                     )
                 }
-                item {
-                    AttemptAnalysisTabRow(
-                        selectedTabIndex = selectedTabIndex,
-                        onTabSelected = { selectedTabIndex = it },
+                stickyHeader {
+                    Box(
                         modifier = Modifier
+                            .fillMaxWidth()
+                            .background(AnalysisBgColor)
                             .padding(top = 12.dp)
-                            .padding(horizontal = 22.dp)
-                    )
+                    ) {
+                        AttemptAnalysisTabRow(
+                            selectedTabIndex = selectedTabIndex,
+                            onTabSelected = { selectedTabIndex = it },
+                            modifier = Modifier
+                                .padding(horizontal = 22.dp)
+                        )
+                    }
                 }
                 item {
                     AttemptAnalysisContentSection(
