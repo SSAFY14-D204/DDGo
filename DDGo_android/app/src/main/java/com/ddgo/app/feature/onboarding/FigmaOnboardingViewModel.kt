@@ -405,7 +405,11 @@ class FigmaOnboardingViewModel @Inject constructor(
                 longitude = DEFAULT_SEARCH_LONGITUDE,
                 query = trimmedQuery
             ).onSuccess { places ->
-                gymSearchUiState = FigmaOnboardingGymSearchUiState.Success(places)
+                gymSearchUiState = if (places.isEmpty()) {
+                    FigmaOnboardingGymSearchUiState.Error("\uCC3E\uC73C\uC2DC\uB294 \uC554\uC7A5\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.")
+                } else {
+                    FigmaOnboardingGymSearchUiState.Success(places)
+                }
             }.onFailure { throwable ->
                 gymSearchUiState = FigmaOnboardingGymSearchUiState.Error(
                     throwable.orNetworkMessage("암장을 찾지 못했어요.")
@@ -527,7 +531,12 @@ class FigmaOnboardingViewModel @Inject constructor(
     }
 
     private fun Throwable.orNetworkMessage(fallback: String): String {
-        return toUserFacingNetworkMessageOrNull() ?: message ?: fallback
+        return toUserFacingNetworkMessageOrNull()
+            ?: if (fallback.contains("?")) {
+                "\uC694\uCCAD\uC744 \uCC98\uB9AC\uD558\uC9C0 \uBABB\uD588\uC5B4\uC694."
+            } else {
+                fallback
+            }
     }
 }
 

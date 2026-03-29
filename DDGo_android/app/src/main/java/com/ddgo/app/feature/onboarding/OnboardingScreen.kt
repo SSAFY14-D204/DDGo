@@ -149,6 +149,15 @@ private val OnboardingResultGlow = Brush.linearGradient(
 private val OnboardingCtaGradient = Brush.linearGradient(
     colors = listOf(Color(0xFF42A7FF), Color(0xFF8458FF))
 )
+private val QuestionPrimaryInputTopPadding = 132.dp
+private val QuestionSecondaryTextSpacing = 20.dp
+private val MeasurementHelperSlotHeight = 32.dp
+private val GymFieldAnchorTopPadding = 180.dp
+private val NicknameFieldAnchorTopPadding = 234.dp
+private val IntroTitleTopPadding = 305.dp
+private val IntroDescriptionTopPadding = 429.dp
+private val CompleteTitleTopPadding = 122.dp
+private val CompleteCardTopPadding = 255.dp
 
 private const val INTRO_SCREEN_ASSET = "file:///android_asset/onboarding/onboarding1.png"
 private const val SEX_LEFT_ASSET = "file:///android_asset/onboarding/sex_male.svg"
@@ -423,6 +432,13 @@ private fun IntroStepScreen(onContinue: () -> Unit) {
             .background(Color.White)
     ) {
         val scale = maxWidth / 412.dp
+        val density = LocalDensity.current
+        val topInsetPx = WindowInsets.statusBars.getTop(density)
+        val topInset = with(density) { topInsetPx.toDp() }
+
+        fun figmaTop(y: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp {
+            return (y * scale) - topInset
+        }
 
         AsyncImage(
             model = INTRO_SCREEN_ASSET,
@@ -443,7 +459,7 @@ private fun IntroStepScreen(onContinue: () -> Unit) {
             ),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 330.dp * scale)
+                .padding(top = figmaTop(IntroTitleTopPadding))
                 .width(412.dp * scale)
         )
         Text(
@@ -457,7 +473,7 @@ private fun IntroStepScreen(onContinue: () -> Unit) {
             ),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 454.dp * scale)
+                .padding(top = figmaTop(IntroDescriptionTopPadding))
                 .width(279.dp * scale)
         )
         SolidCtaButton(
@@ -495,9 +511,9 @@ private fun MeasurementStepScreen(
 ) {
     val isWingspan = rulerKind == MeasurementRulerKind.Wingspan
     val valueTopPadding = when (rulerKind) {
-        MeasurementRulerKind.Height -> 156.dp
-        MeasurementRulerKind.Weight -> 156.dp
-        MeasurementRulerKind.Wingspan -> 156.dp
+        MeasurementRulerKind.Height -> 124.dp
+        MeasurementRulerKind.Weight -> 124.dp
+        MeasurementRulerKind.Wingspan -> 124.dp
     }
 
     QuestionShell(
@@ -509,20 +525,27 @@ private fun MeasurementStepScreen(
         isLoading = isLoading,
         isContinueEnabled = !isLoading
     ) {
-        if (isWingspan && !helperDescription.isNullOrBlank()) {
-            Text(
-                text = helperDescription,
-                style = TextStyle(
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Normal,
-                    lineHeight = 21.sp,
-                    color = Color(0xFF8C8C8F)
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, end = 12.dp),
-                textAlign = TextAlign.Start
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(MeasurementHelperSlotHeight),
+            contentAlignment = Alignment.BottomStart
+        ) {
+            if (isWingspan && !helperDescription.isNullOrBlank()) {
+                Text(
+                    text = helperDescription,
+                    style = TextStyle(
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = 21.sp,
+                        color = Color(0xFF8C8C8F)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 12.dp),
+                    textAlign = TextAlign.Start
+                )
+            }
         }
 
         Column(
@@ -648,6 +671,8 @@ private fun GymStepScreen(
         onContinue = onContinue,
         isContinueEnabled = true
     ) {
+        Spacer(modifier = Modifier.height(GymFieldAnchorTopPadding))
+
         Text(
             text = "홈짐은 언제든지 변경할 수 있어요!",
             style = TextStyle(
@@ -664,6 +689,12 @@ private fun GymStepScreen(
             onValueChange = onQueryChange,
             hint = "",
             textAlign = TextAlign.Start,
+            textStyle = TextStyle(
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Normal,
+                color = OnboardingBlack,
+                textAlign = TextAlign.Start
+            ),
             trailing = {
                 FigmaSearchIcon(
                     modifier = Modifier
@@ -671,7 +702,7 @@ private fun GymStepScreen(
                         .clickable { onSearch() }
                 )
             },
-            modifier = Modifier.padding(top = 124.dp),
+            modifier = Modifier.padding(top = 28.dp),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Text,
                 imeAction = ImeAction.Search
@@ -779,12 +810,14 @@ private fun NicknameStepScreen(
         isLoading = isLoading,
         isContinueEnabled = canContinue
     ) {
+        Spacer(modifier = Modifier.height(NicknameFieldAnchorTopPadding))
+
         UnderlineTextField(
             value = nickname,
             onValueChange = onNicknameChange,
             hint = recommendedNickname,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 114.dp),
+            modifier = Modifier,
             textStyle = TextStyle(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Normal,
@@ -910,14 +943,14 @@ private fun CompleteStepScreen(
             ),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 134.dp * scale)
+                .padding(top = CompleteTitleTopPadding * scale)
                 .width(341.dp * scale)
         )
 
         Surface(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 267.dp * scale)
+                .padding(top = CompleteCardTopPadding * scale)
                 .size(width = 363.dp * scale, height = 436.dp * scale),
             color = Color(0xFF0B0B0E),
             shape = RoundedCornerShape(30.dp * scale)
