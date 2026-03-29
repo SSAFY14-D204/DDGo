@@ -85,6 +85,7 @@ sealed class ScreenRoutes(val route: String) {
             const val ANALYSIS_LOADING = "analysis_loading"
             const val ATTEMPT_RESULT = "attempt_result"
             const val HOLD_CONTACT_DEBUG = "hold_contact_debug"
+            const val BATCH_AI_JSON_EXPORT = "batch_ai_json_export"
             const val FINAL_ANALYSIS = "final_analysis"
             const val CHALLENGE_FINAL_ANALYSIS = "challenge_final_analysis"
         }
