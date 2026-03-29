@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import com.ddgo.app.feature.climbing.upload.ui.analysis.page.ChallengeFinalAnaly
 import com.ddgo.app.feature.climbing.upload.ui.analysis.page.ChallengePreviewHeroState
 import com.ddgo.app.feature.climbing.upload.withAlignedDisplayCrux
 import com.ddgo.app.navigation.PendingCommunityComposeRequest
+import kotlinx.coroutines.launch
 import kotlin.math.max
 
 @Composable
@@ -78,6 +80,44 @@ fun ChallengeFinalAnalysisRoute(
             totalHolds = totalHolds
         )
     }
+    val closeSummaryPayload = remember(attemptSummaries, challengeSummary) {
+        val averageCenterStabilityRatio = attemptSummaries
+            .mapNotNull { it.insideSupportRatio }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.div(100.0)
+        val mostCruxHoldNo = attemptSummaries
+            .mapNotNull { it.primaryCruxHoldNo }
+            .groupingBy { it }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
+        val maxCruxDurationMs = attemptSummaries
+            .mapNotNull { it.primaryCruxDurationMs }
+            .maxOrNull()
+        val finalComment = listOf(
+            challengeSummary.summaryLine,
+            challengeSummary.completionLine,
+            challengeSummary.challengeNatureLine
+        ).filter { it.isNotBlank() }
+            .joinToString(" ")
+            .takeIf { it.isNotBlank() }
+
+        ChallengeFinalAnalysisClosePayload(
+            averageCenterStabilityRatio = averageCenterStabilityRatio,
+            mostCruxHoldNo = mostCruxHoldNo,
+            maxCruxDurationMs = maxCruxDurationMs,
+            finalComment = finalComment
+        )
+    }
+    val challengeResult = remember(challengeSummary.overallSuccess, attemptSummaries) {
+        when {
+            attemptSummaries.isEmpty() -> "UNKNOWN"
+            challengeSummary.overallSuccess -> "SUCCESS"
+            else -> "FAIL"
+        }
+    }
+    val scope = rememberCoroutineScope()
 
     val displayDate = remember(viewModel.createdChallenge?.startedAt) {
         formatAnalysisDate(viewModel.createdChallenge?.startedAt)
@@ -124,7 +164,26 @@ fun ChallengeFinalAnalysisRoute(
         ChallengeFinalAnalysisPage(
             state = pageState,
             onNavigateBack = onNavigateBack,
-            onPrimaryAction = onNavigateToMain,
+            onPrimaryAction = {
+                scope.launch {
+                    val currentChallengeId = viewModel.challengeId ?: 0L
+                    if (currentChallengeId <= 0L) {
+                        onNavigateToMain()
+                        return@launch
+                    }
+
+                    val closed = viewModel.closeChallengeForFinalAnalysis(
+                        challengeResult = challengeResult,
+                        averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                        mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                        maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                        finalComment = closeSummaryPayload.finalComment
+                    )
+                    if (closed) {
+                        onNavigateToMain()
+                    }
+                }
+            },
             onAttemptVideoShare = if (shareOptions.isNotEmpty()) {
                 { attemptNo ->
                     shareSheetSelectedAttemptNos = setOf(attemptNo)
@@ -153,14 +212,37 @@ fun ChallengeFinalAnalysisRoute(
                 isShareSheetVisible = false
                 if (selectedOptions.isEmpty()) return@AnalysisCommunityShareSheet
 
-                onNavigateToCommunityCompose(
-                    buildPendingCommunityComposeRequest(
-                        gymId = viewModel.gymId?.toLong(),
-                        gymName = viewModel.gymName,
-                        options = selectedOptions
-                    )
+                val request = buildPendingCommunityComposeRequest(
+                    gymId = viewModel.gymId?.toLong(),
+                    gymName = viewModel.gymName,
+                    options = selectedOptions
                 )
+                scope.launch {
+                    val currentChallengeId = viewModel.challengeId ?: 0L
+                    if (currentChallengeId <= 0L) {
+                        onNavigateToCommunityCompose(request)
+                        return@launch
+                    }
+
+                    val closed = viewModel.closeChallengeForFinalAnalysis(
+                        challengeResult = challengeResult,
+                        averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                        mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                        maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                        finalComment = closeSummaryPayload.finalComment
+                    )
+                    if (closed) {
+                        onNavigateToCommunityCompose(request)
+                    }
+                }
             }
         )
     }
 }
+
+private data class ChallengeFinalAnalysisClosePayload(
+    val averageCenterStabilityRatio: Double?,
+    val mostCruxHoldNo: Int?,
+    val maxCruxDurationMs: Int?,
+    val finalComment: String?
+)

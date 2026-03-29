@@ -91,6 +91,13 @@ class CalendarViewModel @Inject constructor(
         )
     }
 
+    fun refreshCurrentMonth() {
+        loadMonth(
+            targetMonth = _uiState.value.currentMonth,
+            selectedDate = _uiState.value.selectedDate
+        )
+    }
+
     private fun loadMonth(targetMonth: YearMonth, selectedDate: LocalDate) {
         val requestId = latestLoadRequestId + 1
         latestLoadRequestId = requestId
