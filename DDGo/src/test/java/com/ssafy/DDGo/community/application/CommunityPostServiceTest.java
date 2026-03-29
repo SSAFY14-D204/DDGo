@@ -1,8 +1,10 @@
 package com.ssafy.DDGo.community.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -101,6 +104,47 @@ class CommunityPostServiceTest {
         verify(communityPostVideoRepository).findAllByPostIdInOrderByPostIdAscSortOrderAsc(List.of(1L, 2L));
         verify(communityMediaService).getThumbnailUrl("post-1-video-0");
         verify(communityMediaService, never()).getThumbnailUrl("post-1-video-1");
+    }
+
+    @Test
+    @DisplayName("deletePost uses bulk deletes when the post has no comments")
+    void deletePost_withoutComments_usesBulkDeletes() {
+        deletePost_usesBulkDeletes(false);
+    }
+
+    @Test
+    @DisplayName("deletePost uses bulk deletes when the post has comments")
+    void deletePost_withComments_usesBulkDeletes() {
+        deletePost_usesBulkDeletes(true);
+    }
+
+    private void deletePost_usesBulkDeletes(boolean withComments) {
+        User user = user(100L);
+        CommunityPost post = post(1L, user, "title", "content", 0);
+        if (withComments) {
+            post.adjustCommentCount(2);
+        }
+
+        when(userRepository.findByUsername("tester")).thenReturn(Optional.of(user));
+        when(communityPostRepository.findById(1L)).thenReturn(Optional.of(post));
+
+        communityPostService.deletePost("tester", 1L);
+
+        InOrder inOrder = inOrder(
+                communityPostVideoRepository,
+                communityCommentLikeRepository,
+                communityCommentRepository,
+                communityPostLikeRepository,
+                communityPostRepository);
+        inOrder.verify(communityPostVideoRepository).deleteHardByPostId(1L);
+        inOrder.verify(communityCommentLikeRepository).deleteAllByPostId(1L);
+        inOrder.verify(communityCommentRepository).softDeleteAllByPostId(1L);
+        inOrder.verify(communityPostLikeRepository).deleteAllByPostId(1L);
+        inOrder.verify(communityPostRepository).delete(post);
+
+        verify(communityCommentRepository, never()).findVisibleByPostIdOrderByCreatedAtAsc(1L);
+        verify(communityCommentRepository, never()).deleteAll(any());
+        verify(communityCommentLikeRepository, never()).deleteAllByCommentIdIn(anyList());
     }
 
     private User user(Long id) {

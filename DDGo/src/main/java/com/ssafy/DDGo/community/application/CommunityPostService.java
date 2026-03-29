@@ -133,17 +133,9 @@ public class CommunityPostService {
                 .orElseThrow(() -> new CustomException(ErrorCode.POST_NOT_FOUND, "게시글을 찾을 수 없습니다."));
         validatePostOwner(user, post);
 
-        List<CommunityPostVideo> videos = communityPostVideoRepository.findAllByPostIdOrderBySortOrderAsc(postId);
-        List<com.ssafy.DDGo.community.domain.CommunityComment> comments = communityCommentRepository
-                .findVisibleByPostIdOrderByCreatedAtAsc(postId);
-        if (!videos.isEmpty()) {
-            communityPostVideoRepository.deleteHardByPostId(postId);
-        }
-        if (!comments.isEmpty()) {
-            List<Long> commentIds = comments.stream().map(comment -> comment.getId()).toList();
-            communityCommentLikeRepository.deleteAllByCommentIdIn(commentIds);
-            communityCommentRepository.deleteAll(comments);
-        }
+        communityPostVideoRepository.deleteHardByPostId(postId);
+        communityCommentLikeRepository.deleteAllByPostId(postId);
+        communityCommentRepository.softDeleteAllByPostId(postId);
         communityPostLikeRepository.deleteAllByPostId(postId);
         communityPostRepository.delete(post);
     }
