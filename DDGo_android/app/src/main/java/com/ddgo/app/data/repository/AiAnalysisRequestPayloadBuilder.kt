@@ -17,6 +17,7 @@ internal data class PreparedAiAnalysisRequest(
     val frameStep: Int
 )
 
+internal const val PRIMARY_AI_REQUEST_MAX_FRAME_COUNT = Int.MAX_VALUE
 internal const val DEFAULT_AI_REQUEST_MAX_FRAME_COUNT = 90
 internal const val RETRY_AI_REQUEST_MAX_FRAME_COUNT = 48
 

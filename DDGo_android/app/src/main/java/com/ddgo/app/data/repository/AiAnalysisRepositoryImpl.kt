@@ -25,7 +25,7 @@ class AiAnalysisRepositoryImpl @Inject constructor(
         return runCatching {
             val primaryRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
                 context = context,
-                maxFrameCount = DEFAULT_AI_REQUEST_MAX_FRAME_COUNT
+                maxFrameCount = PRIMARY_AI_REQUEST_MAX_FRAME_COUNT
             )
             val response = try {
                 executeRequest(context.mode, primaryRequest.request)

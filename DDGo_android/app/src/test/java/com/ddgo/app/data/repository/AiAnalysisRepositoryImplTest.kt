@@ -113,7 +113,7 @@ class AiAnalysisRepositoryImplTest {
     }
 
     @Test
-    fun `large payload is sampled before request body is built`() = runBlocking {
+    fun `large payload keeps full frame rate in primary request`() = runBlocking {
         val api = FakeAiAnalysisApi()
         val repository = AiAnalysisRepositoryImpl(api)
 
@@ -129,9 +129,9 @@ class AiAnalysisRepositoryImplTest {
         val frames = request.pose3dSequenceJson.getArray("frames")
         val metadata = request.pose3dSequenceJson.getObject("video_metadata")
 
-        assertEquals(4, request.frameStep)
-        assertEquals(60, frames.size)
-        assertEquals(60, metadata.getInt("processed_frames"))
+        assertEquals(2, request.frameStep)
+        assertEquals(120, frames.size)
+        assertEquals(120, metadata.getInt("processed_frames"))
     }
 
     @Test
@@ -176,7 +176,7 @@ class AiAnalysisRepositoryImplTest {
         assertTrue(result.isSuccess)
         assertEquals(2, api.fastCallCount)
         assertEquals(2, api.fastRequests.size)
-        assertEquals(4, api.fastRequests[0].frameStep)
+        assertEquals(2, api.fastRequests[0].frameStep)
         assertEquals(6, api.fastRequests[1].frameStep)
         assertTrue(
             api.fastRequests[1].pose3dSequenceJson.getArray("frames").size <
