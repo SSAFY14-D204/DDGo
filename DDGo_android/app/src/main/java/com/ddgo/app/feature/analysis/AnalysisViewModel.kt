@@ -88,6 +88,10 @@ class AnalysisViewModel @Inject constructor(
         currentScreen.value = AnalysisScreenState.Dashboard
     }
 
+    fun resetToRoot() {
+        currentScreen.value = AnalysisScreenState.Dashboard
+    }
+
     private fun loadAnalysisSnapshots() {
         viewModelScope.launch {
             getAnalysisSnapshotsUseCase().onSuccess { snapshots ->

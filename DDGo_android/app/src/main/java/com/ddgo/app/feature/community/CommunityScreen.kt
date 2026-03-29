@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun CommunityScreen(
+    rootResetNonce: Int = 0,
     pendingAnalysisShareRequest: PendingCommunityComposeRequest? = null,
     onPendingAnalysisShareHandled: () -> Unit = {},
     viewModel: CommunityViewModel = hiltViewModel()
@@ -77,6 +78,12 @@ fun CommunityScreen(
             delay(3000)
             viewModel.clearMessage()
         }
+    }
+
+    LaunchedEffect(rootResetNonce) {
+        if (rootResetNonce == 0) return@LaunchedEffect
+        if (isPreparingAnalysisShare || isComposeSubmitting) return@LaunchedEffect
+        viewModel.resetToRoot()
     }
 
     BackHandler(
