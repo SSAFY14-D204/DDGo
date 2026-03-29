@@ -156,6 +156,7 @@ fun MainScreen(
     ) {
         selectedTab = MainTab.CALENDAR
         lastActiveTab = MainTab.CALENDAR
+        calendarViewModel.refreshCurrentMonth()
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -195,6 +196,9 @@ fun MainScreen(
             selectedIndex = selectedTab,
             onTabSelected = { tab ->
                 when (tab) {
+                    MainTab.CALENDAR -> {
+                        calendarViewModel.refreshCurrentMonth()
+                    }
                     MainTab.ANALYSIS -> {
                         analysisRootResetNonce += 1
                         analysisTargetChallengeId = null
