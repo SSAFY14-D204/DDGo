@@ -319,12 +319,7 @@ fun RecordRoute(
             modifier = Modifier.fillMaxSize()
         )
     }
-    val overlayContent: @Composable BoxScope.() -> Unit = {
-        LivePoseOverlay(
-            modifier = Modifier.fillMaxSize(),
-            poseFrame = uiState.latestPoseFrame
-        )
-    }
+    val overlayContent: @Composable BoxScope.() -> Unit = {}
 
     if (realtimeOverlayUiState != null) {
         RealtimeRecordPage(
