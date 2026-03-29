@@ -984,7 +984,8 @@ class UploadViewModel @Inject constructor(
             )
             val sampledPreparedRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
                 context = requestContext,
-                maxFrameCount = aiAnalysisVariant.primaryRequestMaxFrameCount
+                // Sampled export now mirrors the normalized 10fps primary request contract.
+                maxFrameCount = Int.MAX_VALUE
             )
             val rawPreparedRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
                 context = requestContext,

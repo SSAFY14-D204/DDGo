@@ -134,11 +134,14 @@ internal fun AttemptVideoSection(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val poseTimestamps = remember(state.attemptPoseSequence) {
-        state.attemptPoseSequence
-            .map(Pose::frameTimeMs)
-            .distinct()
-            .sorted()
+    val poseTimestamps = remember(state.attemptPoseSequence, state.overlayCache) {
+        state.overlayCache
+            ?.frameTimesMs
+            ?.takeIf { it.isNotEmpty() }
+            ?: state.attemptPoseSequence
+                .map(Pose::frameTimeMs)
+                .distinct()
+                .sorted()
     }
     val exoPlayer = remember(context, state.videoUri) {
         state.videoUri?.let { videoUri ->

@@ -1,6 +1,7 @@
 package com.ddgo.app.data.repository
 
 import android.util.Log
+import com.ddgo.app.core.config.AiRequestTransport
 import com.ddgo.app.core.config.AiAnalysisVariant
 import com.ddgo.app.data.remote.ai.AiAnalysisApi
 import com.ddgo.app.data.remote.ai.AiAnalysisRequestDto
@@ -65,10 +66,9 @@ class AiAnalysisRepositoryImpl @Inject constructor(
         request: AiAnalysisRequestDto
     ): AiAnalysisResponseDto {
         val endpointPath = aiAnalysisVariant.analyzePath(mode)
-        val api = if (aiAnalysisVariant.useGzipRequest) {
-            aiAnalysisGzipApi
-        } else {
-            aiAnalysisApi
+        val api = when (aiAnalysisVariant.requestTransport) {
+            AiRequestTransport.PLAIN -> aiAnalysisApi
+            AiRequestTransport.GZIP -> aiAnalysisGzipApi
         }
         return when (mode) {
             AiAnalysisMode.FAST -> api.analyzeFast(endpointPath, request)

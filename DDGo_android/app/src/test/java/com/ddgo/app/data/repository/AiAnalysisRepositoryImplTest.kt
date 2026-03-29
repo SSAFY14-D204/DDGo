@@ -76,7 +76,10 @@ class AiAnalysisRepositoryImplTest {
         assertEquals(100f, polygon[0].jsonObject.getFloat("x"), 0.0001f)
         assertEquals(125f, polygon[0].jsonObject.getFloat("y"), 0.0001f)
         assertEquals("file:///attempt.mp4", poseSequence.getObject("source").getString("video_uri"))
-        assertEquals(1920, poseSequence.getObject("video_metadata").getInt("frame_width"))
+        val metadata = poseSequence.getObject("video_metadata")
+        assertEquals(1920, metadata.getInt("frame_width"))
+        assertEquals(10, metadata.getInt("analysis_fps_limit"))
+        assertEquals(10f, metadata.getFloat("fps"), 0.0001f)
         assertTrue(firstFrame.containsKey("pose_world_landmarks"))
         assertEquals(1.8f, userProfile.getFloat("height_m"), 0.0001f)
         assertEquals(1.8f, userProfile.getFloat("wingspan_m"), 0.0001f)
@@ -127,13 +130,13 @@ class AiAnalysisRepositoryImplTest {
     }
 
     @Test
-    fun `v2 analyze uses gzip endpoint and api v2 path`() = runBlocking {
+    fun `v2 gzip 10fps analyze uses gzip endpoint and api v2 path`() = runBlocking {
         val plainApi = RecordingAiAnalysisApi()
         val gzipApi = RecordingAiAnalysisApi()
         val repository = AiAnalysisRepositoryImpl(
             aiAnalysisApi = plainApi,
             aiAnalysisGzipApi = gzipApi,
-            aiAnalysisVariant = AiAnalysisVariant.V2
+            aiAnalysisVariant = AiAnalysisVariant.V2_GZIP_10FPS
         )
 
         repository.analyze(sampleContext(mode = AiAnalysisMode.FAST)).getOrThrow()
@@ -171,20 +174,20 @@ class AiAnalysisRepositoryImplTest {
     }
 
     @Test
-    fun `v2 primary request keeps full frame rate`() = runBlocking {
+    fun `v2 gzip 10fps primary request keeps full normalized frame rate`() = runBlocking {
         val plainApi = RecordingAiAnalysisApi()
         val gzipApi = RecordingAiAnalysisApi()
         val repository = AiAnalysisRepositoryImpl(
             aiAnalysisApi = plainApi,
             aiAnalysisGzipApi = gzipApi,
-            aiAnalysisVariant = AiAnalysisVariant.V2
+            aiAnalysisVariant = AiAnalysisVariant.V2_GZIP_10FPS
         )
 
         repository.analyze(
             sampleContext(
                 mode = AiAnalysisMode.FAST,
                 frameCount = 240,
-                frameStep = 2
+                frameStep = 1
             )
         ).getOrThrow()
 
@@ -193,9 +196,11 @@ class AiAnalysisRepositoryImplTest {
         val metadata = request.pose3dSequenceJson.getObject("video_metadata")
 
         assertNull(plainApi.lastFastRequest)
-        assertEquals(2, request.frameStep)
-        assertEquals(120, frames.size)
-        assertEquals(120, metadata.getInt("processed_frames"))
+        assertEquals(1, request.frameStep)
+        assertEquals(240, frames.size)
+        assertEquals(240, metadata.getInt("processed_frames"))
+        assertEquals(10, metadata.getInt("analysis_fps_limit"))
+        assertEquals(10f, metadata.getFloat("fps"), 0.0001f)
     }
 
     @Test
@@ -223,12 +228,14 @@ class AiAnalysisRepositoryImplTest {
 
         assertEquals(2, frames.size)
         assertEquals(2, metadata.getInt("processed_frames"))
+        assertEquals(10, metadata.getInt("analysis_fps_limit"))
+        assertEquals(10f, metadata.getFloat("fps"), 0.0001f)
         assertEquals(1, frames[0].jsonObject.getInt("frame_index"))
         assertEquals(3, frames[1].jsonObject.getInt("frame_index"))
     }
 
     @Test
-    fun `v2 request entity too large retries with fewer sampled frames`() = runBlocking {
+    fun `v2 gzip 10fps request entity too large retries with fewer sampled frames`() = runBlocking {
         val plainApi = RecordingAiAnalysisApi()
         val gzipApi = RecordingAiAnalysisApi().apply {
             enqueueFastFailure(requestEntityTooLargeException())
@@ -236,14 +243,14 @@ class AiAnalysisRepositoryImplTest {
         val repository = AiAnalysisRepositoryImpl(
             aiAnalysisApi = plainApi,
             aiAnalysisGzipApi = gzipApi,
-            aiAnalysisVariant = AiAnalysisVariant.V2
+            aiAnalysisVariant = AiAnalysisVariant.V2_GZIP_10FPS
         )
 
         val result = repository.analyze(
             sampleContext(
                 mode = AiAnalysisMode.FAST,
                 frameCount = 200,
-                frameStep = 2
+                frameStep = 1
             )
         )
 
@@ -251,11 +258,51 @@ class AiAnalysisRepositoryImplTest {
         assertEquals(0, plainApi.fastCallCount)
         assertEquals(2, gzipApi.fastCallCount)
         assertEquals(2, gzipApi.fastRequests.size)
-        assertEquals(2, gzipApi.fastRequests[0].frameStep)
-        assertEquals(6, gzipApi.fastRequests[1].frameStep)
+        assertEquals(1, gzipApi.fastRequests[0].frameStep)
+        assertEquals(5, gzipApi.fastRequests[1].frameStep)
         assertTrue(
             gzipApi.fastRequests[1].pose3dSequenceJson.getArray("frames").size <
                 gzipApi.fastRequests[0].pose3dSequenceJson.getArray("frames").size
+        )
+    }
+
+    @Test
+    fun `413 retry keeps fallback frame reachable when valid frames are off stride`() = runBlocking {
+        val plainApi = RecordingAiAnalysisApi()
+        val gzipApi = RecordingAiAnalysisApi().apply {
+            enqueueFastFailure(requestEntityTooLargeException())
+        }
+        val repository = AiAnalysisRepositoryImpl(
+            aiAnalysisApi = plainApi,
+            aiAnalysisGzipApi = gzipApi,
+            aiAnalysisVariant = AiAnalysisVariant.V2_GZIP_10FPS
+        )
+
+        val validFrameIndexes = (1 until 200 step 5).toSet()
+        val invalidFrameIndexes = (0 until 200).filterNot(validFrameIndexes::contains).toSet()
+
+        val result = repository.analyze(
+            sampleContext(
+                mode = AiAnalysisMode.FAST,
+                frameCount = 200,
+                frameStep = 1,
+                invalidFrameIndexes = invalidFrameIndexes
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(0, plainApi.fastCallCount)
+        assertEquals(2, gzipApi.fastCallCount)
+        assertEquals(40, gzipApi.fastRequests[0].pose3dSequenceJson.getArray("frames").size)
+        assertEquals(1, gzipApi.fastRequests[1].pose3dSequenceJson.getArray("frames").size)
+        assertEquals(1, gzipApi.fastRequests[1].frameStep)
+        assertEquals(
+            1,
+            gzipApi.fastRequests[1]
+                .pose3dSequenceJson
+                .getArray("frames")[0]
+                .jsonObject
+                .getInt("frame_index")
         )
     }
 
@@ -305,7 +352,7 @@ class AiAnalysisRepositoryImplTest {
                     val isInvalidFrame = frameIndex in invalidFrameIndexes
                     AiPoseFrame(
                         frameIndex = frameIndex,
-                        timestampMs = 1234L + (frameIndex * 33L),
+                        timestampMs = 1234L + (frameIndex * 100L),
                         poseDetected = !isInvalidFrame,
                         poseLandmarks = if (isInvalidFrame) {
                             emptyList()
