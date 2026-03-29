@@ -1,6 +1,9 @@
 package com.ddgo.app.data.repository
 
 import com.ddgo.app.data.remote.challenge.ChallengeApi
+import com.ddgo.app.data.remote.challenge.ChallengeCloseRequestDto
+import com.ddgo.app.data.remote.challenge.ChallengeCloseResponseDto
+import com.ddgo.app.data.remote.challenge.ChallengeCloseSummaryDto
 import com.ddgo.app.data.remote.challenge.HoldItemDto
 import com.ddgo.app.data.remote.challenge.HoldSaveRequestDto
 import com.ddgo.app.data.remote.challenge.HoldSaveResponseDto
@@ -10,14 +13,19 @@ import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.HoldBoundingBox
 import com.ddgo.app.domain.model.HoldPoint
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
 
 class ChallengeRepositoryImplTest {
 
@@ -89,5 +97,55 @@ class ChallengeRepositoryImplTest {
         assertEquals(3, requestSlot.captured.holds.first().polygon.size)
         assertEquals(0.44f, requestSlot.captured.holds.first().boundingBox.x1)
         assertTrue(json.encodeToString(requestSlot.captured).contains("boundingBox"))
+    }
+
+    @Test
+    fun `closeChallenge retries once on transient gateway failure`() = runBlocking {
+        val challengeApi = mockk<ChallengeApi>()
+        val requestSlot = slot<ChallengeCloseRequestDto>()
+        val repository = ChallengeRepositoryImpl(challengeApi)
+
+        coEvery {
+            challengeApi.closeChallenge(9386L, capture(requestSlot))
+        } throws httpException(502) andThen ApiResponse(
+            success = true,
+            data = ChallengeCloseResponseDto(
+                challengeId = 9386L,
+                challengeStatus = "CLOSED",
+                challengeResult = "SUCCESS",
+                endedAt = "2026-03-29T21:53:27",
+                summary = ChallengeCloseSummaryDto(
+                    averageCenterStabilityRatio = 0.51,
+                    mostCruxHoldNo = 9,
+                    maxCruxDurationMs = 5100,
+                    finalComment = "stable flow"
+                )
+            )
+        )
+
+        val result = repository.closeChallenge(
+            challengeId = 9386L,
+            challengeResult = "SUCCESS",
+            averageCenterStabilityRatio = 0.51,
+            mostCruxHoldNo = 9,
+            maxCruxDurationMs = 5100,
+            finalComment = "stable flow"
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("SUCCESS", result.getOrThrow().challengeResult)
+        assertEquals("stable flow", requestSlot.captured.summary?.finalComment)
+        coVerify(exactly = 2) {
+            challengeApi.closeChallenge(9386L, any())
+        }
+    }
+
+    private fun httpException(code: Int, body: String = ""): HttpException {
+        return HttpException(
+            Response.error<Any>(
+                code,
+                body.toResponseBody("application/json".toMediaType())
+            )
+        )
     }
 }

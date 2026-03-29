@@ -17,6 +17,11 @@ internal data class PreparedAiAnalysisRequest(
     val frameStep: Int
 )
 
+private data class SampledRequestPoseSequence(
+    val poseSequence: AiPoseSequence,
+    val requestFrameStep: Int
+)
+
 internal object AiAnalysisRequestPayloadBuilder {
     fun buildPreparedRequest(
         context: AiAnalysisRequestContext,
@@ -32,7 +37,7 @@ internal object AiAnalysisRequestPayloadBuilder {
             baseFrameStep = context.frameStep,
             maxFrameCount = maxFrameCount
         )
-        val sampledPoseSequence = filteredPoseSequence.sampleFrames(effectiveFrameStep)
+        val sampledPoseSequence = filteredPoseSequence.sampleFramesForRequest(effectiveFrameStep)
 
         return PreparedAiAnalysisRequest(
             request = AiAnalysisRequestDto(
@@ -41,13 +46,13 @@ internal object AiAnalysisRequestPayloadBuilder {
                     frameWidthPx = context.frameWidthPx,
                     frameHeightPx = context.frameHeightPx
                 ),
-                pose3dSequenceJson = buildPoseSequenceJson(sampledPoseSequence),
+                pose3dSequenceJson = buildPoseSequenceJson(sampledPoseSequence.poseSequence),
                 userBodyJson = buildUserBodyJson(context),
                 topKCrux = context.topKCrux,
-                frameStep = effectiveFrameStep
+                frameStep = sampledPoseSequence.requestFrameStep
             ),
-            frameCount = sampledPoseSequence.frames.size,
-            frameStep = effectiveFrameStep
+            frameCount = sampledPoseSequence.poseSequence.frames.size,
+            frameStep = sampledPoseSequence.requestFrameStep
         )
     }
 
@@ -120,6 +125,7 @@ internal object AiAnalysisRequestPayloadBuilder {
     private fun buildPoseSequenceJson(
         poseSequence: AiPoseSequence
     ): JsonObject = buildJsonObject {
+        val normalizedAnalysisFpsLimit = poseSequence.videoMetadata.analysisFpsLimit.coerceAtLeast(1)
         put(
             "source",
             buildJsonObject {
@@ -133,12 +139,10 @@ internal object AiAnalysisRequestPayloadBuilder {
             buildJsonObject {
                 put("frame_width", JsonPrimitive(poseSequence.videoMetadata.frameWidth))
                 put("frame_height", JsonPrimitive(poseSequence.videoMetadata.frameHeight))
-                poseSequence.videoMetadata.fps?.let { fps ->
-                    put("fps", JsonPrimitive(fps))
-                }
+                put("fps", JsonPrimitive(normalizedAnalysisFpsLimit.toFloat()))
                 put("total_frames", JsonPrimitive(poseSequence.videoMetadata.totalFrames))
                 put("processed_frames", JsonPrimitive(poseSequence.videoMetadata.processedFrames))
-                put("analysis_fps_limit", JsonPrimitive(poseSequence.videoMetadata.analysisFpsLimit))
+                put("analysis_fps_limit", JsonPrimitive(normalizedAnalysisFpsLimit))
             }
         )
         put(
@@ -224,18 +228,31 @@ internal object AiAnalysisRequestPayloadBuilder {
         }
     }
 
-    private fun AiPoseSequence.sampleFrames(frameStep: Int): AiPoseSequence {
+    private fun AiPoseSequence.sampleFramesForRequest(frameStep: Int): SampledRequestPoseSequence {
         val normalizedStep = frameStep.coerceAtLeast(1)
         val sampledFrames = if (normalizedStep == 1) {
             frames
         } else {
             frames.filter { frame -> frame.frameIndex % normalizedStep == 0 }
-                .ifEmpty { frames.firstOrNull()?.let(::listOf).orEmpty() }
         }
 
-        return copy(
-            videoMetadata = videoMetadata.copy(processedFrames = sampledFrames.size),
-            frames = sampledFrames
+        if (sampledFrames.isNotEmpty()) {
+            return SampledRequestPoseSequence(
+                poseSequence = copy(
+                    videoMetadata = videoMetadata.copy(processedFrames = sampledFrames.size),
+                    frames = sampledFrames
+                ),
+                requestFrameStep = normalizedStep
+            )
+        }
+
+        val fallbackFrames = frames.firstOrNull()?.let(::listOf).orEmpty()
+        return SampledRequestPoseSequence(
+            poseSequence = copy(
+                videoMetadata = videoMetadata.copy(processedFrames = fallbackFrames.size),
+                frames = fallbackFrames
+            ),
+            requestFrameStep = 1
         )
     }
 

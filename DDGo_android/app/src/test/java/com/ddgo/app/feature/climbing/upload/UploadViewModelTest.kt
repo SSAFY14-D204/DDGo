@@ -75,10 +75,17 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.lang.reflect.Field
 import kotlin.io.path.createTempDirectory
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.float
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UploadViewModelTest {
@@ -2371,6 +2378,97 @@ class UploadViewModelTest {
         coVerify(exactly = 1) { challengeRepository.createChallenge(any(), any(), any()) }
     }
 
+    @Test
+    fun `exportCurrentAttemptBatchAiJson sampled export keeps the normalized full 10fps sequence`() = runTest {
+        val videoUri = "file:///normalized_sampled_export.mp4"
+        val targetUri = Uri.parse("file:///tmp/normalized_sampled_export.json")
+        val outputStream = ByteArrayOutputStream()
+        val context = mockContext()
+        every { context.contentResolver.openOutputStream(targetUri) } returns outputStream
+
+        val frameCount = 120
+        val normalizedSequence = normalizedAiPoseSequence(
+            videoUri = videoUri,
+            frameCount = frameCount
+        )
+
+        val viewModel = createViewModel(
+            context = context,
+            poseEstimator = mockk(relaxed = true),
+            prePoseVideoAnalysisProvider = mockk(relaxed = true),
+            aiAnalysisVariant = AiAnalysisVariant.V2_GZIP_10FPS
+        )
+
+        setPrivateField(viewModel, "videoUri", videoUri)
+        setPrivateField(viewModel, "currentAttemptIndex", 0)
+        setPrivateField(
+            viewModel,
+            "prePoseCacheEntries",
+            mapOf(
+                videoUri to PrePoseCacheEntry(
+                    playbackUri = videoUri,
+                    selectionGeneration = viewModel.selectionGeneration,
+                    status = PrePoseStatus.Ready,
+                    aiPoseSequence = normalizedSequence,
+                    filteredAiPoseSequence = normalizedSequence,
+                    poses = emptyList(),
+                    filteredPoses = emptyList(),
+                    smoothedPoses = emptyList(),
+                    processedFrames = List(frameCount) { index ->
+                        processedFrame(timestampMs = index * 100L, poseDetected = true)
+                    }
+                )
+            )
+        )
+        setPrivateField(
+            viewModel,
+            "attemptAlignedHoldSets",
+            listOf(
+                AttemptAlignedHoldSet(
+                    playbackUri = videoUri,
+                    frameWidthPx = 1080,
+                    frameHeightPx = 1920,
+                    mode = AttemptHoldAlignmentMode.Matched,
+                    confidence = 1f,
+                    matchedHoldCount = 1,
+                    warpOnlyHoldCount = 0,
+                    alignedHolds = listOf(
+                        numberedHold(
+                            holdNo = 1,
+                            centerX = 0.45f,
+                            centerY = 0.40f,
+                            role = HoldRole.START
+                        )
+                    ),
+                    rawCropBounds = null,
+                    debugSummary = "test"
+                )
+            )
+        )
+
+        val result = viewModel.exportCurrentAttemptBatchAiJson(
+            targetUri = targetUri,
+            variant = BatchAiJsonExportVariant.SAMPLED
+        )
+
+        assertTrue(result.isSuccess)
+        val summary = result.getOrThrow()
+        assertEquals(frameCount, summary.poseFrameCount)
+        assertEquals(frameCount, summary.sampledFrameCount)
+        assertEquals(1, summary.sampledFrameStep)
+        assertEquals(frameCount, summary.rawFrameCount)
+        assertEquals(1, summary.rawFrameStep)
+
+        val exportedJson = Json.parseToJsonElement(outputStream.toString(Charsets.UTF_8.name())).jsonObject
+        val poseSequenceJson = exportedJson["pose3d_sequence_json"]!!.jsonObject
+        val videoMetadataJson = poseSequenceJson["video_metadata"]!!.jsonObject
+
+        assertEquals(1, exportedJson["frame_step"]!!.jsonPrimitive.int)
+        assertEquals(10f, videoMetadataJson["fps"]!!.jsonPrimitive.float, 0.0f)
+        assertEquals(10, videoMetadataJson["analysis_fps_limit"]!!.jsonPrimitive.int)
+        assertEquals(frameCount, poseSequenceJson["frames"]!!.jsonArray.size)
+    }
+
     private fun createViewModel(
         context: Context = mockContext(),
         poseEstimator: PoseEstimator,
@@ -2385,6 +2483,7 @@ class UploadViewModelTest {
         gymRepository: GymRepository = mockk(relaxed = true),
         personDetector: PersonDetector = mockk(relaxed = true),
         holdDetector: HoldDetector = mockk(relaxed = true),
+        aiAnalysisVariant: AiAnalysisVariant = AiAnalysisVariant.V1,
         holdColorClassifier: HoldColorClassifier = HoldColorClassifier()
     ): UploadViewModel {
         val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
@@ -2451,7 +2550,7 @@ class UploadViewModelTest {
             holdDetector = holdDetector,
             poseEstimator = poseEstimator,
             prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
-            aiAnalysisVariant = AiAnalysisVariant.V1,
+            aiAnalysisVariant = aiAnalysisVariant,
             holdColorClassifier = holdColorClassifier,
             searchNearbyClimbingGymsUseCase = SearchNearbyClimbingGymsUseCase(gymRepository),
             resolveGymUseCase = ResolveGymUseCase(gymRepository),
@@ -2626,6 +2725,39 @@ class UploadViewModelTest {
                     }
                 )
             }
+        )
+    }
+
+    private fun normalizedAiPoseSequence(
+        videoUri: String,
+        frameCount: Int
+    ): AiPoseSequence {
+        val frames = List(frameCount) { index ->
+            AiPoseFrame(
+                frameIndex = index,
+                timestampMs = index * 100L,
+                poseDetected = true,
+                poseLandmarks = sampleAiLandmarks(offset = 0f),
+                poseWorldLandmarks = sampleAiLandmarks(offset = 1f)
+            )
+        }
+
+        return AiPoseSequence(
+            source = AiPayloadSource(
+                uri = videoUri,
+                videoUri = videoUri,
+                generator = "test",
+                exportedAtIso = "2026-03-21T00:00:00Z"
+            ),
+            videoMetadata = AiVideoMetadata(
+                frameWidth = 1080,
+                frameHeight = 1920,
+                fps = 10f,
+                totalFrames = frameCount,
+                processedFrames = frameCount,
+                analysisFpsLimit = 10
+            ),
+            frames = frames
         )
     }
 

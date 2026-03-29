@@ -17,10 +17,15 @@ import com.ddgo.app.domain.model.ClosedChallenge
 import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.repository.ChallengeRepository
 import javax.inject.Inject
+import kotlinx.coroutines.delay
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import retrofit2.HttpException
 
 private const val HOLD_API_TAG = "holdapi"
+private const val CHALLENGE_API_TAG = "challengeapi"
+private const val CLOSE_CHALLENGE_MAX_ATTEMPTS = 2
+private const val CLOSE_CHALLENGE_RETRY_DELAY_MS = 300L
 
 private val HoldApiJson = Json {
     prettyPrint = true
@@ -135,17 +140,18 @@ class ChallengeRepositoryImpl @Inject constructor(
         finalComment: String?
     ): Result<ClosedChallenge> {
         return try {
-            val response = challengeApi.closeChallenge(
-                challengeId = challengeId,
-                request = ChallengeCloseRequestDto(
-                    challengeResult = challengeResult,
-                    summary = ChallengeCloseSummaryDto(
-                        averageCenterStabilityRatio = averageCenterStabilityRatio,
-                        mostCruxHoldNo = mostCruxHoldNo,
-                        maxCruxDurationMs = maxCruxDurationMs,
-                        finalComment = finalComment
-                    )
+            val request = ChallengeCloseRequestDto(
+                challengeResult = challengeResult,
+                summary = ChallengeCloseSummaryDto(
+                    averageCenterStabilityRatio = averageCenterStabilityRatio,
+                    mostCruxHoldNo = mostCruxHoldNo,
+                    maxCruxDurationMs = maxCruxDurationMs,
+                    finalComment = finalComment
                 )
+            )
+            val response = executeCloseChallengeWithRetry(
+                challengeId = challengeId,
+                request = request
             )
 
             if (response.success && response.data != null) {
@@ -161,5 +167,45 @@ class ChallengeRepositoryImpl @Inject constructor(
                 )
             )
         }
+    }
+
+    private suspend fun executeCloseChallengeWithRetry(
+        challengeId: Long,
+        request: ChallengeCloseRequestDto
+    ) = retryTransientCloseChallengeFailures {
+        challengeApi.closeChallenge(
+            challengeId = challengeId,
+            request = request
+        )
+    }
+
+    private suspend fun <T> retryTransientCloseChallengeFailures(
+        block: suspend () -> T
+    ): T {
+        repeat(CLOSE_CHALLENGE_MAX_ATTEMPTS) { attempt ->
+            try {
+                return block()
+            } catch (throwable: Throwable) {
+                val shouldRetry = throwable.isTransientCloseChallengeFailure() &&
+                    attempt < CLOSE_CHALLENGE_MAX_ATTEMPTS - 1
+                if (!shouldRetry) {
+                    throw throwable
+                }
+
+                Log.w(
+                    CHALLENGE_API_TAG,
+                    "closeChallenge: transient gateway failure, retrying " +
+                        "attempt=${attempt + 2}/$CLOSE_CHALLENGE_MAX_ATTEMPTS",
+                    throwable
+                )
+                delay(CLOSE_CHALLENGE_RETRY_DELAY_MS)
+            }
+        }
+        error("closeChallenge retry loop exhausted unexpectedly")
+    }
+
+    private fun Throwable.isTransientCloseChallengeFailure(): Boolean {
+        val httpException = this as? HttpException ?: return false
+        return httpException.code() in setOf(502, 503, 504)
     }
 }

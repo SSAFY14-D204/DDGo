@@ -4,10 +4,15 @@ import com.ddgo.app.domain.model.AiPoseFrame
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.model.PoseLandmark
+import com.ddgo.app.domain.model.PosePixelPoint
+import com.ddgo.app.domain.model.PoseWorldPoint
 
 internal const val POSE_VALIDITY_WINDOW_RADIUS_MS = 1_000L
 internal const val POSE_VALIDITY_MIN_OBSERVED_2D_FRAMES = 3
 internal const val ATTEMPT_POSE_OVERLAY_MAX_SNAP_GAP_MS = 250L
+internal const val ATTEMPT_POSE_OVERLAY_DISPLAY_FPS = 20
+private const val ATTEMPT_POSE_OVERLAY_FRAME_INTERVAL_MS = 1_000L / ATTEMPT_POSE_OVERLAY_DISPLAY_FPS
+private const val ATTEMPT_POSE_OVERLAY_MAX_INTERPOLATION_SOURCE_GAP_MS = 125L
 private const val ATTEMPT_POSE_SMOOTH_MEDIAN_WINDOW = 3
 private const val ATTEMPT_POSE_SMOOTH_MEAN_WINDOW = 5
 
@@ -117,8 +122,9 @@ internal fun buildAttemptPoseOverlayCache(
 ): AttemptPoseOverlayCache {
     if (poses.isEmpty()) return AttemptPoseOverlayCache()
 
-    val frames = poses
+    val frames = densifyOverlayPoses(poses)
         .sortedBy(Pose::frameTimeMs)
+        .distinctBy(Pose::frameTimeMs)
         .map { pose -> AttemptPoseOverlayFrame(frameTimeMs = pose.frameTimeMs, pose = pose) }
     val frameTimesMs = frames.map(AttemptPoseOverlayFrame::frameTimeMs)
     return AttemptPoseOverlayCache(frames = frames, frameTimesMs = frameTimesMs)
@@ -215,6 +221,135 @@ internal fun findNearestOverlayFrameForPlayback(
     } else {
         null
     }
+}
+
+private fun densifyOverlayPoses(
+    poses: List<Pose>,
+    frameIntervalMs: Long = ATTEMPT_POSE_OVERLAY_FRAME_INTERVAL_MS,
+    maxInterpolationSourceGapMs: Long = ATTEMPT_POSE_OVERLAY_MAX_INTERPOLATION_SOURCE_GAP_MS
+): List<Pose> {
+    val sortedPoses = poses.sortedBy(Pose::frameTimeMs)
+    if (sortedPoses.size < 2) return sortedPoses
+
+    return buildList {
+        sortedPoses.forEachIndexed { index, pose ->
+            add(pose)
+            val nextPose = sortedPoses.getOrNull(index + 1) ?: return@forEachIndexed
+            val gapMs = nextPose.frameTimeMs - pose.frameTimeMs
+            if (gapMs <= frameIntervalMs || gapMs > maxInterpolationSourceGapMs) {
+                return@forEachIndexed
+            }
+
+            var interpolatedTimeMs = pose.frameTimeMs + frameIntervalMs
+            while (interpolatedTimeMs < nextPose.frameTimeMs) {
+                add(interpolatePose(previous = pose, next = nextPose, frameTimeMs = interpolatedTimeMs))
+                interpolatedTimeMs += frameIntervalMs
+            }
+        }
+    }
+}
+
+private fun interpolatePose(
+    previous: Pose,
+    next: Pose,
+    frameTimeMs: Long
+): Pose {
+    val spanMs = (next.frameTimeMs - previous.frameTimeMs).coerceAtLeast(1L)
+    val ratio = (frameTimeMs - previous.frameTimeMs).toFloat() / spanMs.toFloat()
+
+    return Pose(
+        frameTimeMs = frameTimeMs,
+        landmarks = interpolateLandmarks(previous.landmarks, next.landmarks, ratio),
+        landmarksPx = interpolatePixelPoints(previous.landmarksPx, next.landmarksPx, ratio),
+        worldLandmarksSample = interpolateWorldPoints(
+            previous.worldLandmarksSample,
+            next.worldLandmarksSample,
+            ratio
+        )
+    )
+}
+
+private fun interpolateLandmarks(
+    previous: List<PoseLandmark>,
+    next: List<PoseLandmark>,
+    ratio: Float
+): List<PoseLandmark> {
+    val previousByIndex = previous.associateBy(PoseLandmark::index)
+    val nextByIndex = next.associateBy(PoseLandmark::index)
+    val commonIndices = previousByIndex.keys.intersect(nextByIndex.keys).sorted()
+    if (commonIndices.isEmpty()) {
+        return previous
+    }
+
+    return commonIndices.map { index ->
+        val previousLandmark = requireNotNull(previousByIndex[index])
+        val nextLandmark = requireNotNull(nextByIndex[index])
+        PoseLandmark(
+            index = index,
+            x = lerp(previousLandmark.x, nextLandmark.x, ratio),
+            y = lerp(previousLandmark.y, nextLandmark.y, ratio),
+            z = lerp(previousLandmark.z, nextLandmark.z, ratio),
+            visibility = interpolateNullable(previousLandmark.visibility, nextLandmark.visibility, ratio),
+            presence = interpolateNullable(previousLandmark.presence, nextLandmark.presence, ratio)
+        )
+    }
+}
+
+private fun interpolatePixelPoints(
+    previous: Map<String, PosePixelPoint>,
+    next: Map<String, PosePixelPoint>,
+    ratio: Float
+): Map<String, PosePixelPoint> {
+    val commonKeys = previous.keys.intersect(next.keys)
+    if (commonKeys.isEmpty()) {
+        return previous
+    }
+
+    return commonKeys.associateWith { key ->
+        val previousPoint = requireNotNull(previous[key])
+        val nextPoint = requireNotNull(next[key])
+        PosePixelPoint(
+            x = lerp(previousPoint.x, nextPoint.x, ratio),
+            y = lerp(previousPoint.y, nextPoint.y, ratio)
+        )
+    }
+}
+
+private fun interpolateWorldPoints(
+    previous: Map<String, PoseWorldPoint>,
+    next: Map<String, PoseWorldPoint>,
+    ratio: Float
+): Map<String, PoseWorldPoint> {
+    val commonKeys = previous.keys.intersect(next.keys)
+    if (commonKeys.isEmpty()) {
+        return previous
+    }
+
+    return commonKeys.associateWith { key ->
+        val previousPoint = requireNotNull(previous[key])
+        val nextPoint = requireNotNull(next[key])
+        PoseWorldPoint(
+            x = lerp(previousPoint.x, nextPoint.x, ratio),
+            y = lerp(previousPoint.y, nextPoint.y, ratio),
+            z = lerp(previousPoint.z, nextPoint.z, ratio)
+        )
+    }
+}
+
+private fun interpolateNullable(
+    previous: Float?,
+    next: Float?,
+    ratio: Float
+): Float? {
+    return when {
+        previous != null && next != null -> lerp(previous, next, ratio)
+        previous != null -> previous
+        else -> next
+    }
+}
+
+private fun lerp(start: Float, end: Float, ratio: Float): Float {
+    return start + ((end - start) * ratio.coerceIn(0f, 1f))
 }
 
 private data class IndexedLandmarkObservation(
