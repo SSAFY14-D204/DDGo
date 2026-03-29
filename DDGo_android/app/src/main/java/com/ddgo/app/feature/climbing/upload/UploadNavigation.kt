@@ -753,6 +753,15 @@ fun NavGraphBuilder.uploadGraph(
             )
         }
 
+        uploadComposable(ScreenRoutes.Climbing.Upload.BATCH_AI_JSON_EXPORT) { backStackEntry ->
+            val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
+
+            BatchAiJsonExportScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         uploadComposable(ScreenRoutes.Climbing.Upload.FINAL_ANALYSIS) { backStackEntry ->
             val viewModel = rememberSharedUploadViewModel(navController, backStackEntry)
 

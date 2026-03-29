@@ -2,6 +2,7 @@
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -13,8 +14,11 @@ import com.ddgo.app.core.datastore.UploadRecoveryDataStore
 import com.ddgo.app.core.datastore.UploadRecoveryEntryIntent
 import com.ddgo.app.core.datastore.UploadRecoverySnapshot
 import com.ddgo.app.core.dev.DevOptions
+import com.ddgo.app.data.remote.ai.AiAnalysisRequestDto
 import com.ddgo.app.domain.model.AiAnalysisMode
+import com.ddgo.app.domain.model.AiAnalysisRequestContext
 import com.ddgo.app.domain.model.AiAnalysisResult
+import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.ChallengeOverview
@@ -31,6 +35,8 @@ import com.ddgo.app.domain.model.SavedChallengeHolds
 import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.data.ml.color.HoldColorClassifier
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
+import com.ddgo.app.data.repository.AiAnalysisRequestPayloadBuilder
+import com.ddgo.app.data.repository.DEFAULT_AI_REQUEST_MAX_FRAME_COUNT
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
@@ -67,6 +73,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlin.math.max
 
 /**
@@ -83,6 +91,49 @@ private const val TAG = "UploadViewModel"
 private const val ATTEMPT_HOLD_ALIGNMENT_LOG_PREFIX = "[DDGO_ATTEMPT_HOLD_ALIGN]"
 private const val CHALLENGE_ALREADY_CLOSED_MESSAGE_KO = "이미 종료된 챌린지"
 private const val CHALLENGE_ALREADY_CLOSED_MESSAGE_EN = "Challenge Already Closed"
+private val BatchAiJsonExportJson = Json { prettyPrint = true }
+
+internal enum class BatchAiJsonExportVariant {
+    SAMPLED,
+    RAW
+}
+
+internal data class BatchAiJsonExportSummary(
+    val sampledSuggestedFileName: String,
+    val rawSuggestedFileName: String,
+    val attemptNumber: Int,
+    val playbackUri: String?,
+    val holdCount: Int,
+    val poseFrameCount: Int,
+    val sampledFrameCount: Int? = null,
+    val sampledFrameStep: Int? = null,
+    val rawFrameCount: Int? = null,
+    val rawFrameStep: Int? = null,
+    val frameWidthPx: Int? = null,
+    val frameHeightPx: Int? = null,
+    val analysisMode: AiAnalysisMode,
+    val unavailableReason: String? = null
+) {
+    val canExport: Boolean
+        get() = unavailableReason == null
+
+    fun suggestedFileName(variant: BatchAiJsonExportVariant): String =
+        when (variant) {
+            BatchAiJsonExportVariant.SAMPLED -> sampledSuggestedFileName
+            BatchAiJsonExportVariant.RAW -> rawSuggestedFileName
+        }
+}
+
+private data class BatchAiJsonExportPayload(
+    val summary: BatchAiJsonExportSummary,
+    val requestJson: String
+)
+
+private data class BatchAiJsonExportPayloads(
+    val summary: BatchAiJsonExportSummary,
+    val sampled: BatchAiJsonExportPayload,
+    val raw: BatchAiJsonExportPayload
+)
 
 /**
  * Graph-scoped facade and cross-delegate orchestration owner.
@@ -836,6 +887,196 @@ class UploadViewModel @Inject constructor(
     val currentAttemptDisplayHolds: List<HoldNumbered>
         get() = currentAttemptAlignedSelection?.alignedHolds.orEmpty()
             .ifEmpty { numberedHolds }
+
+    internal val currentAttemptPreferredAiPoseSequence: AiPoseSequence?
+        get() = currentAttemptPrePoseEntry.preferredAiPoseSequence()
+
+    internal suspend fun loadCurrentAttemptBatchAiJsonExportSummary(): BatchAiJsonExportSummary {
+        return buildCurrentAttemptBatchAiJsonExportPayloads()
+            .fold(
+                onSuccess = { it.summary },
+                onFailure = { throwable ->
+                    val alignedSelection = currentAttemptAlignedSelection
+                    BatchAiJsonExportSummary(
+                        sampledSuggestedFileName = buildCurrentAttemptBatchAiJsonFileName(
+                            playbackUri = playbackAttemptUris.getOrNull(currentAttemptIndex),
+                            attemptNumber = currentAttemptIndex + 1,
+                            mode = selectedAiAnalysisMode,
+                            variant = BatchAiJsonExportVariant.SAMPLED
+                        ),
+                        rawSuggestedFileName = buildCurrentAttemptBatchAiJsonFileName(
+                            playbackUri = playbackAttemptUris.getOrNull(currentAttemptIndex),
+                            attemptNumber = currentAttemptIndex + 1,
+                            mode = selectedAiAnalysisMode,
+                            variant = BatchAiJsonExportVariant.RAW
+                        ),
+                        attemptNumber = currentAttemptIndex + 1,
+                        playbackUri = playbackAttemptUris.getOrNull(currentAttemptIndex),
+                        holdCount = currentAttemptDisplayHolds.size,
+                        poseFrameCount = currentAttemptPreferredAiPoseSequence?.frames?.size ?: 0,
+                        frameWidthPx = alignedSelection?.frameWidthPx,
+                        frameHeightPx = alignedSelection?.frameHeightPx,
+                        analysisMode = selectedAiAnalysisMode,
+                        unavailableReason = throwable.message ?: "배치 AI JSON export를 준비할 수 없습니다."
+                    )
+                }
+            )
+    }
+
+    internal suspend fun exportCurrentAttemptBatchAiJson(
+        targetUri: Uri,
+        variant: BatchAiJsonExportVariant
+    ): Result<BatchAiJsonExportSummary> {
+        val payload = buildCurrentAttemptBatchAiJsonExportPayloads()
+            .mapCatching { payloads ->
+                when (variant) {
+                    BatchAiJsonExportVariant.SAMPLED -> payloads.sampled
+                    BatchAiJsonExportVariant.RAW -> payloads.raw
+                }
+            }
+            .getOrElse { throwable ->
+                return Result.failure(throwable)
+            }
+
+        return runCatching {
+            withContext(Dispatchers.IO) {
+                val outputStream = context.contentResolver.openOutputStream(targetUri)
+                    ?: throw IllegalStateException("선택한 경로에 파일을 열 수 없습니다.")
+                outputStream.use { stream ->
+                    stream.writer(Charsets.UTF_8).use { writer ->
+                        writer.write(payload.requestJson)
+                    }
+                }
+                payload.summary
+            }
+        }
+    }
+
+    private suspend fun buildCurrentAttemptBatchAiJsonExportPayloads(): Result<BatchAiJsonExportPayloads> {
+        return runCatching {
+            val attemptNumber = currentAttemptIndex + 1
+            val playbackUri = playbackAttemptUris.getOrNull(currentAttemptIndex)
+                ?: throw IllegalStateException("현재 선택된 시도 영상이 없습니다.")
+            val alignedSelection = currentAttemptAlignedSelection
+                ?: throw IllegalStateException("현재 시도의 정렬된 홀드 정보가 없습니다.")
+            val holds = alignedSelection.alignedHolds.map(HoldNumbered::hold)
+            if (holds.isEmpty()) {
+                throw IllegalStateException("현재 시도의 홀드 정보가 비어 있습니다.")
+            }
+
+            val poseSequence = currentAttemptPreferredAiPoseSequence
+                ?: throw IllegalStateException("현재 시도의 AI pose sequence가 없습니다.")
+            val profile = resolveCurrentBatchAiExportProfile().getOrThrow()
+            val requestContext = AiAnalysisRequestContext(
+                mode = selectedAiAnalysisMode,
+                holds = holds,
+                poseSequence = poseSequence,
+                frameWidthPx = alignedSelection.frameWidthPx,
+                frameHeightPx = alignedSelection.frameHeightPx,
+                heightCm = profile.heightCm,
+                weightKg = profile.weightKg,
+                wingspanCm = profile.wingspanCm,
+                topKCrux = 3,
+                frameStep = 1
+            )
+            val sampledPreparedRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
+                context = requestContext,
+                maxFrameCount = DEFAULT_AI_REQUEST_MAX_FRAME_COUNT
+            )
+            val rawPreparedRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
+                context = requestContext,
+                maxFrameCount = Int.MAX_VALUE
+            )
+            val summary = BatchAiJsonExportSummary(
+                sampledSuggestedFileName = buildCurrentAttemptBatchAiJsonFileName(
+                    playbackUri = playbackUri,
+                    attemptNumber = attemptNumber,
+                    mode = selectedAiAnalysisMode,
+                    variant = BatchAiJsonExportVariant.SAMPLED
+                ),
+                rawSuggestedFileName = buildCurrentAttemptBatchAiJsonFileName(
+                    playbackUri = playbackUri,
+                    attemptNumber = attemptNumber,
+                    mode = selectedAiAnalysisMode,
+                    variant = BatchAiJsonExportVariant.RAW
+                ),
+                attemptNumber = attemptNumber,
+                playbackUri = playbackUri,
+                holdCount = holds.size,
+                poseFrameCount = poseSequence.frames.size,
+                sampledFrameCount = sampledPreparedRequest.frameCount,
+                sampledFrameStep = sampledPreparedRequest.frameStep,
+                rawFrameCount = rawPreparedRequest.frameCount,
+                rawFrameStep = rawPreparedRequest.frameStep,
+                frameWidthPx = alignedSelection.frameWidthPx,
+                frameHeightPx = alignedSelection.frameHeightPx,
+                analysisMode = selectedAiAnalysisMode
+            )
+            BatchAiJsonExportPayloads(
+                summary = summary,
+                sampled = BatchAiJsonExportPayload(
+                    summary = summary,
+                    requestJson = BatchAiJsonExportJson.encodeToString(
+                        serializer = AiAnalysisRequestDto.serializer(),
+                        value = sampledPreparedRequest.request
+                    )
+                ),
+                raw = BatchAiJsonExportPayload(
+                    summary = summary,
+                    requestJson = BatchAiJsonExportJson.encodeToString(
+                        serializer = AiAnalysisRequestDto.serializer(),
+                        value = rawPreparedRequest.request
+                    )
+                )
+            )
+        }
+    }
+
+    private suspend fun resolveCurrentBatchAiExportProfile(): Result<ResolvedBatchAiExportProfile> {
+        val user = getMyInfoUseCase()
+            .getOrElse { throwable ->
+                return Result.failure(throwable)
+            }
+
+        val heightCm = user.heightCm?.takeIf { it > 0f }
+        val wingspanCm = user.wingspanCm?.takeIf { it > 0f }
+        val weightKg = user.weightKg?.takeIf { it > 0f }
+        val resolvedHeightCm = heightCm ?: wingspanCm
+
+        if (resolvedHeightCm == null) {
+            return Result.failure(
+                IllegalStateException("배치 AI JSON export를 위해 프로필 키나 윙스팬 정보가 필요합니다.")
+            )
+        }
+
+        return Result.success(
+            ResolvedBatchAiExportProfile(
+                heightCm = resolvedHeightCm,
+                weightKg = weightKg,
+                wingspanCm = wingspanCm
+            )
+        )
+    }
+
+    private fun buildCurrentAttemptBatchAiJsonFileName(
+        playbackUri: String?,
+        attemptNumber: Int,
+        mode: AiAnalysisMode,
+        variant: BatchAiJsonExportVariant
+    ): String {
+        val baseName = playbackUri
+            ?.substringAfterLast('/')
+            ?.substringAfterLast('\\')
+            ?.substringBeforeLast('.')
+            ?.takeIf { it.isNotBlank() }
+            ?: "attempt_${attemptNumber.toString().padStart(2, '0')}"
+        val sanitizedBaseName = baseName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val suffix = when (variant) {
+            BatchAiJsonExportVariant.SAMPLED -> "sampled"
+            BatchAiJsonExportVariant.RAW -> "raw"
+        }
+        return "ddgo_${sanitizedBaseName}_batch_ai_${mode.name.lowercase()}_${suffix}.json"
+    }
 
     /** 최종 분석 화면에 표시할 평균 도달 홀드 번호 */
     val averageReachedHoldNo: Int
@@ -3472,6 +3713,16 @@ internal fun normalizeVideoRotationDegrees(rotationDegrees: Int): Int {
         90, 180, 270 -> normalized
         else -> 0
     }
+}
+
+private data class ResolvedBatchAiExportProfile(
+    val heightCm: Float,
+    val weightKg: Float?,
+    val wingspanCm: Float?
+)
+
+private fun PrePoseCacheEntry?.preferredAiPoseSequence(): AiPoseSequence? {
+    return this?.filteredAiPoseSequence ?: this?.aiPoseSequence
 }
 
 
