@@ -6,3 +6,9 @@ service_fast_result.json
 service_physics_result.json
 benchmark_service_comparison.json
 fastapi_live_validation.json
+.vendor-py/
+.vendor-py2/
+.wheelhouse/
+.venv-codex/
+.venv-shell/
+tmp/

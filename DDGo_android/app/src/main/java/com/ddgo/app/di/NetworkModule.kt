@@ -2,6 +2,7 @@ package com.ddgo.app.di
 
 import com.ddgo.app.BuildConfig
 import com.ddgo.app.core.network.AuthInterceptor
+import com.ddgo.app.core.network.GzipRequestInterceptor
 import com.ddgo.app.core.network.KakaoLocalAuthInterceptor
 import com.ddgo.app.core.network.TokenAuthenticator
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -66,13 +67,16 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("AiServerOkHttpClient")
-    fun provideAiServerOkHttpClient(): OkHttpClient {
+    fun provideAiServerOkHttpClient(
+        gzipRequestInterceptor: GzipRequestInterceptor
+    ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
             else HttpLoggingInterceptor.Level.NONE
         }
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
+            .addInterceptor(gzipRequestInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .writeTimeout(120, TimeUnit.SECONDS)

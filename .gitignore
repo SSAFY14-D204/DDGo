@@ -491,3 +491,4 @@ obj/
 **/.gradle-home/
 **/.android/
 /DDGo_android/META-INF/
+/tmp/
