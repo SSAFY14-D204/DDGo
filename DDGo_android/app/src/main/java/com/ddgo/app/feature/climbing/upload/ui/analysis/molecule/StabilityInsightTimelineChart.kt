@@ -3,13 +3,19 @@ package com.ddgo.app.feature.climbing.upload.ui.analysis.molecule
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,8 +33,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint
@@ -53,6 +61,7 @@ internal fun StabilityInsightTimelineChart(
     cruxEndFraction: Float?,
     failureFraction: Float?,
     heartRateSeries: List<HeartRatePoint> = emptyList(),
+    onTimeSelected: ((Long) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var progress by remember { mutableFloatStateOf(0f) }
@@ -72,268 +81,327 @@ internal fun StabilityInsightTimelineChart(
         progress = 1f
     }
 
+    val chartHorizontalPadding = 8.dp
+    val axisLabelWidth = 18.dp
+    val axisLabelEndPadding = 0.dp
+
     Column(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(232.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                if (data.size < 2) return@Canvas
+            Column(
+                modifier = Modifier
+                    .width(axisLabelWidth)
+                    .height(232.dp)
+                    .padding(top = 16.dp, bottom = 16.dp, end = axisLabelEndPadding),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = "안정",
+                    color = AnalysisMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Visible
+                )
 
-                val topPadding = 20.dp.toPx()
-                val bottomPadding = 12.dp.toPx()
-                val horizontalPadding = 8.dp.toPx()
-                val chartWidth = size.width - horizontalPadding * 2f
-                val chartHeight = size.height - topPadding - bottomPadding
-                val visibleCount = (data.size * animatedProgress).roundToInt().coerceIn(2, data.size)
+                Text(
+                    text = "불안",
+                    color = AnalysisMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Visible
+                )
+            }
 
-                fun xOfFraction(fraction: Float): Float =
-                    horizontalPadding + chartWidth * fraction.coerceIn(0f, 1f)
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(232.dp)
+                    .then(
+                        if (onTimeSelected != null && durationMs > 0L) {
+                            Modifier.pointerInput(durationMs, onTimeSelected) {
+                                detectTapGestures { offset ->
+                                    val horizontalPaddingPx = chartHorizontalPadding.toPx()
+                                    val chartWidthPx = (size.width - horizontalPaddingPx * 2f)
+                                        .coerceAtLeast(1f)
+                                    val fraction = ((offset.x - horizontalPaddingPx) / chartWidthPx)
+                                        .coerceIn(0f, 1f)
+                                    onTimeSelected(
+                                        (durationMs.toFloat() * fraction).roundToInt().toLong()
+                                    )
+                                }
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    if (data.size < 2) return@Canvas
 
-                fun xOf(index: Int): Float =
-                    horizontalPadding + index.toFloat() / (data.size - 1).toFloat() * chartWidth
+                    val topPadding = 20.dp.toPx()
+                    val bottomPadding = 12.dp.toPx()
+                    val horizontalPadding = chartHorizontalPadding.toPx()
+                    val chartWidth = size.width - horizontalPadding * 2f
+                    val chartHeight = size.height - topPadding - bottomPadding
+                    val visibleCount =
+                        (data.size * animatedProgress).roundToInt().coerceIn(2, data.size)
 
-                fun yOf(value: Float): Float =
-                    topPadding + chartHeight * (1f - value.coerceIn(0f, 1f))
+                    fun xOfFraction(fraction: Float): Float =
+                        horizontalPadding + chartWidth * fraction.coerceIn(0f, 1f)
 
-                cruxStartFraction?.let { start ->
-                    cruxEndFraction?.let { end ->
-                        if (end > start) {
-                            drawRoundRect(
-                                color = Color(0xFFFFB357).copy(alpha = 0.14f),
-                                topLeft = Offset(xOfFraction(start), topPadding),
-                                size = Size(
-                                    width = xOfFraction(end) - xOfFraction(start),
-                                    height = chartHeight
-                                ),
-                                cornerRadius = CornerRadius(18.dp.toPx(), 18.dp.toPx())
+                    fun xOf(index: Int): Float =
+                        horizontalPadding +
+                            index.toFloat() / (data.size - 1).toFloat() * chartWidth
+
+                    fun yOf(value: Float): Float =
+                        topPadding + chartHeight * (1f - value.coerceIn(0f, 1f))
+
+                    cruxStartFraction?.let { start ->
+                        cruxEndFraction?.let { end ->
+                            if (end > start) {
+                                drawRoundRect(
+                                    color = Color(0xFFFFB357).copy(alpha = 0.14f),
+                                    topLeft = Offset(xOfFraction(start), topPadding),
+                                    size = Size(
+                                        width = xOfFraction(end) - xOfFraction(start),
+                                        height = chartHeight
+                                    ),
+                                    cornerRadius = CornerRadius(18.dp.toPx(), 18.dp.toPx())
+                                )
+                            }
+                        }
+                    }
+
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.03f),
+                        topLeft = Offset(horizontalPadding, topPadding),
+                        size = Size(chartWidth, chartHeight),
+                        cornerRadius = CornerRadius(20.dp.toPx(), 20.dp.toPx())
+                    )
+
+                    repeat(2) { index ->
+                        val y = topPadding + chartHeight * ((index + 1) / 3f)
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.07f),
+                            start = Offset(horizontalPadding, y),
+                            end = Offset(size.width - horizontalPadding, y),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+
+                    val fillPath = Path().apply {
+                        moveTo(xOf(0), yOf(data[0]))
+                        for (index in 1 until visibleCount) {
+                            lineTo(xOf(index), yOf(data[index]))
+                        }
+                        lineTo(xOf(visibleCount - 1), size.height - bottomPadding)
+                        lineTo(xOf(0), size.height - bottomPadding)
+                        close()
+                    }
+
+                    drawPath(
+                        path = fillPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                AnalysisPrimary.copy(alpha = 0.22f),
+                                AnalysisPrimary.copy(alpha = 0.03f)
+                            ),
+                            startY = topPadding,
+                            endY = size.height - bottomPadding
+                        )
+                    )
+
+                    val linePath = Path().apply {
+                        moveTo(xOf(0), yOf(data[0]))
+                        for (index in 1 until visibleCount) {
+                            val previousX = xOf(index - 1)
+                            val previousY = yOf(data[index - 1])
+                            val currentX = xOf(index)
+                            val currentY = yOf(data[index])
+                            val controlX = (previousX + currentX) / 2f
+                            cubicTo(controlX, previousY, controlX, currentY, currentX, currentY)
+                        }
+                    }
+
+                    drawPath(
+                        path = linePath,
+                        brush = AnalysisBrandAccentBrush,
+                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                    )
+
+                    if (heartRateAxisState != null && heartRateAxisState.points.size >= 2) {
+                        val visibleDurationMs =
+                            (durationMs.toFloat() * animatedProgress).roundToInt().toLong()
+                                .coerceAtLeast(1L)
+                        val visibleHeartRatePoints = heartRateAxisState.points
+                            .filter { it.timestampMs <= visibleDurationMs }
+                            .ifEmpty { heartRateAxisState.points.take(1) }
+
+                        if (visibleHeartRatePoints.size >= 2) {
+                            fun heartRateXOf(point: HeartRatePoint): Float {
+                                val fraction = if (durationMs > 0L) {
+                                    point.timestampMs.toFloat() / durationMs.toFloat()
+                                } else {
+                                    0f
+                                }
+                                return xOfFraction(fraction)
+                            }
+
+                            fun heartRateYOf(bpm: Int): Float {
+                                val range = (heartRateAxisState.maxBpm - heartRateAxisState.minBpm)
+                                    .coerceAtLeast(1)
+                                    .toFloat()
+                                val fraction =
+                                    ((bpm - heartRateAxisState.minBpm).toFloat() / range)
+                                        .coerceIn(0f, 1f)
+                                return topPadding + chartHeight * (1f - fraction)
+                            }
+
+                            val heartRatePath = Path().apply {
+                                moveTo(
+                                    heartRateXOf(visibleHeartRatePoints.first()),
+                                    heartRateYOf(visibleHeartRatePoints.first().bpm)
+                                )
+                                for (index in 1 until visibleHeartRatePoints.size) {
+                                    val previousPoint = visibleHeartRatePoints[index - 1]
+                                    val currentPoint = visibleHeartRatePoints[index]
+                                    val previousX = heartRateXOf(previousPoint)
+                                    val previousY = heartRateYOf(previousPoint.bpm)
+                                    val currentX = heartRateXOf(currentPoint)
+                                    val currentY = heartRateYOf(currentPoint.bpm)
+                                    val controlX = (previousX + currentX) / 2f
+                                    cubicTo(controlX, previousY, controlX, currentY, currentX, currentY)
+                                }
+                            }
+
+                            drawPath(
+                                path = heartRatePath,
+                                color = AnalysisFailure,
+                                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                             )
                         }
                     }
-                }
 
-                drawRoundRect(
-                    color = Color.White.copy(alpha = 0.03f),
-                    topLeft = Offset(horizontalPadding, topPadding),
-                    size = Size(chartWidth, chartHeight),
-                    cornerRadius = CornerRadius(20.dp.toPx(), 20.dp.toPx())
-                )
-
-                repeat(2) { index ->
-                    val y = topPadding + chartHeight * ((index + 1) / 3f)
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.07f),
-                        start = Offset(horizontalPadding, y),
-                        end = Offset(size.width - horizontalPadding, y),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                }
-
-                val fillPath = Path().apply {
-                    moveTo(xOf(0), yOf(data[0]))
-                    for (index in 1 until visibleCount) {
-                        lineTo(xOf(index), yOf(data[index]))
-                    }
-                    lineTo(xOf(visibleCount - 1), size.height - bottomPadding)
-                    lineTo(xOf(0), size.height - bottomPadding)
-                    close()
-                }
-
-                drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            AnalysisPrimary.copy(alpha = 0.22f),
-                            AnalysisPrimary.copy(alpha = 0.03f)
-                        ),
-                        startY = topPadding,
-                        endY = size.height - bottomPadding
-                    )
-                )
-
-                val linePath = Path().apply {
-                    moveTo(xOf(0), yOf(data[0]))
-                    for (index in 1 until visibleCount) {
-                        val previousX = xOf(index - 1)
-                        val previousY = yOf(data[index - 1])
-                        val currentX = xOf(index)
-                        val currentY = yOf(data[index])
-                        val controlX = (previousX + currentX) / 2f
-                        cubicTo(controlX, previousY, controlX, currentY, currentX, currentY)
-                    }
-                }
-
-                drawPath(
-                    path = linePath,
-                    brush = AnalysisBrandAccentBrush,
-                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
-                )
-
-                if (heartRateAxisState != null && heartRateAxisState.points.size >= 2) {
-                    val visibleDurationMs =
-                        (durationMs.toFloat() * animatedProgress).roundToInt().toLong().coerceAtLeast(1L)
-                    val visibleHeartRatePoints = heartRateAxisState.points
-                        .filter { it.timestampMs <= visibleDurationMs }
-                        .ifEmpty { heartRateAxisState.points.take(1) }
-
-                    if (visibleHeartRatePoints.size >= 2) {
-                        fun heartRateXOf(point: HeartRatePoint): Float {
-                            val fraction = if (durationMs > 0L) {
-                                point.timestampMs.toFloat() / durationMs.toFloat()
-                            } else {
-                                0f
-                            }
-                            return xOfFraction(fraction)
-                        }
-
-                        fun heartRateYOf(bpm: Int): Float {
-                            val range = (heartRateAxisState.maxBpm - heartRateAxisState.minBpm)
-                                .coerceAtLeast(1)
-                                .toFloat()
-                            val fraction =
-                                ((bpm - heartRateAxisState.minBpm).toFloat() / range).coerceIn(0f, 1f)
-                            return topPadding + chartHeight * (1f - fraction)
-                        }
-
-                        val heartRatePath = Path().apply {
-                            moveTo(
-                                heartRateXOf(visibleHeartRatePoints.first()),
-                                heartRateYOf(visibleHeartRatePoints.first().bpm)
-                            )
-                            for (index in 1 until visibleHeartRatePoints.size) {
-                                val previousPoint = visibleHeartRatePoints[index - 1]
-                                val currentPoint = visibleHeartRatePoints[index]
-                                val previousX = heartRateXOf(previousPoint)
-                                val previousY = heartRateYOf(previousPoint.bpm)
-                                val currentX = heartRateXOf(currentPoint)
-                                val currentY = heartRateYOf(currentPoint.bpm)
-                                val controlX = (previousX + currentX) / 2f
-                                cubicTo(controlX, previousY, controlX, currentY, currentX, currentY)
-                            }
-                        }
-
-                        drawPath(
-                            path = heartRatePath,
+                    dangerFractions.forEach { fraction ->
+                        val value = valueAtFraction(data, fraction)
+                        val center = Offset(xOfFraction(fraction), yOf(value))
+                        drawLine(
+                            color = AnalysisFailure.copy(alpha = 0.25f),
+                            start = Offset(center.x, center.y),
+                            end = Offset(center.x, size.height - bottomPadding),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                        drawCircle(
+                            color = AnalysisFailure.copy(alpha = 0.22f),
+                            radius = 10.dp.toPx(),
+                            center = center
+                        )
+                        drawCircle(
                             color = AnalysisFailure,
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                            radius = 5.dp.toPx(),
+                            center = center
+                        )
+                    }
+
+                    failureFraction?.let { fraction ->
+                        val x = xOfFraction(fraction)
+                        drawLine(
+                            color = AnalysisFailure.copy(alpha = 0.85f),
+                            start = Offset(x, topPadding),
+                            end = Offset(x, topPadding + chartHeight),
+                            strokeWidth = 2.dp.toPx()
                         )
                     }
                 }
+                if (cruxStartFraction != null && cruxEndFraction != null) {
+                    val estimatedCruxLabelWidth = 42.dp
+                    val chartWidth = (maxWidth - chartHorizontalPadding * 2).coerceAtLeast(0.dp)
+                    val centerFraction = ((cruxStartFraction + cruxEndFraction) / 2f).coerceIn(0f, 1f)
+                    val unclampedOffset =
+                        chartHorizontalPadding + (chartWidth * centerFraction) - (estimatedCruxLabelWidth / 2)
+                    val maxOffset =
+                        (maxWidth - chartHorizontalPadding - estimatedCruxLabelWidth)
+                            .coerceAtLeast(chartHorizontalPadding)
+                    val clampedOffset = unclampedOffset.coerceIn(chartHorizontalPadding, maxOffset)
 
-                dangerFractions.forEach { fraction ->
-                    val value = valueAtFraction(data, fraction)
-                    val center = Offset(xOfFraction(fraction), yOf(value))
-                    drawLine(
-                        color = AnalysisFailure.copy(alpha = 0.25f),
-                        start = Offset(center.x, center.y),
-                        end = Offset(center.x, size.height - bottomPadding),
-                        strokeWidth = 1.dp.toPx()
+                    Text(
+                        text = "크럭스",
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset(x = clampedOffset, y = (-6).dp),
+                        color = Color(0xFFFFC271),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                    drawCircle(
-                        color = AnalysisFailure.copy(alpha = 0.22f),
-                        radius = 10.dp.toPx(),
-                        center = center
-                    )
-                    drawCircle(
+                }
+
+                heartRateAxisState?.let { axis ->
+                    Text(
+                        text = "${axis.maxBpm} bpm",
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = 12.dp, top = 28.dp),
                         color = AnalysisFailure,
-                        radius = 5.dp.toPx(),
-                        center = center
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Text(
+                        text = "${axis.minBpm} bpm",
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 12.dp, bottom = 16.dp),
+                        color = AnalysisFailure.copy(alpha = 0.82f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
-
-                failureFraction?.let { fraction ->
-                    val x = xOfFraction(fraction)
-                    drawLine(
-                        color = AnalysisFailure.copy(alpha = 0.85f),
-                        start = Offset(x, topPadding),
-                        end = Offset(x, topPadding + chartHeight),
-                        strokeWidth = 2.dp.toPx()
-                    )
-                }
-            }
-
-            Text(
-                text = "안정",
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 12.dp, top = 8.dp),
-                color = AnalysisText,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Text(
-                text = "흔들림",
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 16.dp),
-                color = AnalysisMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            if (cruxStartFraction != null && cruxEndFraction != null) {
-                Text(
-                    text = "크럭스",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 12.dp, top = 8.dp),
-                    color = Color(0xFFFFC271),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            heartRateAxisState?.let { axis ->
-                Text(
-                    text = "${axis.maxBpm} bpm",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 12.dp, top = 28.dp),
-                    color = AnalysisFailure,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Text(
-                    text = "${axis.minBpm} bpm",
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 16.dp),
-                    color = AnalysisFailure.copy(alpha = 0.82f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
             }
         }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, top = 0.dp, end = 8.dp),
+                .padding(top = 0.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ChartTimeLabel(
-                text = formatTimeLabel(0L),
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Start
-            )
-            Text(
-                text = formatTimeLabel(durationMs / 2),
-                modifier = Modifier.weight(1f),
-                color = AnalysisMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center
-            )
-            ChartTimeLabel(
-                text = formatTimeLabel(durationMs),
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.End
-            )
+            Spacer(modifier = Modifier.width(axisLabelWidth))
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ChartTimeLabel(
+                    text = formatTimeLabel(0L),
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Start
+                )
+                Text(
+                    text = formatTimeLabel(durationMs / 2),
+                    modifier = Modifier.weight(1f),
+                    color = AnalysisMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+                ChartTimeLabel(
+                    text = formatTimeLabel(durationMs),
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.End
+                )
         }
     }
+
+}
 }
 
 @Composable

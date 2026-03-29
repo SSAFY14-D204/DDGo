@@ -3,6 +3,7 @@ package com.ddgo.app.feature.climbing.upload.ui.analysis.organism
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,11 +12,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -24,37 +29,36 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
 import com.ddgo.app.domain.model.AnalysisPoint
 import com.ddgo.app.domain.model.Hold
 import com.ddgo.app.domain.model.Pose
 import com.ddgo.app.domain.usecase.HoldNumbered
+import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
 import com.ddgo.app.feature.climbing.upload.AnalysisText
 import com.ddgo.app.feature.climbing.upload.AttemptPoseOverlayCache
 import com.ddgo.app.feature.climbing.upload.HoldOverviewPreview
+import com.ddgo.app.feature.climbing.upload.PoseOverlay
 import com.ddgo.app.feature.climbing.upload.PoseScrubberColors
 import com.ddgo.app.feature.climbing.upload.PoseScrubberMarker
-import com.ddgo.app.feature.climbing.upload.PoseOverlay
 import com.ddgo.app.feature.climbing.upload.RawVerticalCropBounds
 import com.ddgo.app.feature.climbing.upload.holdColorToUiColor
 import com.ddgo.app.feature.climbing.upload.resolveActiveAnalysisCardIndex
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.HeaderChip
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.buildHeaderChipTone
 import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptPhysicsLimbHeatmapAndComOverlay
 import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSection
 import com.ddgo.app.feature.climbing.upload.ui.shared.organism.AttemptVideoSectionState
@@ -115,107 +119,89 @@ internal fun AttemptPreviewHero(
 @Composable
 internal fun AttemptPreviewHeroMetaSection(
     state: AttemptPreviewHeroState,
+    selectedAttempt: Int = state.selectedAttempt,
+    attemptSuccessStates: List<Boolean> = emptyList(),
+    onAttemptSelected: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    var showHoldOverviewDialog by remember(state.previewBitmap, state.previewHolds) {
-        mutableStateOf(false)
-    }
     val difficultyChipTone = remember(state.difficultyLabel) {
         buildHeaderChipTone(holdColorToUiColor(state.difficultyLabel))
     }
     val holdChipTone = remember(state.holdColorLabel) {
         buildHeaderChipTone(holdColorToUiColor(state.holdColorLabel))
     }
-    val statusChipTone = remember(state.isSuccess) {
-        buildHeaderChipTone(
-            if (state.isSuccess) Color(0xFF39C66D) else Color(0xFFFF5E63)
-        )
-    }
 
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = state.gymName.ifBlank { "클라이밍장 미지정" },
-                    color = AnalysisText,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = state.displayDate,
-                    color = AnalysisMuted,
-                    fontSize = 13.sp
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    HeaderChip(
-                        text = "${state.selectedAttempt}차 ${if (state.isSuccess) "성공" else "실패"}",
-                        background = statusChipTone.background,
-                        contentColor = Color.White,
-                        borderColor = statusChipTone.border
-                    )
-                    if (state.difficultyLabel.isNotBlank()) {
-                        HeaderChip(
-                            text = "난이도 ${state.difficultyLabel}",
-                            background = difficultyChipTone.background,
-                            contentColor = Color.White,
-                            borderColor = difficultyChipTone.border
-                        )
-                    }
-                    if (state.holdColorLabel.isNotBlank()) {
-                        HeaderChip(
-                            text = "홀드 ${state.holdColorLabel}",
-                            background = holdChipTone.background,
-                            contentColor = Color.White,
-                            borderColor = holdChipTone.border
-                        )
-                    }
-                }
-            }
+            Text(
+                text = state.gymName.ifBlank { "클라이밍 기록" },
+                color = AnalysisText,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
 
-            Box(
-                modifier = Modifier
-                    .size(width = 116.dp, height = 96.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable(
-                        enabled = state.previewBitmap != null || state.previewHolds.isNotEmpty()
-                    ) { showHoldOverviewDialog = true }
+            Row(
+                modifier = Modifier.padding(start = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                HoldOverviewPreview(
-                    bitmap = state.previewBitmap,
-                    holds = state.previewHolds,
-                    modifier = Modifier.fillMaxSize(),
-                    showZoomBadge = true
-                )
+                if (state.difficultyLabel.isNotBlank()) {
+                    HeaderChip(
+                        text = "난이도 ${state.difficultyLabel}",
+                        background = difficultyChipTone.background,
+                        contentColor = Color.White,
+                        borderColor = difficultyChipTone.border,
+                        cornerRadius = 7.dp,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 3.dp,
+                        fontSize = 10.sp
+                    )
+                }
+                if (state.holdColorLabel.isNotBlank()) {
+                    HeaderChip(
+                        text = "홀드 ${state.holdColorLabel}",
+                        background = holdChipTone.background,
+                        contentColor = Color.White,
+                        borderColor = holdChipTone.border,
+                        cornerRadius = 7.dp,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 3.dp,
+                        fontSize = 10.sp
+                    )
+                }
             }
         }
 
-        if (showHoldOverviewDialog) {
-            Dialog(onDismissRequest = { showHoldOverviewDialog = false }) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = state.displayDate,
+                color = AnalysisMuted,
+                fontSize = 13.sp
+            )
+
+            if (attemptSuccessStates.isNotEmpty()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xFF17181C))
-                        .padding(16.dp)
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterEnd
                 ) {
-                    HoldOverviewPreview(
-                        bitmap = state.previewBitmap,
-                        holds = state.previewHolds,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(360.dp)
+                    AttemptMetaSelectorRow(
+                        selectedAttempt = selectedAttempt,
+                        attemptSuccessStates = attemptSuccessStates,
+                        onAttemptSelected = onAttemptSelected
                     )
                 }
             }
@@ -224,9 +210,79 @@ internal fun AttemptPreviewHeroMetaSection(
 }
 
 @Composable
+private fun AttemptMetaSelectorRow(
+    selectedAttempt: Int,
+    attemptSuccessStates: List<Boolean>,
+    onAttemptSelected: ((Int) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+
+    Row(
+        modifier = modifier.horizontalScroll(scrollState),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        attemptSuccessStates.forEachIndexed { index, isSuccess ->
+            val attemptNo = index + 1
+            AttemptMetaSelectorChip(
+                attemptNo = attemptNo,
+                isSelected = attemptNo == selectedAttempt,
+                isSuccess = isSuccess,
+                onClick = onAttemptSelected?.let { callback ->
+                    { callback(attemptNo) }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttemptMetaSelectorChip(
+    attemptNo: Int,
+    isSelected: Boolean,
+    isSuccess: Boolean,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val chipTone = remember(isSuccess) {
+        buildHeaderChipTone(
+            if (isSuccess) {
+                Color(0xFF39C66D)
+            } else {
+                Color(0xFFFF6B71)
+            }
+        )
+    }
+    val isEnabled = onClick != null && !isSelected
+
+    Box(
+        modifier = modifier
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = isEnabled, onClick = { onClick?.invoke() })
+            .padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        HeaderChip(
+            text = "${attemptNo}차",
+            background = if (isSelected) chipTone.background else AnalysisCardColor,
+            contentColor = if (isSelected) Color.White else AnalysisText.copy(alpha = 0.86f),
+            borderColor = chipTone.border,
+            cornerRadius = 7.dp,
+            horizontalPadding = 8.dp,
+            verticalPadding = 3.dp,
+            fontSize = 10.sp
+        )
+    }
+}
+
+@Composable
 internal fun AttemptPreviewHeroVideoSection(
     state: AttemptPreviewHeroState,
     onShareClick: (() -> Unit)? = null,
+    isExpanded: Boolean = true,
+    onToggleExpanded: (() -> Unit)? = null,
     viewportHeightOverride: Dp? = null,
     controlAreaHeight: Dp = AttemptPreviewControlHeight,
     onContainerHeightChanged: (Int) -> Unit = {},
@@ -296,6 +352,7 @@ internal fun AttemptPreviewHeroVideoSection(
                     textColor = Color.White.copy(alpha = 0.82f)
                 ),
                 controlSurfaceColor = Color(0xFF101114),
+                showScrubberTimeLabels = false,
                 hiddenLandmarkIndices = AttemptPreviewHiddenFaceLandmarks,
                 hiddenPointIndices = AttemptPreviewHiddenFingerTipPoints,
                 pointRadiusScale = AttemptPreviewPointRadiusScale,
@@ -342,23 +399,43 @@ internal fun AttemptPreviewHeroVideoSection(
                 }
             )
 
-            if (onShareClick != null) {
-                Box(
+            if (onShareClick != null || onToggleExpanded != null) {
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 72.dp)
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF101114).copy(alpha = 0.82f))
-                        .clickable(onClick = onShareClick),
-                    contentAlignment = Alignment.Center
+                        .padding(end = 16.dp, bottom = 72.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Share,
-                        contentDescription = "시도 분석 결과 공유",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    if (onShareClick != null) {
+                        HeroActionButton(
+                            onClick = onShareClick
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Share,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    if (onToggleExpanded != null) {
+                        HeroActionButton(
+                            onClick = onToggleExpanded
+                        ) {
+                            Icon(
+                                imageVector = if (isExpanded) {
+                                    Icons.Filled.FullscreenExit
+                                } else {
+                                    Icons.Filled.Fullscreen
+                                },
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         } else {
@@ -373,23 +450,21 @@ internal fun AttemptPreviewHeroVideoSection(
     }
 }
 
-private data class HeaderChipTone(
-    val background: Color,
-    val content: Color,
-    val border: Color
-)
-
-private fun buildHeaderChipTone(baseColor: Color): HeaderChipTone {
-    val contentColor = when {
-        baseColor.luminance() < 0.12f -> lerp(baseColor, Color.White, 0.72f)
-        baseColor.luminance() < 0.22f -> lerp(baseColor, Color.White, 0.52f)
-        baseColor.luminance() > 0.84f -> lerp(baseColor, Color.Black, 0.28f)
-        else -> baseColor
+@Composable
+private fun HeroActionButton(
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF101114).copy(alpha = 0.82f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(modifier = Modifier.size(20.dp)) {
+            content()
+        }
     }
-
-    return HeaderChipTone(
-        background = baseColor.copy(alpha = 0.32f),
-        content = contentColor,
-        border = baseColor.copy(alpha = 0.62f)
-    )
 }
