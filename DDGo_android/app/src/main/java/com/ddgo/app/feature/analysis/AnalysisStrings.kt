@@ -13,7 +13,7 @@ internal object AnalysisStrings {
 
     const val TotalChallengesLabel = "챌린지"
     const val TotalAttemptsLabel = "시도"
-    const val AverageStabilityLabel = "평균 안정률"
+    const val AverageStabilityLabel = "평균 안정성"
 
     const val ChallengeAttemptCountLabel = "시도 수"
     const val ChallengeStabilityLabel = "평균 안정률"

@@ -187,9 +187,9 @@ private fun AttemptTimelineCard(
                         }
                     ),
                     contentDescription = if (point.kind == AnalysisPointKind.CLIMB_END) {
-                        "등반 완료"
+                        "핵심 장면 종료"
                     } else {
-                        "등반 시작"
+                        "핵심 장면 시작"
                     },
                     modifier = Modifier.size(width = 20.dp, height = 24.dp)
                 )
@@ -222,16 +222,6 @@ private fun AttemptTimelineCard(
             lineHeight = 20.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
-        )
-
-        Text(
-            text = when (point.kind) {
-                AnalysisPointKind.PERSON_OBSERVATION_START -> "시작 지점 보기"
-                AnalysisPointKind.CLIMB_END -> "완료 지점 보기"
-                else -> "핵심 보기"
-            },
-            color = AnalysisMuted,
-            fontSize = 12.sp
         )
     }
 }

@@ -287,7 +287,7 @@ internal fun AttemptAnalysisTabRow(
 }
 
 @Composable
-private fun AttemptResultOverviewCard(
+private fun LegacyAttemptResultOverviewCard(
     currentSummary: FinalAnalysisAttemptSummary,
     reachedHoldsText: String,
     reachedHoldsSuffix: String?,
@@ -364,7 +364,7 @@ private fun AttemptResultOverviewCard(
 }
 
 @Composable
-private fun AttemptOverviewMetricBlock(
+private fun LegacyAttemptOverviewMetricBlock(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
@@ -468,7 +468,7 @@ private fun AttemptOverviewMetricBlock(
 }
 
 @Composable
-private fun AttemptOverallScoreCard(
+private fun LegacyAttemptOverallScoreCard(
     title: String? = null,
     score: Int?,
     isSuccess: Boolean,
@@ -572,6 +572,335 @@ private fun AttemptOverallScoreCard(
 }
 
 @Composable
+private fun AttemptResultOverviewCard(
+    currentSummary: FinalAnalysisAttemptSummary,
+    reachedHoldsText: String,
+    reachedHoldsSuffix: String?,
+    modifier: Modifier = Modifier
+) {
+    val reachedHoldValue = if (reachedHoldsText == FinalAnalysisUnknownMetricText) {
+        FinalAnalysisUnknownMetricText
+    } else {
+        "${reachedHoldsText}번"
+    }
+    val reachedHoldTrailingValue = if (
+        reachedHoldsText == FinalAnalysisUnknownMetricText ||
+        reachedHoldsSuffix.isNullOrBlank()
+    ) {
+        null
+    } else {
+        "/${reachedHoldsSuffix.removePrefix("/")}번"
+    }
+    val cruxValue = currentSummary.primaryCruxHoldNo
+        ?.let { "${it}번 홀드" }
+        ?: FinalAnalysisUnknownMetricText
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(AnalysisPanelColor)
+            .padding(horizontal = 18.dp, vertical = 18.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text(
+                text = "이번 시도 결과",
+                color = AnalysisText,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                )
+            )
+
+            AttemptOverallScoreCard(
+                score = currentSummary.overallMovementScore,
+                isSuccess = currentSummary.isSuccess
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(AnalysisCardColor)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AttemptOverviewMetricBlock(
+                    label = "문제 풀이 여부",
+                    value = if (currentSummary.isSuccess) "성공" else "실패",
+                    accentColor = if (currentSummary.isSuccess) AnalysisPrimary else AnalysisFailure,
+                    modifier = Modifier.weight(1f)
+                )
+
+                AttemptOverviewMetricDivider()
+
+                AttemptOverviewMetricBlock(
+                    label = "도달 홀드",
+                    value = reachedHoldValue,
+                    trailingValue = reachedHoldTrailingValue,
+                    accentColor = if (currentSummary.isSuccess) AnalysisPrimary else AnalysisFailure,
+                    modifier = Modifier.weight(1f)
+                )
+
+                AttemptOverviewMetricDivider()
+
+                AttemptOverviewMetricBlock(
+                    label = "대표 크럭스",
+                    value = cruxValue,
+                    accentColor = AnalysisText,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttemptOverviewMetricBlock(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    trailingValue: String? = null,
+    accentColor: Color = AnalysisText,
+    contentSpacing: Dp = 10.dp
+) {
+    val useBrandAccent = hasAnalysisGradientAccent(accentColor)
+    val primaryValueFontSize = when {
+        value.length >= 7 -> 24.sp
+        value.length >= 5 -> 26.sp
+        else -> 28.sp
+    }
+
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(contentSpacing)
+    ) {
+        Text(
+            text = label,
+            color = AnalysisText,
+            fontSize = 12.sp
+        )
+
+        if (trailingValue != null) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                if (useBrandAccent) {
+                    AnalysisAccentText(
+                        text = value,
+                        accentColor = accentColor,
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontSize = primaryValueFontSize,
+                            lineHeight = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                } else {
+                    Text(
+                        text = value,
+                        color = accentColor,
+                        fontSize = primaryValueFontSize,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 32.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+                Text(
+                    text = trailingValue,
+                    color = AnalysisMuted,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 22.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
+            }
+        } else {
+            if (useBrandAccent) {
+                AnalysisAccentText(
+                    text = value,
+                    accentColor = accentColor,
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontSize = primaryValueFontSize,
+                        lineHeight = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    text = value,
+                    color = accentColor,
+                    fontSize = primaryValueFontSize,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 32.sp,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttemptOverallScoreCard(
+    title: String? = null,
+    score: Int?,
+    isSuccess: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = if (isSuccess) scoreAccentColor(score) else AnalysisFailure
+    val safeScore = score?.coerceIn(0, 100)
+    val useBrandAccent = hasAnalysisGradientAccent(accentColor)
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            title?.let {
+                Text(
+                    text = it,
+                    color = AnalysisText,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            } ?: Text(
+                text = "종합 점수",
+                color = AnalysisText,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                )
+            )
+            if (useBrandAccent) {
+                AnalysisAccentText(
+                    text = safeScore?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                    accentColor = accentColor,
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontSize = 34.sp,
+                        lineHeight = 40.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            } else {
+                Text(
+                    text = safeScore?.let { "${it}점" } ?: FinalAnalysisUnknownMetricText,
+                    color = accentColor,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .then(
+                        if (useBrandAccent) {
+                            Modifier.background(brush = requireNotNull(analysisSurfaceBrushFor(accentColor)))
+                        } else {
+                            Modifier.background(accentColor.copy(alpha = 0.14f))
+                        }
+                    )
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = buildScoreGradeLabel(safeScore),
+                    color = AnalysisText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .width(100.dp)
+                .height(100.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (useBrandAccent) {
+                AnalysisAccentCircularProgressIndicator(
+                    progress = (safeScore ?: 0) / 100f,
+                    accentColor = accentColor,
+                    modifier = Modifier
+                        .width(92.dp)
+                        .height(92.dp),
+                    trackColor = AnalysisCardColor,
+                    strokeWidth = 8.dp
+                )
+            } else {
+                CircularProgressIndicator(
+                    progress = { (safeScore ?: 0) / 100f },
+                    modifier = Modifier
+                        .width(92.dp)
+                        .height(92.dp),
+                    color = accentColor,
+                    trackColor = AnalysisCardColor,
+                    strokeWidth = 8.dp
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                if (useBrandAccent) {
+                    AnalysisAccentText(
+                        text = safeScore?.toString() ?: "--",
+                        accentColor = accentColor,
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontSize = 28.sp,
+                            lineHeight = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                } else {
+                    Text(
+                        text = safeScore?.toString() ?: "--",
+                        color = accentColor,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = "100점 만점",
+                    color = AnalysisMuted,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttemptOverviewMetricDivider() {
+    Box(
+        modifier = Modifier
+            .padding(vertical = 6.dp)
+            .fillMaxHeight()
+            .width(1.dp)
+            .background(AnalysisCardColor)
+    )
+}
+
+@Composable
 private fun AttemptScoreSection(
     retentionScore: Int?,
     recoveryScore: Int?,
@@ -586,7 +915,7 @@ private fun AttemptScoreSection(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
-        AttemptScoreRowState("안정성 유지율", retentionScore, retentionCaption),
+            AttemptScoreRowState("안성성 유지", retentionScore, retentionCaption),
         AttemptScoreRowState("안정성 회복력", recoveryScore, recoveryCaption),
         AttemptScoreRowState("하체 주도성", lowerBodyDriveScore, lowerBodyCaption)
     )
@@ -679,7 +1008,7 @@ private fun AttemptMetricScoreSection(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
-        AttemptScoreRowState("안정성 유지율", retentionScore, retentionCaption),
+            AttemptScoreRowState("안성성 유지", retentionScore, retentionCaption),
         AttemptScoreRowState("안정성 회복력", recoveryScore, recoveryCaption),
         AttemptScoreRowState("하체 주도성", lowerBodyDriveScore, lowerBodyCaption)
     )

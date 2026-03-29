@@ -77,9 +77,9 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
-            .callTimeout(150, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.MINUTES)
+            .writeTimeout(10, TimeUnit.MINUTES)
+            .callTimeout(10, TimeUnit.MINUTES)
             .build()
     }
 
@@ -97,9 +97,9 @@ object NetworkModule {
             .addInterceptor(loggingInterceptor)
             .addInterceptor(gzipRequestInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
-            .callTimeout(150, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.MINUTES)
+            .writeTimeout(10, TimeUnit.MINUTES)
+            .callTimeout(10, TimeUnit.MINUTES)
             .build()
     }
 

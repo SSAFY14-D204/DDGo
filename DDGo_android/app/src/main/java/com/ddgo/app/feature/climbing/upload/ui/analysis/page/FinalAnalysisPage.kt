@@ -210,31 +210,9 @@ internal fun FinalAnalysisPage(
         containerColor = AnalysisBgColor
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            AttemptPreviewHeroMetaSection(
-                state = state.heroState,
-                selectedAttempt = state.selectedAttempt,
-                attemptSuccessStates = state.attemptSuccessStates,
-                onAttemptSelected = onAttemptSelected,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(AnalysisBgColor)
-                    .padding(top = 4.dp)
-            )
-
             AttemptPreviewHeroVideoSection(
                 state = state.heroState,
                 onShareClick = onShareAction,
-                isExpanded = isHeroExpanded,
-                onToggleExpanded = {
-                    val maxHeightPx = expandedPlayerHeightPx.toFloat()
-                    if (maxHeightPx <= 0f) return@AttemptPreviewHeroVideoSection
-
-                    playerHeightPx = if (isHeroExpanded) {
-                        minPlayerHeightPx.coerceAtLeast(0f)
-                    } else {
-                        maxHeightPx
-                    }
-                },
                 viewportHeightOverride = viewportHeightOverride,
                 controlAreaHeight = controlAreaHeight,
                 onContainerHeightChanged = { measuredHeightPx ->
@@ -256,10 +234,16 @@ internal fun FinalAnalysisPage(
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 item {
+                    AttemptPreviewHeroMetaSection(
+                        state = state.heroState,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+                item {
                     AttemptAnalysisTimelineRow(
                         points = state.timelinePoints,
                         selectedTimeMs = selectedTimelinePointMs.takeIf { it >= 0L },
-                        modifier = Modifier.padding(top = 14.dp),
+                        modifier = Modifier.padding(top = 8.dp),
                         onPointSelected = { point ->
                             selectedTimelinePointMs = point.timeMs
                             onAnalysisPointSelected(
@@ -271,19 +255,14 @@ internal fun FinalAnalysisPage(
                         }
                     )
                 }
-                stickyHeader {
-                    Column(
+                item {
+                    AttemptAnalysisTabRow(
+                        selectedTabIndex = selectedTabIndex,
+                        onTabSelected = { selectedTabIndex = it },
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AnalysisBgColor)
-                            .padding(top = 8.dp)
-                    ) {
-                        AttemptAnalysisTabRow(
-                            selectedTabIndex = selectedTabIndex,
-                            onTabSelected = { selectedTabIndex = it },
-                            modifier = Modifier.padding(horizontal = 22.dp)
-                        )
-                    }
+                            .padding(top = 12.dp)
+                            .padding(horizontal = 22.dp)
+                    )
                 }
                 item {
                     AttemptAnalysisContentSection(
