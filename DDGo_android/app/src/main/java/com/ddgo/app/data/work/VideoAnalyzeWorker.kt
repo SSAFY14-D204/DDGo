@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.ddgo.app.core.config.AiAnalysisVariant
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PoseEstimator
@@ -21,6 +22,7 @@ import wseemann.media.FFmpegMediaMetadataRetriever
 class VideoAnalyzeWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted workerParams: WorkerParameters,
+    private val aiAnalysisVariant: AiAnalysisVariant,
     private val poseEstimator: PoseEstimator,
     private val personDetector: PersonDetector,
     private val holdDetector: HoldDetector,
@@ -45,7 +47,10 @@ class VideoAnalyzeWorker @AssistedInject constructor(
 
             // Step 3: 추출된 프레임에서 홀드 탐지 및 포즈 추정 (병렬 가능)
             val holds = bestFrameBitmap?.let { holdDetector.detectFromFrame(it) } ?: emptyList()
-            val poses = poseEstimator.estimateFromVideo(videoUri)
+            val poses = poseEstimator.estimateFromVideo(
+                videoUri = videoUri,
+                analysisFpsLimit = aiAnalysisVariant.defaultVideoPoseAnalysisFps
+            )
 
             bestFrameBitmap?.recycle()
 

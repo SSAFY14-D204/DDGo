@@ -17,10 +17,11 @@ from app.services.mujoco_complete.realtime_session_store import (
     RealtimeSessionStateError,
 )
 
-router = APIRouter(prefix="/mujoco-complete", tags=["mujoco-complete"])
+batch_router = APIRouter(prefix="/mujoco-complete", tags=["mujoco-complete"])
+realtime_router = APIRouter(prefix="/mujoco-complete", tags=["mujoco-complete"])
 
 
-@router.post("/analyze/fast", response_model=dict[str, Any], summary="Run fast MuJoCo crux analysis")
+@batch_router.post("/analyze/fast", response_model=dict[str, Any], summary="Run fast MuJoCo crux analysis")
 def analyze_fast(request: MujocoCompleteRequest) -> dict[str, Any]:
     try:
         return mujoco_complete_service.analyze_fast(
@@ -36,7 +37,7 @@ def analyze_fast(request: MujocoCompleteRequest) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@router.post("/analyze/physics", response_model=dict[str, Any], summary="Run physics MuJoCo crux analysis")
+@batch_router.post("/analyze/physics", response_model=dict[str, Any], summary="Run physics MuJoCo crux analysis")
 def analyze_physics(request: MujocoCompleteRequest) -> dict[str, Any]:
     try:
         return mujoco_complete_service.analyze_physics(
@@ -52,7 +53,7 @@ def analyze_physics(request: MujocoCompleteRequest) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@router.post(
+@realtime_router.post(
     "/session/start",
     response_model=MujocoRealtimeSessionAckResponse,
     status_code=status.HTTP_201_CREATED,
@@ -74,7 +75,7 @@ def start_realtime_session(request: MujocoRealtimeSessionStartRequest) -> Mujoco
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@router.post(
+@realtime_router.post(
     "/session/{session_id}/pose-chunks",
     response_model=MujocoRealtimeSessionAckResponse,
     summary="Append realtime pose frames",
@@ -97,7 +98,7 @@ def append_realtime_pose_chunks(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@router.post(
+@realtime_router.post(
     "/session/{session_id}/context",
     response_model=MujocoRealtimeSessionAckResponse,
     summary="Attach hold-selection context to a realtime session",
@@ -120,7 +121,7 @@ def attach_realtime_context(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@router.post(
+@realtime_router.post(
     "/session/{session_id}/finalize",
     response_model=dict[str, Any],
     summary="Finalize a realtime session with the existing batch pipeline",
@@ -136,7 +137,7 @@ def finalize_realtime_session(session_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
-@router.delete(
+@realtime_router.delete(
     "/session/{session_id}",
     response_model=MujocoRealtimeSessionAckResponse,
     summary="Abort and delete a realtime session",
@@ -149,3 +150,7 @@ def delete_realtime_session(session_id: str) -> MujocoRealtimeSessionAckResponse
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - defensive API guard
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+# Backward-compatible alias for code paths that still import the old single-router symbol.
+router = batch_router

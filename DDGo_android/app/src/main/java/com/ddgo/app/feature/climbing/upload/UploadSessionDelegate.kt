@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ddgo.app.core.config.AiAnalysisVariant
 import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.poseanalysis.toPoseFrame
 import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
@@ -64,6 +65,7 @@ internal interface UploadSessionCallbacks {
  */
 internal class UploadSessionDelegate(
     private val context: Context,
+    private val aiAnalysisVariant: AiAnalysisVariant,
     private val prePoseVideoAnalysisProvider: PrePoseVideoAnalysisProvider,
     private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase,
     private val detectStallSegmentFromPoseUseCase: DetectStallSegmentFromPoseUseCase,
@@ -907,7 +909,7 @@ internal class UploadSessionDelegate(
                         withTimeout(UploadPrePoseTimeoutConfig.analysisTimeoutMs) {
                             prePoseVideoAnalysisProvider.analyze(
                                 videoUri = task.playbackUri,
-                                analysisFpsLimit = UPLOAD_PREPOSE_ANALYSIS_FPS
+                                analysisFpsLimit = aiAnalysisVariant.uploadPrePoseAnalysisFps
                             )
                         }
                     )

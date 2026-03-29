@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.climbing.upload
 
 import android.graphics.Bitmap
+import com.ddgo.app.core.config.AiAnalysisVariant
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
@@ -115,6 +116,7 @@ class UploadSubmissionDelegateTest {
     @Test
     fun `attempt success resolution requires both hands on end hold`() {
         val delegate = UploadSubmissionDelegate(
+            aiAnalysisVariant = AiAnalysisVariant.V1,
             saveChallengeHoldsUseCase = mockk<SaveChallengeHoldsUseCase>(relaxed = true),
             uploadAttemptVideoUseCase = mockk<UploadAttemptVideoUseCase>(relaxed = true),
             endAttemptUseCase = mockk<EndAttemptUseCase>(relaxed = true),
@@ -150,6 +152,7 @@ class UploadSubmissionDelegateTest {
     @Test
     fun `attempt result preparation proceeds even when loading message already exists from hold alignment`() = runTest {
         val delegate = UploadSubmissionDelegate(
+            aiAnalysisVariant = AiAnalysisVariant.V1,
             saveChallengeHoldsUseCase = mockk<SaveChallengeHoldsUseCase>(relaxed = true),
             uploadAttemptVideoUseCase = mockk<UploadAttemptVideoUseCase>(relaxed = true),
             endAttemptUseCase = mockk<EndAttemptUseCase>(relaxed = true),

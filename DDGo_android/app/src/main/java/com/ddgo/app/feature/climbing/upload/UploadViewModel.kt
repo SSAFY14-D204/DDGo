@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ddgo.app.core.config.AiAnalysisVariant
 import com.ddgo.app.core.datastore.UploadRecoveryDataStore
 import com.ddgo.app.core.datastore.UploadRecoveryEntryIntent
 import com.ddgo.app.core.datastore.UploadRecoverySnapshot
@@ -36,7 +37,6 @@ import com.ddgo.app.domain.model.UploadedAttemptVideo
 import com.ddgo.app.data.ml.color.HoldColorClassifier
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
 import com.ddgo.app.data.repository.AiAnalysisRequestPayloadBuilder
-import com.ddgo.app.data.repository.DEFAULT_AI_REQUEST_MAX_FRAME_COUNT
 import com.ddgo.app.domain.repository.HoldDetector
 import com.ddgo.app.domain.repository.PersonDetector
 import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
@@ -148,6 +148,7 @@ class UploadViewModel @Inject constructor(
     private val holdDetector: HoldDetector,
     private val poseEstimator: PoseEstimator,
     private val prePoseVideoAnalysisProvider: PrePoseVideoAnalysisProvider,
+    private val aiAnalysisVariant: AiAnalysisVariant,
     private val holdColorClassifier: HoldColorClassifier,
     private val searchNearbyClimbingGymsUseCase: SearchNearbyClimbingGymsUseCase,
     private val resolveGymUseCase: ResolveGymUseCase,
@@ -184,6 +185,7 @@ class UploadViewModel @Inject constructor(
     )
     private val sessionDelegate = UploadSessionDelegate(
         context = context,
+        aiAnalysisVariant = aiAnalysisVariant,
         prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
         analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase,
         detectStallSegmentFromPoseUseCase = detectStallSegmentFromPoseUseCase,
@@ -192,6 +194,7 @@ class UploadViewModel @Inject constructor(
         scope = viewModelScope
     )
     private val submissionDelegate = UploadSubmissionDelegate(
+        aiAnalysisVariant = aiAnalysisVariant,
         saveChallengeHoldsUseCase = saveChallengeHoldsUseCase,
         uploadAttemptVideoUseCase = uploadAttemptVideoUseCase,
         endAttemptUseCase = endAttemptUseCase,
@@ -981,7 +984,7 @@ class UploadViewModel @Inject constructor(
             )
             val sampledPreparedRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
                 context = requestContext,
-                maxFrameCount = DEFAULT_AI_REQUEST_MAX_FRAME_COUNT
+                maxFrameCount = aiAnalysisVariant.primaryRequestMaxFrameCount
             )
             val rawPreparedRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
                 context = requestContext,

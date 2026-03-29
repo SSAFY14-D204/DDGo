@@ -1,6 +1,7 @@
 package com.ddgo.app.data.repository
 
 import android.util.Log
+import com.ddgo.app.core.config.AiAnalysisVariant
 import com.ddgo.app.data.remote.ai.AiAnalysisApi
 import com.ddgo.app.data.remote.ai.AiAnalysisRequestDto
 import com.ddgo.app.data.remote.ai.AiAnalysisResponseDto
@@ -14,18 +15,21 @@ import com.ddgo.app.domain.model.AiCruxResult
 import com.ddgo.app.domain.model.AiCruxSegment
 import com.ddgo.app.domain.repository.AiAnalysisRepository
 import javax.inject.Inject
+import javax.inject.Named
 import kotlinx.serialization.json.JsonObject
 import retrofit2.HttpException
 
 class AiAnalysisRepositoryImpl @Inject constructor(
-    private val aiAnalysisApi: AiAnalysisApi
+    @Named("AiAnalysisPlainApi") private val aiAnalysisApi: AiAnalysisApi,
+    @Named("AiAnalysisGzipApi") private val aiAnalysisGzipApi: AiAnalysisApi,
+    private val aiAnalysisVariant: AiAnalysisVariant
 ) : AiAnalysisRepository {
 
     override suspend fun analyze(context: AiAnalysisRequestContext): Result<AiAnalysisResult> {
         return runCatching {
             val primaryRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
                 context = context,
-                maxFrameCount = PRIMARY_AI_REQUEST_MAX_FRAME_COUNT
+                maxFrameCount = aiAnalysisVariant.primaryRequestMaxFrameCount
             )
             val response = try {
                 executeRequest(context.mode, primaryRequest.request)
@@ -36,7 +40,7 @@ class AiAnalysisRepositoryImpl @Inject constructor(
 
                 val retryRequest = AiAnalysisRequestPayloadBuilder.buildPreparedRequest(
                     context = context,
-                    maxFrameCount = RETRY_AI_REQUEST_MAX_FRAME_COUNT
+                    maxFrameCount = aiAnalysisVariant.retryRequestMaxFrameCount
                 )
                 if (retryRequest.frameCount >= primaryRequest.frameCount) {
                     throw throwable
@@ -60,9 +64,15 @@ class AiAnalysisRepositoryImpl @Inject constructor(
         mode: AiAnalysisMode,
         request: AiAnalysisRequestDto
     ): AiAnalysisResponseDto {
+        val endpointPath = aiAnalysisVariant.analyzePath(mode)
+        val api = if (aiAnalysisVariant.useGzipRequest) {
+            aiAnalysisGzipApi
+        } else {
+            aiAnalysisApi
+        }
         return when (mode) {
-            AiAnalysisMode.FAST -> aiAnalysisApi.analyzeFast(request)
-            AiAnalysisMode.PHYSICS -> aiAnalysisApi.analyzePhysics(request)
+            AiAnalysisMode.FAST -> api.analyzeFast(endpointPath, request)
+            AiAnalysisMode.PHYSICS -> api.analyzePhysics(endpointPath, request)
         }
     }
 

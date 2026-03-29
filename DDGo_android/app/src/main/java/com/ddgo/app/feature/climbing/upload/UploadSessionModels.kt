@@ -14,8 +14,6 @@ import com.ddgo.app.domain.usecase.OverallHoldReachSummary
 import com.ddgo.app.domain.usecase.PolygonHoldContactDebugResult
 import com.ddgo.app.domain.usecase.StallSegmentAnnotation
 
-internal const val UPLOAD_PREPOSE_ANALYSIS_FPS = 30
-
 data class ManagedAttemptVideo(
     val sourceUri: String,
     val playbackUri: String,

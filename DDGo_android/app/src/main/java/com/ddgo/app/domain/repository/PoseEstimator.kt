@@ -20,7 +20,10 @@ interface PoseEstimator {
      * @param videoUri 로컬 비디오 파일 URI (file:// 권장)
      * @return 프레임별 Pose 리스트 (시간순 정렬)
      */
-    suspend fun estimateFromVideo(videoUri: String): List<Pose>
+    suspend fun estimateFromVideo(
+        videoUri: String,
+        analysisFpsLimit: Int = 10
+    ): List<Pose>
 
     /**
      * 단일 Bitmap 프레임에서 포즈 랜드마크를 실시간 추출합니다.

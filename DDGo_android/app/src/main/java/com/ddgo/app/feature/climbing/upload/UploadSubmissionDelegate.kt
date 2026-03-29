@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ddgo.app.core.config.AiAnalysisVariant
 import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.toPoseSequenceDto
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
@@ -95,6 +96,7 @@ internal interface UploadSubmissionCallbacks {
  * retention and cleanup continue to use a single source of truth.
  */
 internal class UploadSubmissionDelegate(
+    private val aiAnalysisVariant: AiAnalysisVariant,
     private val saveChallengeHoldsUseCase: SaveChallengeHoldsUseCase,
     private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase,
     private val endAttemptUseCase: EndAttemptUseCase,
@@ -2390,7 +2392,7 @@ internal class UploadSubmissionDelegate(
             heightCm = profile.heightCm,
             weightKg = profile.weightKg,
             wingspanCm = profile.wingspanCm,
-            analysisFpsLimit = UPLOAD_PREPOSE_ANALYSIS_FPS,
+            analysisFpsLimit = aiAnalysisVariant.uploadPrePoseAnalysisFps,
             cachedPoseSequence = cachedPoseSequence,
             frameStep = DEFAULT_AI_REQUEST_FRAME_STEP
         )
