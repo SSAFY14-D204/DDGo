@@ -19,12 +19,10 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.ddgo.app.BuildConfig
 import com.ddgo.app.core.datastore.AuthSessionEvent
-import com.ddgo.app.core.ui.components.DevNavigationOverlay
 import com.ddgo.app.feature.auth.authGraph
 import com.ddgo.app.feature.auth.AuthSuccessDestination
 import com.ddgo.app.feature.debug.debugGraph
@@ -41,9 +39,6 @@ fun NavGraph(
     val navController: NavHostController = rememberNavController()
     val appSessionViewModel: AppSessionViewModel = hiltViewModel()
     var showSessionExpiredDialog by rememberSaveable { mutableStateOf(false) }
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry?.destination?.route.orEmpty()
-    val shouldShowDevOverlay = !currentRoute.startsWith(ScreenRoutes.Onboarding.route)
 
     LaunchedEffect(appSessionViewModel) {
         appSessionViewModel.authSessionEvent.collectLatest { event ->
@@ -203,10 +198,6 @@ fun NavGraph(
             )
 
             debugGraph(navController = navController)
-        }
-
-        if (shouldShowDevOverlay) {
-            DevNavigationOverlay(navController = navController)
         }
 
         if (showSessionExpiredDialog) {

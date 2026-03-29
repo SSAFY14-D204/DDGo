@@ -138,7 +138,7 @@ internal fun AttemptAnalysisContentSection(
             )
 
         ChartPanel(
-            title = "안전성 점수 그래프",
+            title = "안정성 그래프",
             subtitle = ""
         ) {
             StabilityInsightTimelineChart(
@@ -915,7 +915,7 @@ private fun AttemptScoreSection(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
-            AttemptScoreRowState("안성성 유지", retentionScore, retentionCaption),
+        AttemptScoreRowState("안정성 유지", retentionScore, retentionCaption),
         AttemptScoreRowState("안정성 회복력", recoveryScore, recoveryCaption),
         AttemptScoreRowState("하체 주도성", lowerBodyDriveScore, lowerBodyCaption)
     )
@@ -1008,7 +1008,7 @@ private fun AttemptMetricScoreSection(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
-            AttemptScoreRowState("안성성 유지", retentionScore, retentionCaption),
+        AttemptScoreRowState("안정성 유지", retentionScore, retentionCaption),
         AttemptScoreRowState("안정성 회복력", recoveryScore, recoveryCaption),
         AttemptScoreRowState("하체 주도성", lowerBodyDriveScore, lowerBodyCaption)
     )
