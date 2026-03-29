@@ -50,7 +50,6 @@ internal fun AttemptBodyLoadMapCard(
     loadFocusLabel: String?,
     topJointLoads: List<FinalAnalysisJointLoadSummary>,
     loadFocusValue: String,
-    loadFocusCaption: String,
     loadFocusAccentColor: Color,
     modifier: Modifier = Modifier
 ) {
@@ -85,7 +84,6 @@ internal fun AttemptBodyLoadMapCard(
 
             BodyLoadFocusInset(
                 value = loadFocusValue,
-                caption = loadFocusCaption,
                 accentColor = loadFocusAccentColor
             )
 
@@ -286,7 +284,6 @@ private fun BodyLoadCenterLabel(
 @Composable
 private fun BodyLoadFocusInset(
     value: String,
-    caption: String,
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
@@ -322,12 +319,6 @@ private fun BodyLoadFocusInset(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
-            )
-            Text(
-                text = caption,
-                color = AnalysisMuted,
-                fontSize = 12.sp,
-                lineHeight = 18.sp
             )
         }
     }

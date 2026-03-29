@@ -188,7 +188,6 @@ internal fun AttemptAnalysisContentSection(
                 loadFocusLabel = currentSummary.loadFocusLabel,
                 topJointLoads = currentSummary.topJointLoads,
                 loadFocusValue = contributionInsight.loadFocusValue,
-                loadFocusCaption = contributionInsight.loadFocusCaption,
                 loadFocusAccentColor = contributionInsight.loadFocusAccentColor
             )
 
