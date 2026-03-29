@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.runtime.MutableState
+import com.ddgo.app.core.config.AiAnalysisVariant
+import com.ddgo.app.core.datastore.UploadRecoveryDataStore
 import com.ddgo.app.data.ml.color.HoldColorClassifier
 import com.ddgo.app.domain.model.AiLandmark3D
 import com.ddgo.app.domain.model.AiAnalysisMode
@@ -40,6 +42,7 @@ import com.ddgo.app.domain.usecase.AnalyzeAttemptWithAiUseCase
 import com.ddgo.app.domain.usecase.AnalyzeHandPeakAndEndUseCase
 import com.ddgo.app.domain.usecase.CloseChallengeUseCase
 import com.ddgo.app.domain.usecase.CreateChallengeUseCase
+import com.ddgo.app.domain.usecase.GetChallengesUseCase
 import com.ddgo.app.domain.usecase.DetectStallSegmentFromPoseUseCase
 import com.ddgo.app.domain.usecase.DetectWallArrivalTimeUseCase
 import com.ddgo.app.domain.usecase.DetectStablePersonObservationUseCase
@@ -2385,6 +2388,8 @@ class UploadViewModelTest {
         holdColorClassifier: HoldColorClassifier = HoldColorClassifier()
     ): UploadViewModel {
         val getMyInfoUseCase = mockk<GetMyInfoUseCase>()
+        val uploadRecoveryDataStore = mockk<UploadRecoveryDataStore>(relaxed = true)
+        val getChallengesUseCase = GetChallengesUseCase(challengeRepository)
         coEvery {
             challengeRepository.saveChallengeHolds(any(), any())
         } answers {
@@ -2446,6 +2451,7 @@ class UploadViewModelTest {
             holdDetector = holdDetector,
             poseEstimator = poseEstimator,
             prePoseVideoAnalysisProvider = prePoseVideoAnalysisProvider,
+            aiAnalysisVariant = AiAnalysisVariant.V1,
             holdColorClassifier = holdColorClassifier,
             searchNearbyClimbingGymsUseCase = SearchNearbyClimbingGymsUseCase(gymRepository),
             resolveGymUseCase = ResolveGymUseCase(gymRepository),
@@ -2458,7 +2464,9 @@ class UploadViewModelTest {
             detectStallSegmentFromPoseUseCase = detectStallSegmentFromPoseUseCase,
             detectWallArrivalTimeUseCase = detectWallArrivalTimeUseCase,
             detectStablePersonObservationUseCase = DetectStablePersonObservationUseCase(),
+            uploadRecoveryDataStore = uploadRecoveryDataStore,
             getMyInfoUseCase = getMyInfoUseCase,
+            getChallengesUseCase = getChallengesUseCase,
             analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase
         )
     }

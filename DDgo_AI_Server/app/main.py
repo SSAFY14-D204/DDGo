@@ -7,6 +7,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.mujoco_complete import batch_router
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.gzip_request_middleware import GzipRequestMiddleware
@@ -37,6 +38,7 @@ app.add_middleware(
 app.add_middleware(GzipRequestMiddleware)
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(batch_router, prefix="/api/v2")
 
 
 @app.get("/health", tags=["health"], summary="서버 상태 확인")

@@ -91,9 +91,15 @@ class PoseEstimatorImpl @Inject constructor(
             }
         }
 
-    override suspend fun estimateFromVideo(videoUri: String) = withContext(Dispatchers.IO) {
+    override suspend fun estimateFromVideo(
+        videoUri: String,
+        analysisFpsLimit: Int
+    ) = withContext(Dispatchers.IO) {
         try {
-            sequentialPoseVideoAnalyzer(videoUri = videoUri)
+            sequentialPoseVideoAnalyzer(
+                videoUri = videoUri,
+                analysisFpsLimit = analysisFpsLimit
+            )
                 .also { Log.d(TAG, "estimateFromVideo completed: ${it.size} poses") }
         } catch (e: Exception) {
             Log.e(TAG, "estimateFromVideo failed.", e)

@@ -23,7 +23,7 @@ class AnalyzeAttemptWithAiUseCase @Inject constructor(
         heightCm: Float,
         weightKg: Float?,
         wingspanCm: Float?,
-        analysisFpsLimit: Int = 30,
+        analysisFpsLimit: Int = 10,
         cachedPoseSequence: AiPoseSequence? = null,
         topKCrux: Int = 3,
         frameStep: Int = 1

@@ -2,16 +2,19 @@ package com.ddgo.app.data.remote.ai
 
 import retrofit2.http.Body
 import retrofit2.http.POST
+import retrofit2.http.Url
 
 interface AiAnalysisApi {
 
-    @POST("api/v1/mujoco-complete/analyze/fast")
+    @POST
     suspend fun analyzeFast(
+        @Url url: String,
         @Body request: AiAnalysisRequestDto
     ): AiAnalysisResponseDto
 
-    @POST("api/v1/mujoco-complete/analyze/physics")
+    @POST
     suspend fun analyzePhysics(
+        @Url url: String,
         @Body request: AiAnalysisRequestDto
     ): AiAnalysisResponseDto
 }

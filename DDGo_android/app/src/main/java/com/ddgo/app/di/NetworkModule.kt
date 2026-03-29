@@ -1,6 +1,8 @@
 package com.ddgo.app.di
 
 import com.ddgo.app.BuildConfig
+import com.ddgo.app.core.config.AiAnalysisVariant
+import com.ddgo.app.core.config.AiAnalysisVariantConfig
 import com.ddgo.app.core.network.AuthInterceptor
 import com.ddgo.app.core.network.GzipRequestInterceptor
 import com.ddgo.app.core.network.KakaoLocalAuthInterceptor
@@ -66,8 +68,25 @@ object NetworkModule {
     // ──────────────────────────────────────────────────────────────
     @Provides
     @Singleton
-    @Named("AiServerOkHttpClient")
-    fun provideAiServerOkHttpClient(
+    @Named("AiServerPlainOkHttpClient")
+    fun provideAiServerPlainOkHttpClient(): OkHttpClient {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
+            else HttpLoggingInterceptor.Level.NONE
+        }
+        return OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .callTimeout(150, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    @Named("AiServerGzipOkHttpClient")
+    fun provideAiServerGzipOkHttpClient(
         gzipRequestInterceptor: GzipRequestInterceptor
     ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
@@ -115,9 +134,23 @@ object NetworkModule {
     // ──────────────────────────────────────────────────────────────
     @Provides
     @Singleton
-    @Named("AiServerRetrofit")
-    fun provideAiServerRetrofit(
-        @Named("AiServerOkHttpClient") okHttpClient: OkHttpClient,
+    @Named("AiServerPlainRetrofit")
+    fun provideAiServerPlainRetrofit(
+        @Named("AiServerPlainOkHttpClient") okHttpClient: OkHttpClient,
+        json: Json
+    ): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(BuildConfig.AI_SERVER_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    @Named("AiServerGzipRetrofit")
+    fun provideAiServerGzipRetrofit(
+        @Named("AiServerGzipOkHttpClient") okHttpClient: OkHttpClient,
         json: Json
     ): Retrofit {
         return Retrofit.Builder()
@@ -204,10 +237,26 @@ object NetworkModule {
      */
     @Provides
     @Singleton
+    @Named("AiAnalysisPlainApi")
     fun provideAiAnalysisApi(
-        @Named("AiServerRetrofit") retrofit: Retrofit
+        @Named("AiServerPlainRetrofit") retrofit: Retrofit
     ): com.ddgo.app.data.remote.ai.AiAnalysisApi {
         return retrofit.create(com.ddgo.app.data.remote.ai.AiAnalysisApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("AiAnalysisGzipApi")
+    fun provideAiAnalysisGzipApi(
+        @Named("AiServerGzipRetrofit") retrofit: Retrofit
+    ): com.ddgo.app.data.remote.ai.AiAnalysisApi {
+        return retrofit.create(com.ddgo.app.data.remote.ai.AiAnalysisApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAiAnalysisVariant(): AiAnalysisVariant {
+        return AiAnalysisVariantConfig.current
     }
 
     /**
