@@ -879,7 +879,7 @@ private fun ChallengeScoreSection(
 ) {
     val items = listOf(
         ChallengeScoreRowState(
-            title = "평균 안정성 유지율",
+            title = "종합 안정성 유지",
             score = summary.averageInsideSupportRatio,
             caption = when {
                 summary.averageInsideSupportRatio == null -> "집계할 안정성 데이터가 아직 부족해요."
@@ -930,7 +930,6 @@ private fun ChallengeScoreSection(
 
             ChallengeLoadFocusInfoCard(
                 value = summary.aggregateLoadFocusValue,
-                caption = summary.aggregateLoadFocusCaption,
                 accentColor = loadFocusAccentColor(summary.aggregateLoadFocusValue)
             )
         }
@@ -1010,7 +1009,6 @@ private fun ChallengeScoreRow(
 @Composable
 private fun ChallengeLoadFocusInfoCard(
     value: String,
-    caption: String,
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
@@ -1046,14 +1044,6 @@ private fun ChallengeLoadFocusInfoCard(
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = caption,
-                color = AnalysisMuted,
-                fontSize = 12.sp,
-                lineHeight = 18.sp,
-                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }

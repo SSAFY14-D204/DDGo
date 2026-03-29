@@ -168,7 +168,7 @@ private fun GrowthVisualBoard(
             ) {
                 CircularGrowthGauge(
                     score = summary.stabilityScore,
-                    title = "평균 안정률",
+                    title = "평균 안정성",
                     valueLabel = "${(summary.stabilityScore * 100f).toInt()}점"
                 )
 

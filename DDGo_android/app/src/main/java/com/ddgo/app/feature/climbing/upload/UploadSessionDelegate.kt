@@ -33,13 +33,13 @@ import kotlinx.coroutines.withContext
 import wseemann.media.FFmpegMediaMetadataRetriever
 
 internal object UploadPrePoseTimeoutConfig {
-    var analysisTimeoutMs: Long = 60_000L
-    var awaitTimeoutMs: Long = 60_000L
+    var analysisTimeoutMs: Long = 600_000L
+    var awaitTimeoutMs: Long = 600_000L
     var pollIntervalMs: Long = 100L
 
     fun reset() {
-        analysisTimeoutMs = 60_000L
-        awaitTimeoutMs = 60_000L
+        analysisTimeoutMs = 600_000L
+        awaitTimeoutMs = 600_000L
         pollIntervalMs = 100L
     }
 }
