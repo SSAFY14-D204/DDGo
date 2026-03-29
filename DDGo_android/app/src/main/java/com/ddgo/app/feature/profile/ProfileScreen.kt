@@ -51,6 +51,7 @@ import com.ddgo.app.feature.profile.style.ProfilePalette
  */
 @Composable
 fun ProfileScreen(
+    rootResetNonce: Int = 0,
     onNavigateToAuth: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
@@ -72,6 +73,14 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+
+    LaunchedEffect(rootResetNonce) {
+        if (rootResetNonce == 0) return@LaunchedEffect
+        if (uiState.isLoggingOut || uiState.isDeletingAccount) return@LaunchedEffect
+
+        confirmationAction = null
+        viewModel.resetToRoot()
     }
 
     uiState.nicknameEditor?.let { editorState ->

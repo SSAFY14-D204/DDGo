@@ -200,6 +200,15 @@ class ProfileViewModel @Inject constructor(
         updateState { it.closePasswordEditor() }
     }
 
+    fun resetToRoot() {
+        resetNicknameAvailabilityState()
+        updateState { state ->
+            state.closeNicknameEditor()
+                .closeBodyProfileEditor()
+                .closePasswordEditor()
+        }
+    }
+
     fun updateCurrentPasswordInput(input: String) {
         updatePasswordInput { editor -> editor.copy(currentPasswordInput = input) }
         refreshPasswordFeedbacks()

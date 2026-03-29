@@ -38,6 +38,7 @@ import com.ddgo.app.feature.analysis.style.AnalysisPalette
  */
 @Composable
 fun AnalysisScreen(
+    rootResetNonce: Int = 0,
     externalChallengeId: Long? = null,
     onExternalChallengeHandled: () -> Unit = {},
     viewModel: AnalysisViewModel = hiltViewModel()
@@ -51,6 +52,11 @@ fun AnalysisScreen(
         if (viewModel.openChallengeDetailIfAvailable(challengeId)) {
             onExternalChallengeHandled()
         }
+    }
+
+    LaunchedEffect(rootResetNonce) {
+        if (rootResetNonce == 0) return@LaunchedEffect
+        viewModel.resetToRoot()
     }
 
     when {

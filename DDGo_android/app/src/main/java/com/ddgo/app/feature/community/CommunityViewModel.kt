@@ -239,6 +239,27 @@ class CommunityViewModel @Inject constructor(
         }
     }
 
+    fun resetToRoot() {
+        val state = _uiState.value
+        if (state.composeState.isPreparingAnalysisShare || state.composeState.isSubmitting) {
+            return
+        }
+
+        _uiState.update {
+            it.withClearedCommentDraft().copy(
+                destination = CommunityDestination.Feed,
+                detail = null,
+                comments = emptyList(),
+                isLoadingDetail = false,
+                detailError = null,
+                composeState = CommunityComposeState(),
+                isChallengeSheetVisible = false,
+                isLoadingChallengeReferences = false,
+                challengeReferences = emptyList()
+            )
+        }
+    }
+
     fun updateComposeTitle(value: String) {
         if (_uiState.value.composeState.isSubmitting) return
         _uiState.update {

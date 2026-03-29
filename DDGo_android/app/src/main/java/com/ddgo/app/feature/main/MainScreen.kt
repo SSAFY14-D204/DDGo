@@ -60,7 +60,13 @@ fun MainScreen(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
     var lastActiveTab by rememberSaveable { mutableIntStateOf(MainTab.CALENDAR) }
+    var analysisRootResetNonce by remember { mutableIntStateOf(0) }
+    var communityRootResetNonce by remember { mutableIntStateOf(0) }
+    var profileRootResetNonce by remember { mutableIntStateOf(0) }
     var analysisTargetChallengeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingAnalysisShareRequestState by remember {
+        mutableStateOf<PendingCommunityComposeRequest?>(null)
+    }
     var pendingClimbingDestination by remember {
         mutableStateOf<PendingClimbingDestination?>(null)
     }
@@ -106,7 +112,11 @@ fun MainScreen(
     }
 
     LaunchedEffect(pendingAnalysisShareRequest?.requestId) {
-        if (pendingAnalysisShareRequest == null) return@LaunchedEffect
+        pendingAnalysisShareRequestState = pendingAnalysisShareRequest
+    }
+
+    LaunchedEffect(pendingAnalysisShareRequestState?.requestId) {
+        if (pendingAnalysisShareRequestState == null) return@LaunchedEffect
         lastActiveTab = MainTab.COMMUNITY
         selectedTab = MainTab.COMMUNITY
     }
@@ -160,22 +170,44 @@ fun MainScreen(
                     viewModel = calendarViewModel
                 )
                 MainTab.COMMUNITY -> CommunityScreen(
-                    pendingAnalysisShareRequest = pendingAnalysisShareRequest,
-                    onPendingAnalysisShareHandled = onPendingAnalysisShareHandled
+                    rootResetNonce = communityRootResetNonce,
+                    pendingAnalysisShareRequest = pendingAnalysisShareRequestState,
+                    onPendingAnalysisShareHandled = {
+                        pendingAnalysisShareRequestState = null
+                        onPendingAnalysisShareHandled()
+                    }
                 )
                 MainTab.ANALYSIS -> AnalysisScreen(
+                    rootResetNonce = analysisRootResetNonce,
                     externalChallengeId = analysisTargetChallengeId,
                     onExternalChallengeHandled = {
                         analysisTargetChallengeId = null
                     }
                 )
-                MainTab.PROFILE -> ProfileScreen(onNavigateToAuth = onNavigateToAuth)
+                MainTab.PROFILE -> ProfileScreen(
+                    rootResetNonce = profileRootResetNonce,
+                    onNavigateToAuth = onNavigateToAuth
+                )
             }
         }
 
         CustomBottomNavBarBase(
             selectedIndex = selectedTab,
             onTabSelected = { tab ->
+                when (tab) {
+                    MainTab.ANALYSIS -> {
+                        analysisRootResetNonce += 1
+                        analysisTargetChallengeId = null
+                    }
+                    MainTab.COMMUNITY -> {
+                        communityRootResetNonce += 1
+                        if (pendingAnalysisShareRequestState != null) {
+                            pendingAnalysisShareRequestState = null
+                            onPendingAnalysisShareHandled()
+                        }
+                    }
+                    MainTab.PROFILE -> profileRootResetNonce += 1
+                }
                 selectedTab = tab
                 if (tab != MainTab.CLIMBING) {
                     lastActiveTab = tab

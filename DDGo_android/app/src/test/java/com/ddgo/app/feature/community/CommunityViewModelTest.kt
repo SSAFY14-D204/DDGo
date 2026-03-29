@@ -2,10 +2,10 @@ package com.ddgo.app.feature.community
 
 import com.ddgo.app.domain.model.CommunityChallengeReference
 import com.ddgo.app.domain.model.CommunityComment
+import com.ddgo.app.domain.model.CommunityComposeState
 import com.ddgo.app.domain.model.CommunityFeedPage
 import com.ddgo.app.domain.model.CommunityPostDetail
 import com.ddgo.app.domain.model.CommunityPostSummary
-import com.ddgo.app.domain.model.CommunitySort
 import com.ddgo.app.domain.model.CommunityVideoAttachment
 import com.ddgo.app.domain.model.CommunityVideoDraft
 import com.ddgo.app.domain.usecase.CreateCommunityCommentUseCase
@@ -25,11 +25,14 @@ import com.ddgo.app.feature.climbing.upload.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -163,6 +166,142 @@ class CommunityViewModelTest {
         coVerify(exactly = 0) {
             getCommunityChallengeReferencesUseCase()
         }
+    }
+
+    @Test
+    fun `reset to root returns detail screen to feed`() = runTest {
+        val detail = sampleDetail()
+        val getCommunityPostDetailUseCase = mockk<GetCommunityPostDetailUseCase>()
+        coEvery { getCommunityPostDetailUseCase(detail.id) } returns Result.success(detail)
+
+        val viewModel = createViewModel(
+            getCommunityPostDetailUseCase = getCommunityPostDetailUseCase
+        )
+        advanceUntilIdle()
+
+        viewModel.openPostDetail(detail.id)
+        advanceUntilIdle()
+        viewModel.resetToRoot()
+
+        assertEquals(CommunityDestination.Feed, viewModel.uiState.value.destination)
+        assertNull(viewModel.uiState.value.detail)
+        assertTrue(viewModel.uiState.value.comments.isEmpty())
+        assertNull(viewModel.uiState.value.detailError)
+    }
+
+    @Test
+    fun `reset to root clears create draft and closes challenge sheet`() = runTest {
+        val getCommunityChallengeReferencesUseCase = mockk<GetCommunityChallengeReferencesUseCase>()
+        coEvery { getCommunityChallengeReferencesUseCase() } returns Result.success(
+            listOf(sampleChallengeReference())
+        )
+        val viewModel = createViewModel(
+            getCommunityChallengeReferencesUseCase = getCommunityChallengeReferencesUseCase
+        )
+        advanceUntilIdle()
+
+        viewModel.openCompose()
+        viewModel.updateComposeTitle("Draft title")
+        viewModel.updateComposeContent("Draft body")
+        viewModel.openChallengeReferenceSheet()
+        advanceUntilIdle()
+
+        viewModel.resetToRoot()
+
+        assertEquals(CommunityDestination.Feed, viewModel.uiState.value.destination)
+        assertEquals(CommunityComposeState(), viewModel.uiState.value.composeState)
+        assertFalse(viewModel.uiState.value.isChallengeSheetVisible)
+        assertTrue(viewModel.uiState.value.challengeReferences.isEmpty())
+    }
+
+    @Test
+    fun `reset to root clears edit draft and closes challenge sheet`() = runTest {
+        val detail = sampleDetail()
+        val getCommunityPostDetailUseCase = mockk<GetCommunityPostDetailUseCase>()
+        coEvery { getCommunityPostDetailUseCase(detail.id) } returns Result.success(detail)
+
+        val viewModel = createViewModel(
+            getCommunityPostDetailUseCase = getCommunityPostDetailUseCase
+        )
+        advanceUntilIdle()
+
+        viewModel.openPostDetail(detail.id)
+        advanceUntilIdle()
+        viewModel.openEdit()
+        viewModel.openChallengeReferenceSheet()
+        advanceUntilIdle()
+
+        viewModel.resetToRoot()
+
+        assertEquals(CommunityDestination.Feed, viewModel.uiState.value.destination)
+        assertEquals(CommunityComposeState(), viewModel.uiState.value.composeState)
+        assertFalse(viewModel.uiState.value.isChallengeSheetVisible)
+    }
+
+    @Test
+    fun `reset to root is ignored while analysis share preparation is in progress`() = runTest {
+        val prepareGate = CompletableDeferred<Result<List<CommunityVideoDraft>>>()
+        val prepareCommunityComposeVideosUseCase = mockk<PrepareCommunityComposeVideosUseCase>()
+        coEvery {
+            prepareCommunityComposeVideosUseCase(listOf("file:///attempt.mp4"))
+        } coAnswers {
+            prepareGate.await()
+        }
+
+        val viewModel = createViewModel(
+            prepareCommunityComposeVideosUseCase = prepareCommunityComposeVideosUseCase
+        )
+        advanceUntilIdle()
+
+        viewModel.consumePendingAnalysisShare(
+            requestId = 202L,
+            gymId = 7L,
+            gymName = "DDGo Gym",
+            videoUris = listOf("file:///attempt.mp4")
+        )
+        runCurrent()
+
+        viewModel.resetToRoot()
+
+        assertEquals(CommunityDestination.Feed, viewModel.uiState.value.destination)
+        assertEquals(CommunityComposeMode.AnalysisShare, viewModel.uiState.value.composeState.mode)
+        assertTrue(viewModel.uiState.value.composeState.isPreparingAnalysisShare)
+
+        prepareGate.complete(Result.failure(IllegalStateException("cancelled for test")))
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `reset to root is ignored while compose submission is in progress`() = runTest {
+        val submitGate = CompletableDeferred<Result<CommunityPostDetail>>()
+        val createCommunityPostUseCase = mockk<CreateCommunityPostUseCase>()
+        coEvery { createCommunityPostUseCase(any()) } coAnswers {
+            submitGate.await()
+        }
+
+        val viewModel = createViewModel(
+            createCommunityPostUseCase = createCommunityPostUseCase
+        )
+        advanceUntilIdle()
+
+        viewModel.openCompose()
+        viewModel.updateComposeTitle("title")
+        viewModel.updateComposeContent("content")
+        viewModel.submitPost()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.destination is CommunityDestination.Compose)
+        assertTrue(viewModel.uiState.value.composeState.isSubmitting)
+
+        viewModel.resetToRoot()
+
+        assertTrue(viewModel.uiState.value.destination is CommunityDestination.Compose)
+        assertTrue(viewModel.uiState.value.composeState.isSubmitting)
+        assertEquals("title", viewModel.uiState.value.composeState.title)
+        assertEquals("content", viewModel.uiState.value.composeState.content)
+
+        submitGate.complete(Result.failure(IllegalStateException("cancelled for test")))
+        advanceUntilIdle()
     }
 
     private fun createViewModel(
