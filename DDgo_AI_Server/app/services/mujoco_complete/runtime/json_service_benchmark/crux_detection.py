@@ -44,6 +44,31 @@ def _nominal_frame_duration_ms(fps: float) -> float:
     return 1000.0 / max(float(fps), 1e-6)
 
 
+def _resolved_frame_duration_ms(frames: list[dict[str, Any]], fps: float) -> float:
+    positive_deltas_ms: list[float] = []
+    previous_timestamp_ms: float | None = None
+
+    for frame in frames:
+        raw_timestamp_ms = frame.get("timestamp_ms")
+        if raw_timestamp_ms is None:
+            continue
+        timestamp_ms = float(raw_timestamp_ms)
+        if previous_timestamp_ms is not None:
+            delta_ms = timestamp_ms - previous_timestamp_ms
+            if delta_ms > 0.0:
+                positive_deltas_ms.append(delta_ms)
+        previous_timestamp_ms = timestamp_ms
+
+    if positive_deltas_ms:
+        sorted_deltas = sorted(positive_deltas_ms)
+        midpoint = len(sorted_deltas) // 2
+        if len(sorted_deltas) % 2 == 1:
+            return float(sorted_deltas[midpoint])
+        return float((sorted_deltas[midpoint - 1] + sorted_deltas[midpoint]) / 2.0)
+
+    return _nominal_frame_duration_ms(fps)
+
+
 def _confidence_to_weight(value: str | None) -> float:
     if value is None:
         return CONFIDENCE_WEIGHT["low"]
@@ -144,7 +169,7 @@ def _frame_hold_membership(frame: dict[str, Any]) -> dict[int, dict[str, Any]]:
 
 
 def build_hold_segments(frames: list[dict[str, Any]], fps: float) -> dict[int, list[HoldSegment]]:
-    nominal_dt_ms = _nominal_frame_duration_ms(fps)
+    nominal_dt_ms = _resolved_frame_duration_ms(frames, fps)
     open_segments: dict[int, dict[str, Any]] = {}
     closed_segments: dict[int, list[HoldSegment]] = defaultdict(list)
 

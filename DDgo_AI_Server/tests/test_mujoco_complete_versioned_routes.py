@@ -66,21 +66,26 @@ _install_import_stubs()
 from app.main import app
 
 
-def _batch_request_payload() -> dict[str, object]:
+def _batch_request_payload(
+    *,
+    fps: int = 10,
+    frame_step: int = 1,
+    total_frames: int = 12,
+) -> dict[str, object]:
     return {
         "holds_json": {"holds": []},
         "pose3d_sequence_json": {
             "video_metadata": {
-                "fps": 30,
+                "fps": fps,
                 "frame_width": 1280,
                 "frame_height": 720,
-                "total_frames": 12,
+                "total_frames": total_frames,
             },
             "frames": [],
         },
         "user_body_json": {"user_profile": {"weight_kg": 60}},
         "top_k_crux": 4,
-        "frame_step": 2,
+        "frame_step": frame_step,
     }
 
 
@@ -102,8 +107,10 @@ class MujocoCompleteVersionedRouteTest(unittest.TestCase):
             pose_payload=payload["pose3d_sequence_json"],
             user_body_payload=payload["user_body_json"],
             top_k_crux=4,
-            frame_step=2,
+            frame_step=1,
         )
+        self.assertEqual(payload["pose3d_sequence_json"]["video_metadata"]["fps"], 10)
+        self.assertEqual(payload["frame_step"], 1)
 
     def test_v2_plain_batch_analyze_works(self) -> None:
         payload = _batch_request_payload()
@@ -122,8 +129,10 @@ class MujocoCompleteVersionedRouteTest(unittest.TestCase):
             pose_payload=payload["pose3d_sequence_json"],
             user_body_payload=payload["user_body_json"],
             top_k_crux=4,
-            frame_step=2,
+            frame_step=1,
         )
+        self.assertEqual(payload["pose3d_sequence_json"]["video_metadata"]["fps"], 10)
+        self.assertEqual(payload["frame_step"], 1)
 
     def test_v2_gzip_batch_analyze_is_decompressed_and_routed(self) -> None:
         payload = _batch_request_payload()
@@ -147,8 +156,37 @@ class MujocoCompleteVersionedRouteTest(unittest.TestCase):
             pose_payload=payload["pose3d_sequence_json"],
             user_body_payload=payload["user_body_json"],
             top_k_crux=4,
-            frame_step=2,
+            frame_step=1,
         )
+        self.assertEqual(payload["pose3d_sequence_json"]["video_metadata"]["fps"], 10)
+        self.assertEqual(payload["frame_step"], 1)
+
+    def test_v1_gzip_batch_analyze_is_decompressed_and_routed(self) -> None:
+        payload = _batch_request_payload()
+        expected = {"version": "v1", "mode": "fast", "encoding": "gzip"}
+        body = gzip.compress(json.dumps(payload).encode("utf-8"))
+
+        with patch("app.api.mujoco_complete.mujoco_complete_service.analyze_fast", return_value=expected) as mock_analyze:
+            response = self.client.post(
+                "/api/v1/mujoco-complete/analyze/fast",
+                content=body,
+                headers={
+                    "Content-Encoding": "gzip",
+                    "Content-Type": "application/json",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), expected)
+        mock_analyze.assert_called_once_with(
+            holds_payload=payload["holds_json"],
+            pose_payload=payload["pose3d_sequence_json"],
+            user_body_payload=payload["user_body_json"],
+            top_k_crux=4,
+            frame_step=1,
+        )
+        self.assertEqual(payload["pose3d_sequence_json"]["video_metadata"]["fps"], 10)
+        self.assertEqual(payload["frame_step"], 1)
 
     def test_v2_realtime_session_is_not_versioned(self) -> None:
         response = self.client.post("/api/v2/mujoco-complete/session/start", json={})
