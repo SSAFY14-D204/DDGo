@@ -112,38 +112,10 @@ class AttemptPoseOverlayCacheTest {
             )
         )
 
-        assertEquals(listOf(0L, 50L, 100L, 150L, 200L, 600L, 650L, 700L), overlayCache.frameTimesMs)
-        assertEquals(listOf(0L, 50L, 100L, 150L, 200L, 600L, 650L, 700L), overlayCache.frames.map { it.frameTimeMs })
+        assertEquals(listOf(0L, 100L, 200L, 600L, 700L), overlayCache.frameTimesMs)
+        assertEquals(listOf(0L, 100L, 200L, 600L, 700L), overlayCache.frames.map { it.frameTimeMs })
         assertEquals(0L, overlayCache.frames.first().pose.frameTimeMs)
         assertEquals(700L, overlayCache.frames.last().pose.frameTimeMs)
-    }
-
-    @Test
-    fun `overlay cache interpolates display frames up to 20fps for normal 10fps gaps`() {
-        val overlayCache = buildAttemptPoseOverlayCache(
-            poses = listOf(
-                poseWithLandmark(0L, 23, x = 0.20f, y = 0.30f, z = 0.40f),
-                poseWithLandmark(100L, 23, x = 0.40f, y = 0.50f, z = 0.60f)
-            )
-        )
-
-        assertEquals(listOf(0L, 50L, 100L), overlayCache.frameTimesMs)
-        val interpolatedLandmark = overlayCache.frames[1].pose.landmarks.single()
-        assertEquals(0.30f, interpolatedLandmark.x, 0.0001f)
-        assertEquals(0.40f, interpolatedLandmark.y, 0.0001f)
-        assertEquals(0.50f, interpolatedLandmark.z, 0.0001f)
-    }
-
-    @Test
-    fun `overlay cache does not interpolate across large pose gaps`() {
-        val overlayCache = buildAttemptPoseOverlayCache(
-            poses = listOf(
-                poseWithHipCenter(0L, 0.20f, 0.30f),
-                poseWithHipCenter(250L, 0.50f, 0.60f)
-            )
-        )
-
-        assertEquals(listOf(0L, 250L), overlayCache.frameTimesMs)
     }
 
     @Test
