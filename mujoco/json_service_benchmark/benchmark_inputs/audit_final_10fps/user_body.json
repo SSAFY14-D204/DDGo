@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.1.0",
+  "source": {
+    "type": "anthropometric_profile_estimation",
+    "note": "height/weight/wingspan only; no T-pose image used"
+  },
+  "user_profile": {
+    "height_m": 1.67,
+    "height_cm": 167.0,
+    "weight_kg": 75.0,
+    "wingspan_m": 1.68,
+    "wingspan_cm": 168.0
+  },
+  "static_biometrics": {
+    "left_upper_arm_m": 0.2487078,
+    "right_upper_arm_m": 0.2487078,
+    "left_forearm_m": 0.2205522,
+    "right_forearm_m": 0.2205522,
+    "left_thigh_m": 0.40914999999999996,
+    "right_thigh_m": 0.40914999999999996,
+    "left_shin_m": 0.41081999999999996,
+    "right_shin_m": 0.41081999999999996,
+    "shoulder_width_m": 0.38076,
+    "hip_width_m": 0.31897,
+    "torso_length_m": 0.501,
+    "wingspan_raw_m": 1.68,
+    "wingspan_extra_m": 0.0,
+    "wingspan_m": 1.68,
+    "hand_length_m": 0.18036,
+    "estimation_mode": "profile_only"
+  },
+  "calibration_compat": {
+    "body_mass_kg": 75.0,
+    "left_upper_arm_m": 0.2487078,
+    "right_upper_arm_m": 0.2487078,
+    "upper_arm_m": 0.2487078,
+    "left_forearm_m": 0.2205522,
+    "right_forearm_m": 0.2205522,
+    "forearm_m": 0.2205522,
+    "left_thigh_m": 0.40914999999999996,
+    "right_thigh_m": 0.40914999999999996,
+    "thigh_m": 0.40914999999999996,
+    "left_shin_m": 0.41081999999999996,
+    "right_shin_m": 0.41081999999999996,
+    "shin_m": 0.41081999999999996,
+    "shoulder_width_m": 0.38076,
+    "hip_width_m": 0.31897,
+    "torso_length_m": 0.501,
+    "wingspan_m": 1.68
+  }
+}

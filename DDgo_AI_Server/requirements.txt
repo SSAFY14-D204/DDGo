@@ -1,0 +1,14 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-multipart>=0.0.9
+python-dotenv>=1.0.0
+
+numpy>=1.26.0
+mujoco>=3.0.0
+
+# Runtime dependencies imported directly by the MuJoCo complete pipeline.
+# These are used by the JSON/runtime modules even when they are not obvious from the API layer.
+mediapipe>=0.10.14
+opencv-python>=4.9.0

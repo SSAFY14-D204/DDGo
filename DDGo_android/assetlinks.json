@@ -1,0 +1,15 @@
+﻿[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.ddgo.app",
+      "sha256_cert_fingerprints": [
+        "1B:49:37:BB:7F:96:F4:4E:0A:E9:B9:91:3F:66:38:90:B1:B9:39:9E:81:9C:76:E4:EC:F0:7C:F9:AA:97:9D:CF",
+        "41:C0:73:78:0C:7D:D2:09:B5:80:CE:FB:F9:9C:5E:9E:C0:C0:B3:CA:2F:5F:98:B2:DB:C6:53:A5:1B:52:70:83"
+      ]
+    }
+  }
+]

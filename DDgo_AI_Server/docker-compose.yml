@@ -1,0 +1,24 @@
+services:
+  ddgo-ai-server:
+    image: ${DDGO_DOCKER_IMAGE:-yourdockerhub/ddgo-ai-server:latest}
+    container_name: ${DDGO_CONTAINER_NAME:-ddgo-ai-server}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${DDGO_HOST_PORT:-8000}:8000"
+    environment:
+      APP_NAME: "MuJoCo Humanoid Analysis Server"
+      APP_VERSION: "${DDGO_APP_VERSION:-0.1.1}"
+      DEBUG: "${DDGO_DEBUG:-false}"
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      LOG_LEVEL: "${DDGO_LOG_LEVEL:-INFO}"
+      ALLOWED_ORIGINS: "[\"*\"]"
+      STRESS_RATIO_THRESHOLD: "${DDGO_STRESS_RATIO_THRESHOLD:-0.8}"
+      STRENGTH_RATIO_THRESHOLD: "${DDGO_STRENGTH_RATIO_THRESHOLD:-1.0}"
+      STRENGTH_CONSECUTIVE_FRAMES: "${DDGO_STRENGTH_CONSECUTIVE_FRAMES:-5}"
+      SUPPORT_MARGIN_M: "${DDGO_SUPPORT_MARGIN_M:-0.15}"
+      HOLD_LOCK_TOLERANCE_M: "${DDGO_HOLD_LOCK_TOLERANCE_M:-0.06}"
+      BALANCE_FAILURE_THRESHOLD: "${DDGO_BALANCE_FAILURE_THRESHOLD:-0.08}"
+      SCALE_MODEL_SEGMENTS: "${DDGO_SCALE_MODEL_SEGMENTS:-false}"
+    volumes:
+      - ./cache:/app/cache

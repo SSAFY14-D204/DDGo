@@ -1,0 +1,115 @@
+package com.ddgo.app.core.datastore
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.core.stringPreferencesKey
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+internal val Context.ddgoPreferencesDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "ddgo_prefs"
+)
+
+class OnboardingPreferenceDataStore @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private companion object {
+        val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val KEY_HAS_AUTHENTICATED_ONCE = booleanPreferencesKey("has_authenticated_once")
+        val KEY_MAIN_ENTRY_GUIDE_STEP = stringPreferencesKey("main_entry_guide_step")
+    }
+
+    val hasCompletedOnboarding: Flow<Boolean> = context.ddgoPreferencesDataStore.data
+        .map { preferences -> preferences[KEY_ONBOARDING_COMPLETED] ?: false }
+
+    val hasAuthenticatedOnce: Flow<Boolean> = context.ddgoPreferencesDataStore.data
+        .map { preferences -> preferences[KEY_HAS_AUTHENTICATED_ONCE] ?: false }
+
+    val mainEntryGuideStep: Flow<MainEntryGuideStep> = context.ddgoPreferencesDataStore.data
+        .map { preferences ->
+            preferences[KEY_MAIN_ENTRY_GUIDE_STEP]
+                ?.let(MainEntryGuideStep::fromStoredValue)
+                ?: MainEntryGuideStep.NONE
+        }
+
+    suspend fun setOnboardingCompleted(completed: Boolean = true) {
+        context.ddgoPreferencesDataStore.edit { preferences ->
+            preferences[KEY_ONBOARDING_COMPLETED] = completed
+        }
+    }
+
+    suspend fun setHasAuthenticatedOnce(authenticated: Boolean = true) {
+        context.ddgoPreferencesDataStore.edit { preferences ->
+            preferences[KEY_HAS_AUTHENTICATED_ONCE] = authenticated
+        }
+    }
+
+    suspend fun setMainEntryGuideStep(step: MainEntryGuideStep) {
+        context.ddgoPreferencesDataStore.edit { preferences ->
+            preferences[KEY_MAIN_ENTRY_GUIDE_STEP] = step.name
+        }
+    }
+}
+
+enum class MainEntryGuideStep {
+    NONE,
+    FAB,
+    MENU,
+    DONE;
+
+    companion object {
+        fun fromStoredValue(value: String): MainEntryGuideStep {
+            return entries.firstOrNull { it.name == value } ?: NONE
+        }
+    }
+}
+
+data class PreferredGymPreference(
+    val gymId: Int,
+    val gymName: String
+)
+
+class PreferredGymPreferenceDataStore @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    private companion object {
+        val KEY_PREFERRED_GYM_ID = intPreferencesKey("preferred_gym_id")
+        val KEY_PREFERRED_GYM_NAME = stringPreferencesKey("preferred_gym_name")
+    }
+
+    val preferredGym: Flow<PreferredGymPreference?> = context.ddgoPreferencesDataStore.data
+        .map { preferences ->
+            val gymId = preferences[KEY_PREFERRED_GYM_ID]
+            val gymName = preferences[KEY_PREFERRED_GYM_NAME]
+
+            if (gymId == null || gymName.isNullOrBlank()) {
+                null
+            } else {
+                PreferredGymPreference(
+                    gymId = gymId,
+                    gymName = gymName
+                )
+            }
+        }
+
+    suspend fun setPreferredGym(gymId: Int, gymName: String) {
+        context.ddgoPreferencesDataStore.edit { preferences ->
+            preferences[KEY_PREFERRED_GYM_ID] = gymId
+            preferences[KEY_PREFERRED_GYM_NAME] = gymName
+        }
+    }
+
+    suspend fun clearPreferredGym() {
+        context.ddgoPreferencesDataStore.edit { preferences ->
+            preferences.remove(KEY_PREFERRED_GYM_ID)
+            preferences.remove(KEY_PREFERRED_GYM_NAME)
+        }
+    }
+}

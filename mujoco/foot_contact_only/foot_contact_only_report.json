@@ -1,0 +1,3760 @@
+{
+  "source_dynamic_report": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\주황.mp4",
+  "frame_count": 964,
+  "fps": 29.99827810713493,
+  "summary": {
+    "candidate_frame_count": 44,
+    "no_hand_grip_frame_count": 15,
+    "plausible_foot_support_count": 0,
+    "status_counts": {
+      "high_residual": 44
+    },
+    "relative_residual_summary": {
+      "mean": 0.9835654913807409,
+      "median": 1.0,
+      "max": 1.0
+    }
+  },
+  "frames": [
+    {
+      "frame_index": 367,
+      "timestamp_ms": 12234,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -58.571886448004946,
+        44.461116365623475,
+        793.0078142127226,
+        -79.57496863424541,
+        -26.587272779638443,
+        -12.060449296108612
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -58.571886448004946,
+          44.461116365623475,
+          793.0078142127226,
+          -79.57496863424541,
+          -26.587272779638443,
+          -12.060449296108612
+        ],
+        "achieved_wrench": [
+          -33.99716723335043,
+          -0.5472325002581512,
+          27.192227928615832,
+          -2.543028616266501,
+          8.408165332784737,
+          -3.0102185088932845
+        ],
+        "wrench_residual": [
+          -24.574719214654515,
+          45.00834886588163,
+          765.8155862841068,
+          -77.03194001797891,
+          -34.99543811242318,
+          -9.050230787215327
+        ],
+        "relative_residual": 0.964196986898074,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              -0.10441062394956419,
+              0.3004313433314372,
+              0.16860941915594868
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6169800658067934,
+              -0.07268706677335232,
+              0.31000560950995143
+            ],
+            "force_xyz": [
+              -33.99716723335043,
+              -0.5472325002581512,
+              27.192227928615832
+            ],
+            "force_norm_n": 43.53761710318481,
+            "normal_force_n": 33.99716723335043,
+            "tangential_force_n": 27.197733786680345
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 368,
+      "timestamp_ms": 12267,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -33.553070261088024,
+        56.217545020093084,
+        762.0973575406609,
+        -46.18313650823214,
+        -22.46257639978604,
+        -3.8805161256191507
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -33.553070261088024,
+          56.217545020093084,
+          762.0973575406609,
+          -46.18313650823214,
+          -22.46257639978604,
+          -3.8805161256191507
+        ],
+        "achieved_wrench": [
+          -15.0461994980087,
+          0.3359566804067392,
+          12.032270337827834,
+          -0.7164179497559664,
+          3.591605597967228,
+          -0.9961537559810003
+        ],
+        "wrench_residual": [
+          -18.506870763079323,
+          55.881588339686346,
+          750.0650872028331,
+          -45.466718558476174,
+          -26.05418199775327,
+          -2.8843623696381506
+        ],
+        "relative_residual": 0.9837778507050521,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              -0.08321548402922799,
+              0.3019854486319702,
+              0.1717142213259138
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6229678811561108,
+              -0.07394002930700336,
+              0.31582387958627645
+            ],
+            "force_xyz": [
+              -15.0461994980087,
+              0.3359566804067392,
+              12.032270337827834
+            ],
+            "force_norm_n": 19.268536937389893,
+            "normal_force_n": 15.0461994980087,
+            "tangential_force_n": 12.03695959840696
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 369,
+      "timestamp_ms": 12301,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -38.729220044572536,
+        54.926641085650104,
+        768.0806967657554,
+        -33.0326347009807,
+        -49.67390533494991,
+        -9.300754803123567
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -38.729220044572536,
+          54.926641085650104,
+          768.0806967657554,
+          -33.0326347009807,
+          -49.67390533494991,
+          -9.300754803123567
+        ],
+        "achieved_wrench": [
+          -3.6990634009138814,
+          0.09613727128834255,
+          2.957688701201801,
+          -0.1755118482721964,
+          0.8003761506574809,
+          -0.24552125218716958
+        ],
+        "wrench_residual": [
+          -35.03015664365866,
+          54.83050381436176,
+          765.1230080645536,
+          -32.85712285270851,
+          -50.474281485607385,
+          -9.055233550936398
+        ],
+        "relative_residual": 0.9960178468985288,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              -0.08498036262288206,
+              0.3052119513483801,
+              0.1736583074293931
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6383327278604322,
+              -0.07716764351062765,
+              0.32471880174926837
+            ],
+            "force_xyz": [
+              -3.6990634009138814,
+              0.09613727128834255,
+              2.957688701201801
+            ],
+            "force_norm_n": 4.737112503638492,
+            "normal_force_n": 3.6990634009138814,
+            "tangential_force_n": 2.9592507207311054
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 370,
+      "timestamp_ms": 12334,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -45.962349358523866,
+        62.15531344495745,
+        820.0938187088879,
+        -19.341731431203385,
+        -68.3611974568209,
+        -11.893042726355759
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -45.962349358523866,
+          62.15531344495745,
+          820.0938187088879,
+          -19.341731431203385,
+          -68.3611974568209,
+          -11.893042726355759
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          -45.962349358523866,
+          62.15531344495745,
+          820.0938187088879,
+          -19.341731431203385,
+          -68.3611974568209,
+          -11.893042726355759
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              -0.06039202698979176,
+              0.31137272951036593,
+              0.17349441570141966
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6617715642502491,
+              -0.0857906645479296,
+              0.33756937072485815
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 371,
+      "timestamp_ms": 12367,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -25.257584406475484,
+        81.65845575613996,
+        862.7834890539744,
+        1.9024865235977657,
+        -71.12563951134933,
+        -11.431237763244663
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -25.257584406475484,
+          81.65845575613996,
+          862.7834890539744,
+          1.9024865235977657,
+          -71.12563951134933,
+          -11.431237763244663
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          -25.257584406475484,
+          81.65845575613996,
+          862.7834890539744,
+          1.9024865235977657,
+          -71.12563951134933,
+          -11.431237763244663
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              -0.02055222930384246,
+              0.313860316856691,
+              0.17477989693112692
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6794180179097614,
+              -0.09245657662625861,
+              0.3465297252956601
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 372,
+      "timestamp_ms": 12401,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        9.213038636169738,
+        101.11391788905883,
+        860.0082806540262,
+        12.503092385744775,
+        -61.566687342893616,
+        -14.880609851097352
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          9.213038636169738,
+          101.11391788905883,
+          860.0082806540262,
+          12.503092385744775,
+          -61.566687342893616,
+          -14.880609851097352
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          9.213038636169738,
+          101.11391788905883,
+          860.0082806540262,
+          12.503092385744775,
+          -61.566687342893616,
+          -14.880609851097352
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.007488177138113363,
+              0.318988329643945,
+              0.17667003263790226
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6933751678479452,
+              -0.09526009850750852,
+              0.35424326255662375
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 373,
+      "timestamp_ms": 12434,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        31.207417965695168,
+        100.99507649431612,
+        841.7342230835584,
+        12.585184871574988,
+        -54.08105342627509,
+        -15.74393756890885
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          31.207417965695168,
+          100.99507649431612,
+          841.7342230835584,
+          12.585184871574988,
+          -54.08105342627509,
+          -15.74393756890885
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          31.207417965695168,
+          100.99507649431612,
+          841.7342230835584,
+          12.585184871574988,
+          -54.08105342627509,
+          -15.74393756890885
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.027765328232625678,
+              0.3397506279494984,
+              0.18460966208831361
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.7038313534434453,
+              -0.08222965682138449,
+              0.3598585720588192
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 374,
+      "timestamp_ms": 12467,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        51.91169685798175,
+        73.43958901007784,
+        843.4003661140224,
+        9.883002290439201,
+        -70.59531101870101,
+        -17.585868080552856
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          51.91169685798175,
+          73.43958901007784,
+          843.4003661140224,
+          9.883002290439201,
+          -70.59531101870101,
+          -17.585868080552856
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          51.91169685798175,
+          73.43958901007784,
+          843.4003661140224,
+          9.883002290439201,
+          -70.59531101870101,
+          -17.585868080552856
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.03333117881798386,
+              0.36274936265453905,
+              0.19218639488788405
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.7070347983107874,
+              -0.0689089787367466,
+              0.3621559763660862
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 375,
+      "timestamp_ms": 12501,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        65.53802373914758,
+        26.8383793052361,
+        856.0268570579863,
+        -0.2602866691919097,
+        -103.29137324713042,
+        -20.645268667966285
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          65.53802373914758,
+          26.8383793052361,
+          856.0268570579863,
+          -0.2602866691919097,
+          -103.29137324713042,
+          -20.645268667966285
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          65.53802373914758,
+          26.8383793052361,
+          856.0268570579863,
+          -0.2602866691919097,
+          -103.29137324713042,
+          -20.645268667966285
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.02945916789755655,
+              0.38400206378933127,
+              0.19717184355587364
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6983784249809089,
+              -0.05220276765512523,
+              0.3564104458597313
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 416,
+      "timestamp_ms": 13867,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        2.304026910556762,
+        3.346224226009363,
+        805.3761545713411,
+        8.958733278644345,
+        -43.25438056918633,
+        26.95545243180617
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          2.304026910556762,
+          3.346224226009363,
+          805.3761545713411,
+          8.958733278644345,
+          -43.25438056918633,
+          26.95545243180617
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          2.304026910556762,
+          3.346224226009363,
+          805.3761545713411,
+          8.958733278644345,
+          -43.25438056918633,
+          26.95545243180617
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6801358261785785,
+              0.11608295721280062,
+              0.558582959700655
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.36053378373274947,
+              -0.4904233141133616,
+              0.3077962870996783
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 417,
+      "timestamp_ms": 13901,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        3.9858008258558275,
+        4.567721063310951,
+        800.7047602389911,
+        5.950999260185972,
+        -40.4461896565694,
+        23.62027533227816
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          3.9858008258558275,
+          4.567721063310951,
+          800.7047602389911,
+          5.950999260185972,
+          -40.4461896565694,
+          23.62027533227816
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          3.9858008258558275,
+          4.567721063310951,
+          800.7047602389911,
+          5.950999260185972,
+          -40.4461896565694,
+          23.62027533227816
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6738900407441014,
+              0.10821925775017605,
+              0.5501828692120857
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.3540211137348072,
+              -0.48955300187784956,
+              0.3055674697043146
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 418,
+      "timestamp_ms": 13934,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        8.249627654701698,
+        4.212622452776465,
+        791.9888423100816,
+        1.059378885075359,
+        -29.820587968426956,
+        19.03210932569865
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          8.249627654701698,
+          4.212622452776465,
+          791.9888423100816,
+          1.059378885075359,
+          -29.820587968426956,
+          19.03210932569865
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          8.249627654701698,
+          4.212622452776465,
+          791.9888423100816,
+          1.059378885075359,
+          -29.820587968426956,
+          19.03210932569865
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6685364573302702,
+              0.10206473292313947,
+              0.543363493372939
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.34943309891477964,
+              -0.4890298867214251,
+              0.3034604054122181
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 419,
+      "timestamp_ms": 13967,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        12.147249979523762,
+        4.113683404467821,
+        783.4750409857219,
+        -3.9245726281266875,
+        -19.78976700322724,
+        15.074497479705693
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          12.147249979523762,
+          4.113683404467821,
+          783.4750409857219,
+          -3.9245726281266875,
+          -19.78976700322724,
+          15.074497479705693
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          12.147249979523762,
+          4.113683404467821,
+          783.4750409857219,
+          -3.9245726281266875,
+          -19.78976700322724,
+          15.074497479705693
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6710138532876491,
+              0.10206614695777431,
+              0.5423590185529301
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.34941264324175325,
+              -0.48561405586880024,
+              0.30238483768522717
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 420,
+      "timestamp_ms": 14001,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        16.20793414829679,
+        5.660799866410724,
+        777.7653157437769,
+        -4.9991543344979865,
+        -9.863223597725678,
+        11.950227430319838
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          16.20793414829679,
+          5.660799866410724,
+          777.7653157437769,
+          -4.9991543344979865,
+          -9.863223597725678,
+          11.950227430319838
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          16.20793414829679,
+          5.660799866410724,
+          777.7653157437769,
+          -4.9991543344979865,
+          -9.863223597725678,
+          11.950227430319838
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6721183330881925,
+              0.10385448983580403,
+              0.5383815146631383
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.34225451593976264,
+              -0.48008685635143983,
+              0.29655708901892147
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 421,
+      "timestamp_ms": 14034,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        21.19074383724234,
+        9.348986579724523,
+        775.3879385575282,
+        -1.710104017380579,
+        5.027494974235555,
+        8.98385777737375
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          21.19074383724234,
+          9.348986579724523,
+          775.3879385575282,
+          -1.710104017380579,
+          5.027494974235555,
+          8.98385777737375
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          21.19074383724234,
+          9.348986579724523,
+          775.3879385575282,
+          -1.710104017380579,
+          5.027494974235555,
+          8.98385777737375
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6870919186911943,
+              0.11572214861465634,
+              0.5409888446633766
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.33865727414105457,
+              -0.4749699195542606,
+              0.2932865330080647
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 422,
+      "timestamp_ms": 14067,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        19.387788256349015,
+        14.867364817363008,
+        773.4499058759319,
+        4.778902697026389,
+        18.58252418817813,
+        7.130966330539536
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          19.387788256349015,
+          14.867364817363008,
+          773.4499058759319,
+          4.778902697026389,
+          18.58252418817813,
+          7.130966330539536
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          19.387788256349015,
+          14.867364817363008,
+          773.4499058759319,
+          4.778902697026389,
+          18.58252418817813,
+          7.130966330539536
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.7030834827977381,
+              0.1338662051939732,
+              0.5449944295280081
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.34209360070586897,
+              -0.46763764059059026,
+              0.2925115122453587
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 423,
+      "timestamp_ms": 14101,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        5.155761236127232,
+        18.04469700181113,
+        773.48601147566,
+        10.764288205260605,
+        21.395212255895522,
+        5.826202245344741
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          5.155761236127232,
+          18.04469700181113,
+          773.48601147566,
+          10.764288205260605,
+          21.395212255895522,
+          5.826202245344741
+        ],
+        "achieved_wrench": [
+          -5.689011489847393,
+          0.18014679219361837,
+          4.547642457105092,
+          -1.6243593785635748,
+          2.4617160003840644,
+          -2.1296909601009855
+        ],
+        "wrench_residual": [
+          10.844772725974625,
+          17.864550209617512,
+          768.9383690185549,
+          12.38864758382418,
+          18.933496255511457,
+          7.955893205445727
+        ],
+        "relative_residual": 0.994173878632298,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.7045961130089967,
+              0.1367766178415802,
+              0.5431934035510975
+            ],
+            "force_xyz": [
+              -0.7144580655325569,
+              0.02243541751891856,
+              0.5711259594692285
+            ],
+            "force_norm_n": 0.9149527512081803,
+            "normal_force_n": 0.7144580655325569,
+            "tangential_force_n": 0.5715664524260456
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.34535352835780486,
+              -0.46204338550921403,
+              0.2913576771728198
+            ],
+            "force_xyz": [
+              -4.974553424314836,
+              0.1577113746746998,
+              3.9765164976358633
+            ],
+            "force_norm_n": 6.370536720326981,
+            "normal_force_n": 4.974553424314836,
+            "tangential_force_n": 3.979642739451869
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 424,
+      "timestamp_ms": 14134,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -14.763493912400895,
+        15.835193847591883,
+        776.0571676164993,
+        11.992019532221732,
+        10.865147838779652,
+        3.6114922811560977
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -14.763493912400895,
+          15.835193847591883,
+          776.0571676164993,
+          11.992019532221732,
+          10.865147838779652,
+          3.6114922811560977
+        ],
+        "achieved_wrench": [
+          -19.773618780643535,
+          0.5130191146013173,
+          15.810565176913673,
+          0.012092867846354993,
+          2.136268697007423,
+          -0.05931342860782662
+        ],
+        "wrench_residual": [
+          5.01012486824264,
+          15.322174732990566,
+          760.2466024395857,
+          11.979926664375377,
+          8.728879141772229,
+          3.670805709763924
+        ],
+        "relative_residual": 0.9794403493160672,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6993542300086588,
+              0.1373759519669685,
+              0.5393760306309038
+            ],
+            "force_xyz": [
+              -14.652407504598155,
+              0.37282508110919066,
+              11.715995505914584
+            ],
+            "force_norm_n": 18.764237125887085,
+            "normal_force_n": 14.652407504598155,
+            "tangential_force_n": 11.721926003678526
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.3397300324693124,
+              -0.463507371188137,
+              0.28826670008244537
+            ],
+            "force_xyz": [
+              -5.121211276045379,
+              0.14019403349212667,
+              4.094569670999089
+            ],
+            "force_norm_n": 6.558350409332115,
+            "normal_force_n": 5.121211276045379,
+            "tangential_force_n": 4.096969020836304
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 425,
+      "timestamp_ms": 14167,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -33.91747092807984,
+        8.965714597370496,
+        783.9844832812335,
+        8.044047662088508,
+        -5.237069801577356,
+        -0.44444806718154517
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -33.91747092807984,
+          8.965714597370496,
+          783.9844832812335,
+          8.044047662088508,
+          -5.237069801577356,
+          -0.44444806718154517
+        ],
+        "achieved_wrench": [
+          -30.079505250065893,
+          0.3268118498505623,
+          24.06136934578139,
+          1.8065259336094646,
+          1.3549220262314448,
+          2.2337864756761188
+        ],
+        "wrench_residual": [
+          -3.837965678013944,
+          8.638902747519934,
+          759.9231139354521,
+          6.237521728479043,
+          -6.5919918278088,
+          -2.678234542857664
+        ],
+        "relative_residual": 0.968417207114144,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6879802094394311,
+              0.1433696617008804,
+              0.5369942741675441
+            ],
+            "force_xyz": [
+              -26.391520047816137,
+              0.2777829215488895,
+              21.111388588305502
+            ],
+            "force_norm_n": 33.79763633617329,
+            "normal_force_n": 26.391520047816137,
+            "tangential_force_n": 21.11321603825291
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.32597958060752164,
+              -0.46804658687853673,
+              0.2841655553595973
+            ],
+            "force_xyz": [
+              -3.687985202249756,
+              0.049028928301672776,
+              2.9499807574758887
+            ],
+            "force_norm_n": 4.7229254871638195,
+            "normal_force_n": 3.687985202249756,
+            "tangential_force_n": 2.9503881617998045
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 426,
+      "timestamp_ms": 14201,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -48.98774196033147,
+        -2.4512579530024663,
+        795.8461926660663,
+        6.4186437238968175,
+        -32.7849280140477,
+        -1.5053715654625517
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -48.98774196033147,
+          -2.4512579530024663,
+          795.8461926660663,
+          6.4186437238968175,
+          -32.7849280140477,
+          -1.5053715654625517
+        ],
+        "achieved_wrench": [
+          -31.331635806867627,
+          -0.15908388507172763,
+          25.06480380556353,
+          3.7417076295775584,
+          -0.5239685318430958,
+          4.6739031633671795
+        ],
+        "wrench_residual": [
+          -17.656106153463842,
+          -2.2921740679307385,
+          770.7813888605027,
+          2.676936094319259,
+          -32.260959482204605,
+          -6.179274728829731
+        ],
+        "relative_residual": 0.9669620728085919,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6784558944538288,
+              0.15407243711040924,
+              0.5391271969773584
+            ],
+            "force_xyz": [
+              -31.331635806867627,
+              -0.15908388507172763,
+              25.06480380556353
+            ],
+            "force_norm_n": 40.1240713266746,
+            "normal_force_n": 31.331635806867627,
+            "tangential_force_n": 25.065308645494103
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.314498978977103,
+              -0.47447209051786066,
+              0.28141061561802805
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 427,
+      "timestamp_ms": 14234,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -49.795870338647,
+        -12.878718519313999,
+        805.9856798629111,
+        8.536654195396313,
+        -68.76826273408096,
+        3.552314002110305
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -49.795870338647,
+          -12.878718519313999,
+          805.9856798629111,
+          8.536654195396313,
+          -68.76826273408096,
+          3.552314002110305
+        ],
+        "achieved_wrench": [
+          -14.217785759163446,
+          -0.11280990786370096,
+          11.37366916770965,
+          1.7176369966548364,
+          0.1253347334872501,
+          2.148394987570119
+        ],
+        "wrench_residual": [
+          -35.57808457948355,
+          -12.765908611450298,
+          794.6120106952014,
+          6.819017198741476,
+          -68.89359746756821,
+          1.4039190145401856
+        ],
+        "relative_residual": 0.9850951628951785,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6487029604350868,
+              0.15880041345413093,
+              0.5368476727413807
+            ],
+            "force_xyz": [
+              -14.217785759163446,
+              -0.11280990786370096,
+              11.37366916770965
+            ],
+            "force_norm_n": 18.20764971942541,
+            "normal_force_n": 14.217785759163446,
+            "tangential_force_n": 11.374228607330757
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.2886383362354716,
+              -0.48457934935264035,
+              0.2743464872120882
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 428,
+      "timestamp_ms": 14267,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -27.65970823440321,
+        -16.542244425789953,
+        804.4436665910508,
+        11.527504543164364,
+        -94.66335852541843,
+        12.639131282537296
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -27.65970823440321,
+          -16.542244425789953,
+          804.4436665910508,
+          11.527504543164364,
+          -94.66335852541843,
+          12.639131282537296
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          -27.65970823440321,
+          -16.542244425789953,
+          804.4436665910508,
+          11.527504543164364,
+          -94.66335852541843,
+          12.639131282537296
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6193241035979405,
+              0.1553342991293744,
+              0.5305408962413642
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.24162032616878093,
+              -0.49599372916408374,
+              0.26542996727601664
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 429,
+      "timestamp_ms": 14301,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        4.318347581634409,
+        -19.38137323454565,
+        795.9733764243872,
+        12.462330952455199,
+        -104.26752105825707,
+        20.400260633370053
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          4.318347581634409,
+          -19.38137323454565,
+          795.9733764243872,
+          12.462330952455199,
+          -104.26752105825707,
+          20.400260633370053
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          4.318347581634409,
+          -19.38137323454565,
+          795.9733764243872,
+          12.462330952455199,
+          -104.26752105825707,
+          20.400260633370053
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6044787302128135,
+              0.14871372866521906,
+              0.5247796341707107
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.21494299766943126,
+              -0.5044806452671815,
+              0.26472322335528586
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 430,
+      "timestamp_ms": 14334,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        28.429546752261082,
+        -24.024720197568673,
+        787.6444947523266,
+        6.111464713496353,
+        -102.52409805796258,
+        23.250767111530198
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          28.429546752261082,
+          -24.024720197568673,
+          787.6444947523266,
+          6.111464713496353,
+          -102.52409805796258,
+          23.250767111530198
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          28.429546752261082,
+          -24.024720197568673,
+          787.6444947523266,
+          6.111464713496353,
+          -102.52409805796258,
+          23.250767111530198
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.5940879664822778,
+              0.14072849854516473,
+              0.5202867944656436
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.19302861839088503,
+              -0.5040388876569122,
+              0.2615401972693784
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 431,
+      "timestamp_ms": 14367,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        42.03781384581763,
+        -26.34943485527613,
+        782.8842873090751,
+        2.0269097765421167,
+        -93.92154995396163,
+        21.65026630816561
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          42.03781384581763,
+          -26.34943485527613,
+          782.8842873090751,
+          2.0269097765421167,
+          -93.92154995396163,
+          21.65026630816561
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          42.03781384581763,
+          -26.34943485527613,
+          782.8842873090751,
+          2.0269097765421167,
+          -93.92154995396163,
+          21.65026630816561
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.5966561085952495,
+              0.13807481783336883,
+              0.5199507431710019
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.1891791560179265,
+              -0.5081600791695291,
+              0.2633159340558782
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 432,
+      "timestamp_ms": 14401,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        48.40319348963598,
+        -21.266484231748006,
+        780.6929107283461,
+        -1.9122326093993678,
+        -77.82292016954248,
+        17.072206548850033
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          48.40319348963598,
+          -21.266484231748006,
+          780.6929107283461,
+          -1.9122326093993678,
+          -77.82292016954248,
+          17.072206548850033
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          48.40319348963598,
+          -21.266484231748006,
+          780.6929107283461,
+          -1.9122326093993678,
+          -77.82292016954248,
+          17.072206548850033
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.5998411515023581,
+              0.13376655722817737,
+              0.5228008812937023
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.1894969852840825,
+              -0.5141031131515,
+              0.26770614520359776
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 433,
+      "timestamp_ms": 14434,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        42.10478611272993,
+        -13.796207371351553,
+        780.2049619133247,
+        -4.506516220404336,
+        -58.81856534868858,
+        11.664517733552163
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          42.10478611272993,
+          -13.796207371351553,
+          780.2049619133247,
+          -4.506516220404336,
+          -58.81856534868858,
+          11.664517733552163
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          42.10478611272993,
+          -13.796207371351553,
+          780.2049619133247,
+          -4.506516220404336,
+          -58.81856534868858,
+          11.664517733552163
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6035076487188921,
+              0.1283851562822696,
+              0.5256732685026351
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.1992924603312335,
+              -0.5173174932793974,
+              0.27142973263046644
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 434,
+      "timestamp_ms": 14467,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        22.27379699996618,
+        -1.4045105145087327,
+        779.6331990023164,
+        -4.005190401547594,
+        -46.43509207329096,
+        9.090803915990096
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          22.27379699996618,
+          -1.4045105145087327,
+          779.6331990023164,
+          -4.005190401547594,
+          -46.43509207329096,
+          9.090803915990096
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          22.27379699996618,
+          -1.4045105145087327,
+          779.6331990023164,
+          -4.005190401547594,
+          -46.43509207329096,
+          9.090803915990096
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6314179430887905,
+              0.12805317663169694,
+              0.5271773674123035
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.2236671079203552,
+              -0.5194236222193916,
+              0.278709733029445
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 435,
+      "timestamp_ms": 14501,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        2.583209065837785,
+        18.39684978386915,
+        774.7821090708892,
+        -1.3990175422404612,
+        -36.998207017108186,
+        10.16415823454646
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          2.583209065837785,
+          18.39684978386915,
+          774.7821090708892,
+          -1.3990175422404612,
+          -36.998207017108186,
+          10.16415823454646
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          2.583209065837785,
+          18.39684978386915,
+          774.7821090708892,
+          -1.3990175422404612,
+          -36.998207017108186,
+          10.16415823454646
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6417305963807081,
+              0.11694845345765381,
+              0.5256796005548622
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.2412456889174335,
+              -0.5200419652432879,
+              0.2817350984234985
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 436,
+      "timestamp_ms": 14534,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -10.720519174104249,
+        39.55727547405263,
+        771.446846548088,
+        1.1484883232712804,
+        -30.918680463927863,
+        13.4918337713454
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -10.720519174104249,
+          39.55727547405263,
+          771.446846548088,
+          1.1484883232712804,
+          -30.918680463927863,
+          13.4918337713454
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          -10.720519174104249,
+          39.55727547405263,
+          771.446846548088,
+          1.1484883232712804,
+          -30.918680463927863,
+          13.4918337713454
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6729592243366737,
+              0.1270502046039701,
+              0.5272318404289947
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.25027382189205355,
+              -0.5214761690733156,
+              0.2840175718868708
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 437,
+      "timestamp_ms": 14568,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "static_support",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -20.27354772045998,
+        50.19729193557845,
+        770.226718768669,
+        2.1325595349612563,
+        -23.883275339446556,
+        14.032917630334694
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -20.27354772045998,
+          50.19729193557845,
+          770.226718768669,
+          2.1325595349612563,
+          -23.883275339446556,
+          14.032917630334694
+        ],
+        "achieved_wrench": [
+          -9.384188164628974,
+          0.562650312866494,
+          7.486236479787107,
+          1.2605611609409466,
+          -0.15042760812420308,
+          1.5914513654805948
+        ],
+        "wrench_residual": [
+          -10.889359555831007,
+          49.63464162271195,
+          762.7404822888819,
+          0.8719983740203097,
+          -23.73284773132235,
+          12.4414662648541
+        ],
+        "relative_residual": 0.9900012649821879,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6904102638144994,
+              0.12663792696081558,
+              0.5315637669143596
+            ],
+            "force_xyz": [
+              -9.384188164628974,
+              0.562650312866494,
+              7.486236479787107
+            ],
+            "force_norm_n": 12.017624537113253,
+            "normal_force_n": 9.384188164628974,
+            "tangential_force_n": 7.50735053170318
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.26087519004547965,
+              -0.5218821876422302,
+              0.28541328222383566
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 438,
+      "timestamp_ms": 14601,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "loaded_transition",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -27.663007990980166,
+        52.17370223735567,
+        770.281629510476,
+        6.192114999755532,
+        -22.612398423461087,
+        15.221227094726402
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -27.663007990980166,
+          52.17370223735567,
+          770.281629510476,
+          6.192114999755532,
+          -22.612398423461087,
+          15.221227094726402
+        ],
+        "achieved_wrench": [
+          -17.824310792179414,
+          1.1298766105511295,
+          14.214614106028337,
+          2.4873812971356615,
+          -0.6208378997053341,
+          3.168382003526995
+        ],
+        "wrench_residual": [
+          -9.838697198800752,
+          51.04382562680454,
+          756.0670154044477,
+          3.7047337026198703,
+          -21.99156052375575,
+          12.052845091199407
+        ],
+        "relative_residual": 0.9808916044774348,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.7075525130386425,
+              0.13106210913425057,
+              0.5363594448883597
+            ],
+            "force_xyz": [
+              -17.824310792179414,
+              1.1298766105511295,
+              14.214614106028337
+            ],
+            "force_norm_n": 22.826255289787984,
+            "normal_force_n": 17.824310792179414,
+            "tangential_force_n": 14.259448633743531
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.26712079665391236,
+              -0.5211443084472539,
+              0.28542378115782485
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 439,
+      "timestamp_ms": 14634,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "loaded_transition",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -28.785831599911752,
+        47.02983734778354,
+        774.609179911901,
+        11.927128319331622,
+        -26.19887145130246,
+        17.514504214609737
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -28.785831599911752,
+          47.02983734778354,
+          774.609179911901,
+          11.927128319331622,
+          -26.19887145130246,
+          17.514504214609737
+        ],
+        "achieved_wrench": [
+          -17.67523957740007,
+          1.1013365218348352,
+          14.097236541305046,
+          2.5605244391135265,
+          -0.8973546265493173,
+          3.280513325634708
+        ],
+        "wrench_residual": [
+          -11.110592022511682,
+          45.9285008259487,
+          760.511943370596,
+          9.366603880218095,
+          -25.301516824753143,
+          14.233990888975029
+        ],
+        "relative_residual": 0.9810741406339563,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.7247194224918431,
+              0.13750045317801235,
+              0.5376052566581452
+            ],
+            "force_xyz": [
+              -17.67523957740007,
+              1.1013365218348352,
+              14.097236541305046
+            ],
+            "force_norm_n": 22.635350988096548,
+            "normal_force_n": 17.67523957740007,
+            "tangential_force_n": 14.140191661920058
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.2699847478359668,
+              -0.5209509588795972,
+              0.2855707124121776
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 440,
+      "timestamp_ms": 14668,
+      "reference_mode": "root_position",
+      "analysis_confidence": "high",
+      "phase": "loaded_transition",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -27.974438762594865,
+        30.668996993955446,
+        784.6111992642658,
+        21.166805180569675,
+        -26.36743087754883,
+        17.308366834639564
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -27.974438762594865,
+          30.668996993955446,
+          784.6111992642658,
+          21.166805180569675,
+          -26.36743087754883,
+          17.308366834639564
+        ],
+        "achieved_wrench": [
+          -17.14879383198194,
+          0.8551265325282753,
+          13.692358516491312,
+          2.5041803003019236,
+          -1.0459177243600664,
+          3.2016444524243854
+        ],
+        "wrench_residual": [
+          -10.825644930612924,
+          29.81387046142717,
+          770.9188407477744,
+          18.66262488026775,
+          -25.321513153188764,
+          14.106722382215178
+        ],
+        "relative_residual": 0.9818397524068128,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.7301169672939041,
+              0.14863852488000182,
+              0.5425595673540274
+            ],
+            "force_xyz": [
+              -17.14879383198194,
+              0.8551265325282753,
+              13.692358516491312
+            ],
+            "force_norm_n": 21.9611714856605,
+            "normal_force_n": 17.14879383198194,
+            "tangential_force_n": 13.719035065585553
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.2740040900245657,
+              -0.5186580002216303,
+              0.2840046665246983
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 525,
+      "timestamp_ms": 17501,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "recovery",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        1.8180152014106026e-31,
+        3.6021909460867906e-31,
+        784.8000196200001,
+        -23.730336489710496,
+        5.754971210998409,
+        13.746455440225184
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          1.8180152014106026e-31,
+          3.6021909460867906e-31,
+          784.8000196200001,
+          -23.730336489710496,
+          5.754971210998409,
+          13.746455440225184
+        ],
+        "achieved_wrench": [
+          -5.990390543602027,
+          0.03903352520464986,
+          4.792153467641778,
+          4.467046421948117,
+          -1.1519811753784372,
+          5.59337648744044
+        ],
+        "wrench_residual": [
+          5.990390543602027,
+          -0.03903352520464986,
+          780.0078661523582,
+          -28.197382911658615,
+          6.9069523863768465,
+          8.153078952784742
+        ],
+        "relative_residual": 0.994032054012221,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.016080721019543023,
+              0.9724180759753548,
+              1.2710062533089754
+            ],
+            "force_xyz": [
+              -5.990390543602027,
+              0.03903352520464986,
+              4.792153467641778
+            ],
+            "force_norm_n": 7.671442976285335,
+            "normal_force_n": 5.990390543602027,
+            "tangential_force_n": 4.792312434881621
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.12936501483208554,
+              0.27763769188675685,
+              1.016121108123978
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 526,
+      "timestamp_ms": 17534,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "recovery",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -2.5123991797435656e-17,
+        2.075280038173675e-17,
+        784.8000196200001,
+        -23.730336489710496,
+        5.754971210998409,
+        13.746455440225184
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -2.5123991797435656e-17,
+          2.075280038173675e-17,
+          784.8000196200001,
+          -23.730336489710496,
+          5.754971210998409,
+          13.746455440225184
+        ],
+        "achieved_wrench": [
+          -5.990390543602027,
+          0.03903352520464986,
+          4.792153467641778,
+          4.467046421948117,
+          -1.1519811753784372,
+          5.59337648744044
+        ],
+        "wrench_residual": [
+          5.990390543602027,
+          -0.03903352520464984,
+          780.0078661523582,
+          -28.197382911658615,
+          6.9069523863768465,
+          8.153078952784742
+        ],
+        "relative_residual": 0.994032054012221,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.016080721019543023,
+              0.9724180759753548,
+              1.2710062533089754
+            ],
+            "force_xyz": [
+              -5.990390543602027,
+              0.03903352520464986,
+              4.792153467641778
+            ],
+            "force_norm_n": 7.671442976285335,
+            "normal_force_n": 5.990390543602027,
+            "tangential_force_n": 4.792312434881621
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.12936501483208554,
+              0.27763769188675685,
+              1.016121108123978
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 527,
+      "timestamp_ms": 17568,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "recovery",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        2.512399179743602e-17,
+        -2.0752800381736022e-17,
+        784.8000196200001,
+        -23.730336489710496,
+        5.754971210998409,
+        13.746455440225184
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          2.512399179743602e-17,
+          -2.0752800381736022e-17,
+          784.8000196200001,
+          -23.730336489710496,
+          5.754971210998409,
+          13.746455440225184
+        ],
+        "achieved_wrench": [
+          -5.990390543602027,
+          0.03903352520464986,
+          4.792153467641778,
+          4.467046421948117,
+          -1.1519811753784372,
+          5.59337648744044
+        ],
+        "wrench_residual": [
+          5.990390543602027,
+          -0.03903352520464988,
+          780.0078661523582,
+          -28.197382911658615,
+          6.9069523863768465,
+          8.153078952784742
+        ],
+        "relative_residual": 0.994032054012221,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.016080721019543023,
+              0.9724180759753548,
+              1.2710062533089754
+            ],
+            "force_xyz": [
+              -5.990390543602027,
+              0.03903352520464986,
+              4.792153467641778
+            ],
+            "force_norm_n": 7.671442976285335,
+            "normal_force_n": 5.990390543602027,
+            "tangential_force_n": 4.792312434881621
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.12936501483208554,
+              0.27763769188675685,
+              1.016121108123978
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 528,
+      "timestamp_ms": 17601,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "recovery",
+      "no_hand_grip": false,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        1.8180152014106026e-31,
+        3.6021909460867906e-31,
+        784.8000196200001,
+        -23.730336489710496,
+        5.754971210998409,
+        13.746455440225184
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          1.8180152014106026e-31,
+          3.6021909460867906e-31,
+          784.8000196200001,
+          -23.730336489710496,
+          5.754971210998409,
+          13.746455440225184
+        ],
+        "achieved_wrench": [
+          -5.990390543602027,
+          0.03903352520464986,
+          4.792153467641778,
+          4.467046421948117,
+          -1.1519811753784372,
+          5.59337648744044
+        ],
+        "wrench_residual": [
+          5.990390543602027,
+          -0.03903352520464986,
+          780.0078661523582,
+          -28.197382911658615,
+          6.9069523863768465,
+          8.153078952784742
+        ],
+        "relative_residual": 0.994032054012221,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.016080721019543023,
+              0.9724180759753548,
+              1.2710062533089754
+            ],
+            "force_xyz": [
+              -5.990390543602027,
+              0.03903352520464986,
+              4.792153467641778
+            ],
+            "force_norm_n": 7.671442976285335,
+            "normal_force_n": 5.990390543602027,
+            "tangential_force_n": 4.792312434881621
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.12936501483208554,
+              0.27763769188675685,
+              1.016121108123978
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 573,
+      "timestamp_ms": 19101,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -57.458404571997825,
+        -22.60282925753843,
+        800.4508372736735,
+        -63.841087796775966,
+        -24.8701270205738,
+        14.828405224589023
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -57.458404571997825,
+          -22.60282925753843,
+          800.4508372736735,
+          -63.841087796775966,
+          -24.8701270205738,
+          14.828405224589023
+        ],
+        "achieved_wrench": [
+          -53.19020326927492,
+          -2.375320157195747,
+          42.48581407246379,
+          14.00294290798882,
+          -11.16917270545652,
+          16.90656126660047
+        ],
+        "wrench_residual": [
+          -4.2682013027229075,
+          -20.227509100342683,
+          757.9650232012098,
+          -77.84403070476479,
+          -13.700954315117281,
+          -2.0781560420114467
+        ],
+        "relative_residual": 0.9459907858524313,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6007906514028187,
+              0.33397057521454926,
+              0.8024958536766822
+            ],
+            "force_xyz": [
+              -53.19020326927492,
+              -2.375320157195747,
+              42.48581407246379
+            ],
+            "force_norm_n": 68.11669594949484,
+            "normal_force_n": 53.19020326927492,
+            "tangential_force_n": 42.552162615419945
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.17334867478904425,
+              -0.6175984731641635,
+              0.2964984142246576
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 574,
+      "timestamp_ms": 19134,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        22.26630275129434,
+        -78.7405697074422,
+        791.2674626512797,
+        -42.89658920999689,
+        44.315423051799016,
+        -10.047607866202167
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          22.26630275129434,
+          -78.7405697074422,
+          791.2674626512797,
+          -42.89658920999689,
+          44.315423051799016,
+          -10.047607866202167
+        ],
+        "achieved_wrench": [
+          -9.528663734180473,
+          -1.0122385681312207,
+          7.555425197763711,
+          -5.317181729703828,
+          6.112109930782784,
+          -5.886991419681409
+        ],
+        "wrench_residual": [
+          31.794966485474813,
+          -77.72833113931098,
+          783.712037453516,
+          -37.579407480293064,
+          38.20331312101623,
+          -4.160616446520758
+        ],
+        "relative_residual": 0.9900885394565309,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.5964076983414492,
+              0.3062333572119767,
+              0.7660840943155403
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.1748030587463803,
+              -0.6113825862080566,
+              0.2905644984886764
+            ],
+            "force_xyz": [
+              -9.528663734180473,
+              -1.0122385681312207,
+              7.555425197763711
+            ],
+            "force_norm_n": 12.202643541335677,
+            "normal_force_n": 9.528663734180473,
+            "tangential_force_n": 7.622930987344379
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 575,
+      "timestamp_ms": 19168,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        63.26797181494578,
+        -139.73331630405957,
+        760.0215790516729,
+        -1.3886596639206665,
+        79.68063880340438,
+        -25.20243280646467
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          63.26797181494578,
+          -139.73331630405957,
+          760.0215790516729,
+          -1.3886596639206665,
+          79.68063880340438,
+          -25.20243280646467
+        ],
+        "achieved_wrench": [
+          -7.031569656264203,
+          -1.0387433959598704,
+          5.528518258007553,
+          -4.134879171926095,
+          4.640436250665159,
+          -4.387155341804794
+        ],
+        "wrench_residual": [
+          70.29954147120998,
+          -138.6945729080997,
+          754.4930607936653,
+          2.746219508005429,
+          75.04020255273922,
+          -20.81527746465988
+        ],
+        "relative_residual": 0.9928732861132024,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.5944990609673224,
+              0.2949126949325547,
+              0.7491971039300465
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.15165846067903116,
+              -0.6132175064205457,
+              0.28900529236514083
+            ],
+            "force_xyz": [
+              -7.031569656264203,
+              -1.0387433959598704,
+              5.528518258007553
+            ],
+            "force_norm_n": 9.004802818644537,
+            "normal_force_n": 7.031569656264203,
+            "tangential_force_n": 5.625255725011363
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 576,
+      "timestamp_ms": 19201,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        62.526846395468,
+        -103.90266197088897,
+        730.5311660534583,
+        4.529165375647636,
+        41.475761395331034,
+        -4.599881313559337
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          62.526846395468,
+          -103.90266197088897,
+          730.5311660534583,
+          4.529165375647636,
+          41.475761395331034,
+          -4.599881313559337
+        ],
+        "achieved_wrench": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "wrench_residual": [
+          62.526846395468,
+          -103.90266197088897,
+          730.5311660534583,
+          4.529165375647636,
+          41.475761395331034,
+          -4.599881313559337
+        ],
+        "relative_residual": 1.0,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.5911106208734813,
+              0.2902533314094573,
+              0.7394743512307722
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.12987724395102435,
+              -0.6171749168680687,
+              0.2889736105301592
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 577,
+      "timestamp_ms": 19234,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -138.72037400116713,
+        115.95204973234952,
+        757.0304013381219,
+        -32.65906643948535,
+        -149.6958047879764,
+        103.84222595031564
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -138.72037400116713,
+          115.95204973234952,
+          757.0304013381219,
+          -32.65906643948535,
+          -149.6958047879764,
+          103.84222595031564
+        ],
+        "achieved_wrench": [
+          -111.41574261597648,
+          13.769208514997182,
+          88.06263808550719,
+          35.03711705097504,
+          -15.780961504727195,
+          46.795983568895764
+        ],
+        "wrench_residual": [
+          -27.304631385190646,
+          102.18284121735235,
+          668.9677632526148,
+          -67.69618349046038,
+          -133.9148432832492,
+          57.04624238141987
+        ],
+        "relative_residual": 0.8700244759329925,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.5974399531510789,
+              0.3344181651179977,
+              0.7255562652033695
+            ],
+            "force_xyz": [
+              -111.41574261597648,
+              13.769208514997182,
+              88.06263808550719
+            ],
+            "force_norm_n": 142.6817683951878,
+            "normal_force_n": 111.41574261597648,
+            "tangential_force_n": 89.13259409278119
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.10604386631579048,
+              -0.6054457382791236,
+              0.3086537825233677
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    },
+    {
+      "frame_index": 578,
+      "timestamp_ms": 19268,
+      "reference_mode": "root_position",
+      "analysis_confidence": "low",
+      "phase": "loaded_transition",
+      "no_hand_grip": true,
+      "is_plausible_foot_support": false,
+      "root_inverse_force": [
+        -312.1658401515929,
+        270.9936616190799,
+        854.031292512696,
+        26.553328309430032,
+        -222.66775061766097,
+        194.276672513497
+      ],
+      "force_distribution": {
+        "status": "high_residual",
+        "contact_count": 2,
+        "required_wrench": [
+          -312.1658401515929,
+          270.9936616190799,
+          854.031292512696,
+          26.553328309430032,
+          -222.66775061766097,
+          194.276672513497
+        ],
+        "achieved_wrench": [
+          -257.7179116448605,
+          59.572247523155035,
+          197.38034703053987,
+          90.89649057080837,
+          -25.463447799621363,
+          126.3680448236734
+        ],
+        "wrench_residual": [
+          -54.44792850673235,
+          211.42141409592486,
+          656.6509454821562,
+          -64.34316226137834,
+          -197.2043028180396,
+          67.9086276898236
+        ],
+        "relative_residual": 0.7298881995802313,
+        "wall_normal_world": [
+          -1.0,
+          0.0,
+          0.0
+        ],
+        "contact_forces": {
+          "left_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.6084028433927664,
+              0.34099678795108573,
+              0.6910939701041022
+            ],
+            "force_xyz": [
+              -257.7179116448605,
+              59.572247523155035,
+              197.38034703053987
+            ],
+            "force_norm_n": 330.0399612947567,
+            "normal_force_n": 257.7179116448605,
+            "tangential_force_n": 206.1743293158884
+          },
+          "right_foot": {
+            "mode": "STEP",
+            "position_xyz": [
+              0.0949560005929066,
+              -0.6147849731867973,
+              0.3456135872169656
+            ],
+            "force_xyz": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "force_norm_n": 0.0,
+            "normal_force_n": 0.0,
+            "tangential_force_n": 0.0
+          }
+        }
+      }
+    }
+  ]
+}

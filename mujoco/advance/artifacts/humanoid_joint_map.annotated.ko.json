@@ -1,0 +1,1144 @@
+﻿{
+  "_annotation_ko": {
+    "file_purpose": "MuJoCo humanoid 모델의 인덱스 맵/조인트/액추에이터 정보를 분석한 결과 파일",
+    "top_level_keys": {
+      "source_xml": "분석 대상 XML 경로",
+      "dimensions": "모델 전체 차원/개수 정보",
+      "index_map": "이름 -> 인덱스(ID) 매핑",
+      "joints": "조인트 상세 물리 파라미터 목록",
+      "actuators": "액추에이터 상세 파라미터 목록"
+    },
+    "dimensions_fields": {
+      "nq": "qpos 상태벡터 길이(일반화 좌표 수)",
+      "nv": "qvel 상태벡터 길이(일반화 속도 수)",
+      "nu": "actuator 제어 입력 수",
+      "nbody": "body 개수",
+      "njnt": "joint 개수",
+      "ngeom": "geom 개수",
+      "nsite": "site 개수"
+    },
+    "index_map_categories": {
+      "body": "body 이름->ID",
+      "joint": "joint 이름->ID",
+      "geom": "geom 이름->ID",
+      "site": "site 이름->ID",
+      "actuator": "actuator 이름->ID"
+    },
+    "joint_fields": {
+      "id": "조인트 고유 인덱스",
+      "name": "조인트 이름",
+      "body_id": "이 조인트가 속한 body 인덱스",
+      "body_name": "이 조인트가 속한 body 이름",
+      "type": "조인트 타입 코드",
+      "qpos_adr": "qpos에서 이 조인트 값이 시작되는 인덱스",
+      "dof_adr": "qvel/동역학 DOF가 시작되는 인덱스",
+      "range": "조인트 제한 범위 [min, max] (보통 degree)",
+      "limited": "range 제한 사용 여부",
+      "stiffness": "관절 스프링 강성",
+      "damping": "관절 감쇠",
+      "armature": "구동부 관성(armature)"
+    },
+    "actuator_fields": {
+      "id": "액추에이터 고유 인덱스",
+      "name": "액추에이터 이름",
+      "trn_type": "전달 타입 코드",
+      "target_joint_id": "구동 대상 joint ID",
+      "target_joint_name": "구동 대상 joint 이름",
+      "ctrl_limited": "제어 입력 제한 여부",
+      "force_limited": "출력 힘/토크 제한 여부",
+      "ctrl_range": "제어 입력 허용 범위",
+      "force_range": "출력 힘/토크 허용 범위",
+      "gear": "기어 벡터(구동 이득/방향)"
+    }
+  },
+  "source_xml": "E:\\ssafy\\mujoco\\models\\humanoid.xml",
+  "dimensions": {
+    "nq": 28,
+    "nv": 27,
+    "nu": 21,
+    "nbody": 17,
+    "njnt": 22,
+    "ngeom": 20,
+    "nsite": 0
+  },
+  "index_map": {
+    "body": {
+      "world": 0,
+      "torso": 1,
+      "head": 2,
+      "waist_lower": 3,
+      "pelvis": 4,
+      "thigh_right": 5,
+      "shin_right": 6,
+      "foot_right": 7,
+      "thigh_left": 8,
+      "shin_left": 9,
+      "foot_left": 10,
+      "upper_arm_right": 11,
+      "lower_arm_right": 12,
+      "hand_right": 13,
+      "upper_arm_left": 14,
+      "lower_arm_left": 15,
+      "hand_left": 16
+    },
+    "joint": {
+      "root": 0,
+      "abdomen_z": 1,
+      "abdomen_y": 2,
+      "abdomen_x": 3,
+      "hip_x_right": 4,
+      "hip_z_right": 5,
+      "hip_y_right": 6,
+      "knee_right": 7,
+      "ankle_y_right": 8,
+      "ankle_x_right": 9,
+      "hip_x_left": 10,
+      "hip_z_left": 11,
+      "hip_y_left": 12,
+      "knee_left": 13,
+      "ankle_y_left": 14,
+      "ankle_x_left": 15,
+      "shoulder1_right": 16,
+      "shoulder2_right": 17,
+      "elbow_right": 18,
+      "shoulder1_left": 19,
+      "shoulder2_left": 20,
+      "elbow_left": 21
+    },
+    "geom": {
+      "floor": 0,
+      "torso": 1,
+      "waist_upper": 2,
+      "head": 3,
+      "waist_lower": 4,
+      "butt": 5,
+      "thigh_right": 6,
+      "shin_right": 7,
+      "foot1_right": 8,
+      "foot2_right": 9,
+      "thigh_left": 10,
+      "shin_left": 11,
+      "foot1_left": 12,
+      "foot2_left": 13,
+      "upper_arm_right": 14,
+      "lower_arm_right": 15,
+      "hand_right": 16,
+      "upper_arm_left": 17,
+      "lower_arm_left": 18,
+      "hand_left": 19
+    },
+    "site": {},
+    "actuator": {
+      "abdomen_z": 0,
+      "abdomen_y": 1,
+      "abdomen_x": 2,
+      "hip_x_right": 3,
+      "hip_z_right": 4,
+      "hip_y_right": 5,
+      "knee_right": 6,
+      "ankle_y_right": 7,
+      "ankle_x_right": 8,
+      "hip_x_left": 9,
+      "hip_z_left": 10,
+      "hip_y_left": 11,
+      "knee_left": 12,
+      "ankle_y_left": 13,
+      "ankle_x_left": 14,
+      "shoulder1_right": 15,
+      "shoulder2_right": 16,
+      "elbow_right": 17,
+      "shoulder1_left": 18,
+      "shoulder2_left": 19,
+      "elbow_left": 20
+    }
+  },
+  "joints": [
+    {
+      "id": 0,
+      "name": "root",
+      "body_id": 1,
+      "body_name": "torso",
+      "type": 0,
+      "qpos_adr": 0,
+      "dof_adr": 0,
+      "range": [
+        0.0,
+        0.0
+      ],
+      "limited": false,
+      "stiffness": 0.0,
+      "damping": 0.0,
+      "armature": 0.0,
+      "role_ko": "몸 전체의 전역 기준(자유조인트: 위치+자세)",
+      "type_ko": "자유조인트(free): 6DOF"
+    },
+    {
+      "id": 1,
+      "name": "abdomen_z",
+      "body_id": 3,
+      "body_name": "waist_lower",
+      "type": 3,
+      "qpos_adr": 7,
+      "dof_adr": 6,
+      "range": [
+        -0.7853981633974483,
+        0.7853981633974483
+      ],
+      "limited": true,
+      "stiffness": 20.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "복부 회전 yaw(몸통 비틀림)",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 2,
+      "name": "abdomen_y",
+      "body_id": 3,
+      "body_name": "waist_lower",
+      "type": 3,
+      "qpos_adr": 8,
+      "dof_adr": 7,
+      "range": [
+        -1.3089969389957472,
+        0.5235987755982988
+      ],
+      "limited": true,
+      "stiffness": 10.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "복부 pitch(몸통 굴곡/신전)",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 3,
+      "name": "abdomen_x",
+      "body_id": 4,
+      "body_name": "pelvis",
+      "type": 3,
+      "qpos_adr": 9,
+      "dof_adr": 8,
+      "range": [
+        -0.6108652381980153,
+        0.6108652381980153
+      ],
+      "limited": true,
+      "stiffness": 10.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "복부 roll(몸통 좌우 기울기)",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 4,
+      "name": "hip_x_right",
+      "body_id": 5,
+      "body_name": "thigh_right",
+      "type": 3,
+      "qpos_adr": 10,
+      "dof_adr": 9,
+      "range": [
+        -0.5235987755982988,
+        0.17453292519943295
+      ],
+      "limited": true,
+      "stiffness": 10.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "오른 고관절 x축 회전",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 5,
+      "name": "hip_z_right",
+      "body_id": 5,
+      "body_name": "thigh_right",
+      "type": 3,
+      "qpos_adr": 11,
+      "dof_adr": 10,
+      "range": [
+        -1.0471975511965976,
+        0.6108652381980153
+      ],
+      "limited": true,
+      "stiffness": 10.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "오른 고관절 z축 회전",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 6,
+      "name": "hip_y_right",
+      "body_id": 5,
+      "body_name": "thigh_right",
+      "type": 3,
+      "qpos_adr": 12,
+      "dof_adr": 11,
+      "range": [
+        -2.6179938779914944,
+        0.3490658503988659
+      ],
+      "limited": true,
+      "stiffness": 10.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "오른 고관절 y축 회전(주 추진축)",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 7,
+      "name": "knee_right",
+      "body_id": 6,
+      "body_name": "shin_right",
+      "type": 3,
+      "qpos_adr": 13,
+      "dof_adr": 12,
+      "range": [
+        -2.792526803190927,
+        0.03490658503988659
+      ],
+      "limited": true,
+      "stiffness": 1.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "오른 무릎 굴곡/신전",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 8,
+      "name": "ankle_y_right",
+      "body_id": 7,
+      "body_name": "foot_right",
+      "type": 3,
+      "qpos_adr": 14,
+      "dof_adr": 13,
+      "range": [
+        -0.8726646259971648,
+        0.8726646259971648
+      ],
+      "limited": true,
+      "stiffness": 6.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "오른 발목 pitch",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 9,
+      "name": "ankle_x_right",
+      "body_id": 7,
+      "body_name": "foot_right",
+      "type": 3,
+      "qpos_adr": 15,
+      "dof_adr": 14,
+      "range": [
+        -0.8726646259971648,
+        0.8726646259971648
+      ],
+      "limited": true,
+      "stiffness": 3.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "오른 발목 roll",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 10,
+      "name": "hip_x_left",
+      "body_id": 8,
+      "body_name": "thigh_left",
+      "type": 3,
+      "qpos_adr": 16,
+      "dof_adr": 15,
+      "range": [
+        -0.5235987755982988,
+        0.17453292519943295
+      ],
+      "limited": true,
+      "stiffness": 10.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "왼 고관절 x축 회전",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 11,
+      "name": "hip_z_left",
+      "body_id": 8,
+      "body_name": "thigh_left",
+      "type": 3,
+      "qpos_adr": 17,
+      "dof_adr": 16,
+      "range": [
+        -1.0471975511965976,
+        0.6108652381980153
+      ],
+      "limited": true,
+      "stiffness": 10.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "왼 고관절 z축 회전",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 12,
+      "name": "hip_y_left",
+      "body_id": 8,
+      "body_name": "thigh_left",
+      "type": 3,
+      "qpos_adr": 18,
+      "dof_adr": 17,
+      "range": [
+        -2.6179938779914944,
+        0.3490658503988659
+      ],
+      "limited": true,
+      "stiffness": 10.0,
+      "damping": 5.0,
+      "armature": 0.01,
+      "role_ko": "왼 고관절 y축 회전(주 추진축)",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 13,
+      "name": "knee_left",
+      "body_id": 9,
+      "body_name": "shin_left",
+      "type": 3,
+      "qpos_adr": 19,
+      "dof_adr": 18,
+      "range": [
+        -2.792526803190927,
+        0.03490658503988659
+      ],
+      "limited": true,
+      "stiffness": 1.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "왼 무릎 굴곡/신전",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 14,
+      "name": "ankle_y_left",
+      "body_id": 10,
+      "body_name": "foot_left",
+      "type": 3,
+      "qpos_adr": 20,
+      "dof_adr": 19,
+      "range": [
+        -0.8726646259971648,
+        0.8726646259971648
+      ],
+      "limited": true,
+      "stiffness": 6.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "왼 발목 pitch",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 15,
+      "name": "ankle_x_left",
+      "body_id": 10,
+      "body_name": "foot_left",
+      "type": 3,
+      "qpos_adr": 21,
+      "dof_adr": 20,
+      "range": [
+        -0.8726646259971648,
+        0.8726646259971648
+      ],
+      "limited": true,
+      "stiffness": 3.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "왼 발목 roll",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 16,
+      "name": "shoulder1_right",
+      "body_id": 11,
+      "body_name": "upper_arm_right",
+      "type": 3,
+      "qpos_adr": 22,
+      "dof_adr": 21,
+      "range": [
+        -1.4835298641951802,
+        1.0471975511965976
+      ],
+      "limited": true,
+      "stiffness": 1.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "오른 어깨 1축",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 17,
+      "name": "shoulder2_right",
+      "body_id": 11,
+      "body_name": "upper_arm_right",
+      "type": 3,
+      "qpos_adr": 23,
+      "dof_adr": 22,
+      "range": [
+        -1.4835298641951802,
+        1.0471975511965976
+      ],
+      "limited": true,
+      "stiffness": 1.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "오른 어깨 2축",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 18,
+      "name": "elbow_right",
+      "body_id": 12,
+      "body_name": "lower_arm_right",
+      "type": 3,
+      "qpos_adr": 24,
+      "dof_adr": 23,
+      "range": [
+        -1.7453292519943295,
+        0.8726646259971648
+      ],
+      "limited": true,
+      "stiffness": 0.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "오른 팔꿈치 굴곡/신전",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 19,
+      "name": "shoulder1_left",
+      "body_id": 14,
+      "body_name": "upper_arm_left",
+      "type": 3,
+      "qpos_adr": 25,
+      "dof_adr": 24,
+      "range": [
+        -1.4835298641951802,
+        1.0471975511965976
+      ],
+      "limited": true,
+      "stiffness": 1.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "왼 어깨 1축",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 20,
+      "name": "shoulder2_left",
+      "body_id": 14,
+      "body_name": "upper_arm_left",
+      "type": 3,
+      "qpos_adr": 26,
+      "dof_adr": 25,
+      "range": [
+        -1.4835298641951802,
+        1.0471975511965976
+      ],
+      "limited": true,
+      "stiffness": 1.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "왼 어깨 2축",
+      "type_ko": "힌지(hinge): 1DOF"
+    },
+    {
+      "id": 21,
+      "name": "elbow_left",
+      "body_id": 15,
+      "body_name": "lower_arm_left",
+      "type": 3,
+      "qpos_adr": 27,
+      "dof_adr": 26,
+      "range": [
+        -1.7453292519943295,
+        0.8726646259971648
+      ],
+      "limited": true,
+      "stiffness": 0.0,
+      "damping": 0.2,
+      "armature": 0.01,
+      "role_ko": "왼 팔꿈치 굴곡/신전",
+      "type_ko": "힌지(hinge): 1DOF"
+    }
+  ],
+  "actuators": [
+    {
+      "id": 0,
+      "name": "abdomen_z",
+      "trn_type": 0,
+      "target_joint_id": 1,
+      "target_joint_name": "abdomen_z",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "복부 회전 yaw(몸통 비틀림)",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 1,
+      "name": "abdomen_y",
+      "trn_type": 0,
+      "target_joint_id": 2,
+      "target_joint_name": "abdomen_y",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "복부 pitch(몸통 굴곡/신전)",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 2,
+      "name": "abdomen_x",
+      "trn_type": 0,
+      "target_joint_id": 3,
+      "target_joint_name": "abdomen_x",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "복부 roll(몸통 좌우 기울기)",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 3,
+      "name": "hip_x_right",
+      "trn_type": 0,
+      "target_joint_id": 4,
+      "target_joint_name": "hip_x_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 고관절 x축 회전",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 4,
+      "name": "hip_z_right",
+      "trn_type": 0,
+      "target_joint_id": 5,
+      "target_joint_name": "hip_z_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 고관절 z축 회전",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 5,
+      "name": "hip_y_right",
+      "trn_type": 0,
+      "target_joint_id": 6,
+      "target_joint_name": "hip_y_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        120.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 고관절 y축 회전(주 추진축)",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 6,
+      "name": "knee_right",
+      "trn_type": 0,
+      "target_joint_id": 7,
+      "target_joint_name": "knee_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        80.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 무릎 굴곡/신전",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 7,
+      "name": "ankle_y_right",
+      "trn_type": 0,
+      "target_joint_id": 8,
+      "target_joint_name": "ankle_y_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        20.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 발목 pitch",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 8,
+      "name": "ankle_x_right",
+      "trn_type": 0,
+      "target_joint_id": 9,
+      "target_joint_name": "ankle_x_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        20.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 발목 roll",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 9,
+      "name": "hip_x_left",
+      "trn_type": 0,
+      "target_joint_id": 10,
+      "target_joint_name": "hip_x_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 고관절 x축 회전",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 10,
+      "name": "hip_z_left",
+      "trn_type": 0,
+      "target_joint_id": 11,
+      "target_joint_name": "hip_z_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 고관절 z축 회전",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 11,
+      "name": "hip_y_left",
+      "trn_type": 0,
+      "target_joint_id": 12,
+      "target_joint_name": "hip_y_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        120.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 고관절 y축 회전(주 추진축)",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 12,
+      "name": "knee_left",
+      "trn_type": 0,
+      "target_joint_id": 13,
+      "target_joint_name": "knee_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        80.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 무릎 굴곡/신전",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 13,
+      "name": "ankle_y_left",
+      "trn_type": 0,
+      "target_joint_id": 14,
+      "target_joint_name": "ankle_y_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        20.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 발목 pitch",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 14,
+      "name": "ankle_x_left",
+      "trn_type": 0,
+      "target_joint_id": 15,
+      "target_joint_name": "ankle_x_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        20.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 발목 roll",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 15,
+      "name": "shoulder1_right",
+      "trn_type": 0,
+      "target_joint_id": 16,
+      "target_joint_name": "shoulder1_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        20.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 어깨 1축",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 16,
+      "name": "shoulder2_right",
+      "trn_type": 0,
+      "target_joint_id": 17,
+      "target_joint_name": "shoulder2_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        20.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 어깨 2축",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 17,
+      "name": "elbow_right",
+      "trn_type": 0,
+      "target_joint_id": 18,
+      "target_joint_name": "elbow_right",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "오른 팔꿈치 굴곡/신전",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 18,
+      "name": "shoulder1_left",
+      "trn_type": 0,
+      "target_joint_id": 19,
+      "target_joint_name": "shoulder1_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        20.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 어깨 1축",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 19,
+      "name": "shoulder2_left",
+      "trn_type": 0,
+      "target_joint_id": 20,
+      "target_joint_name": "shoulder2_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        20.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 어깨 2축",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    },
+    {
+      "id": 20,
+      "name": "elbow_left",
+      "trn_type": 0,
+      "target_joint_id": 21,
+      "target_joint_name": "elbow_left",
+      "ctrl_limited": true,
+      "force_limited": false,
+      "ctrl_range": [
+        -1.0,
+        1.0
+      ],
+      "force_range": [
+        0.0,
+        0.0
+      ],
+      "gear": [
+        40.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "role_ko": "왼 팔꿈치 굴곡/신전",
+      "trn_type_ko": "joint 전달: actuator가 조인트를 직접 구동"
+    }
+  ]
+}

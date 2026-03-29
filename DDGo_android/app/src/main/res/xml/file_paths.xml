@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [DEBUG ONLY] 이 파일은 디버그 모드의 분석 데이터 JSON 내보내기 기능을 위한 FileProvider 설정입니다. -->
+<paths>
+    <cache-path name="export_data" path="." />
+</paths>

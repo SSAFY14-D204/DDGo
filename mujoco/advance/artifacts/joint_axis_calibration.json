@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "joints": {
+    "abdomen_z": {
+      "axis_direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "abdomen_y": {
+      "axis_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "abdomen_x": {
+      "axis_direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "hip_x_right": {
+      "axis_direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "hip_z_right": {
+      "axis_direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "hip_y_right": {
+      "axis_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "knee_right": {
+      "axis_direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "ankle_y_right": {
+      "axis_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "ankle_x_right": {
+      "axis_direction": [
+        0.8944271909999159,
+        0.0,
+        0.4472135954999579
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "hip_x_left": {
+      "axis_direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "hip_z_left": {
+      "axis_direction": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "hip_y_left": {
+      "axis_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "knee_left": {
+      "axis_direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "ankle_y_left": {
+      "axis_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "ankle_x_left": {
+      "axis_direction": [
+        -0.8944271909999159,
+        0.0,
+        -0.4472135954999579
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "shoulder1_right": {
+      "axis_direction": [
+        0.8164965809277261,
+        0.4082482904638631,
+        0.4082482904638631
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "shoulder2_right": {
+      "axis_direction": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865475
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "elbow_right": {
+      "axis_direction": [
+        0.0,
+        -0.7071067811865475,
+        0.7071067811865475
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "shoulder1_left": {
+      "axis_direction": [
+        -0.8164965809277261,
+        0.4082482904638631,
+        -0.4082482904638631
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "shoulder2_left": {
+      "axis_direction": [
+        0.0,
+        -0.7071067811865475,
+        -0.7071067811865475
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    },
+    "elbow_left": {
+      "axis_direction": [
+        0.0,
+        -0.7071067811865475,
+        -0.7071067811865475
+      ],
+      "sign_flip": 1.0,
+      "offset_rad": 0.0
+    }
+  }
+}

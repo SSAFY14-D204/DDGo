@@ -1,0 +1,12 @@
+.git
+.gitignore
+.gradle
+build
+src
+gradle
+gradlew
+README.md
+
+!build/libs
+!build/libs/*.jar
+!Dockerfile

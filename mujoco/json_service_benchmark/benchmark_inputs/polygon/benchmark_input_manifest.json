@@ -1,0 +1,16 @@
+{
+  "mode": "polygon_service_benchmark_inputs",
+  "input_video": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\주황.mp4",
+  "seg_detections_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\seg_detect.json",
+  "tpose_image": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\video\\fullbody_dg.png",
+  "task_model": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_skeleton_verify\\pose_landmarker_lite.task",
+  "frame_step": 1,
+  "max_frames": null,
+  "height_m": 1.75,
+  "weight_kg": 80.0,
+  "outputs": {
+    "holds_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\holds_polygon.json",
+    "pose_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\pose3d_sequence.json",
+    "user_body_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\user_body.json"
+  }
+}

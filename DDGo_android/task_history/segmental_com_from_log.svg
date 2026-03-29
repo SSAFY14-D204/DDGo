@@ -1,0 +1,82 @@
+<svg width="520" height="760" viewBox="520 240 400 620" xmlns="http://www.w3.org/2000/svg">
+  <rect x="520" y="240" width="400" height="620" fill="#fbfbfd"/>
+
+  <text x="540" y="272" font-size="18" font-family="Arial" font-weight="bold" fill="#1f2937">
+    Pose landmarks + segmental CoM (from provided landmarksPx)
+  </text>
+  <text x="540" y="294" font-size="12" font-family="Arial" fill="#4b5563">
+    de Leva (1996) male mass fractions / segment COM ratios
+  </text>
+
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <line x1="846.42" y1="356.52" x2="831.05" y2="418.80" stroke="#8fd3ff" stroke-width="5"/>
+    <line x1="780.2" y1="396.4" x2="881.9" y2="441.2" stroke="#8fd3ff" stroke-width="5"/>
+    <line x1="831.05" y1="418.80" x2="786.15" y2="600.7" stroke="#8fd3ff" stroke-width="5"/>
+    <line x1="757.6" y1="593.1" x2="814.7" y2="608.3" stroke="#8fd3ff" stroke-width="5"/>
+
+    <line x1="780.2" y1="396.4" x2="736.7" y2="361.6" stroke="#8fd3ff" stroke-width="5"/>
+    <line x1="736.7" y1="361.6" x2="725.1" y2="280.6" stroke="#8fd3ff" stroke-width="5"/>
+    <line x1="725.1" y1="280.6" x2="730.2" y2="266.4" stroke="#8fd3ff" stroke-width="5"/>
+
+    <line x1="881.9" y1="441.2" x2="887.8" y2="513.0" stroke="#8fd3ff" stroke-width="5"/>
+    <line x1="887.8" y1="513.0" x2="858.2" y2="507.5" stroke="#8fd3ff" stroke-width="5"/>
+    <line x1="858.2" y1="507.5" x2="847.9" y2="503.4" stroke="#8fd3ff" stroke-width="5"/>
+
+    <line x1="757.6" y1="593.1" x2="646.3" y2="648.8" stroke="#ff8f4d" stroke-width="8"/>
+    <line x1="646.3" y1="648.8" x2="581.4" y2="748.1" stroke="#ff8f4d" stroke-width="8"/>
+
+    <line x1="814.7" y1="608.3" x2="807.0" y2="720.3" stroke="#72df88" stroke-width="6"/>
+    <line x1="807.0" y1="720.3" x2="813.0" y2="820.7" stroke="#72df88" stroke-width="6"/>
+  </g>
+
+  <g fill="#ffffff" stroke="#0f172a" stroke-width="1.5">
+    <circle cx="846.42" cy="356.52" r="5"/>
+    <circle cx="831.05" cy="418.80" r="5"/>
+    <circle cx="780.2" cy="396.4" r="5"/>
+    <circle cx="881.9" cy="441.2" r="5"/>
+    <circle cx="736.7" cy="361.6" r="5"/>
+    <circle cx="887.8" cy="513.0" r="5"/>
+    <circle cx="725.1" cy="280.6" r="5"/>
+    <circle cx="858.2" cy="507.5" r="5"/>
+    <circle cx="730.2" cy="266.4" r="5"/>
+    <circle cx="847.9" cy="503.4" r="5"/>
+    <circle cx="757.6" cy="593.1" r="5"/>
+    <circle cx="814.7" cy="608.3" r="5"/>
+    <circle cx="646.3" cy="648.8" r="5"/>
+    <circle cx="807.0" cy="720.3" r="5"/>
+    <circle cx="581.4" cy="748.1" r="5"/>
+    <circle cx="813.0" cy="820.7" r="5"/>
+  </g>
+
+  <g fill="#ff9f1a" stroke="#7c3b00" stroke-width="1.2">
+    <circle cx="838.73" cy="387.67" r="3.8"/>
+    <circle cx="807.98" cy="512.26" r="3.8"/>
+    <circle cx="755.09" cy="376.31" r="3.8"/>
+    <circle cx="885.31" cy="482.64" r="3.8"/>
+    <circle cx="731.39" cy="324.55" r="3.8"/>
+    <circle cx="874.26" cy="510.48" r="3.8"/>
+    <circle cx="729.13" cy="269.38" r="3.8"/>
+    <circle cx="850.06" cy="504.26" r="3.8"/>
+    <circle cx="712.02" cy="615.91" r="3.8"/>
+    <circle cx="811.55" cy="654.16" r="3.8"/>
+    <circle cx="617.78" cy="692.44" r="3.8"/>
+    <circle cx="809.64" cy="764.43" r="3.8"/>
+    <circle cx="581.4" cy="748.1" r="3.8"/>
+    <circle cx="813.0" cy="820.7" r="3.8"/>
+  </g>
+
+  <g>
+    <circle cx="786.10" cy="555.47" r="26" fill="none" stroke="#2563eb" stroke-width="4" opacity="0.85"/>
+    <polygon points="786.10,537.47 791.39,550.23 805.18,550.23 794.02,558.91 799.30,571.67 786.10,563.95 772.90,571.67 778.18,558.91 767.02,550.23 780.81,550.23"
+      fill="#ffd400" stroke="#8b1e1e" stroke-width="2.2"/>
+    <text x="786.10" y="593" font-size="14" text-anchor="middle" font-family="Arial" font-weight="bold" fill="#123b6d">
+      Whole-body CoM
+    </text>
+  </g>
+
+  <g font-family="Arial" font-size="11" fill="#374151">
+    <text x="540" y="814">White: provided landmarksPx</text>
+    <text x="540" y="832">Orange: each segment CoM</text>
+    <text x="540" y="850">Star: weighted whole-body CoM</text>
+  </g>
+</svg>

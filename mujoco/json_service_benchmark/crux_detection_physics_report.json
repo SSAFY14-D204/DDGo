@@ -1,0 +1,1032 @@
+{
+  "schema_version": "1.0.0",
+  "mode": "physics_crux_detection",
+  "inputs": {
+    "holds_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\holds_polygon.json",
+    "pose3d_sequence_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\pose3d_sequence.json",
+    "user_body_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs\\polygon\\user_body.json",
+    "base_xml": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\custom_articulated_human\\custom_articulated_human.xml"
+  },
+  "timings_s": {
+    "load_inputs_s": 0.20093779999297112,
+    "correction_s": 0.8141311999643221,
+    "physics_pipeline_s": 14.831372399930842,
+    "crux_scoring_s": 0.03459439997095615,
+    "serialize_s": 0.0012477999553084373,
+    "total_s": 15.883671200019307
+  },
+  "correction_summary": {
+    "config": {
+      "visibility_low": 0.35,
+      "visibility_missing": 0.15,
+      "freeze_frames": 2,
+      "alpha_torso": 0.55,
+      "alpha_major": 0.4,
+      "alpha_distal": 0.25,
+      "segment_length_tolerance": 0.12
+    },
+    "frame_count": 964,
+    "filled_from_previous_frame_count": 3,
+    "total_low_visibility_joint_count": 198,
+    "total_frozen_joint_count": 198,
+    "total_reconstructed_joint_count": 0
+  },
+  "physics_summary": {
+    "fit_mean_error_m": 0.087699523722095,
+    "recovery_ratio": 0.056016597510373446,
+    "processed_frames": 964,
+    "high_confidence_frame_count": 596,
+    "ok_contact_force_frame_count": 679,
+    "point_support_frame_count": 65
+  },
+  "physics_pipeline_benchmark_timings_s": {
+    "load_inputs_s": 0.00630890007596463,
+    "prepare_model_s": 0.026021700003184378,
+    "fit_sequence_s": 11.99789460003376,
+    "inverse_dynamics_s": 2.475120099959895,
+    "serialize_s": 0.30332300008740276,
+    "total_s": 14.825480600004084
+  },
+  "crux_result": {
+    "logic": {
+      "score_formula": "quality_weight * (0.35*dwell + 0.35*load + 0.15*instability + 0.15*load_shift) - rest_penalty",
+      "why": "설명형 크럭스는 오래 버틴 구간뿐 아니라 몸 부하, 지지 불안정, 하중 이동을 함께 본다. 휴식 홀드는 rest_penalty로 일부 감점한다."
+    },
+    "candidate_count": 21,
+    "top_candidates": [
+      {
+        "hold_id": 9,
+        "segment_count": 5,
+        "engagement_count": 5,
+        "total_active_time_s": 10.601676233287229,
+        "longest_continuous_dwell_s": 4.800335246657446,
+        "best_segment": {
+          "start_frame": 589,
+          "end_frame": 732,
+          "start_time_ms": 19634,
+          "end_time_ms": 24401,
+          "duration_s": 4.800335246657446,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 8012.960165701787,
+          "mean_core_load": 3022.011531546924,
+          "mean_negative_margin_cm": 11.813013276778523,
+          "mean_load_shift_proxy": 4485.928200819074,
+          "mean_confidence_weight": 0.8999999999999999,
+          "ok_fraction": 0.7807017543859649,
+          "segment_crux_score": 0.5733055145696947,
+          "reason_tags": [
+            "long_dwell",
+            "load_shift"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 100,
+          "right_foot": 221,
+          "right_hand": 11
+        },
+        "mode_counts": {
+          "STEP": 307,
+          "GRIP": 11
+        },
+        "physics_crux_score": 0.6373096873842404,
+        "reason_tags": [
+          "long_dwell",
+          "load_shift"
+        ]
+      },
+      {
+        "hold_id": 32,
+        "segment_count": 6,
+        "engagement_count": 6,
+        "total_active_time_s": 6.267011479944675,
+        "longest_continuous_dwell_s": 4.533335246657446,
+        "best_segment": {
+          "start_frame": 415,
+          "end_frame": 550,
+          "start_time_ms": 13834,
+          "end_time_ms": 18334,
+          "duration_s": 4.533335246657446,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 7221.266210303248,
+          "mean_core_load": 2957.0763819902595,
+          "mean_negative_margin_cm": 8.917688054362676,
+          "mean_load_shift_proxy": 3838.5824561636196,
+          "mean_confidence_weight": 0.9470588235294118,
+          "ok_fraction": 0.9485294117647058,
+          "segment_crux_score": 0.6056582113622744,
+          "reason_tags": [
+            "long_dwell",
+            "load_shift"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 148,
+          "right_hand": 40
+        },
+        "mode_counts": {
+          "GRIP": 188
+        },
+        "physics_crux_score": 0.579753751641073,
+        "reason_tags": [
+          "long_dwell",
+          "load_shift"
+        ]
+      },
+      {
+        "hold_id": 26,
+        "segment_count": 3,
+        "engagement_count": 3,
+        "total_active_time_s": 5.300005739972336,
+        "longest_continuous_dwell_s": 3.1003352466574454,
+        "best_segment": {
+          "start_frame": 422,
+          "end_frame": 514,
+          "start_time_ms": 14067,
+          "end_time_ms": 17134,
+          "duration_s": 3.1003352466574454,
+          "dominant_limbs": [
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 9166.685967818084,
+          "mean_core_load": 3129.8231231069194,
+          "mean_negative_margin_cm": 3.2422153615166995,
+          "mean_load_shift_proxy": 5404.404009186666,
+          "mean_confidence_weight": 0.9935483870967743,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.5667700645312107,
+          "reason_tags": [
+            "long_dwell",
+            "load_shift"
+          ]
+        },
+        "limb_counts": {
+          "right_hand": 159
+        },
+        "mode_counts": {
+          "GRIP": 159
+        },
+        "physics_crux_score": 0.5242671316838754,
+        "reason_tags": [
+          "long_dwell",
+          "load_shift"
+        ]
+      }
+    ],
+    "all_candidates": [
+      {
+        "hold_id": 9,
+        "segment_count": 5,
+        "engagement_count": 5,
+        "total_active_time_s": 10.601676233287229,
+        "longest_continuous_dwell_s": 4.800335246657446,
+        "best_segment": {
+          "start_frame": 589,
+          "end_frame": 732,
+          "start_time_ms": 19634,
+          "end_time_ms": 24401,
+          "duration_s": 4.800335246657446,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 8012.960165701787,
+          "mean_core_load": 3022.011531546924,
+          "mean_negative_margin_cm": 11.813013276778523,
+          "mean_load_shift_proxy": 4485.928200819074,
+          "mean_confidence_weight": 0.8999999999999999,
+          "ok_fraction": 0.7807017543859649,
+          "segment_crux_score": 0.5733055145696947,
+          "reason_tags": [
+            "long_dwell",
+            "load_shift"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 100,
+          "right_foot": 221,
+          "right_hand": 11
+        },
+        "mode_counts": {
+          "STEP": 307,
+          "GRIP": 11
+        },
+        "physics_crux_score": 0.6373096873842404,
+        "reason_tags": [
+          "long_dwell",
+          "load_shift"
+        ]
+      },
+      {
+        "hold_id": 32,
+        "segment_count": 6,
+        "engagement_count": 6,
+        "total_active_time_s": 6.267011479944675,
+        "longest_continuous_dwell_s": 4.533335246657446,
+        "best_segment": {
+          "start_frame": 415,
+          "end_frame": 550,
+          "start_time_ms": 13834,
+          "end_time_ms": 18334,
+          "duration_s": 4.533335246657446,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 7221.266210303248,
+          "mean_core_load": 2957.0763819902595,
+          "mean_negative_margin_cm": 8.917688054362676,
+          "mean_load_shift_proxy": 3838.5824561636196,
+          "mean_confidence_weight": 0.9470588235294118,
+          "ok_fraction": 0.9485294117647058,
+          "segment_crux_score": 0.6056582113622744,
+          "reason_tags": [
+            "long_dwell",
+            "load_shift"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 148,
+          "right_hand": 40
+        },
+        "mode_counts": {
+          "GRIP": 188
+        },
+        "physics_crux_score": 0.579753751641073,
+        "reason_tags": [
+          "long_dwell",
+          "load_shift"
+        ]
+      },
+      {
+        "hold_id": 26,
+        "segment_count": 3,
+        "engagement_count": 3,
+        "total_active_time_s": 5.300005739972336,
+        "longest_continuous_dwell_s": 3.1003352466574454,
+        "best_segment": {
+          "start_frame": 422,
+          "end_frame": 514,
+          "start_time_ms": 14067,
+          "end_time_ms": 17134,
+          "duration_s": 3.1003352466574454,
+          "dominant_limbs": [
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 9166.685967818084,
+          "mean_core_load": 3129.8231231069194,
+          "mean_negative_margin_cm": 3.2422153615166995,
+          "mean_load_shift_proxy": 5404.404009186666,
+          "mean_confidence_weight": 0.9935483870967743,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.5667700645312107,
+          "reason_tags": [
+            "long_dwell",
+            "load_shift"
+          ]
+        },
+        "limb_counts": {
+          "right_hand": 159
+        },
+        "mode_counts": {
+          "GRIP": 159
+        },
+        "physics_crux_score": 0.5242671316838754,
+        "reason_tags": [
+          "long_dwell",
+          "load_shift"
+        ]
+      },
+      {
+        "hold_id": 30,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 6.900670493314891,
+        "longest_continuous_dwell_s": 4.300335246657446,
+        "best_segment": {
+          "start_frame": 591,
+          "end_frame": 719,
+          "start_time_ms": 19701,
+          "end_time_ms": 23968,
+          "duration_s": 4.300335246657446,
+          "dominant_limbs": [
+            "left_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 4628.963366608919,
+          "mean_core_load": 3916.838387471105,
+          "mean_negative_margin_cm": 25.071894234278528,
+          "mean_load_shift_proxy": 442.5036716100808,
+          "mean_confidence_weight": 0.8372093023255814,
+          "ok_fraction": 0.7131782945736435,
+          "segment_crux_score": 0.4414626781051689,
+          "reason_tags": [
+            "long_dwell",
+            "unstable_support"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 207
+        },
+        "mode_counts": {
+          "STEP": 207
+        },
+        "physics_crux_score": 0.4548865777887185,
+        "reason_tags": [
+          "long_dwell",
+          "unstable_support"
+        ]
+      },
+      {
+        "hold_id": 15,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 10.334335246657446,
+        "longest_continuous_dwell_s": 10.334335246657446,
+        "best_segment": {
+          "start_frame": 67,
+          "end_frame": 376,
+          "start_time_ms": 2233,
+          "end_time_ms": 12534,
+          "duration_s": 10.334335246657446,
+          "dominant_limbs": [
+            "left_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 2492.2106853441664,
+          "mean_core_load": 2140.9823916202413,
+          "mean_negative_margin_cm": 12.292509482622359,
+          "mean_load_shift_proxy": 191.71850620893954,
+          "mean_confidence_weight": 0.9070967741935485,
+          "ok_fraction": 0.8064516129032258,
+          "segment_crux_score": 0.3560006987807347,
+          "reason_tags": [
+            "long_dwell"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 310
+        },
+        "mode_counts": {
+          "STEP": 310
+        },
+        "physics_crux_score": 0.4526005939636245,
+        "reason_tags": [
+          "long_dwell"
+        ]
+      },
+      {
+        "hold_id": 27,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 9.93367049331489,
+        "longest_continuous_dwell_s": 9.000335246657444,
+        "best_segment": {
+          "start_frame": 75,
+          "end_frame": 344,
+          "start_time_ms": 2500,
+          "end_time_ms": 11467,
+          "duration_s": 9.000335246657444,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 2569.8518263611427,
+          "mean_core_load": 2202.335757499989,
+          "mean_negative_margin_cm": 10.179307938291377,
+          "mean_load_shift_proxy": 190.05661006103205,
+          "mean_confidence_weight": 0.9400000000000001,
+          "ok_fraction": 0.8,
+          "segment_crux_score": 0.348684427132636,
+          "reason_tags": [
+            "long_dwell"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 298
+        },
+        "mode_counts": {
+          "STEP": 298
+        },
+        "physics_crux_score": 0.4463817630627406,
+        "reason_tags": [
+          "long_dwell"
+        ]
+      },
+      {
+        "hold_id": 3,
+        "segment_count": 8,
+        "engagement_count": 8,
+        "total_active_time_s": 3.7666819732595664,
+        "longest_continuous_dwell_s": 1.2333352466574459,
+        "best_segment": {
+          "start_frame": 262,
+          "end_frame": 298,
+          "start_time_ms": 8734,
+          "end_time_ms": 9934,
+          "duration_s": 1.2333352466574459,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 24676.573612094617,
+          "mean_core_load": 1504.9751481622263,
+          "mean_negative_margin_cm": 14.039266255406991,
+          "mean_load_shift_proxy": 11102.181752380824,
+          "mean_confidence_weight": 0.8,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.49071006575877213,
+          "reason_tags": [
+            "high_load",
+            "load_shift"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 66,
+          "right_hand": 47
+        },
+        "mode_counts": {
+          "GRIP": 113
+        },
+        "physics_crux_score": 0.4240475214144565,
+        "reason_tags": [
+          "high_load",
+          "load_shift"
+        ]
+      },
+      {
+        "hold_id": 7,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 2.5006704933148916,
+        "longest_continuous_dwell_s": 1.400335246657446,
+        "best_segment": {
+          "start_frame": 729,
+          "end_frame": 770,
+          "start_time_ms": 24301,
+          "end_time_ms": 25668,
+          "duration_s": 1.400335246657446,
+          "dominant_limbs": [
+            "left_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 13033.74688559839,
+          "mean_core_load": 1228.1186001770138,
+          "mean_negative_margin_cm": 13.040457413759734,
+          "mean_load_shift_proxy": 5671.795608964912,
+          "mean_confidence_weight": 0.9090909090909091,
+          "ok_fraction": 0.8787878787878788,
+          "segment_crux_score": 0.47492727117897865,
+          "reason_tags": [
+            "high_load",
+            "load_shift"
+          ]
+        },
+        "limb_counts": {
+          "left_foot": 75
+        },
+        "mode_counts": {
+          "STEP": 75
+        },
+        "physics_crux_score": 0.40368818050213184,
+        "reason_tags": [
+          "high_load",
+          "load_shift"
+        ]
+      },
+      {
+        "hold_id": 41,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 3.4673352466574454,
+        "longest_continuous_dwell_s": 3.4673352466574454,
+        "best_segment": {
+          "start_frame": 364,
+          "end_frame": 467,
+          "start_time_ms": 12134,
+          "end_time_ms": 15568,
+          "duration_s": 3.4673352466574454,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 3050.0572834156837,
+          "mean_core_load": 2778.781811113244,
+          "mean_negative_margin_cm": 28.730138806223092,
+          "mean_load_shift_proxy": 183.60940036507523,
+          "mean_confidence_weight": 0.7807692307692308,
+          "ok_fraction": 0.5769230769230769,
+          "segment_crux_score": 0.31399291529023116,
+          "reason_tags": [
+            "long_dwell",
+            "unstable_support"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 104
+        },
+        "mode_counts": {
+          "STEP": 104
+        },
+        "physics_crux_score": 0.26689397799669645,
+        "reason_tags": [
+          "long_dwell",
+          "unstable_support"
+        ]
+      },
+      {
+        "hold_id": 18,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.40033524665744585,
+        "longest_continuous_dwell_s": 0.40033524665744585,
+        "best_segment": {
+          "start_frame": 871,
+          "end_frame": 882,
+          "start_time_ms": 29035,
+          "end_time_ms": 29402,
+          "duration_s": 0.40033524665744585,
+          "dominant_limbs": [
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 200371.93628654807,
+          "mean_core_load": 8742.015035642533,
+          "mean_negative_margin_cm": 17.18042989820091,
+          "mean_load_shift_proxy": 24.536844426808134,
+          "mean_confidence_weight": 0.4000000000000001,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.2591908444816261,
+          "reason_tags": [
+            "high_load",
+            "unstable_support"
+          ]
+        },
+        "limb_counts": {
+          "right_hand": 12
+        },
+        "mode_counts": {
+          "GRIP": 12
+        },
+        "physics_crux_score": 0.22031221780938218,
+        "reason_tags": [
+          "high_load",
+          "unstable_support"
+        ]
+      },
+      {
+        "hold_id": 5,
+        "segment_count": 4,
+        "engagement_count": 4,
+        "total_active_time_s": 3.5993409866297834,
+        "longest_continuous_dwell_s": 1.9993352466574459,
+        "best_segment": {
+          "start_frame": 670,
+          "end_frame": 729,
+          "start_time_ms": 22335,
+          "end_time_ms": 24301,
+          "duration_s": 1.9993352466574459,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 10132.36665087189,
+          "mean_core_load": 7728.580250937287,
+          "mean_negative_margin_cm": 15.476687293860913,
+          "mean_load_shift_proxy": 1086.586511968205,
+          "mean_confidence_weight": 0.5548387096774192,
+          "ok_fraction": 0.9354838709677419,
+          "segment_crux_score": 0.22940154569923504,
+          "reason_tags": []
+        },
+        "limb_counts": {
+          "left_hand": 101,
+          "right_hand": 7
+        },
+        "mode_counts": {
+          "GRIP": 108
+        },
+        "physics_crux_score": 0.19805345959469361,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 13,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.10033524665744582,
+        "longest_continuous_dwell_s": 0.10033524665744582,
+        "best_segment": {
+          "start_frame": 880,
+          "end_frame": 882,
+          "start_time_ms": 29335,
+          "end_time_ms": 29402,
+          "duration_s": 0.10033524665744582,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 200371.93628654839,
+          "mean_core_load": 8742.015035642538,
+          "mean_negative_margin_cm": 10.230773944789526,
+          "mean_load_shift_proxy": 34.43579923325593,
+          "mean_confidence_weight": 0.4000000000000001,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.22545801467650184,
+          "reason_tags": [
+            "high_load"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 3
+        },
+        "mode_counts": {
+          "GRIP": 3
+        },
+        "physics_crux_score": 0.19163931247502655,
+        "reason_tags": [
+          "high_load"
+        ]
+      },
+      {
+        "hold_id": 2,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 0.43267049331489166,
+        "longest_continuous_dwell_s": 0.3663352466574458,
+        "best_segment": {
+          "start_frame": 823,
+          "end_frame": 833,
+          "start_time_ms": 27435,
+          "end_time_ms": 27768,
+          "duration_s": 0.3663352466574458,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 200371.93628654815,
+          "mean_core_load": 8742.015035642533,
+          "mean_negative_margin_cm": 10.230773938840791,
+          "mean_load_shift_proxy": 96.12006042933626,
+          "mean_confidence_weight": 0.4,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.22545801464762735,
+          "reason_tags": [
+            "high_load"
+          ]
+        },
+        "limb_counts": {
+          "right_foot": 11,
+          "left_hand": 2
+        },
+        "mode_counts": {
+          "STEP": 11,
+          "GRIP": 2
+        },
+        "physics_crux_score": 0.19163931245048324,
+        "reason_tags": [
+          "high_load"
+        ]
+      },
+      {
+        "hold_id": 17,
+        "segment_count": 2,
+        "engagement_count": 2,
+        "total_active_time_s": 4.200670493314892,
+        "longest_continuous_dwell_s": 3.9003352466574457,
+        "best_segment": {
+          "start_frame": 4,
+          "end_frame": 120,
+          "start_time_ms": 133,
+          "end_time_ms": 4000,
+          "duration_s": 3.9003352466574457,
+          "dominant_limbs": [
+            "right_hand",
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 3440.9321040555783,
+          "mean_core_load": 3117.9249084445146,
+          "mean_negative_margin_cm": 8.705780778467334,
+          "mean_load_shift_proxy": 204.42373444460424,
+          "mean_confidence_weight": 0.9538461538461539,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.2052073621805762,
+          "reason_tags": [
+            "long_dwell"
+          ]
+        },
+        "limb_counts": {
+          "left_hand": 125,
+          "right_hand": 117
+        },
+        "mode_counts": {
+          "GRIP": 126
+        },
+        "physics_crux_score": 0.19143748334716917,
+        "reason_tags": [
+          "long_dwell"
+        ]
+      },
+      {
+        "hold_id": 28,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 4.000335246657445,
+        "longest_continuous_dwell_s": 4.000335246657445,
+        "best_segment": {
+          "start_frame": 134,
+          "end_frame": 253,
+          "start_time_ms": 4467,
+          "end_time_ms": 8434,
+          "duration_s": 4.000335246657445,
+          "dominant_limbs": [
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 2696.7402056479013,
+          "mean_core_load": 2469.8897726870364,
+          "mean_negative_margin_cm": 0.17480501436681015,
+          "mean_load_shift_proxy": 115.95482896838722,
+          "mean_confidence_weight": 1.0,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.1935582822085888,
+          "reason_tags": [
+            "long_dwell"
+          ]
+        },
+        "limb_counts": {
+          "right_hand": 120
+        },
+        "mode_counts": {
+          "GRIP": 120
+        },
+        "physics_crux_score": 0.1768885756023779,
+        "reason_tags": [
+          "long_dwell"
+        ]
+      },
+      {
+        "hold_id": 49,
+        "segment_count": 3,
+        "engagement_count": 3,
+        "total_active_time_s": 2.5660057399723373,
+        "longest_continuous_dwell_s": 2.1993352466574456,
+        "best_segment": {
+          "start_frame": 184,
+          "end_frame": 249,
+          "start_time_ms": 6134,
+          "end_time_ms": 8300,
+          "duration_s": 2.1993352466574456,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 2794.4113915928915,
+          "mean_core_load": 2590.5144221035353,
+          "mean_negative_margin_cm": 0.0,
+          "mean_load_shift_proxy": 93.68910586738434,
+          "mean_confidence_weight": 1.0,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.1501993865030674,
+          "reason_tags": []
+        },
+        "limb_counts": {
+          "left_hand": 66,
+          "right_hand": 11
+        },
+        "mode_counts": {
+          "GRIP": 77
+        },
+        "physics_crux_score": 0.1276694785276073,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 4,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 1.1333352466574458,
+        "longest_continuous_dwell_s": 1.1333352466574458,
+        "best_segment": {
+          "start_frame": 624,
+          "end_frame": 657,
+          "start_time_ms": 20801,
+          "end_time_ms": 21901,
+          "duration_s": 1.1333352466574458,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 5692.125740468435,
+          "mean_core_load": 5254.249850516661,
+          "mean_negative_margin_cm": 1.2621074669756847,
+          "mean_load_shift_proxy": 355.01995024005635,
+          "mean_confidence_weight": 1.0,
+          "ok_fraction": 0.9411764705882353,
+          "segment_crux_score": 0.11254587341352137,
+          "reason_tags": []
+        },
+        "limb_counts": {
+          "left_hand": 34
+        },
+        "mode_counts": {
+          "GRIP": 34
+        },
+        "physics_crux_score": 0.09566399240149316,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 58,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 1.767335246657446,
+        "longest_continuous_dwell_s": 1.767335246657446,
+        "best_segment": {
+          "start_frame": 743,
+          "end_frame": 795,
+          "start_time_ms": 24768,
+          "end_time_ms": 26502,
+          "duration_s": 1.767335246657446,
+          "dominant_limbs": [
+            "left_hand",
+            "right_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 892.7877733535865,
+          "mean_core_load": 718.3645473349351,
+          "mean_negative_margin_cm": 4.411816961547489,
+          "mean_load_shift_proxy": 97.12730184053166,
+          "mean_confidence_weight": 0.7849056603773585,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.08818740016205577,
+          "reason_tags": []
+        },
+        "limb_counts": {
+          "right_hand": 10,
+          "left_hand": 47
+        },
+        "mode_counts": {
+          "GRIP": 53
+        },
+        "physics_crux_score": 0.07495929013774741,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 11,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.46733524665744586,
+        "longest_continuous_dwell_s": 0.46733524665744586,
+        "best_segment": {
+          "start_frame": 950,
+          "end_frame": 963,
+          "start_time_ms": 31668,
+          "end_time_ms": 32102,
+          "duration_s": 0.46733524665744586,
+          "dominant_limbs": [
+            "left_hand"
+          ],
+          "dominant_modes": [
+            "GRIP"
+          ],
+          "mean_total_body_load": 3019.5463025808795,
+          "mean_core_load": 2519.657439503161,
+          "mean_negative_margin_cm": 10.110366005794457,
+          "mean_load_shift_proxy": 240.32001555352218,
+          "mean_confidence_weight": 0.4000000000000001,
+          "ok_fraction": 0.7857142857142857,
+          "segment_crux_score": 0.02018696584605694,
+          "reason_tags": []
+        },
+        "limb_counts": {
+          "left_hand": 14
+        },
+        "mode_counts": {
+          "GRIP": 14
+        },
+        "physics_crux_score": 0.017158920969148398,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 37,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.3003352466574459,
+        "longest_continuous_dwell_s": 0.3003352466574459,
+        "best_segment": {
+          "start_frame": 57,
+          "end_frame": 65,
+          "start_time_ms": 1900,
+          "end_time_ms": 2167,
+          "duration_s": 0.3003352466574459,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 3556.924792672826,
+          "mean_core_load": 3313.405690339115,
+          "mean_negative_margin_cm": 2.7841489822852648,
+          "mean_load_shift_proxy": 106.28153257398692,
+          "mean_confidence_weight": 1.0,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.011610753838195903,
+          "reason_tags": []
+        },
+        "limb_counts": {
+          "right_foot": 9
+        },
+        "mode_counts": {
+          "STEP": 9
+        },
+        "physics_crux_score": 0.009869140762466517,
+        "reason_tags": []
+      },
+      {
+        "hold_id": 34,
+        "segment_count": 1,
+        "engagement_count": 1,
+        "total_active_time_s": 0.5663352466574458,
+        "longest_continuous_dwell_s": 0.5663352466574458,
+        "best_segment": {
+          "start_frame": 36,
+          "end_frame": 52,
+          "start_time_ms": 1200,
+          "end_time_ms": 1733,
+          "duration_s": 0.5663352466574458,
+          "dominant_limbs": [
+            "right_foot"
+          ],
+          "dominant_modes": [
+            "STEP"
+          ],
+          "mean_total_body_load": 2788.9135867592563,
+          "mean_core_load": 2587.010057996727,
+          "mean_negative_margin_cm": 0.0,
+          "mean_load_shift_proxy": 58.928104785592915,
+          "mean_confidence_weight": 1.0,
+          "ok_fraction": 1.0,
+          "segment_crux_score": 0.0,
+          "reason_tags": []
+        },
+        "limb_counts": {
+          "right_foot": 17
+        },
+        "mode_counts": {
+          "STEP": 17
+        },
+        "physics_crux_score": 0.0,
+        "reason_tags": []
+      }
+    ]
+  }
+}

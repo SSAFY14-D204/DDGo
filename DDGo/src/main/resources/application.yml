@@ -1,0 +1,74 @@
+﻿spring:
+  application:
+    name: DDGo
+
+  datasource:
+    url: ${MARIADB_URL}
+    username: ${MARIADB_USER}
+    password: ${MARIADB_PASSWORD}
+    driver-class-name: org.mariadb.jdbc.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:true}
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MariaDBDialect
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-expiration: ${JWT_ACCESS_EXPIRATION}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+minio:
+  url: ${MINIO_URL}
+  public-url: ${MINIO_PUBLIC_URL:${MINIO_URL}}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
+  bucket: ${MINIO_BUCKET}
+
+social:
+  http:
+    connect-timeout-ms: ${SOCIAL_HTTP_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${SOCIAL_HTTP_READ_TIMEOUT_MS:3000}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+
+password-reset:
+  enabled: ${PASSWORD_RESET_ENABLED:false}
+  from: ${PASSWORD_RESET_FROM:}
+  reset-url: ${PASSWORD_RESET_URL:http://localhost:3000/reset-password}
+  token-ttl-seconds: ${PASSWORD_RESET_TOKEN_TTL_SECONDS:900}
+  request-cooldown-seconds: ${PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS:60}
+
+challenge:
+  stale-active-auto-close:
+    enabled: ${CHALLENGE_STALE_ACTIVE_AUTO_CLOSE_ENABLED:true}
+    stale-after-hours: ${CHALLENGE_STALE_ACTIVE_AUTO_CLOSE_STALE_AFTER_HOURS:6}
+    interval-ms: ${CHALLENGE_STALE_ACTIVE_AUTO_CLOSE_INTERVAL_MS:3600000}
+    batch-size: ${CHALLENGE_STALE_ACTIVE_AUTO_CLOSE_BATCH_SIZE:200}

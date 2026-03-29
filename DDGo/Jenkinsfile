@@ -1,0 +1,436 @@
+def backendChanged = false
+def deployBranch = ""
+def deployCommitMsg = ""
+def deployCommitAuthor = ""
+def shortHash = ""
+def tag = ""
+def jarFile = ""
+
+pipeline {
+  agent any
+
+  options {
+    skipDefaultCheckout(true)
+    disableConcurrentBuilds()
+    timestamps()
+  }
+
+  environment {
+    IMAGE = "leetaehee0/ddgo-backend"
+    DEPLOY_DIR = "/opt/ddgo"
+    REGISTRY = "https://index.docker.io/v1/"
+    GRADLE_USER_HOME = "/var/lib/jenkins/.gradle"
+    DOCKER_BUILDKIT = "1"
+    COMPOSE_DOCKER_CLI_BUILD = "1"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        echo "===== [1/6] 소스 체크아웃 시작 ====="
+        checkout scm
+        echo "===== [1/6] 소스 체크아웃 완료 ====="
+
+        script {
+          def gitBranch = sh(
+            script: "git rev-parse --abbrev-ref HEAD || true",
+            returnStdout: true
+          ).trim()
+
+          def gitMsg = sh(
+            script: "git log -1 --pretty=%s || true",
+            returnStdout: true
+          ).trim()
+
+          def webhookBranch = env.gitlabSourceBranch?.trim() ?:
+                              env.gitlabBranch?.trim() ?:
+                              env.BRANCH_NAME?.trim()
+
+          def webhookUser = env.gitlabUserName?.trim() ?:
+                            env.gitlabUserUsername?.trim()
+
+          deployBranch = webhookBranch ?: (gitBranch ?: "HEAD")
+          deployCommitMsg = gitMsg ?: "(커밋 메시지 없음)"
+          deployCommitAuthor = webhookUser ?: "(푸시 사용자 없음)"
+
+          echo "배포 대상 브랜치: ${deployBranch}"
+          echo "커밋 메시지: ${deployCommitMsg}"
+          echo "푸시 사용자: ${deployCommitAuthor}"
+
+          echo "gitlabUserName: ${env.gitlabUserName}"
+          echo "gitlabUserUsername: ${env.gitlabUserUsername}"
+          echo "gitlabBranch: ${env.gitlabBranch}"
+          echo "gitlabSourceBranch: ${env.gitlabSourceBranch}"
+        }
+      }
+    }
+
+    stage('Check Changed Paths') {
+      steps {
+        script {
+          echo "===== [2/6] 변경 경로 검사 시작 ====="
+
+          def beforeSha = env.gitlabBefore
+          def afterSha = env.gitlabAfter
+          def changedFilesRaw = ""
+
+          echo "gitlabBefore: ${beforeSha}"
+          echo "gitlabAfter : ${afterSha}"
+
+          if (beforeSha?.trim() &&
+              afterSha?.trim() &&
+              beforeSha != "0000000000000000000000000000000000000000" &&
+              afterSha != "0000000000000000000000000000000000000000") {
+
+            changedFilesRaw = sh(
+              script: "git diff --name-only ${beforeSha} ${afterSha} || true",
+              returnStdout: true
+            ).trim()
+
+          } else {
+            echo "GitLab webhook SHA 환경변수가 없어서 HEAD 기준 fallback 비교를 수행합니다."
+
+            changedFilesRaw = sh(
+              script: """
+                if git rev-parse HEAD~1 >/dev/null 2>&1; then
+                  git diff --name-only HEAD~1 HEAD || true
+                else
+                  git ls-tree -r --name-only HEAD || true
+                fi
+              """,
+              returnStdout: true
+            ).trim()
+          }
+
+          def changedFiles = changedFilesRaw ? changedFilesRaw.split('\n') : []
+
+          echo "변경 파일 목록:"
+          changedFiles.each { echo "- ${it}" }
+
+          backendChanged = changedFiles.any { file ->
+            file.startsWith('DDGo/')
+          }
+
+          if (backendChanged) {
+            echo "DDGo 폴더 내부 변경 감지됨 -> MM 알림 및 빌드/배포 진행"
+
+            currentBuild.description = """
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+상태: DDGo 변경 감지
+""".trim()
+
+            mattermostSend(
+              color: '#2F86EB',
+              message: """🚀 **DDGo 배포 시작**
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- URL: ${env.BUILD_URL}"""
+            )
+          } else {
+            echo "DDGo 폴더 내부 변경 없음 -> MM 알림 / 빌드 / 배포 스킵"
+
+            currentBuild.description = """
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+상태: DDGo 변경 없음 - 스킵
+""".trim()
+          }
+
+          echo "===== [2/6] 변경 경로 검사 완료 ====="
+        }
+      }
+    }
+
+    stage('Build Jar') {
+      when {
+        expression { backendChanged }
+      }
+      steps {
+        dir('DDGo') {
+          script {
+            echo "===== [3/6] Gradle 빌드 시작 ====="
+            sh 'chmod +x gradlew'
+            sh './gradlew bootJar -x test --build-cache --parallel --daemon'
+
+            shortHash = sh(
+              script: "git rev-parse --short HEAD",
+              returnStdout: true
+            ).trim()
+
+            tag = "${env.BUILD_NUMBER}-${shortHash}"
+
+            jarFile = sh(
+              script: "find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1",
+              returnStdout: true
+            ).trim()
+
+            if (!jarFile) {
+              error("배포할 JAR 파일을 찾지 못했습니다.")
+            }
+
+            currentBuild.displayName = "#${env.BUILD_NUMBER} ${tag}"
+            currentBuild.description = """
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+상태: Gradle 빌드 완료
+""".trim()
+
+            sh "ls -lh ${jarFile}"
+            echo "실행 JAR: ${jarFile}"
+            echo "===== [3/6] Gradle 빌드 완료 ====="
+          }
+        }
+      }
+    }
+
+    stage('Docker Build') {
+      when {
+        expression { backendChanged }
+      }
+      steps {
+        script {
+          echo "===== [4/6] Docker 이미지 빌드 시작 ====="
+          echo "생성할 이미지 태그: ${env.IMAGE}:${tag}"
+
+          sh "docker pull ${env.IMAGE}:latest || true"
+
+          dir('DDGo') {
+            sh """
+              docker build \
+                --build-arg JAR_FILE=${jarFile} \
+                --cache-from ${env.IMAGE}:latest \
+                -t ${env.IMAGE}:${tag} \
+                -t ${env.IMAGE}:latest \
+                .
+            """
+          }
+
+          echo "===== [4/6] Docker 이미지 빌드 완료 ====="
+        }
+      }
+    }
+
+    stage('Docker Push') {
+      when {
+        expression { backendChanged }
+      }
+      steps {
+        script {
+          echo "===== [5/6] DockerHub Push 시작 ====="
+
+          docker.withRegistry("${env.REGISTRY}", 'dockerhub-cred') {
+            sh "docker push ${env.IMAGE}:${tag}"
+            sh "docker push ${env.IMAGE}:latest"
+          }
+
+          echo "DockerHub Push 완료: ${env.IMAGE}:${tag}"
+          echo "===== [5/6] DockerHub Push 완료 ====="
+        }
+      }
+    }
+
+    stage('Deploy + HealthCheck + Rollback') {
+      when {
+        expression { backendChanged }
+      }
+      steps {
+        script {
+          echo "===== [6/6] 배포 시작 ====="
+
+          def prev = sh(
+            script: """
+              cd ${env.DEPLOY_DIR}
+              if [ -f .env ]; then
+                grep '^DOCKER_IMAGE=' .env | cut -d'=' -f2
+              fi
+            """,
+            returnStdout: true
+          ).trim()
+
+          echo "이전 배포 이미지: ${prev ?: '없음'}"
+          echo "새 배포 이미지: ${env.IMAGE}:${tag}"
+
+          try {
+            sh """
+              set -e
+              docker image inspect ${env.IMAGE}:${tag} >/dev/null 2>&1 || docker pull ${env.IMAGE}:${tag}
+              cd ${env.DEPLOY_DIR}
+              sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${env.IMAGE}:${tag}|' .env
+              docker rm -f ddgo-backend || true
+              docker compose up -d --no-deps backend
+              docker compose ps
+            """
+
+            echo "백엔드 컨테이너 교체 완료, 헬스체크 시작"
+
+            def ok = false
+            for (int i = 1; i <= 12; i++) {
+              sleep 5
+              def code = sh(
+                script: "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/actuator/health || true",
+                returnStdout: true
+              ).trim()
+
+              echo "Health Check ${i}/12 -> HTTP ${code}"
+
+              if (code == "200") {
+                ok = true
+                echo "헬스체크 성공"
+                break
+              }
+            }
+
+            if (!ok) {
+              sh 'docker logs --tail 100 ddgo-backend || true'
+              error("헬스체크 실패: 새 버전 배포 실패")
+            }
+
+            echo "===== 배포 성공 ====="
+            echo "최종 배포 이미지: ${env.IMAGE}:${tag}"
+
+          } catch (e) {
+            echo "===== 배포 실패 감지 ====="
+
+            if (prev) {
+              echo "롤백 시작: ${prev}"
+
+              sh """
+                set -e
+                docker image inspect ${prev} >/dev/null 2>&1 || docker pull ${prev}
+                cd ${env.DEPLOY_DIR}
+                sed -i 's|^DOCKER_IMAGE=.*|DOCKER_IMAGE=${prev}|' .env
+                docker rm -f ddgo-backend || true
+                docker compose up -d --no-deps backend
+                docker compose ps
+              """
+
+              sh 'docker logs --tail 100 ddgo-backend || true'
+
+              echo "===== 롤백 완료 ====="
+              echo "복구 이미지: ${prev}"
+
+              mattermostSend(
+                color: 'warning',
+                message: """⚠️ **DDGo 배포 실패 → 롤백 완료**
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- URL: ${env.BUILD_URL}"""
+              )
+
+              currentBuild.description = """
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+상태: 배포 실패 → 롤백 완료
+""".trim()
+            } else {
+              echo "이전 배포 이미지가 없어 롤백을 수행할 수 없습니다."
+
+              mattermostSend(
+                color: 'danger',
+                message: """❌ **DDGo 배포 실패**
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- URL: ${env.BUILD_URL}"""
+              )
+
+              currentBuild.description = """
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+상태: 배포 실패 (롤백 불가)
+""".trim()
+            }
+
+            throw e
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      script {
+        if (backendChanged) {
+          echo "########################################"
+          echo "# 최종 결과: 배포 성공"
+          echo "########################################"
+
+          currentBuild.description = """
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+상태: 배포 성공
+""".trim()
+
+          mattermostSend(
+            color: 'good',
+            message: """✅ **DDGo 파이프라인 성공**
+- 결과: 백엔드 배포 완료
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- URL: ${env.BUILD_URL}"""
+          )
+        } else {
+          echo "########################################"
+          echo "# 최종 결과: DDGo 변경 없음"
+          echo "# MM 알림 / 빌드 / 배포 스킵"
+          echo "########################################"
+
+          currentBuild.description = """
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+상태: DDGo 변경 없음 - 스킵
+""".trim()
+        }
+      }
+    }
+
+    failure {
+      echo "########################################"
+      echo "# 최종 결과: 배포 실패"
+      echo "# Jenkins 콘솔 로그 확인 필요"
+      echo "########################################"
+
+      script {
+        if (!currentBuild.description) {
+          currentBuild.description = """
+브랜치: ${deployBranch}
+커밋: ${deployCommitMsg}
+작성자: ${deployCommitAuthor}
+상태: 배포 실패
+""".trim()
+        }
+
+        if (backendChanged) {
+          mattermostSend(
+            color: 'danger',
+            message: """❌ **DDGo 배포 실패**
+- 브랜치: ${deployBranch}
+- 커밋: ${deployCommitMsg}
+- 작성자: ${deployCommitAuthor}
+- URL: ${env.BUILD_URL}"""
+          )
+        }
+      }
+    }
+
+    always {
+      echo "불필요한 Docker dangling 이미지 정리 시작"
+      sh 'docker image prune -f || true'
+      echo "워크스페이스 정리 시작"
+      cleanWs()
+      echo "파이프라인 종료"
+    }
+  }
+}

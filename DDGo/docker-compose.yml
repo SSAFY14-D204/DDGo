@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # 1. MariaDB 설정
+  mariadb:
+    image: mariadb:10.11
+    container_name: ddgo-mariadb
+    restart: always
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: ddgo_db
+      MARIADB_USER: ddgo_user
+      MARIADB_PASSWORD: ddgo_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - ddgo-network
+
+  # 2. Redis 설정
+  redis:
+    image: redis:latest
+    container_name: ddgo-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ddgo-network
+
+  # 3. MinIO 설정 (S3 호환 오브젝트 스토리지)
+  minio:
+    image: minio/minio
+    container_name: ddgo-minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000" # API 포트
+      - "9001:9001" # 웹 UI(Console) 포트
+    volumes:
+      - minio_data:/data
+    networks:
+      - ddgo-network
+  # 4. Spring Boot 백엔드 애플리케이션
+  spring-boot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ddgo-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - MARIADB_URL=jdbc:mariadb://mariadb:3306/ddgo_db
+      - MARIADB_USER=ddgo_user
+      - MARIADB_PASSWORD=ddgo_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=ZGRnb19zZWNyZXRfa2V5X25lZWRzX3RvX2JlX2xvbmdfZW5vdWdoX2Zvcl9oczI1Ngo=
+      - JWT_ACCESS_EXPIRATION=1800000
+      - JWT_REFRESH_EXPIRATION=1209600000
+      - MINIO_URL=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=ddgo_videos
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - MAIL_SMTP_AUTH=${MAIL_SMTP_AUTH}
+      - MAIL_SMTP_STARTTLS_ENABLE=${MAIL_SMTP_STARTTLS_ENABLE}
+      - PASSWORD_RESET_ENABLED=${PASSWORD_RESET_ENABLED}
+      - PASSWORD_RESET_FROM=${PASSWORD_RESET_FROM}
+      - PASSWORD_RESET_URL=${PASSWORD_RESET_URL}
+      - PASSWORD_RESET_TOKEN_TTL_SECONDS=${PASSWORD_RESET_TOKEN_TTL_SECONDS}
+      - PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS=${PASSWORD_RESET_REQUEST_COOLDOWN_SECONDS}
+
+    depends_on:
+      - mariadb
+      - redis
+      - minio
+    networks:
+      - ddgo-network
+
+volumes:
+  mariadb_data:
+  redis_data:
+  minio_data:
+
+
+networks:
+  ddgo-network:
+    driver: bridge

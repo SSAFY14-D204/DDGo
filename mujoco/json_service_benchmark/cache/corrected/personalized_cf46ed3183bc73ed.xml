@@ -1,0 +1,217 @@
+<mujoco model="custom_articulated_human">
+  <compiler angle="degree" />
+  <option timestep="0.005" gravity="0 0 -9.81" integrator="implicitfast" />
+  <default>
+    <joint limited="true" damping="2" stiffness="0.5" armature="0.01" />
+    <geom conaffinity="1" contype="1" friction="0.8 0.1 0.05" density="0" />
+    <motor ctrllimited="true" />
+    <default class="trunk_joint">
+      <joint damping="8" stiffness="2" />
+    </default>
+    <default class="shoulder_joint">
+      <joint damping="3" stiffness="1" />
+    </default>
+    <default class="hip_joint">
+      <joint damping="4" stiffness="1" />
+    </default>
+    <default class="elbow_joint">
+      <joint damping="2" stiffness="0.5" />
+    </default>
+    <default class="knee_joint">
+      <joint damping="3" stiffness="0.5" />
+    </default>
+    <default class="ankle_joint">
+      <joint damping="2.5" stiffness="0.5" />
+    </default>
+  </default>
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1="0.15 0.17 0.19" rgb2="0.09 0.10 0.11" />
+    <material name="grid" texture="grid" texrepeat="8 8" reflectance="0.05" />
+  </asset>
+  <worldbody>
+    <light pos="0 0 5" dir="0 0 -1" directional="true" />
+    <geom name="floor" type="plane" size="5 5 0.1" material="grid" rgba="0.22 0.24 0.26 1" />
+    <camera name="overview" pos="3.0 -3.3 2.2" xyaxes="0.73 0.68 0 -0.24 0.25 0.94" />
+    <body name="pelvis" pos="0 0 1.03">
+      <freejoint name="root" />
+      <inertial pos="0.000000 0.000000 0.000000" mass="6.000000" diaginertia="0.058071 0.017000 0.060671" />
+      <geom name="pelvis_geom" type="capsule" fromto="0 -0.06 0 0 0.06 0" size="0.09" rgba="0.95 0.48 0.28 0.88" />
+      <site name="pelvis_site" pos="0 0 0" size="0.012" rgba="1 0.95 0.30 0.9" />
+      <body name="torso_base" pos="0.000000 0.000000 0.029471">
+        <joint name="abdomen_z" class="trunk_joint" type="hinge" axis="0 0 1" range="-50 50" />
+        <joint name="abdomen_y" class="trunk_joint" type="hinge" axis="0 1 0" range="-80 50" />
+        <joint name="abdomen_x" class="trunk_joint" type="hinge" axis="1 0 0" range="-45 45" />
+        <inertial pos="0.000000 0.000000 0.103147" mass="9.562500" diaginertia="0.115951 0.094629 0.098459" />
+        <geom name="lower_torso_geom" type="capsule" fromto="0.000000 0.000000 -0.029471 0.000000 0.000000 0.235765" size="0.083767" rgba="0.96 0.62 0.20 0.86" />
+        <body name="thorax" pos="0.000000 0.000000 0.471529">
+          <inertial pos="0.000000 0.000000 0.025050" mass="16.657500" diaginertia="0.265426 0.173793 0.279307" />
+          <geom name="thorax_geom" type="capsule" fromto="0.000000 0.000000 -0.117882 0.000000 0.000000 0.117882" size="0.091382" rgba="0.95 0.72 0.28 0.88" />
+          <geom name="neck_geom" type="capsule" fromto="0.000000 0.000000 0.117882 0.000000 0.000000 0.265235" size="0.041884" rgba="0.97 0.84 0.54 0.80" />
+          <site name="thorax_site" pos="0 0 0" size="0.012" rgba="1 0.95 0.30 0.9" />
+          <joint name="neck_z" class="trunk_joint" type="hinge" axis="0 0 1" range="-50 50" />
+          <joint name="neck_y" class="trunk_joint" type="hinge" axis="0 1 0" range="-45 45" />
+          <joint name="neck_x" class="trunk_joint" type="hinge" axis="1 0 0" range="-45 45" />
+          <body name="head" pos="0.095847 0.000000 0.219577">
+            <inertial pos="0.000000 0.000000 0.000000" mass="5.205000" diaginertia="0.034700 0.034700 0.034700" />
+            <geom name="head_geom" type="sphere" size="0.11" rgba="0.98 0.98 0.98 0.92" />
+            <site name="head_site" pos="0 0 0" size="0.012" rgba="1 0.95 0.30 0.9" />
+          </body>
+          <body name="left_shoulder_mount" pos="-0.012111 0.190380 0.040000">
+            <joint name="shoulder_shrug_left" class="shoulder_joint" type="slide" axis="0 0 1" range="0 0.10" />
+            <joint name="shoulder1_left" class="shoulder_joint" type="hinge" axis="-2 1 -1" range="-120 120" />
+            <joint name="shoulder2_left" class="shoulder_joint" type="hinge" axis="0 -1 -1" range="-120 120" />
+            <joint name="shoulder3_left" class="shoulder_joint" type="hinge" axis="1 1 -1" range="-150 150" />
+            <inertial pos="0.000000 0.000000 0.030000" mass="0.093750" diaginertia="0.000078 0.000078 0.000056" />
+            <geom name="left_shoulder_marker" type="sphere" size="0.03" rgba="0.14 0.92 0.88 0.9" />
+            <site name="left_shoulder_site" pos="0 0 0" size="0.010" rgba="0.14 0.92 0.88 0.9" />
+            <body name="left_upper_arm" pos="0 0 0">
+              <inertial pos="0.124354 0.000000 0.000000" mass="2.032500" diaginertia="0.002168 0.011561 0.011561" />
+              <geom name="left_upper_arm_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.248708 0.000000 0.000000" size="0.04" rgba="0.18 1 0.54 0.85" />
+              <body name="left_elbow" pos="0.248708 0.000000 0.000000">
+                <joint name="elbow_left" class="elbow_joint" type="hinge" axis="0 -1 -1" range="-175 10" />
+                <inertial pos="0.110276 0.000000 0.000000" mass="1.215000" diaginertia="0.000936 0.005393 0.005393" />
+                <geom name="left_elbow_marker" type="sphere" size="0.028" rgba="0.18 1 0.54 0.9" />
+                <site name="left_elbow_site" pos="0 0 0" size="0.010" rgba="0.18 1 0.54 0.9" />
+                <site name="left_elbow_pole_site" pos="0.000000 0.084467 0.000000" size="0.008" rgba="0.40 1 0.72 0.8" />
+                <geom name="left_forearm_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.220552 0.000000 0.000000" size="0.034" rgba="0.16 0.78 1 0.85" />
+                <body name="left_hand" pos="0.220552 0.000000 0.000000">
+                  <inertial pos="0.025000 0.000000 0.000000" mass="0.457500" diaginertia="0.000275 0.000233 0.000233" />
+                  <geom name="left_hand_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.050000 0.000000 0.000000" size="0.03" rgba="0.16 0.78 1 0.92" />
+                  <site name="left_hand_site" pos="0.050000 0.000000 0.000000" size="0.010" rgba="0.16 0.78 1 0.92" />
+                </body>
+              </body>
+            </body>
+          </body>
+          <body name="right_shoulder_mount" pos="0.005538 -0.190380 0.040000">
+            <joint name="shoulder_shrug_right" class="shoulder_joint" type="slide" axis="0 0 1" range="0 0.10" />
+            <joint name="shoulder1_right" class="shoulder_joint" type="hinge" axis="2 1 1" range="-120 120" />
+            <joint name="shoulder2_right" class="shoulder_joint" type="hinge" axis="0 -1 1" range="-120 120" />
+            <joint name="shoulder3_right" class="shoulder_joint" type="hinge" axis="1 -1 -1" range="-150 150" />
+            <inertial pos="0.000000 0.000000 0.030000" mass="0.093750" diaginertia="0.000078 0.000078 0.000056" />
+            <geom name="right_shoulder_marker" type="sphere" size="0.03" rgba="0.92 0.36 0.88 0.9" />
+            <site name="right_shoulder_site" pos="0 0 0" size="0.010" rgba="0.92 0.36 0.88 0.9" />
+            <body name="right_upper_arm" pos="0 0 0">
+              <inertial pos="0.124354 0.000000 0.000000" mass="2.032500" diaginertia="0.002168 0.011561 0.011561" />
+              <geom name="right_upper_arm_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.248708 0.000000 0.000000" size="0.04" rgba="1 0.48 0.16 0.85" />
+              <body name="right_elbow" pos="0.248708 0.000000 0.000000">
+                <joint name="elbow_right" class="elbow_joint" type="hinge" axis="0 -1 1" range="-175 10" />
+                <inertial pos="0.110276 0.000000 0.000000" mass="1.215000" diaginertia="0.000936 0.005393 0.005393" />
+                <geom name="right_elbow_marker" type="sphere" size="0.028" rgba="1 0.48 0.16 0.9" />
+                <site name="right_elbow_site" pos="0 0 0" size="0.010" rgba="1 0.48 0.16 0.9" />
+                <site name="right_elbow_pole_site" pos="0.000000 0.084467 0.000000" size="0.008" rgba="1 0.68 0.40 0.8" />
+                <geom name="right_forearm_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.220552 0.000000 0.000000" size="0.034" rgba="1 0.30 0.30 0.85" />
+                <body name="right_hand" pos="0.220552 0.000000 0.000000">
+                  <inertial pos="0.025000 0.000000 0.000000" mass="0.457500" diaginertia="0.000275 0.000233 0.000233" />
+                  <geom name="right_hand_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.050000 0.000000 0.000000" size="0.03" rgba="1 0.30 0.30 0.92" />
+                  <site name="right_hand_site" pos="0.050000 0.000000 0.000000" size="0.010" rgba="1 0.30 0.30 0.92" />
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="left_hip_mount" pos="0.000003 0.159485 0.000004">
+        <joint name="hip_x_left" class="hip_joint" type="hinge" axis="1 0 0" range="-55 45" />
+        <joint name="hip_z_left" class="hip_joint" type="hinge" axis="0 0 1" range="0 40" />
+        <joint name="hip_y_left" class="hip_joint" type="hinge" axis="0 1 0" range="-170 45" />
+        <inertial pos="0.000000 0.000000 0.000000" mass="0.093750" diaginertia="0.000078 0.000078 0.000056" />
+        <geom name="left_hip_marker" type="sphere" size="0.03" rgba="0.28 0.82 1 0.9" />
+        <site name="left_hip_site" pos="0 0 0" size="0.010" rgba="0.28 0.82 1 0.9" />
+        <body name="left_thigh" pos="0 0 0">
+          <inertial pos="0.000000 0.000000 -0.204575" mass="10.620000" diaginertia="0.157002 0.157002 0.017700" />
+          <geom name="left_thigh_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.000000 0.000000 -0.409150" size="0.05" rgba="1 0.88 0.22 0.85" />
+          <site name="left_thigh_lateral_site" pos="0.000000 0.055000 -0.188209" size="0.008" rgba="1 0.98 0.56 0.80" />
+          <body name="left_knee" pos="0.000000 0.000000 -0.409150">
+            <joint name="knee_left" class="knee_joint" type="hinge" axis="0 1 0" range="-170 0" />
+            <inertial pos="0.000000 0.000000 -0.205410" mass="3.247500" diaginertia="0.047406 0.047406 0.003464" />
+            <geom name="left_knee_marker" type="sphere" size="0.03" rgba="1 0.88 0.22 0.9" />
+            <site name="left_knee_site" pos="0 0 0" size="0.010" rgba="1 0.88 0.22 0.9" />
+            <site name="left_knee_pole_site" pos="0.090000 0.000000 0.000000" size="0.008" rgba="1 0.96 0.48 0.8" />
+            <site name="left_knee_forward_site" pos="0.040 0 0" size="0.007" rgba="1 0.98 0.62 0.72" />
+            <geom name="left_shin_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.000000 0.000000 -0.410820" size="0.04" rgba="0.40 1 0.54 0.85" />
+            <body name="left_ankle" pos="0.000000 0.000000 -0.410820">
+              <joint name="ankle_y_left" class="ankle_joint" type="hinge" axis="0 1 0" range="-75 80" />
+              <joint name="ankle_x_left" class="ankle_joint" type="hinge" axis="-1 0 -0.5" range="-35 35" />
+              <inertial pos="0.000000 0.000000 0.000000" mass="0.000001" diaginertia="0.000001 0.000001 0.000001" />
+              <geom name="left_ankle_marker" type="sphere" size="0.026" rgba="0.40 1 0.54 0.9" />
+              <site name="left_ankle_site" pos="0 0 0" size="0.010" rgba="0.40 1 0.54 0.9" />
+              <body name="left_foot" pos="-0.004165 -0.008469 -0.039270">
+                <inertial pos="0.041718 -0.017610 -0.022534" mass="1.027500" diaginertia="0.001113 0.003553 0.003279" />
+                <geom name="left_foot_geom" type="capsule" fromto="-0.043629 0.010954 -0.006731 0.127064 -0.046174 -0.038338" size="0.03" rgba="0.24 0.94 0.64 0.92" />
+                <site name="left_heel_site" pos="-0.043629 0.010954 -0.006731" size="0.008" rgba="0.48 1 0.74 0.82" />
+                <site name="left_foot_site" pos="0.127064 -0.046174 -0.038338" size="0.010" rgba="0.24 0.94 0.64 0.92" />
+                <site name="left_foot_dorsal_site" pos="0.048278 -0.019806 0.016863" size="0.008" rgba="0.54 1 0.82 0.80" />
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="right_hip_mount" pos="0.000003 -0.159485 0.000004">
+        <joint name="hip_x_right" class="hip_joint" type="hinge" axis="1 0 0" range="-55 45" />
+        <joint name="hip_z_right" class="hip_joint" type="hinge" axis="0 0 1" range="0 40" />
+        <joint name="hip_y_right" class="hip_joint" type="hinge" axis="0 1 0" range="-170 45" />
+        <inertial pos="0.000000 0.000000 0.000000" mass="0.093750" diaginertia="0.000078 0.000078 0.000056" />
+        <geom name="right_hip_marker" type="sphere" size="0.03" rgba="0.82 0.46 1 0.9" />
+        <site name="right_hip_site" pos="0 0 0" size="0.010" rgba="0.82 0.46 1 0.9" />
+        <body name="right_thigh" pos="0 0 0">
+          <inertial pos="0.000000 0.000000 -0.204575" mass="10.620000" diaginertia="0.157002 0.157002 0.017700" />
+          <geom name="right_thigh_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.000000 0.000000 -0.409150" size="0.05" rgba="0.52 0.58 1 0.85" />
+          <site name="right_thigh_lateral_site" pos="0.000000 -0.055000 -0.188209" size="0.008" rgba="0.82 0.86 1 0.80" />
+          <body name="right_knee" pos="0.000000 0.000000 -0.409150">
+            <joint name="knee_right" class="knee_joint" type="hinge" axis="0 1 0" range="-170 0" />
+            <inertial pos="0.000000 0.000000 -0.205410" mass="3.247500" diaginertia="0.047406 0.047406 0.003464" />
+            <geom name="right_knee_marker" type="sphere" size="0.03" rgba="0.52 0.58 1 0.9" />
+            <site name="right_knee_site" pos="0 0 0" size="0.010" rgba="0.52 0.58 1 0.9" />
+            <site name="right_knee_pole_site" pos="0.090000 0.000000 0.000000" size="0.008" rgba="0.72 0.78 1 0.8" />
+            <site name="right_knee_forward_site" pos="0.040 0 0" size="0.007" rgba="0.82 0.88 1 0.72" />
+            <geom name="right_shin_geom" type="capsule" fromto="0.000000 0.000000 0.000000 0.000000 0.000000 -0.410820" size="0.04" rgba="1 0.58 0.26 0.85" />
+            <body name="right_ankle" pos="0.000000 0.000000 -0.410820">
+              <joint name="ankle_y_right" class="ankle_joint" type="hinge" axis="0 1 0" range="-75 80" />
+              <joint name="ankle_x_right" class="ankle_joint" type="hinge" axis="1 0 0.5" range="-35 35" />
+              <inertial pos="0.000000 0.000000 0.000000" mass="0.000001" diaginertia="0.000001 0.000001 0.000001" />
+              <geom name="right_ankle_marker" type="sphere" size="0.026" rgba="1 0.58 0.26 0.9" />
+              <site name="right_ankle_site" pos="0 0 0" size="0.010" rgba="1 0.58 0.26 0.9" />
+              <body name="right_foot" pos="-0.003743 -0.015362 -0.039406">
+                <inertial pos="0.037490 -0.029549 -0.025962" mass="1.027500" diaginertia="0.001113 0.003641 0.003367" />
+                <geom name="right_foot_geom" type="capsule" fromto="-0.039208 0.017540 -0.003495 0.114188 -0.076639 -0.048430" size="0.03" rgba="1 0.68 0.20 0.92" />
+                <site name="right_heel_site" pos="-0.039208 0.017540 -0.003495" size="0.008" rgba="1 0.80 0.40 0.82" />
+                <site name="right_foot_site" pos="0.114188 -0.076639 -0.048430" size="0.010" rgba="1 0.68 0.20 0.92" />
+                <site name="right_foot_dorsal_site" pos="0.045746 -0.034618 0.012847" size="0.008" rgba="1 0.82 0.46 0.80" />
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor name="abdomen_z_motor" joint="abdomen_z" ctrlrange="-1 1" gear="220" />
+    <motor name="abdomen_y_motor" joint="abdomen_y" ctrlrange="-1 1" gear="220" />
+    <motor name="abdomen_x_motor" joint="abdomen_x" ctrlrange="-1 1" gear="220" />
+    <motor name="neck_z_motor" joint="neck_z" ctrlrange="-1 1" gear="60" />
+    <motor name="neck_y_motor" joint="neck_y" ctrlrange="-1 1" gear="60" />
+    <motor name="neck_x_motor" joint="neck_x" ctrlrange="-1 1" gear="60" />
+    <motor name="shoulder_shrug_left_motor" joint="shoulder_shrug_left" ctrlrange="0 0.10" gear="400" />
+    <motor name="shoulder1_left_motor" joint="shoulder1_left" ctrlrange="-2.094 2.094" gear="140" />
+    <motor name="shoulder2_left_motor" joint="shoulder2_left" ctrlrange="-2.094 2.094" gear="140" />
+    <motor name="shoulder3_left_motor" joint="shoulder3_left" ctrlrange="-2.618 2.618" gear="120" />
+    <motor name="elbow_left_motor" joint="elbow_left" ctrlrange="-3.054 0.175" gear="120" />
+    <motor name="shoulder_shrug_right_motor" joint="shoulder_shrug_right" ctrlrange="0 0.10" gear="400" />
+    <motor name="shoulder1_right_motor" joint="shoulder1_right" ctrlrange="-2.094 2.094" gear="140" />
+    <motor name="shoulder2_right_motor" joint="shoulder2_right" ctrlrange="-2.094 2.094" gear="140" />
+    <motor name="shoulder3_right_motor" joint="shoulder3_right" ctrlrange="-2.618 2.618" gear="120" />
+    <motor name="elbow_right_motor" joint="elbow_right" ctrlrange="-3.054 0.175" gear="120" />
+    <motor name="hip_x_left_motor" joint="hip_x_left" ctrlrange="-0.960 0.785" gear="320" />
+    <motor name="hip_z_left_motor" joint="hip_z_left" ctrlrange="0 0.698" gear="320" />
+    <motor name="hip_y_left_motor" joint="hip_y_left" ctrlrange="-2.967 0.785" gear="420" />
+    <motor name="knee_left_motor" joint="knee_left" ctrlrange="-2.967 0.087" gear="360" />
+    <motor name="ankle_y_left_motor" joint="ankle_y_left" ctrlrange="-1.309 1.396" gear="180" />
+    <motor name="ankle_x_left_motor" joint="ankle_x_left" ctrlrange="-1.047 1.047" gear="160" />
+    <motor name="hip_x_right_motor" joint="hip_x_right" ctrlrange="-0.960 0.785" gear="320" />
+    <motor name="hip_z_right_motor" joint="hip_z_right" ctrlrange="0 0.698" gear="320" />
+    <motor name="hip_y_right_motor" joint="hip_y_right" ctrlrange="-2.967 0.785" gear="420" />
+    <motor name="knee_right_motor" joint="knee_right" ctrlrange="-2.967 0.087" gear="360" />
+    <motor name="ankle_y_right_motor" joint="ankle_y_right" ctrlrange="-1.309 1.396" gear="180" />
+    <motor name="ankle_x_right_motor" joint="ankle_x_right" ctrlrange="-1.047 1.047" gear="160" />
+  </actuator>
+</mujoco>

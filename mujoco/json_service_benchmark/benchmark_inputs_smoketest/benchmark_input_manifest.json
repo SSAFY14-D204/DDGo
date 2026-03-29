@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "holds_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs_smoketest\\holds.json",
+  "pose3d_sequence_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs_smoketest\\pose3d_sequence.json",
+  "user_body_json": "C:\\ssafy\\project-2\\S14P21D204\\mujoco\\json_service_benchmark\\benchmark_inputs_smoketest\\user_body.json",
+  "frame_count": 8,
+  "pose_detected_frames": 7,
+  "video_metadata": {
+    "frame_width": 1080,
+    "frame_height": 1920,
+    "fps": 29.99827810713493,
+    "total_frames": 964,
+    "duration_ms": 32135,
+    "frame_step": 120,
+    "processed_frames": 8
+  },
+  "user_profile": {
+    "height_m": 1.75,
+    "height_cm": 175.0,
+    "weight_kg": 80.0
+  }
+}

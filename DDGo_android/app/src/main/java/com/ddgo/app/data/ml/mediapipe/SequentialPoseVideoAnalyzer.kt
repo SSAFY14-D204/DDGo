@@ -1,0 +1,564 @@
+package com.ddgo.app.data.ml.mediapipe
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Matrix
+import android.graphics.Rect
+import android.graphics.YuvImage
+import android.media.Image
+import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.net.Uri
+import android.util.Log
+import com.ddgo.app.domain.model.AiPoseFrame
+import com.ddgo.app.domain.model.AiPoseSequence
+import com.ddgo.app.domain.model.Pose
+import com.ddgo.app.domain.model.PrePoseVideoAnalysisResult
+import com.ddgo.app.domain.repository.AiPoseSequenceProvider
+import com.ddgo.app.domain.repository.PrePoseVideoAnalysisProvider
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
+import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.ByteArrayOutputStream
+import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+
+/**
+ * MediaPipe Tasks Vision을 사용하는 비디오 포즈 분석기.
+ *
+ * - `estimateFromVideo()`는 기존처럼 [Pose] 목록만 반환합니다.
+ * - `analyzePoseSequence()`는 AI 서버 전송용 리치 시퀀스를 생성합니다.
+ */
+class SequentialPoseVideoAnalyzer @Inject constructor(
+    @ApplicationContext private val context: Context
+) : AiPoseSequenceProvider, PrePoseVideoAnalysisProvider {
+
+    suspend operator fun invoke(
+        videoUri: String,
+        analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
+    ): List<Pose> = withContext(Dispatchers.IO) {
+        analyzeInternal(
+            videoUri = videoUri,
+            analysisFpsLimit = analysisFpsLimit,
+            cancellationCheckpoint = {
+                coroutineContext.ensureActive()
+            }
+        ).poses
+    }
+
+    override suspend fun analyze(
+        videoUri: String,
+        analysisFpsLimit: Int
+    ): PrePoseVideoAnalysisResult = withContext(Dispatchers.IO) {
+        analyzeInternal(
+            videoUri = videoUri,
+            analysisFpsLimit = analysisFpsLimit,
+            cancellationCheckpoint = {
+                coroutineContext.ensureActive()
+            }
+        ).toPrePoseVideoAnalysisResult()
+    }
+
+    override suspend fun analyzePoseSequence(
+        videoUri: String,
+        analysisFpsLimit: Int
+    ): AiPoseSequence = withContext(Dispatchers.IO) {
+        analyzeInternal(
+            videoUri = videoUri,
+            analysisFpsLimit = analysisFpsLimit,
+            cancellationCheckpoint = {
+                coroutineContext.ensureActive()
+            }
+        ).sequence
+    }
+
+    private fun analyzeInternal(
+        videoUri: String,
+        analysisFpsLimit: Int,
+        cancellationCheckpoint: () -> Unit
+    ): PoseSequenceAnalysisResult {
+        val poseLandmarker = createPoseLandmarker()
+            ?: return emptyPrePoseAnalysisResult(
+                videoUri = videoUri,
+                analysisFpsLimit = analysisFpsLimit,
+                generator = TAG
+            )
+
+        try {
+            return analyzeSequentialFrames(
+                uri = Uri.parse(videoUri),
+                poseLandmarker = poseLandmarker,
+                analysisFpsLimit = analysisFpsLimit,
+                cancellationCheckpoint = cancellationCheckpoint
+            )
+        } finally {
+            poseLandmarker.close()
+        }
+    }
+
+    private fun analyzeSequentialFrames(
+        uri: Uri,
+        poseLandmarker: PoseLandmarker,
+        analysisFpsLimit: Int,
+        cancellationCheckpoint: () -> Unit
+    ): PoseSequenceAnalysisResult {
+        val extractor = MediaExtractor()
+
+        try {
+            require(setExtractorDataSource(extractor, uri)) {
+                "Could not open selected video."
+            }
+
+            val videoTrackIndex = findVideoTrackIndex(extractor)
+            if (videoTrackIndex == -1) {
+                Log.w(TAG, "No video track found.")
+                return emptyPrePoseAnalysisResult(
+                    videoUri = uri.toString(),
+                    analysisFpsLimit = analysisFpsLimit,
+                    generator = TAG
+                )
+            }
+
+            extractor.selectTrack(videoTrackIndex)
+            val trackFormat = extractor.getTrackFormat(videoTrackIndex)
+            val mimeType = trackFormat.getString(MediaFormat.KEY_MIME)
+                ?: throw IllegalStateException("Missing video mime type.")
+            val rotationDegrees = trackFormat.readRotationDegrees()
+            val frameRate = trackFormat.readFrameRateOrNull()
+            val frameWidth = trackFormat.readVideoSize(MediaFormat.KEY_WIDTH)
+            val frameHeight = trackFormat.readVideoSize(MediaFormat.KEY_HEIGHT)
+            val decoder = createVideoDecoder(
+                mimeType = mimeType,
+                trackFormat = trackFormat
+            )
+
+            try {
+                return decodeEveryFrame(
+                    extractor = extractor,
+                    decoder = decoder,
+                    poseLandmarker = poseLandmarker,
+                    analysisFpsLimit = analysisFpsLimit,
+                    rotationDegrees = rotationDegrees,
+                    frameWidth = frameWidth,
+                    frameHeight = frameHeight,
+                    frameRate = frameRate,
+                    mimeType = mimeType,
+                    sourceUri = uri,
+                    cancellationCheckpoint = cancellationCheckpoint
+                )
+            } finally {
+                runCatching { decoder.stop() }
+                    .onFailure { error -> Log.w(TAG, "Failed to stop decoder.", error) }
+                decoder.release()
+            }
+        } finally {
+            extractor.release()
+        }
+    }
+
+    private fun decodeEveryFrame(
+        extractor: MediaExtractor,
+        decoder: MediaCodec,
+        poseLandmarker: PoseLandmarker,
+        analysisFpsLimit: Int,
+        rotationDegrees: Int,
+        frameWidth: Int,
+        frameHeight: Int,
+        frameRate: Int?,
+        mimeType: String,
+        sourceUri: Uri,
+        cancellationCheckpoint: () -> Unit
+    ): PoseSequenceAnalysisResult {
+        val bufferInfo = MediaCodec.BufferInfo()
+        val poses = ArrayList<Pose>()
+        val aiFrames = ArrayList<AiPoseFrame>()
+        val normalizedAnalysisFpsLimit = analysisFpsLimit.coerceAtLeast(1)
+        val minProcessFrameGapUs = 1_000_000L / normalizedAnalysisFpsLimit
+        var inputEnded = false
+        var outputEnded = false
+        var decodedFrameCount = 0
+        var processedFrameCount = 0
+        var skippedFrameCount = 0
+        var lastProcessedPresentationTimeUs = Long.MIN_VALUE
+
+        Log.d(
+            TAG,
+            "Sequential pose decode started: fps=${frameRate ?: "unknown"}, targetAnalysisFps=$normalizedAnalysisFpsLimit"
+        )
+
+        while (!outputEnded) {
+            cancellationCheckpoint()
+
+            if (!inputEnded) {
+                val inputBufferIndex = decoder.dequeueInputBuffer(DEQUEUE_TIMEOUT_US)
+                if (inputBufferIndex >= 0) {
+                    val inputBuffer = decoder.getInputBuffer(inputBufferIndex)
+                        ?: throw IllegalStateException("Could not obtain decoder input buffer.")
+
+                    inputBuffer.clear()
+                    val sampleSize = extractor.readSampleData(inputBuffer, 0)
+
+                    if (sampleSize < 0) {
+                        decoder.queueInputBuffer(
+                            inputBufferIndex,
+                            0,
+                            0,
+                            0L,
+                            MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                        )
+                        inputEnded = true
+                    } else {
+                        decoder.queueInputBuffer(
+                            inputBufferIndex,
+                            0,
+                            sampleSize,
+                            extractor.sampleTime,
+                            extractor.sampleFlags
+                        )
+                        extractor.advance()
+                    }
+                }
+            }
+
+            when (val outputBufferIndex = decoder.dequeueOutputBuffer(bufferInfo, DEQUEUE_TIMEOUT_US)) {
+                MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
+                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    Log.d(TAG, "Decoder output format changed: ${decoder.outputFormat}")
+                }
+
+                else -> {
+                    if (outputBufferIndex < 0) continue
+
+                    val presentationTimeUs = bufferInfo.presentationTimeUs
+                    val isEndOfStream =
+                        bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                    val isCodecConfig =
+                        bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
+
+                    if (!isCodecConfig && presentationTimeUs >= 0L) {
+                        decodedFrameCount++
+
+                        if (
+                            lastProcessedPresentationTimeUs != Long.MIN_VALUE &&
+                            presentationTimeUs - lastProcessedPresentationTimeUs < minProcessFrameGapUs
+                        ) {
+                            skippedFrameCount++
+                        } else {
+                            lastProcessedPresentationTimeUs = presentationTimeUs
+                            val currentFrameIndex = processedFrameCount
+                            processedFrameCount++
+
+                            runCatching {
+                                inferPoseFromDecodedFrame(
+                                    decoder = decoder,
+                                    outputBufferIndex = outputBufferIndex,
+                                    poseLandmarker = poseLandmarker,
+                                    presentationTimeUs = presentationTimeUs,
+                                    rotationDegrees = rotationDegrees,
+                                    frameIndex = currentFrameIndex
+                                )
+                            }.onFailure { error ->
+                                Log.e(TAG, "Pose inference failed at ptsUs=$presentationTimeUs", error)
+                            }.getOrNull()?.let { capture ->
+                                aiFrames.add(capture.frame)
+                                capture.pose?.let(poses::add)
+                            }
+                        }
+                    }
+
+                    decoder.releaseOutputBuffer(outputBufferIndex, false)
+
+                    if (isEndOfStream) {
+                        outputEnded = true
+                    }
+                }
+            }
+        }
+
+        Log.d(
+            TAG,
+            "Sequential pose decode completed: decoded=$decodedFrameCount, processed=$processedFrameCount, skipped=$skippedFrameCount, poses=${poses.size}"
+        )
+
+        return buildPoseSequenceAnalysisResult(
+            sourceUri = sourceUri,
+            generator = TAG,
+            mimeType = mimeType,
+            frameWidth = frameWidth,
+            frameHeight = frameHeight,
+            frameRate = frameRate,
+            analysisFpsLimit = normalizedAnalysisFpsLimit,
+            rotationDegrees = rotationDegrees,
+            decodedFrameCount = decodedFrameCount,
+            processedFrameCount = processedFrameCount,
+            skippedFrameCount = skippedFrameCount,
+            aiFrames = aiFrames,
+            poses = poses
+        )
+    }
+
+    private fun inferPoseFromDecodedFrame(
+        decoder: MediaCodec,
+        outputBufferIndex: Int,
+        poseLandmarker: PoseLandmarker,
+        presentationTimeUs: Long,
+        rotationDegrees: Int,
+        frameIndex: Int
+    ): PoseCapture? {
+        val image = decoder.getOutputImage(outputBufferIndex) ?: return null
+
+        try {
+            val rawBitmap = image.toBitmap()
+            val preparedFrame = rawBitmap.prepareForInference(rotationDegrees)
+
+            try {
+                return inferPoseCaptureFromBitmap(
+                    poseLandmarker = poseLandmarker,
+                    frameBitmap = preparedFrame.bitmap,
+                    frameTimeMs = presentationTimeUs / 1_000L,
+                    frameIndex = frameIndex,
+                    referenceWidthPx = preparedFrame.referenceWidthPx,
+                    referenceHeightPx = preparedFrame.referenceHeightPx
+                )
+            } finally {
+                if (preparedFrame.bitmap !== rawBitmap) {
+                    preparedFrame.bitmap.recycle()
+                }
+                rawBitmap.recycle()
+            }
+        } finally {
+            image.close()
+        }
+    }
+
+    private fun createPoseLandmarker(): PoseLandmarker? {
+        return try {
+            runCatching { createPoseLandmarker(delegate = Delegate.GPU) }
+                .onFailure { error ->
+                    Log.w(TAG, "GPU delegate unavailable for upload pre-pose. Falling back to CPU.", error)
+                }
+                .getOrElse { createPoseLandmarker(delegate = null) }
+        } catch (error: UnsatisfiedLinkError) {
+            Log.w(TAG, "MediaPipe video analyzer is unavailable on this device.", error)
+            null
+        } catch (error: Exception) {
+            Log.e(TAG, "Failed to create pose landmarker.", error)
+            null
+        }
+    }
+
+    private fun createPoseLandmarker(delegate: Delegate?): PoseLandmarker {
+        val baseOptionsBuilder = BaseOptions.builder()
+            .setModelAssetPath(POSE_MODEL_PATH)
+        if (delegate != null) {
+            baseOptionsBuilder.setDelegate(delegate)
+        }
+
+        val options = PoseLandmarker.PoseLandmarkerOptions.builder()
+            .setBaseOptions(baseOptionsBuilder.build())
+            .setRunningMode(RunningMode.VIDEO)
+            .setNumPoses(1)
+            .setMinPoseDetectionConfidence(0.5f)
+            .setMinPosePresenceConfidence(0.5f)
+            .setMinTrackingConfidence(0.5f)
+            .build()
+
+        return PoseLandmarker.createFromOptions(context, options)
+    }
+
+    private fun createVideoDecoder(
+        mimeType: String,
+        trackFormat: MediaFormat
+    ): MediaCodec {
+        val decoder = MediaCodec.createDecoderByType(mimeType)
+        val capabilities = decoder.codecInfo.getCapabilitiesForType(mimeType)
+        val supportsFlexibleYuv = capabilities.colorFormats.contains(
+            MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
+        )
+
+        if (supportsFlexibleYuv) {
+            trackFormat.setInteger(
+                MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
+            )
+        }
+
+        decoder.configure(trackFormat, null, null, 0)
+        decoder.start()
+        return decoder
+    }
+
+    private fun findVideoTrackIndex(extractor: MediaExtractor): Int {
+        for (trackIndex in 0 until extractor.trackCount) {
+            val mime = extractor.getTrackFormat(trackIndex).getString(MediaFormat.KEY_MIME)
+            if (mime?.startsWith("video/") == true) {
+                return trackIndex
+            }
+        }
+        return -1
+    }
+
+    private fun setExtractorDataSource(
+        extractor: MediaExtractor,
+        uri: Uri
+    ): Boolean {
+        return try {
+            if (uri.scheme == "file") {
+                extractor.setDataSource(uri.path ?: return false)
+            } else {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    extractor.setDataSource(pfd.fileDescriptor)
+                } ?: return false
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun MediaFormat.readRotationDegrees(): Int {
+        return if (containsKey(MediaFormat.KEY_ROTATION)) {
+            getInteger(MediaFormat.KEY_ROTATION)
+        } else {
+            0
+        }
+    }
+
+    private fun MediaFormat.readFrameRateOrNull(): Int? {
+        return if (containsKey(MediaFormat.KEY_FRAME_RATE)) {
+            getInteger(MediaFormat.KEY_FRAME_RATE)
+        } else {
+            null
+        }
+    }
+
+    private fun MediaFormat.readVideoSize(key: String): Int {
+        return if (containsKey(key)) {
+            getInteger(key)
+        } else {
+            0
+        }
+    }
+
+    private fun Image.toBitmap(): Bitmap {
+        val cropWidth = cropRect.width()
+        val cropHeight = cropRect.height()
+        val nv21Bytes = toNv21Bytes()
+        val yuvImage = YuvImage(nv21Bytes, ImageFormat.NV21, cropWidth, cropHeight, null)
+        val jpegStream = ByteArrayOutputStream()
+        yuvImage.compressToJpeg(Rect(0, 0, cropWidth, cropHeight), 90, jpegStream)
+        val jpegBytes = jpegStream.toByteArray()
+        return BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+            ?: throw IllegalStateException("Failed to decode frame bitmap.")
+    }
+
+    private fun Image.toNv21Bytes(): ByteArray {
+        val cropRect = cropRect
+        val width = cropRect.width()
+        val height = cropRect.height()
+        val planes = planes
+        val output = ByteArray(width * height * ImageFormat.getBitsPerPixel(format) / 8)
+        val rowData = ByteArray(planes.maxOf { it.rowStride })
+
+        for (planeIndex in planes.indices) {
+            val plane = planes[planeIndex]
+            val buffer = plane.buffer
+            val rowStride = plane.rowStride
+            val pixelStride = plane.pixelStride
+            val shift = if (planeIndex == 0) 0 else 1
+            val planeWidth = width shr shift
+            val planeHeight = height shr shift
+            val outputOffset = when (planeIndex) {
+                0 -> 0
+                1 -> width * height + 1
+                else -> width * height
+            }
+            val outputStride = if (planeIndex == 0) 1 else 2
+
+            var channelOffset = outputOffset
+            buffer.position(
+                rowStride * (cropRect.top shr shift) + pixelStride * (cropRect.left shr shift)
+            )
+
+            for (row in 0 until planeHeight) {
+                val length = if (pixelStride == 1 && outputStride == 1) {
+                    planeWidth
+                } else {
+                    (planeWidth - 1) * pixelStride + 1
+                }
+                if (pixelStride == 1 && outputStride == 1) {
+                    buffer.get(output, channelOffset, length)
+                    channelOffset += length
+                } else {
+                    buffer.get(rowData, 0, length)
+                    for (column in 0 until planeWidth) {
+                        output[channelOffset] = rowData[column * pixelStride]
+                        channelOffset += outputStride
+                    }
+                }
+                if (row < planeHeight - 1) {
+                    buffer.position(buffer.position() + rowStride - length)
+                }
+            }
+        }
+        return output
+    }
+
+    private fun Bitmap.prepareForInference(rotationDegrees: Int): PreparedInferenceBitmap {
+        val orientedBitmap = if (rotationDegrees == 0) {
+            this
+        } else {
+            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+            Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
+        }
+
+        val referenceWidthPx = orientedBitmap.width
+        val referenceHeightPx = orientedBitmap.height
+        val maxDimension = max(orientedBitmap.width, orientedBitmap.height)
+        if (maxDimension <= MAX_INFERENCE_DIMENSION_PX) {
+            return PreparedInferenceBitmap(
+                bitmap = orientedBitmap,
+                referenceWidthPx = referenceWidthPx,
+                referenceHeightPx = referenceHeightPx
+            )
+        }
+
+        val scale = MAX_INFERENCE_DIMENSION_PX.toFloat() / maxDimension.toFloat()
+        val scaledWidth = (orientedBitmap.width * scale).roundToInt().coerceAtLeast(1)
+        val scaledHeight = (orientedBitmap.height * scale).roundToInt().coerceAtLeast(1)
+        val scaledBitmap = Bitmap.createScaledBitmap(orientedBitmap, scaledWidth, scaledHeight, true)
+        if (orientedBitmap !== this) {
+            orientedBitmap.recycle()
+        }
+        return PreparedInferenceBitmap(
+            bitmap = scaledBitmap,
+            referenceWidthPx = referenceWidthPx,
+            referenceHeightPx = referenceHeightPx
+        )
+    }
+
+    private data class PreparedInferenceBitmap(
+        val bitmap: Bitmap,
+        val referenceWidthPx: Int,
+        val referenceHeightPx: Int
+    )
+
+    companion object {
+        private const val TAG = "SequentialPoseVideoAnalyzer"
+        private const val POSE_MODEL_PATH = "models/pose_landmarker_lite.task"
+        private const val DEQUEUE_TIMEOUT_US = 10_000L
+        private const val MAX_INFERENCE_DIMENSION_PX = 640
+        private const val DEFAULT_ANALYSIS_FPS_LIMIT = 10
+    }
+}

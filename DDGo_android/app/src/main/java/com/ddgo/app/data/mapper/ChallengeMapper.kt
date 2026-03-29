@@ -1,0 +1,124 @@
+package com.ddgo.app.data.mapper
+
+import com.ddgo.app.data.remote.challenge.BoundingBoxDto
+import com.ddgo.app.data.remote.challenge.ChallengeCloseResponseDto
+import com.ddgo.app.data.remote.challenge.ChallengeCreateResponseDto
+import com.ddgo.app.data.remote.challenge.ChallengeListResponseDto
+import com.ddgo.app.data.remote.challenge.HoldItemDto
+import com.ddgo.app.data.remote.challenge.HoldSaveRequestItemDto
+import com.ddgo.app.data.remote.challenge.HoldSaveResponseDto
+import com.ddgo.app.data.remote.challenge.PointItemDto
+import com.ddgo.app.domain.model.ChallengeHoldCoordinate
+import com.ddgo.app.domain.model.ChallengeOverview
+import com.ddgo.app.domain.model.ChallengeSession
+import com.ddgo.app.domain.model.ClosedChallenge
+import com.ddgo.app.domain.model.HoldBoundingBox
+import com.ddgo.app.domain.model.HoldPoint
+import com.ddgo.app.domain.model.SavedChallengeHolds
+
+/**
+ * Challenge DTO를 Domain 모델로 변환하는 매퍼입니다.
+ *
+ * 규칙:
+ * - DTO를 feature/domain 계층으로 직접 넘기지 않습니다.
+ * - 백엔드 응답은 여기서 순수 domain 모델로 변환합니다.
+ */
+object ChallengeMapper {
+
+    /** 챌린지 생성 응답을 ChallengeSession으로 변환합니다. */
+    fun ChallengeCreateResponseDto.toDomain(
+        gymId: Long,
+        gymGradeId: Long
+    ): ChallengeSession = ChallengeSession(
+        challengeId = id,
+        gymId = gymId,
+        gymGradeId = gymGradeId,
+        gymName = gymName,
+        problemColor = problemColor,
+        gradeLabel = gradeLabel,
+        challengeStatus = challengeStatus,
+        challengeResult = null,
+        doneAttemptCount = 0,
+        startedAt = startedAt,
+        createdAt = createdAt
+    )
+
+    fun ChallengeListResponseDto.toOverview(): ChallengeOverview = ChallengeOverview(
+        challengeId = id,
+        gymId = gymId,
+        gymName = gymName,
+        problemColor = problemColor,
+        gradeLabel = gradeLabel,
+        challengeStatus = challengeStatus,
+        challengeResult = challengeResult,
+        doneAttemptCount = doneAttemptCount,
+        startedAt = startedAt,
+        endedAt = endedAt,
+        createdAt = createdAt
+    )
+
+    /** 홀드 저장 응답을 domain 결과 모델로 변환합니다. */
+    fun HoldSaveResponseDto.toDomain(): SavedChallengeHolds = SavedChallengeHolds(
+        challengeId = challengeId,
+        holdCount = holdCount,
+        holds = holds.map { it.toDomain() }
+    )
+
+    /** domain 홀드 좌표를 요청 DTO로 변환합니다. */
+    fun ChallengeCloseResponseDto.toDomain(): ClosedChallenge = ClosedChallenge(
+        challengeId = challengeId,
+        challengeStatus = challengeStatus,
+        challengeResult = challengeResult,
+        endedAt = endedAt,
+        averageCenterStabilityRatio = summary?.averageCenterStabilityRatio,
+        mostCruxHoldNo = summary?.mostCruxHoldNo,
+        maxCruxDurationMs = summary?.maxCruxDurationMs,
+        finalComment = summary?.finalComment
+    )
+
+    fun ChallengeHoldCoordinate.toRequestDto(): HoldSaveRequestItemDto = HoldSaveRequestItemDto(
+        holdNo = holdNo,
+        boundingBox = BoundingBoxDto(
+            x1 = boundingBox.x1,
+            x2 = boundingBox.x2,
+            y1 = boundingBox.y1,
+            y2 = boundingBox.y2
+        ),
+        polygon = polygon.map { PointItemDto(x = it.x, y = it.y) }
+    )
+
+    private fun HoldItemDto.toDomain(): ChallengeHoldCoordinate = ChallengeHoldCoordinate(
+        holdNo = holdNo,
+        boundingBox = boundingBox.toDomainBoundingBox(polygon),
+        polygon = polygon.map { HoldPoint(x = it.x, y = it.y) }
+    )
+
+    private fun BoundingBoxDto?.toDomainBoundingBox(polygon: List<PointItemDto>): HoldBoundingBox {
+        if (this != null) {
+            return HoldBoundingBox(
+                x1 = x1,
+                x2 = x2,
+                y1 = y1,
+                y2 = y2
+            )
+        }
+
+        val xs = polygon.map { it.x }
+        val ys = polygon.map { it.y }
+        if (xs.isEmpty() || ys.isEmpty()) {
+            return HoldBoundingBox(
+                x1 = 0f,
+                x2 = 0f,
+                y1 = 0f,
+                y2 = 0f
+            )
+        }
+
+        return HoldBoundingBox(
+            x1 = xs.minOrNull() ?: 0f,
+            x2 = xs.maxOrNull() ?: 0f,
+            y1 = ys.minOrNull() ?: 0f,
+            y2 = ys.maxOrNull() ?: 0f
+        )
+    }
+}

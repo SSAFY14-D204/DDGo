@@ -1,0 +1,28 @@
+{
+  "mode": "physics_crux_detection",
+  "fit_mean_error_m": 0.11820492849488676,
+  "recovery_ratio": 0.045171339563862926,
+  "processed_frames": 642,
+  "has_contact_force_display_smoothing": true,
+  "frame_has_contact_force_status": true,
+  "frame_has_estimated_contact_forces_raw_n": true,
+  "frame_has_estimated_contact_forces_n": true,
+  "sample_force_fields": [
+    "axis_regularization_scale_xyz",
+    "compressive_wall_normal_force_n",
+    "confidence_score",
+    "force_norm_n",
+    "force_xyz",
+    "lateral_force_n",
+    "mode",
+    "mode_bias_scale",
+    "normal_force_n",
+    "position_xyz",
+    "regularization_scale",
+    "smoothed_for_display",
+    "tangential_force_n",
+    "vertical_force_n",
+    "wall_normal_component_n",
+    "wall_tangential_force_n"
+  ]
+}
