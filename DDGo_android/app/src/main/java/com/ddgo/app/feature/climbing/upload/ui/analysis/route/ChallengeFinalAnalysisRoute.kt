@@ -1,5 +1,6 @@
 package com.ddgo.app.feature.climbing.upload.ui.analysis.route
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -118,6 +119,26 @@ fun ChallengeFinalAnalysisRoute(
         }
     }
     val scope = rememberCoroutineScope()
+    val closeThenNavigate: ((() -> Unit) -> Unit) = { onClosedNavigate ->
+        scope.launch {
+            val currentChallengeId = viewModel.challengeId ?: 0L
+            if (currentChallengeId <= 0L) {
+                onClosedNavigate()
+                return@launch
+            }
+
+            val closed = viewModel.closeChallengeForFinalAnalysis(
+                challengeResult = challengeResult,
+                averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                finalComment = closeSummaryPayload.finalComment
+            )
+            if (closed) {
+                onClosedNavigate()
+            }
+        }
+    }
 
     val displayDate = remember(viewModel.createdChallenge?.startedAt) {
         formatAnalysisDate(viewModel.createdChallenge?.startedAt)
@@ -160,30 +181,15 @@ fun ChallengeFinalAnalysisRoute(
         )
     }
 
+    BackHandler(enabled = !isShareSheetVisible) {
+        onNavigateBack()
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         ChallengeFinalAnalysisPage(
             state = pageState,
             onNavigateBack = onNavigateBack,
-            onPrimaryAction = {
-                scope.launch {
-                    val currentChallengeId = viewModel.challengeId ?: 0L
-                    if (currentChallengeId <= 0L) {
-                        onNavigateToMain()
-                        return@launch
-                    }
-
-                    val closed = viewModel.closeChallengeForFinalAnalysis(
-                        challengeResult = challengeResult,
-                        averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
-                        mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
-                        maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
-                        finalComment = closeSummaryPayload.finalComment
-                    )
-                    if (closed) {
-                        onNavigateToMain()
-                    }
-                }
-            },
+            onPrimaryAction = { closeThenNavigate(onNavigateToMain) },
             onAttemptVideoShare = if (shareOptions.isNotEmpty()) {
                 { attemptNo ->
                     shareSheetSelectedAttemptNos = setOf(attemptNo)
@@ -217,24 +223,7 @@ fun ChallengeFinalAnalysisRoute(
                     gymName = viewModel.gymName,
                     options = selectedOptions
                 )
-                scope.launch {
-                    val currentChallengeId = viewModel.challengeId ?: 0L
-                    if (currentChallengeId <= 0L) {
-                        onNavigateToCommunityCompose(request)
-                        return@launch
-                    }
-
-                    val closed = viewModel.closeChallengeForFinalAnalysis(
-                        challengeResult = challengeResult,
-                        averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
-                        mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
-                        maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
-                        finalComment = closeSummaryPayload.finalComment
-                    )
-                    if (closed) {
-                        onNavigateToCommunityCompose(request)
-                    }
-                }
+                closeThenNavigate { onNavigateToCommunityCompose(request) }
             }
         )
     }
