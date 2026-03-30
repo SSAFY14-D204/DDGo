@@ -119,6 +119,26 @@ fun FinalAnalysisRoute(
         }
     }
     val scope = rememberCoroutineScope()
+    val closeThenNavigate: ((() -> Unit) -> Unit) = { onClosedNavigate ->
+        scope.launch {
+            val currentChallengeId = viewModel.challengeId ?: 0L
+            if (currentChallengeId <= 0L) {
+                onClosedNavigate()
+                return@launch
+            }
+
+            val closed = viewModel.closeChallengeForFinalAnalysis(
+                challengeResult = challengeResult,
+                averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
+                mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
+                maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
+                finalComment = closeSummaryPayload.finalComment
+            )
+            if (closed) {
+                onClosedNavigate()
+            }
+        }
+    }
 
     var selectedAttempt by rememberSaveable(attemptCount, initialSelectedAttempt) {
         mutableIntStateOf(initialSelectedAttempt)
@@ -396,23 +416,7 @@ fun FinalAnalysisRoute(
             onPrimaryAction = {
                 when {
                     isSingleUploadedAttempt -> {
-                        scope.launch {
-                            val currentChallengeId = viewModel.challengeId ?: 0L
-                            if (currentChallengeId <= 0L) {
-                                onNavigateToMain()
-                                return@launch
-                            }
-                            val closed = viewModel.closeChallengeForFinalAnalysis(
-                                challengeResult = challengeResult,
-                                averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
-                                mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
-                                maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
-                                finalComment = closeSummaryPayload.finalComment
-                            )
-                            if (closed) {
-                                onNavigateToMain()
-                            }
-                        }
+                        closeThenNavigate(onNavigateToMain)
                     }
 
                     safeSelectedAttempt < attemptCount -> {
@@ -421,23 +425,7 @@ fun FinalAnalysisRoute(
                     }
 
                     else -> {
-                        scope.launch {
-                            val currentChallengeId = viewModel.challengeId ?: 0L
-                            if (currentChallengeId <= 0L) {
-                                onNavigateToChallenge()
-                                return@launch
-                            }
-                            val closed = viewModel.closeChallengeForFinalAnalysis(
-                                challengeResult = challengeResult,
-                                averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
-                                mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
-                                maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
-                                finalComment = closeSummaryPayload.finalComment
-                            )
-                            if (closed) {
-                                onNavigateToChallenge()
-                            }
-                        }
+                        onNavigateToChallenge()
                     }
                 }
             }
@@ -460,28 +448,7 @@ fun FinalAnalysisRoute(
             onDismiss = { showExitConfirmDialog = false },
             onConfirm = {
                 showExitConfirmDialog = false
-                scope.launch {
-                    if (isSingleUploadedAttempt) {
-                        val currentChallengeId = viewModel.challengeId ?: 0L
-                        if (currentChallengeId <= 0L) {
-                            onNavigateToMain()
-                            return@launch
-                        }
-
-                        val closed = viewModel.closeChallengeForFinalAnalysis(
-                            challengeResult = challengeResult,
-                            averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
-                            mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
-                            maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
-                            finalComment = closeSummaryPayload.finalComment
-                        )
-                        if (closed) {
-                            onNavigateToMain()
-                        }
-                    } else if (viewModel.abandonCurrentChallengeIfNeeded()) {
-                        onNavigateToMain()
-                    }
-                }
+                closeThenNavigate(onNavigateToMain)
             }
         )
     }
@@ -500,24 +467,7 @@ fun FinalAnalysisRoute(
                     gymName = viewModel.gymName,
                     options = selectedOptions
                 )
-                scope.launch {
-                    val currentChallengeId = viewModel.challengeId ?: 0L
-                    if (currentChallengeId <= 0L) {
-                        onNavigateToCommunityCompose(request)
-                        return@launch
-                    }
-
-                    val closed = viewModel.closeChallengeForFinalAnalysis(
-                        challengeResult = challengeResult,
-                        averageCenterStabilityRatio = closeSummaryPayload.averageCenterStabilityRatio,
-                        mostCruxHoldNo = closeSummaryPayload.mostCruxHoldNo,
-                        maxCruxDurationMs = closeSummaryPayload.maxCruxDurationMs,
-                        finalComment = closeSummaryPayload.finalComment
-                    )
-                    if (closed) {
-                        onNavigateToCommunityCompose(request)
-                    }
-                }
+                closeThenNavigate { onNavigateToCommunityCompose(request) }
             }
         )
     }
