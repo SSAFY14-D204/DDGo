@@ -47,6 +47,12 @@ fun AnalysisScreen(
     val attemptDetail = uiState.attemptDetail
     val challengeDetail = uiState.challengeDetail
 
+    LaunchedEffect(externalChallengeId) {
+        if (externalChallengeId != null) {
+            viewModel.refreshCurrentSnapshots()
+        }
+    }
+
     LaunchedEffect(externalChallengeId, uiState.challenges.size) {
         val challengeId = externalChallengeId ?: return@LaunchedEffect
         if (viewModel.openChallengeDetailIfAvailable(challengeId)) {
@@ -57,6 +63,7 @@ fun AnalysisScreen(
     LaunchedEffect(rootResetNonce) {
         if (rootResetNonce == 0) return@LaunchedEffect
         viewModel.resetToRoot()
+        viewModel.refreshCurrentSnapshots()
     }
 
     when {
