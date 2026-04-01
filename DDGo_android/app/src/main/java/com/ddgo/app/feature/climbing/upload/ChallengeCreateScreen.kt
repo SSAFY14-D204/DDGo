@@ -2621,7 +2621,7 @@ private fun SearchHeroSection(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "지금 가고 싶은 클라이밍장을\n빠르게 찾아보세요",
+            text = "어느 클라이밍장의 문제인가요?",
             color = Color.White,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
@@ -2636,15 +2636,6 @@ private fun SearchHeroSection(
             onSearch = onSearch,
             onCurrentLocationSearch = onCurrentLocationSearch,
             isBusy = isBusy
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Text(
-            text = "암장명으로 찾거나, 현재 위치 버튼으로 주변 암장만 바로 확인할 수 있어요.",
-            color = Color.White.copy(alpha = 0.62f),
-            fontSize = 13.sp,
-            lineHeight = 19.sp
         )
 
         if (isResolvingLocation) {
@@ -2708,7 +2699,7 @@ private fun SearchEmptyGuide() {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "암장명을 입력해 찾거나, 현재 위치 버튼으로 가까운 클라이밍장을 불러오세요.",
+            text = "암장명을 입력해 찾거나, 현재 위치 버튼으로 지금 있는 클라이밍장을 불러오세요.",
             color = Color.White.copy(alpha = 0.62f),
             fontSize = 14.sp,
             lineHeight = 20.sp
