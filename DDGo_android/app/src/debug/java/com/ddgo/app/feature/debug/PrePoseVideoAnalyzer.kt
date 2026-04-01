@@ -15,18 +15,10 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.util.Log
-import com.ddgo.app.data.mapper.VisionMapper
-import com.ddgo.app.domain.model.Pose
-import com.ddgo.app.domain.model.PoseLandmark
-import com.google.mediapipe.framework.image.BitmapImageBuilder
-import com.google.mediapipe.tasks.core.BaseOptions
-import com.google.mediapipe.tasks.core.Delegate
-import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
-import java.util.Optional
 import javax.inject.Inject
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -42,7 +34,7 @@ private const val DEFAULT_ANALYSIS_FPS_LIMIT = 30
 class PrePoseVideoAnalyzer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private var lastCaptureTimeMs: Long = -5_000
+    private var lastCaptureTimeMs: Long = -PRE_POSE_CAPTURE_INTERVAL_MS
 
     suspend operator fun invoke(
         videoUri: String,
@@ -59,9 +51,13 @@ class PrePoseVideoAnalyzer @Inject constructor(
         useGpuAcceleration: Boolean,
         onProgress: (Float) -> Unit
     ): List<DebugPoseFrameResult> {
-        lastCaptureTimeMs = -5_000
+        lastCaptureTimeMs = -PRE_POSE_CAPTURE_INTERVAL_MS
         val uri = Uri.parse(videoUri)
-        val poseLandmarker = createPoseLandmarker(useGpuAcceleration)
+        val poseLandmarker = createDebugPoseLandmarker(
+            context = context,
+            useGpuAcceleration = useGpuAcceleration,
+            logTag = TAG
+        )
 
         try {
             return analyzeSequentialFrames(
@@ -266,11 +262,14 @@ class PrePoseVideoAnalyzer @Inject constructor(
             val preparedBitmap = rawBitmap.prepareForInference(rotationDegrees)
 
             try {
-                return inferPose(
+                val detection = detectDebugPoseFrame(
                     poseLandmarker = poseLandmarker,
                     frameBitmap = preparedBitmap,
-                    frameTimeMs = presentationTimeUs / 1_000L
+                    frameTimeMs = presentationTimeUs / 1_000L,
+                    lastCaptureTimeMs = lastCaptureTimeMs
                 )
+                lastCaptureTimeMs = detection.updatedCaptureTimeMs
+                return detection.frameResult
             } finally {
                 if (preparedBitmap !== rawBitmap) {
                     preparedBitmap.recycle()
@@ -280,90 +279,6 @@ class PrePoseVideoAnalyzer @Inject constructor(
         } finally {
             image.close()
         }
-    }
-
-    private fun inferPose(
-        poseLandmarker: PoseLandmarker,
-        frameBitmap: Bitmap,
-        frameTimeMs: Long
-    ): DebugPoseFrameResult? {
-        val mpImage = BitmapImageBuilder(frameBitmap).build()
-
-        try {
-            val result = poseLandmarker.detectForVideo(mpImage, frameTimeMs)
-            val landmarks = result.landmarks().firstOrNull().orEmpty()
-            val worldLandmarks = result.worldLandmarks().firstOrNull().orEmpty()
-            
-            val pose = VisionMapper.toPose(
-                frameTimeMs = result.timestampMs(),
-                rawLandmarks = landmarks.map { landmark ->
-                    Triple(landmark.x(), landmark.y(), landmark.z())
-                },
-                visibilityValues = landmarks.map { landmark -> landmark.visibility().toNullable() },
-                presenceValues = landmarks.map { landmark -> landmark.presence().toNullable() }
-            )
-
-            // 5초 간격으로 이미지 캡처 (디버깅용)
-            val currentTimestampMs = result.timestampMs()
-            val shouldCapture = currentTimestampMs >= lastCaptureTimeMs + 5_000
-            val capturedBitmap = if (shouldCapture) {
-                lastCaptureTimeMs = (currentTimestampMs / 5000) * 5000
-                Bitmap.createBitmap(frameBitmap)
-            } else null
-
-            if (landmarks.isNotEmpty() || capturedBitmap != null) {
-                return DebugPoseFrameResult(
-                    pose = pose,
-                    worldLandmarks = worldLandmarks.mapIndexed { index, landmark ->
-                        DebugPoseWorldLandmark(
-                            index = index,
-                            x = landmark.x(),
-                            y = landmark.y(),
-                            z = landmark.z(),
-                            visibility = landmark.visibility().toNullable(),
-                            presence = landmark.presence().toNullable()
-                        )
-                    },
-                    capturedBitmap = capturedBitmap
-                )
-            }
-            return null
-        } finally {
-            mpImage.close()
-        }
-    }
-
-    private fun Optional<Float>.toNullable(): Float? = if (isPresent) get() else null
-
-    private fun createPoseLandmarker(useGpuAcceleration: Boolean): PoseLandmarker {
-        if (useGpuAcceleration) {
-            val gpuResult = runCatching { createPoseLandmarker(delegate = Delegate.GPU) }
-            gpuResult.onFailure {
-                Log.w(TAG, "GPU delegate unavailable. Falling back to CPU.", it)
-            }
-            return gpuResult.getOrElse { createPoseLandmarker(delegate = null) }
-        }
-
-        return createPoseLandmarker(delegate = null)
-    }
-
-    private fun createPoseLandmarker(delegate: Delegate?): PoseLandmarker {
-        val baseOptionsBuilder = BaseOptions.builder()
-            .setModelAssetPath(POSE_MODEL_PATH)
-        if (delegate != null) {
-            baseOptionsBuilder.setDelegate(delegate)
-        }
-
-        val options = PoseLandmarker.PoseLandmarkerOptions.builder()
-            .setBaseOptions(baseOptionsBuilder.build())
-            .setRunningMode(RunningMode.VIDEO)
-            .setNumPoses(1)
-            .setMinPoseDetectionConfidence(0.5f)
-            .setMinPosePresenceConfidence(0.5f)
-            .setMinTrackingConfidence(0.5f)
-            .build()
-
-        return PoseLandmarker.createFromOptions(context, options)
     }
 
     private fun createVideoDecoder(
@@ -500,7 +415,6 @@ class PrePoseVideoAnalyzer @Inject constructor(
 
     companion object {
         private const val TAG = "PrePoseVideoAnalyzer"
-        private const val POSE_MODEL_PATH = "models/pose_landmarker_lite.task"
         private const val DEQUEUE_TIMEOUT_US = 10_000L
         private const val MAX_INFERENCE_DIMENSION_PX = 640 // 분석 속도를 위해 640으로 조정
     }

@@ -31,6 +31,7 @@ class PrePoseLandmarkerViewModelTest {
     fun `analyzeVideo stores raw hand endpoint analysis point`() = runTest {
         val prePoseVideoAnalyzer = mockk<PrePoseVideoAnalyzer>()
         val optimizedPrePoseVideoAnalyzer = mockk<OptimizedPrePoseVideoAnalyzer>()
+        val officialSampledPrePoseVideoAnalyzer = mockk<OfficialSampledPrePoseVideoAnalyzer>()
         val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
         val poseFrames = listOf(
             debugPoseFrameAt(0L),
@@ -55,13 +56,14 @@ class PrePoseLandmarkerViewModelTest {
         val viewModel = PrePoseLandmarkerViewModel(
             prePoseVideoAnalyzer = prePoseVideoAnalyzer,
             optimizedPrePoseVideoAnalyzer = optimizedPrePoseVideoAnalyzer,
+            officialSampledPrePoseVideoAnalyzer = officialSampledPrePoseVideoAnalyzer,
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase
         )
 
         viewModel.analyzeVideo(
             uri = fileUri(),
             displayName = "single_video.mp4",
-            useOptimized = false
+            analysisMode = PrePoseAnalysisMode.NORMAL
         )
         advanceUntilIdle()
 
@@ -76,6 +78,7 @@ class PrePoseLandmarkerViewModelTest {
     fun `analyzeVideo keeps endpoint output empty when analyzer returns null`() = runTest {
         val prePoseVideoAnalyzer = mockk<PrePoseVideoAnalyzer>()
         val optimizedPrePoseVideoAnalyzer = mockk<OptimizedPrePoseVideoAnalyzer>()
+        val officialSampledPrePoseVideoAnalyzer = mockk<OfficialSampledPrePoseVideoAnalyzer>()
         val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
         val poseFrames = listOf(debugPoseFrameAt(0L))
 
@@ -87,13 +90,14 @@ class PrePoseLandmarkerViewModelTest {
         val viewModel = PrePoseLandmarkerViewModel(
             prePoseVideoAnalyzer = prePoseVideoAnalyzer,
             optimizedPrePoseVideoAnalyzer = optimizedPrePoseVideoAnalyzer,
+            officialSampledPrePoseVideoAnalyzer = officialSampledPrePoseVideoAnalyzer,
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase
         )
 
         viewModel.analyzeVideo(
             uri = fileUri(),
             displayName = "single_video.mp4",
-            useOptimized = false
+            analysisMode = PrePoseAnalysisMode.NORMAL
         )
         advanceUntilIdle()
 
@@ -106,6 +110,7 @@ class PrePoseLandmarkerViewModelTest {
     fun `analyzeVideo resets previous endpoint state when a new analysis starts`() = runTest {
         val prePoseVideoAnalyzer = mockk<PrePoseVideoAnalyzer>()
         val optimizedPrePoseVideoAnalyzer = mockk<OptimizedPrePoseVideoAnalyzer>()
+        val officialSampledPrePoseVideoAnalyzer = mockk<OfficialSampledPrePoseVideoAnalyzer>()
         val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
         val poseFrames = listOf(debugPoseFrameAt(0L))
         val annotation = HandPeakAnnotation(
@@ -127,13 +132,14 @@ class PrePoseLandmarkerViewModelTest {
         val viewModel = PrePoseLandmarkerViewModel(
             prePoseVideoAnalyzer = prePoseVideoAnalyzer,
             optimizedPrePoseVideoAnalyzer = optimizedPrePoseVideoAnalyzer,
+            officialSampledPrePoseVideoAnalyzer = officialSampledPrePoseVideoAnalyzer,
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase
         )
 
         viewModel.analyzeVideo(
             uri = fileUri(),
             displayName = "first_video.mp4",
-            useOptimized = false
+            analysisMode = PrePoseAnalysisMode.NORMAL
         )
         advanceUntilIdle()
 
@@ -142,7 +148,7 @@ class PrePoseLandmarkerViewModelTest {
         viewModel.analyzeVideo(
             uri = fileUri(),
             displayName = "second_video.mp4",
-            useOptimized = false
+            analysisMode = PrePoseAnalysisMode.NORMAL
         )
 
         val uiState = viewModel.uiState.value
@@ -156,6 +162,7 @@ class PrePoseLandmarkerViewModelTest {
     fun `analyzeVideo forwards gpu toggle to optimized analyzer`() = runTest {
         val prePoseVideoAnalyzer = mockk<PrePoseVideoAnalyzer>()
         val optimizedPrePoseVideoAnalyzer = mockk<OptimizedPrePoseVideoAnalyzer>()
+        val officialSampledPrePoseVideoAnalyzer = mockk<OfficialSampledPrePoseVideoAnalyzer>()
         val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
         val poseFrames = listOf(debugPoseFrameAt(0L))
 
@@ -167,19 +174,53 @@ class PrePoseLandmarkerViewModelTest {
         val viewModel = PrePoseLandmarkerViewModel(
             prePoseVideoAnalyzer = prePoseVideoAnalyzer,
             optimizedPrePoseVideoAnalyzer = optimizedPrePoseVideoAnalyzer,
+            officialSampledPrePoseVideoAnalyzer = officialSampledPrePoseVideoAnalyzer,
             analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase
         )
 
         viewModel.analyzeVideo(
             uri = fileUri(),
             displayName = "gpu_video.mp4",
-            useOptimized = true,
+            analysisMode = PrePoseAnalysisMode.OPTIMIZED,
             useGpuAcceleration = true
         )
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
             optimizedPrePoseVideoAnalyzer.invoke(any(), 30, true, any())
+        }
+    }
+
+    @Test
+    fun `analyzeVideo dispatches official sampled mode to retriever analyzer`() = runTest {
+        val prePoseVideoAnalyzer = mockk<PrePoseVideoAnalyzer>()
+        val optimizedPrePoseVideoAnalyzer = mockk<OptimizedPrePoseVideoAnalyzer>()
+        val officialSampledPrePoseVideoAnalyzer = mockk<OfficialSampledPrePoseVideoAnalyzer>()
+        val analyzeHandPeakAndEndUseCase = mockk<AnalyzeHandPeakAndEndUseCase>()
+        val poseFrames = listOf(debugPoseFrameAt(34L))
+
+        coEvery {
+            officialSampledPrePoseVideoAnalyzer.invoke(any(), any(), any(), any())
+        } returns Result.success(poseFrames)
+        every { analyzeHandPeakAndEndUseCase(any<List<PoseFrame>>(), any()) } returns null
+
+        val viewModel = PrePoseLandmarkerViewModel(
+            prePoseVideoAnalyzer = prePoseVideoAnalyzer,
+            optimizedPrePoseVideoAnalyzer = optimizedPrePoseVideoAnalyzer,
+            officialSampledPrePoseVideoAnalyzer = officialSampledPrePoseVideoAnalyzer,
+            analyzeHandPeakAndEndUseCase = analyzeHandPeakAndEndUseCase
+        )
+
+        viewModel.analyzeVideo(
+            uri = fileUri(),
+            displayName = "official_sample.mp4",
+            analysisMode = PrePoseAnalysisMode.OFFICIAL_SAMPLED,
+            analysisFpsLimit = 30
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            officialSampledPrePoseVideoAnalyzer.invoke(any(), 30, true, any())
         }
     }
 
