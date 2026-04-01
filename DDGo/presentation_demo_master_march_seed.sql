@@ -17,7 +17,7 @@
 -- Result after this script:
 --   - old extra demo records from previous March extra seeds are removed
 --   - 24 extra challenges are inserted for user 9005
---   - 74 extra DONE analysis results are inserted in March 2026
+--   - 73 extra DONE analysis results are inserted in March 2026
 --   - base demo data remains untouched
 -- =========================================================
 
@@ -31,6 +31,8 @@ START TRANSACTION;
 -- ---------------------------------------------------------
 DELETE FROM `attempt_feedbacks` WHERE `id` BETWEEN 9447 AND 9466;
 DELETE FROM `attempt_metrics` WHERE `id` BETWEEN 9547 AND 9566;
+DELETE FROM `attempt_stability_points` WHERE `attempt_id` BETWEEN 9352 AND 9371;
+DELETE FROM `attempt_heart_rate_samples` WHERE `attempt_id` BETWEEN 9352 AND 9371;
 DELETE FROM `attempt_video` WHERE `attempt_id` BETWEEN 9352 AND 9371;
 DELETE FROM `attempts` WHERE `id` BETWEEN 9352 AND 9371;
 DELETE FROM `challenge_summaries` WHERE `id` BETWEEN 9606 AND 9620;
@@ -42,6 +44,8 @@ DELETE FROM `challenges` WHERE `id` BETWEEN 9211 AND 9225;
 -- ---------------------------------------------------------
 DELETE FROM `attempt_feedbacks` WHERE `id` BETWEEN 11401 AND 11474;
 DELETE FROM `attempt_metrics` WHERE `id` BETWEEN 10401 AND 10474;
+DELETE FROM `attempt_stability_points` WHERE `attempt_id` BETWEEN 9401 AND 9474;
+DELETE FROM `attempt_heart_rate_samples` WHERE `attempt_id` BETWEEN 9401 AND 9474;
 DELETE FROM `attempt_video` WHERE `attempt_id` BETWEEN 9401 AND 9474;
 DELETE FROM `attempts` WHERE `id` BETWEEN 9401 AND 9474;
 DELETE FROM `challenge_summaries` WHERE `id` BETWEEN 12301 AND 12324;
@@ -50,6 +54,7 @@ DELETE FROM `challenges` WHERE `id` BETWEEN 9301 AND 9324;
 
 DROP TEMPORARY TABLE IF EXISTS `tmp_demo_challenge_seed`;
 DROP TEMPORARY TABLE IF EXISTS `tmp_demo_numbers`;
+DROP TEMPORARY TABLE IF EXISTS `tmp_demo_series_numbers`;
 DROP TEMPORARY TABLE IF EXISTS `tmp_demo_extra_attempts`;
 DROP TEMPORARY TABLE IF EXISTS `tmp_demo_extra_metrics`;
 
@@ -154,6 +159,13 @@ CREATE TEMPORARY TABLE `tmp_demo_numbers` (
 
 INSERT INTO `tmp_demo_numbers` (`n`) VALUES (1), (2), (3), (4);
 
+CREATE TEMPORARY TABLE `tmp_demo_series_numbers` (
+  `n` INT NOT NULL,
+  PRIMARY KEY (`n`)
+) ENGINE=MEMORY;
+
+INSERT INTO `tmp_demo_series_numbers` (`n`) VALUES (0), (1), (2), (3), (4), (5);
+
 CREATE TEMPORARY TABLE `tmp_demo_extra_attempts` AS
 SELECT
   9400 + ROW_NUMBER() OVER (ORDER BY c.`challenge_id`, n.`n`) AS `attempt_id`,
@@ -242,6 +254,63 @@ SELECT
 FROM `tmp_demo_extra_metrics`
 ORDER BY `attempt_id`;
 
+INSERT INTO `attempt_stability_points` (
+  `attempt_id`, `point_order`, `timestamp_ms`, `stability_score`, `created_at`
+)
+SELECT
+  a.`attempt_id`,
+  s.`n`,
+  ROUND((a.`duration_ms` * s.`n`) / 5, 0),
+  ROUND(
+    LEAST(
+      0.95,
+      GREATEST(
+        0.24,
+        (
+          (a.`base_overall_score` - 16)
+          + (a.`attempt_no` * 4)
+          + (s.`n` * 5)
+          + CASE
+              WHEN a.`attempt_result` = 'SUCCESS' AND s.`n` = 5 THEN 4
+              ELSE 0
+            END
+        ) / 100
+      )
+    ),
+    2
+  ) AS `stability_score`,
+  a.`analysis_ended_at`
+FROM `tmp_demo_extra_attempts` a
+JOIN `tmp_demo_series_numbers` s
+ORDER BY a.`attempt_id`, s.`n`;
+
+INSERT INTO `attempt_heart_rate_samples` (
+  `attempt_id`, `sample_order`, `timestamp_ms`, `bpm`, `created_at`
+)
+SELECT
+  a.`attempt_id`,
+  s.`n`,
+  ROUND((a.`duration_ms` * s.`n`) / 5, 0),
+  LEAST(
+    188,
+    GREATEST(
+      104,
+      104
+      + (a.`sort_order_snapshot` * 2)
+      + (a.`attempt_no` * 5)
+      + (s.`n` * 6)
+      + CASE
+          WHEN a.`attempt_result` = 'FAIL' AND s.`n` >= 4 THEN 4
+          WHEN a.`attempt_result` = 'SUCCESS' AND s.`n` = 5 THEN -2
+          ELSE 0
+        END
+    )
+  ) AS `bpm`,
+  a.`analysis_ended_at`
+FROM `tmp_demo_extra_attempts` a
+JOIN `tmp_demo_series_numbers` s
+ORDER BY a.`attempt_id`, s.`n`;
+
 INSERT INTO `attempt_feedbacks` (
   `id`, `attempt_id`, `failure_reason`, `risk_alert`, `next_mission`,
   `model_version`, `prompt_version`, `generated_at`, `created_at`, `updated_at`
@@ -315,6 +384,7 @@ ORDER BY c.`challenge_id`;
 
 DROP TEMPORARY TABLE IF EXISTS `tmp_demo_extra_metrics`;
 DROP TEMPORARY TABLE IF EXISTS `tmp_demo_extra_attempts`;
+DROP TEMPORARY TABLE IF EXISTS `tmp_demo_series_numbers`;
 DROP TEMPORARY TABLE IF EXISTS `tmp_demo_numbers`;
 DROP TEMPORARY TABLE IF EXISTS `tmp_demo_challenge_seed`;
 

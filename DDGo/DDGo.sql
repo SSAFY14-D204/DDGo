@@ -23,6 +23,8 @@ DROP TABLE IF EXISTS `community_post_videos`;
 DROP TABLE IF EXISTS `community_posts`;
 
 DROP TABLE IF EXISTS `attempt_metrics`;
+DROP TABLE IF EXISTS `attempt_stability_points`;
+DROP TABLE IF EXISTS `attempt_heart_rate_samples`;
 DROP TABLE IF EXISTS `attempt_video`;
 DROP TABLE IF EXISTS `attempt_feedbacks`;
 DROP TABLE IF EXISTS `attempts`;
@@ -406,6 +408,32 @@ CREATE TABLE `attempt_metrics` (
   UNIQUE KEY `uk_attempt_metrics_attempt_id` (`attempt_id`),
   KEY `ix_attempt_metrics_attempt_id` (`attempt_id`),
   KEY `ix_attempt_metrics_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB;
+
+CREATE TABLE `attempt_stability_points` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `attempt_id` INT NOT NULL,
+  `point_order` INT NOT NULL,
+  `timestamp_ms` BIGINT NOT NULL,
+  `stability_score` DOUBLE NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_attempt_stability_points_attempt_order` (`attempt_id`, `point_order`),
+  KEY `ix_attempt_stability_points_attempt_id` (`attempt_id`)
+) ENGINE=InnoDB;
+
+CREATE TABLE `attempt_heart_rate_samples` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `attempt_id` INT NOT NULL,
+  `sample_order` INT NOT NULL,
+  `timestamp_ms` BIGINT NOT NULL,
+  `bpm` INT NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_attempt_heart_rate_samples_attempt_order` (`attempt_id`, `sample_order`),
+  KEY `ix_attempt_heart_rate_samples_attempt_id` (`attempt_id`)
 ) ENGINE=InnoDB;
 
 -- =========================================================

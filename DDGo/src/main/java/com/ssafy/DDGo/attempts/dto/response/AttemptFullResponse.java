@@ -2,11 +2,14 @@ package com.ssafy.DDGo.attempts.dto.response;
 
 import com.ssafy.DDGo.attempts.domain.Attempt;
 import com.ssafy.DDGo.attempts.domain.AttemptFeedback;
+import com.ssafy.DDGo.attempts.domain.AttemptHeartRateSample;
 import com.ssafy.DDGo.attempts.domain.AttemptMetrics;
 import com.ssafy.DDGo.attempts.domain.AttemptResult;
+import com.ssafy.DDGo.attempts.domain.AttemptStabilityPoint;
 import com.ssafy.DDGo.attempts.domain.AttemptStatus;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record AttemptFullResponse(
         Long attemptId,
@@ -17,8 +20,11 @@ public record AttemptFullResponse(
         Integer durationMs,
         Integer maxHoldNo,
         String videoUrl,
+        Integer videoDurationMs,
         MetricsData metricsData,
-        FeedbacksData feedbacksData) {
+        FeedbacksData feedbacksData,
+        List<StabilityTimelinePoint> stabilityTimeline,
+        List<HeartRateSample> heartRateSeries) {
 
     public record MetricsData(
             Double centerStabilityRatio,
@@ -31,8 +37,9 @@ public record AttemptFullResponse(
             Integer dangerEventCount,
             String loadFocusLabel) {
         public static MetricsData from(AttemptMetrics metrics) {
-            if (metrics == null)
+            if (metrics == null) {
                 return null;
+            }
             return new MetricsData(
                     metrics.getCenterStabilityRatio(),
                     metrics.getStabilityRecoveryScore(),
@@ -51,8 +58,9 @@ public record AttemptFullResponse(
             String riskAlert,
             String nextMission) {
         public static FeedbacksData from(AttemptFeedback feedback) {
-            if (feedback == null)
+            if (feedback == null) {
                 return null;
+            }
             return new FeedbacksData(
                     feedback.getFailureReason(),
                     feedback.getRiskAlert(),
@@ -60,8 +68,29 @@ public record AttemptFullResponse(
         }
     }
 
-    public static AttemptFullResponse from(Attempt attempt, String videoUrl, AttemptMetrics metrics,
-            AttemptFeedback feedback) {
+    public record StabilityTimelinePoint(
+            Long timestampMs,
+            Double stabilityScore) {
+        public static StabilityTimelinePoint from(AttemptStabilityPoint point) {
+            return new StabilityTimelinePoint(point.getTimestampMs(), point.getStabilityScore());
+        }
+    }
+
+    public record HeartRateSample(
+            Long timestampMs,
+            Integer bpm) {
+        public static HeartRateSample from(AttemptHeartRateSample sample) {
+            return new HeartRateSample(sample.getTimestampMs(), sample.getBpm());
+        }
+    }
+
+    public static AttemptFullResponse from(
+            Attempt attempt,
+            String videoUrl,
+            AttemptMetrics metrics,
+            AttemptFeedback feedback,
+            List<AttemptStabilityPoint> stabilityTimeline,
+            List<AttemptHeartRateSample> heartRateSeries) {
         return new AttemptFullResponse(
                 attempt.getId(),
                 attempt.getAttemptNo(),
@@ -71,7 +100,10 @@ public record AttemptFullResponse(
                 attempt.getDurationMs(),
                 attempt.getMaxHoldNo(),
                 videoUrl,
+                attempt.getDurationMs(),
                 MetricsData.from(metrics),
-                FeedbacksData.from(feedback));
+                FeedbacksData.from(feedback),
+                stabilityTimeline == null ? List.of() : stabilityTimeline.stream().map(StabilityTimelinePoint::from).toList(),
+                heartRateSeries == null ? List.of() : heartRateSeries.stream().map(HeartRateSample::from).toList());
     }
 }
