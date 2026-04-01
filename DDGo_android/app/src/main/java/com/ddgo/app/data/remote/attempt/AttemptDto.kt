@@ -77,7 +77,12 @@ data class AttemptFullResponseDto(
     val loadFocusLabel: String? = null,
     val failureReason: String? = null,
     val riskAlert: String? = null,
-    val nextMission: String? = null
+    val nextMission: String? = null,
+    val insightData: AttemptInsightResponseDto? = null,
+    val videoDurationMs: Int? = null,
+    val stabilityFocusFraction: Double? = null,
+    val stabilityTimeline: List<AttemptStabilityPointResponseDto> = emptyList(),
+    val heartRateSeries: List<AttemptHeartRateSampleResponseDto> = emptyList()
 )
 
 @Serializable
@@ -98,6 +103,26 @@ data class AttemptFeedbacksResponseDto(
     val failureReason: String? = null,
     val riskAlert: String? = null,
     val nextMission: String? = null
+)
+
+@Serializable
+data class AttemptInsightResponseDto(
+    val videoDurationMs: Int? = null,
+    val stabilityFocusFraction: Double? = null,
+    val stabilityTimeline: List<AttemptStabilityPointResponseDto> = emptyList(),
+    val heartRateSeries: List<AttemptHeartRateSampleResponseDto> = emptyList()
+)
+
+@Serializable
+data class AttemptStabilityPointResponseDto(
+    val timestampMs: Long,
+    val stabilityScore: Double
+)
+
+@Serializable
+data class AttemptHeartRateSampleResponseDto(
+    val timestampMs: Long,
+    val bpm: Int
 )
 
 @Serializable
@@ -128,8 +153,22 @@ data class AttemptEndFeedbacksDataDto(
 )
 
 @Serializable
+data class AttemptEndStabilityPointDto(
+    val timestampMs: Long,
+    val stabilityScore: Double
+)
+
+@Serializable
+data class AttemptEndHeartRateSampleDto(
+    val timestampMs: Long,
+    val bpm: Int
+)
+
+@Serializable
 data class AttemptEndRequestDto(
     val baseData: AttemptEndBaseDataDto? = null,
     val metricsData: AttemptEndMetricsDataDto? = null,
-    val feedbacksData: AttemptEndFeedbacksDataDto? = null
+    val feedbacksData: AttemptEndFeedbacksDataDto? = null,
+    val stabilityTimeline: List<AttemptEndStabilityPointDto> = emptyList(),
+    val heartRateSeries: List<AttemptEndHeartRateSampleDto> = emptyList()
 )

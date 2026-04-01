@@ -33,6 +33,11 @@ object RecordingStateSyncProcessor {
                                     incoming = recordingState,
                                     source = RecordingStateEventSource.DATA_ITEM
                                 )
+                                Log.d(
+                                    TAG,
+                                    "WATCH_RECEIVE_DATA sessionId=${recordingState.sessionId} " +
+                                        "isRecording=${recordingState.isRecording} applied=$applied"
+                                )
                                 if (applied) {
                                     SessionRecoveryCoordinator.syncDesiredState(appContext)
                                 }
@@ -66,6 +71,11 @@ object RecordingStateSyncProcessor {
                 incoming = recordingState,
                 source = RecordingStateEventSource.DATA_ITEM
             )
+            Log.d(
+                TAG,
+                "WATCH_RECEIVE_DATA sessionId=${recordingState.sessionId} " +
+                    "isRecording=${recordingState.isRecording} applied=$applied"
+            )
             if (applied) {
                 SessionRecoveryCoordinator.syncDesiredState(appContext)
             }
@@ -82,7 +92,12 @@ object RecordingStateSyncProcessor {
             return
         }
 
-        if (path != DlPaths.MSG_RECORDING_START && path != DlPaths.MSG_RECORDING_STOP) {
+        if (
+            path != DlPaths.MSG_RECORDING_START &&
+            path != DlPaths.MSG_RECORDING_STOP &&
+            path != DlPaths.MSG_MEASUREMENT_PREPARE_START &&
+            path != DlPaths.MSG_MEASUREMENT_PREPARE_STOP
+        ) {
             return
         }
 
@@ -97,6 +112,11 @@ object RecordingStateSyncProcessor {
         val applied = RecordingStateStore.get(appContext).apply(
             incoming = recordingState,
             source = RecordingStateEventSource.MESSAGE
+        )
+        Log.d(
+            TAG,
+            "WATCH_RECEIVE_MSG sessionId=${recordingState.sessionId} " +
+                "isRecording=${recordingState.isRecording} applied=$applied path=$path"
         )
         if (applied) {
             SessionRecoveryCoordinator.syncDesiredState(appContext)

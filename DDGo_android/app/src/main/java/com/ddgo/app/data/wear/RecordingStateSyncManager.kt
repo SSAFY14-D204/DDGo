@@ -27,8 +27,31 @@ class RecordingStateSyncManager @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true }
 
     fun sync(recordingState: RecordingState) {
+        Log.d(
+            TAG,
+            "PHONE_SEND recordingState sessionId=${recordingState.sessionId} " +
+                "isRecording=${recordingState.isRecording} updatedAt=${recordingState.updatedAt}"
+        )
         syncDataItem(recordingState)
         syncMessage(recordingState)
+    }
+
+    fun prepareMeasurement(recordingState: RecordingState) {
+        Log.d(
+            TAG,
+            "PHONE_PREPARE sessionId=${recordingState.sessionId} " +
+                "isRecording=${recordingState.isRecording} updatedAt=${recordingState.updatedAt}"
+        )
+        syncCustomMessage(DlPaths.MSG_MEASUREMENT_PREPARE_START, recordingState)
+    }
+
+    fun stopPreparedMeasurement(recordingState: RecordingState) {
+        Log.d(
+            TAG,
+            "PHONE_PREPARE_STOP sessionId=${recordingState.sessionId} " +
+                "isRecording=${recordingState.isRecording} updatedAt=${recordingState.updatedAt}"
+        )
+        syncCustomMessage(DlPaths.MSG_MEASUREMENT_PREPARE_STOP, recordingState)
     }
 
     fun launchWatchApp() {
@@ -57,14 +80,33 @@ class RecordingStateSyncManager @Inject constructor(
 
         dataClient.putDataItem(request)
             .addOnSuccessListener { item ->
-                Log.d(TAG, "Recording state synced to Data Layer: ${item.uri}")
+                Log.d(
+                    TAG,
+                    "PHONE_SEND_DATA_OK sessionId=${recordingState.sessionId} uri=${item.uri}"
+                )
             }
             .addOnFailureListener { throwable ->
-                Log.w(TAG, "Failed to sync recording state data item.", throwable)
+                Log.w(
+                    TAG,
+                    "PHONE_SEND_DATA_FAIL sessionId=${recordingState.sessionId}",
+                    throwable
+                )
             }
     }
 
     private fun syncMessage(recordingState: RecordingState) {
+        val path = if (recordingState.isRecording) {
+            DlPaths.MSG_RECORDING_START
+        } else {
+            DlPaths.MSG_RECORDING_STOP
+        }
+        syncCustomMessage(path, recordingState)
+    }
+
+    private fun syncCustomMessage(
+        path: String,
+        recordingState: RecordingState
+    ) {
         capabilityClient.getCapability(
             DlPaths.CAPABILITY_WATCH,
             CapabilityClient.FILTER_REACHABLE
@@ -72,22 +114,25 @@ class RecordingStateSyncManager @Inject constructor(
             val nodes = capabilityInfo.nodes
             if (nodes.isNotEmpty()) {
                 nodes.forEach { node ->
-                    sendMessage(node, recordingState)
+                    sendMessage(node, path, recordingState)
                 }
             } else {
-                fallbackToConnectedNodes(recordingState)
+                fallbackToConnectedNodes(path, recordingState)
             }
         }.addOnFailureListener { throwable ->
             Log.w(TAG, "Failed to resolve watch capability nodes. Falling back to connected nodes.", throwable)
-            fallbackToConnectedNodes(recordingState)
+            fallbackToConnectedNodes(path, recordingState)
         }
     }
 
-    private fun fallbackToConnectedNodes(recordingState: RecordingState) {
+    private fun fallbackToConnectedNodes(
+        path: String,
+        recordingState: RecordingState
+    ) {
         nodeClient.connectedNodes
             .addOnSuccessListener { nodes ->
                 nodes.forEach { node ->
-                    sendMessage(node, recordingState)
+                    sendMessage(node, path, recordingState)
                 }
             }
             .addOnFailureListener { throwable ->
@@ -107,21 +152,24 @@ class RecordingStateSyncManager @Inject constructor(
 
     private fun sendMessage(
         node: Node,
+        path: String,
         recordingState: RecordingState
     ) {
-        val path = if (recordingState.isRecording) {
-            DlPaths.MSG_RECORDING_START
-        } else {
-            DlPaths.MSG_RECORDING_STOP
-        }
         val payload = json.encodeToString(recordingState).encodeToByteArray()
 
         messageClient.sendMessage(node.id, path, payload)
             .addOnSuccessListener {
-                Log.d(TAG, "Recording state message sent to node=${node.id}, path=$path")
+                Log.d(
+                    TAG,
+                    "PHONE_SEND_MSG_OK sessionId=${recordingState.sessionId} node=${node.id} path=$path"
+                )
             }
             .addOnFailureListener { throwable ->
-                Log.w(TAG, "Failed to send recording state message to node=${node.id}", throwable)
+                Log.w(
+                    TAG,
+                    "PHONE_SEND_MSG_FAIL sessionId=${recordingState.sessionId} node=${node.id} path=$path",
+                    throwable
+                )
             }
     }
 

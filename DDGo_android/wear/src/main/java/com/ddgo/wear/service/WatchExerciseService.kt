@@ -3,6 +3,7 @@ package com.ddgo.wear.service
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.util.Log
 import com.ddgo.wear.data.ExerciseRuntimeStore
 import com.ddgo.wear.runtime.ExerciseSessionManager
 import com.ddgo.wear.runtime.OngoingActivityController
@@ -20,6 +21,7 @@ class WatchExerciseService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "WATCH_SERVICE_CREATED")
         runtimeStore = ExerciseRuntimeStore.get(applicationContext)
         ongoingActivityController = OngoingActivityController(applicationContext)
         sessionManager = ExerciseSessionManager(
@@ -35,6 +37,7 @@ class WatchExerciseService : Service() {
         flags: Int,
         startId: Int
     ): Int {
+        Log.d(TAG, "WATCH_SERVICE_ON_START action=${intent?.action} startId=$startId")
         ongoingActivityController.startOrUpdate(this, runtimeStore.snapshot.value)
 
         serviceScope.launch {
@@ -48,6 +51,7 @@ class WatchExerciseService : Service() {
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "WATCH_SERVICE_DESTROYED")
         serviceScope.launch {
             sessionManager.shutdown()
         }
@@ -63,6 +67,7 @@ class WatchExerciseService : Service() {
     }
 
     companion object {
+        private const val TAG = "WatchExerciseService"
         const val ACTION_SYNC_RECORDING = "com.ddgo.wear.action.SYNC_RECORDING"
         const val ACTION_RECOVER = "com.ddgo.wear.action.RECOVER"
         const val ACTION_STOP = "com.ddgo.wear.action.STOP"
