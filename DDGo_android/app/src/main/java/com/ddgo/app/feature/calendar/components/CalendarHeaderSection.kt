@@ -10,8 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,27 +28,20 @@ import com.ddgo.app.R
 import com.ddgo.app.feature.calendar.model.CalendarMonthSummaryUiModel
 import com.ddgo.app.feature.calendar.style.CalendarPalette
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
-private val MonthFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)
-
-// 상단 히어로는 피그마의 검은 헤더 톤을 유지하면서 기존 월 이동 기능을 함께 제공한다.
 @Composable
 internal fun CalendarHeroSection(
     currentMonth: YearMonth,
     summary: CalendarMonthSummaryUiModel,
-    onPreviousMonth: () -> Unit,
-    onNextMonth: () -> Unit
+    onShareClick: () -> Unit
 ) {
     val onHeroColor = CalendarPalette.OnAccent
     val headline = if (summary.totalSessions == 0) {
-        "${currentMonth.monthValue}월에는 아직 푼 문제가 없어요!"
+        "${currentMonth.monthValue}월에 아직 푼 문제가 없어요"
     } else {
-        "${currentMonth.monthValue}월에는 ${summary.totalSessions}개의 문제를 풀었어요!"
+        "${currentMonth.monthValue}월에 ${summary.totalSessions}개의 문제를 풀었어요"
     }
-    val supportingText = "활동 ${summary.activeDays}일 · 연속 ${summary.longestStreak}일"
+    val supportingText = "출석 ${summary.activeDays}일째 · 연속 ${summary.longestStreak}일"
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -73,30 +65,15 @@ internal fun CalendarHeroSection(
                     shape = RoundedCornerShape(18.dp),
                     color = Color.White.copy(alpha = 0.10f)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    IconButton(
+                        onClick = onShareClick,
+                        modifier = Modifier.size(36.dp)
                     ) {
-                        IconButton(onClick = onPreviousMonth, modifier = Modifier.size(28.dp)) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                                contentDescription = "이전 달",
-                                tint = onHeroColor
-                            )
-                        }
-                        Text(
-                            text = currentMonth.format(MonthFormatter),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = onHeroColor.copy(alpha = 0.90f),
-                            maxLines = 1
+                        Icon(
+                            imageVector = Icons.Rounded.Share,
+                            contentDescription = "캘린더 공유",
+                            tint = onHeroColor
                         )
-                        IconButton(onClick = onNextMonth, modifier = Modifier.size(28.dp)) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = "다음 달",
-                                tint = onHeroColor
-                            )
-                        }
                     }
                 }
             }

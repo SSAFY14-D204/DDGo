@@ -85,7 +85,7 @@ fun PrePoseLandmarkerScreen(
     val context = LocalContext.current
     val selectedVideoUri = uiState.selectedVideoUri
     val selectedVideoName = uiState.selectedVideoName
-    var useOptimized by remember { mutableStateOf(true) }
+    var analysisMode by remember { mutableStateOf(uiState.analysisMode) }
     var useGpuAcceleration by remember { mutableStateOf(uiState.useGpuAcceleration) }
     var analysisFpsLimit by remember { mutableIntStateOf(uiState.analysisFpsLimit) }
     val analysisFpsOptions = remember { listOf(10, 20, 30) }
@@ -98,7 +98,7 @@ fun PrePoseLandmarkerScreen(
         viewModel.analyzeVideo(
             uri = uri,
             displayName = context.resolveDisplayName(uri),
-            useOptimized = useOptimized,
+            analysisMode = analysisMode,
             useGpuAcceleration = useGpuAcceleration,
             analysisFpsLimit = analysisFpsLimit
         )
@@ -143,16 +143,21 @@ fun PrePoseLandmarkerScreen(
                     title = { Text("Video Mode 성능 최적화 설명") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("현재 두 가지 분석 모드를 지원합니다:", fontWeight = FontWeight.Bold)
+                            Text("현재 세 가지 분석 모드를 지원합니다:", fontWeight = FontWeight.Bold)
 
                             Text("1. 일반 모드 (Normal)", fontWeight = FontWeight.SemiBold)
-                            Text("• 방식: MediaCodec(YUV) → Bitmap 변환(ARGB) → CPU 리사이징 → MediaPipe(CPU/GPU 선택)")
-                            Text("• 단점: Java 레이어의 Bitmap 생성 및 픽셀 변환 오버헤드가 큼")
+                            Text("• 방식: MediaCodec → getOutputImage → Bitmap 변환 → CPU 회전/축소 → MediaPipe")
+                            Text("• 특징: baseline 비교용으로 좋지만 CPU 전처리 비용이 큼")
 
                             Text("2. 최적화 모드 (Optimized)", fontWeight = FontWeight.SemiBold)
-                            Text("• 방식: MediaCodec(YUV) → MediaImageBuilder → MediaPipe(CPU/GPU 선택)")
-                            Text("• 장점: Bitmap 변환 생략(Zero-Copy 지향), 회전 정보 처리")
+                            Text("• 방식: MediaCodec(surface) → SurfaceTexture → EGL → ImageReader → MediaPipe")
+                            Text("• 특징: 회전/축소를 Surface 경로에서 먼저 처리해 가장 빠른 편")
                             Text("• GPU를 켜면 지원 기기에서 더 빠를 수 있고, 실패 시 CPU로 자동 폴백됩니다.")
+
+                            Text("3. 공식샘플 모드 (Official Sampled)", fontWeight = FontWeight.SemiBold)
+                            Text("• 방식: MediaMetadataRetriever → Bitmap → MediaPipe")
+                            Text("• 특징: 공식 video 예제처럼 일정 간격으로 프레임을 샘플링합니다.")
+                            Text("• 30fps 선택 시 약 34ms 간격으로 프레임을 가져옵니다.")
                         }
                     },
                     confirmButton = {
@@ -164,21 +169,20 @@ fun PrePoseLandmarkerScreen(
             }
 
             Text(
+                text = "분석 모드",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            PrePoseAnalysisModeSelector(
+                selectedMode = analysisMode,
+                enabled = !uiState.isAnalyzing,
+                onModeSelected = { analysisMode = it }
+            )
+
+            Text(
                 text = "영상을 미리 분석하여 재생 시 지연 없는 포즈 오버레이를 제공합니다.",
                 style = MaterialTheme.typography.bodyMedium
             )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Checkbox(
-                    checked = useOptimized,
-                    onCheckedChange = { useOptimized = it },
-                    enabled = !uiState.isAnalyzing
-                )
-                Text("최적화 모드 사용 (Surface/Zero-Copy 경로)")
-            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -248,7 +252,7 @@ fun PrePoseLandmarkerScreen(
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Text("분석 결과 리포트", fontWeight = FontWeight.Bold)
-                        Text("모드: ${if (uiState.isOptimized) "최적화 (Option B)" else "일반 (Option A)"}")
+                        Text("모드: ${uiState.analysisMode.resultLabel}")
                         Text("소요 시간: ${uiState.analysisTimeMs}ms")
                         Text("검출된 포즈 수: ${uiState.poseFrames.size}")
                         Text(
@@ -313,6 +317,27 @@ private fun PrePoseResultView(
         pointColor = Color.Magenta,
         helperText = "Playing ${poseFrames.size} precomputed poses in sync with the original video."
     )
+}
+
+@Composable
+private fun PrePoseAnalysisModeSelector(
+    selectedMode: PrePoseAnalysisMode,
+    enabled: Boolean,
+    onModeSelected: (PrePoseAnalysisMode) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        PrePoseAnalysisMode.entries.forEach { mode ->
+            FilterChip(
+                selected = selectedMode == mode,
+                onClick = { onModeSelected(mode) },
+                enabled = enabled,
+                label = { Text(mode.chipLabel) }
+            )
+        }
+    }
 }
 
 @Composable
@@ -663,7 +688,7 @@ fun PrePoseLandmarkerSmoothFilterCompareScreen(
     val selectedVideoUri = uiState.selectedVideoUri
     val selectedVideoName = uiState.selectedVideoName
     val poseFrames = uiState.poseFrames
-    var useOptimized by remember { mutableStateOf(uiState.isOptimized) }
+    var analysisMode by remember { mutableStateOf(uiState.analysisMode) }
     var analysisFpsLimit by remember {
         mutableIntStateOf(
             uiState.analysisFpsLimit.takeIf { it > 0 } ?: SMOOTH_FILTER_DEFAULT_ANALYSIS_FPS_LIMIT
@@ -679,7 +704,7 @@ fun PrePoseLandmarkerSmoothFilterCompareScreen(
         viewModel.analyzeVideo(
             uri = uri,
             displayName = context.resolveDisplayName(uri),
-            useOptimized = useOptimized,
+            analysisMode = analysisMode,
             analysisFpsLimit = analysisFpsLimit
         )
     }
@@ -737,17 +762,11 @@ fun PrePoseLandmarkerSmoothFilterCompareScreen(
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Checkbox(
-                    checked = useOptimized,
-                    onCheckedChange = { useOptimized = it },
-                    enabled = !uiState.isAnalyzing
-                )
-                Text("Use optimized pre-pose analysis")
-            }
+            PrePoseAnalysisModeSelector(
+                selectedMode = analysisMode,
+                enabled = !uiState.isAnalyzing,
+                onModeSelected = { analysisMode = it }
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -894,7 +913,7 @@ private fun LegacyPrePoseLandmarkerSmoothFilterCompareScreen(
     val context = LocalContext.current
     val poseFrames = uiState.poseFrames
     val selectedVideoName = uiState.selectedVideoName
-    var useOptimized by remember { mutableStateOf(uiState.isOptimized) }
+    var analysisMode by remember { mutableStateOf(uiState.analysisMode) }
     var analysisFpsLimit by remember {
         mutableIntStateOf(
             uiState.analysisFpsLimit.takeIf { it > 0 } ?: SMOOTH_FILTER_DEFAULT_ANALYSIS_FPS_LIMIT
@@ -909,7 +928,7 @@ private fun LegacyPrePoseLandmarkerSmoothFilterCompareScreen(
         viewModel.analyzeVideo(
             uri = uri,
             displayName = context.resolveDisplayName(uri),
-            useOptimized = useOptimized,
+            analysisMode = analysisMode,
             analysisFpsLimit = analysisFpsLimit
         )
     }
@@ -976,17 +995,11 @@ private fun LegacyPrePoseLandmarkerSmoothFilterCompareScreen(
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Checkbox(
-                    checked = useOptimized,
-                    onCheckedChange = { useOptimized = it },
-                    enabled = !uiState.isAnalyzing
-                )
-                Text("최적화된 pre-pose 분석 사용")
-            }
+            PrePoseAnalysisModeSelector(
+                selectedMode = analysisMode,
+                enabled = !uiState.isAnalyzing,
+                onModeSelected = { analysisMode = it }
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

@@ -33,6 +33,7 @@ private val SUPPORTED_ANALYSIS_FPS_LIMITS = setOf(10, 20, 30)
 class PrePoseLandmarkerViewModel @Inject constructor(
     private val prePoseVideoAnalyzer: PrePoseVideoAnalyzer,
     private val optimizedPrePoseVideoAnalyzer: OptimizedPrePoseVideoAnalyzer,
+    private val officialSampledPrePoseVideoAnalyzer: OfficialSampledPrePoseVideoAnalyzer,
     private val analyzeHandPeakAndEndUseCase: AnalyzeHandPeakAndEndUseCase
 ) : ViewModel() {
 
@@ -42,7 +43,7 @@ class PrePoseLandmarkerViewModel @Inject constructor(
     fun analyzeVideo(
         uri: Uri,
         displayName: String,
-        useOptimized: Boolean = false,
+        analysisMode: PrePoseAnalysisMode = PrePoseAnalysisMode.OPTIMIZED,
         useGpuAcceleration: Boolean = true,
         analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
     ) {
@@ -58,7 +59,7 @@ class PrePoseLandmarkerViewModel @Inject constructor(
             analysisPoints = emptyList(),
             errorMessage = null,
             analysisTimeMs = 0L,
-            isOptimized = useOptimized,
+            analysisMode = analysisMode,
             useGpuAcceleration = useGpuAcceleration,
             analysisFpsLimit = normalizedAnalysisFpsLimit
         )
@@ -67,22 +68,30 @@ class PrePoseLandmarkerViewModel @Inject constructor(
             var poseFrames: List<DebugPoseFrameResult> = emptyList()
             var handPeakAnnotation: HandPeakAnnotation? = null
             val time = measureTimeMillis {
-                val result = if (useOptimized) {
-                    optimizedPrePoseVideoAnalyzer(
+                val progressUpdater: (Float) -> Unit = { progress ->
+                    _uiState.value = _uiState.value.copy(analysisProgress = progress)
+                }
+                val result = when (analysisMode) {
+                    PrePoseAnalysisMode.NORMAL -> prePoseVideoAnalyzer(
                         videoUri = uri.toString(),
                         analysisFpsLimit = normalizedAnalysisFpsLimit,
-                        useGpuAcceleration = useGpuAcceleration
-                    ) { progress ->
-                        _uiState.value = _uiState.value.copy(analysisProgress = progress)
-                    }
-                } else {
-                    prePoseVideoAnalyzer(
+                        useGpuAcceleration = useGpuAcceleration,
+                        onProgress = progressUpdater
+                    )
+
+                    PrePoseAnalysisMode.OPTIMIZED -> optimizedPrePoseVideoAnalyzer(
                         videoUri = uri.toString(),
                         analysisFpsLimit = normalizedAnalysisFpsLimit,
-                        useGpuAcceleration = useGpuAcceleration
-                    ) { progress ->
-                        _uiState.value = _uiState.value.copy(analysisProgress = progress)
-                    }
+                        useGpuAcceleration = useGpuAcceleration,
+                        onProgress = progressUpdater
+                    )
+
+                    PrePoseAnalysisMode.OFFICIAL_SAMPLED -> officialSampledPrePoseVideoAnalyzer(
+                        videoUri = uri.toString(),
+                        analysisFpsLimit = normalizedAnalysisFpsLimit,
+                        useGpuAcceleration = useGpuAcceleration,
+                        onProgress = progressUpdater
+                    )
                 }
 
                 result.onSuccess { poseFrames = it }
@@ -197,7 +206,7 @@ data class PrePoseUiState(
     val analysisPoints: List<AnalysisPoint> = emptyList(),
     val errorMessage: String? = null,
     val analysisTimeMs: Long = 0L,
-    val isOptimized: Boolean = false,
+    val analysisMode: PrePoseAnalysisMode = PrePoseAnalysisMode.OPTIMIZED,
     val useGpuAcceleration: Boolean = true,
     val analysisFpsLimit: Int = DEFAULT_ANALYSIS_FPS_LIMIT
 )
