@@ -2,6 +2,7 @@ package com.ddgo.app.data.mapper
 
 import com.ddgo.app.data.remote.attempt.AttemptDetailResponseDto
 import com.ddgo.app.data.remote.challenge.ChallengeListResponseDto
+import com.ddgo.app.data.remote.common.GymNameFormatter
 import com.ddgo.app.data.remote.community.CommunityCommentDto
 import com.ddgo.app.data.remote.community.CommunityLikeResponseDto
 import com.ddgo.app.data.remote.community.CommunityPostDetailResponseDto
@@ -39,7 +40,7 @@ object CommunityMapper {
         contentPreview = contentPreview,
         authorNickname = authorNickname,
         gymId = gymId,
-        gymName = gymName,
+        gymName = GymNameFormatter.sanitize(gymName),
         createdAt = createdAt,
         viewCount = viewCount,
         likeCount = likeCount,
@@ -56,7 +57,7 @@ object CommunityMapper {
         content = content,
         authorNickname = authorNickname,
         gymId = gymId,
-        gymName = gymName,
+        gymName = GymNameFormatter.sanitize(gymName),
         createdAt = createdAt,
         updatedAt = updatedAt,
         likeCount = likeCount,
@@ -126,7 +127,7 @@ object CommunityMapper {
     ): CommunityChallengeReference = CommunityChallengeReference(
         challengeId = id,
         gymId = gymId,
-        gymName = gymName,
+        gymName = GymNameFormatter.sanitize(gymName),
         problemColor = problemColor,
         gradeLabel = gradeLabel,
         challengeStatus = challengeStatus,
