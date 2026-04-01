@@ -15,5 +15,23 @@ data class AttemptCompletionPayload(
     val loadFocusLabel: String? = null,
     val failureReason: String? = null,
     val riskAlert: String? = null,
-    val nextMission: String? = null
+    val nextMission: String? = null,
+    val insightData: AttemptInsightPayload? = null
+)
+
+data class AttemptInsightPayload(
+    val videoDurationMs: Int? = null,
+    val stabilityFocusFraction: Double? = null,
+    val stabilityTimeline: List<AttemptStabilityPointPayload> = emptyList(),
+    val heartRateSeries: List<AttemptHeartRateSamplePayload> = emptyList()
+)
+
+data class AttemptStabilityPointPayload(
+    val timestampMs: Long,
+    val stabilityScore: Double
+)
+
+data class AttemptHeartRateSamplePayload(
+    val timestampMs: Long,
+    val bpm: Int
 )

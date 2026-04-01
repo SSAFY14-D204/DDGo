@@ -1,9 +1,12 @@
 package com.ddgo.app.data.repository
 
 import android.util.Log
+import com.ddgo.app.core.datastore.AnalysisAttemptInsightCacheDataStore
 import com.ddgo.app.data.remote.attempt.AttemptApi
 import com.ddgo.app.data.remote.attempt.AttemptDetailResponseDto
 import com.ddgo.app.data.remote.attempt.AttemptFullResponseDto
+import com.ddgo.app.data.remote.attempt.AttemptHeartRateSampleResponseDto
+import com.ddgo.app.data.remote.attempt.AttemptStabilityPointResponseDto
 import com.ddgo.app.data.remote.challenge.ChallengeApi
 import com.ddgo.app.data.remote.challenge.ChallengeListResponseDto
 import com.ddgo.app.data.remote.common.GymNameFormatter
@@ -12,6 +15,7 @@ import com.ddgo.app.domain.model.AnalysisAttemptSnapshot
 import com.ddgo.app.domain.model.AnalysisChallengeResult
 import com.ddgo.app.domain.model.AnalysisChallengeSnapshot
 import com.ddgo.app.domain.model.AnalysisChallengeStatus
+import com.ddgo.app.domain.model.AnalysisHeartRateSample
 import com.ddgo.app.domain.repository.AnalysisRepository
 import javax.inject.Inject
 import kotlinx.coroutines.async
@@ -22,7 +26,8 @@ private const val TAG = "AnalysisRepository"
 
 class AnalysisRepositoryImpl @Inject constructor(
     private val challengeApi: ChallengeApi,
-    private val attemptApi: AttemptApi
+    private val attemptApi: AttemptApi,
+    private val analysisAttemptInsightCacheDataStore: AnalysisAttemptInsightCacheDataStore
 ) : AnalysisRepository {
 
     override suspend fun getAnalysisSnapshots(): Result<List<AnalysisChallengeSnapshot>> = runCatching {
@@ -53,10 +58,19 @@ class AnalysisRepositoryImpl @Inject constructor(
         if (!attemptsResponse.success || attempts.isEmpty()) {
             return null
         }
+        val attemptInsights = analysisAttemptInsightCacheDataStore.getAttemptInsights(
+            attempts.map(AttemptDetailResponseDto::attemptId)
+        )
 
         val attemptSnapshots = coroutineScope {
             attempts.map { attempt ->
-                async { buildAttemptSnapshot(challenge.id, attempt) }
+                async {
+                    buildAttemptSnapshot(
+                        challengeId = challenge.id,
+                        attempt = attempt,
+                        cachedInsight = attemptInsights[attempt.attemptId]
+                    )
+                }
             }.awaitAll()
         }
             .filterNotNull()
@@ -94,7 +108,8 @@ class AnalysisRepositoryImpl @Inject constructor(
 
     private suspend fun buildAttemptSnapshot(
         challengeId: Long,
-        attempt: AttemptDetailResponseDto
+        attempt: AttemptDetailResponseDto,
+        cachedInsight: com.ddgo.app.domain.model.AnalysisAttemptInsight?
     ): AnalysisAttemptSnapshot? {
         val detailResponse = runCatching {
             attemptApi.getAttemptDetail(challengeId = challengeId, attemptId = attempt.attemptId)
@@ -115,13 +130,16 @@ class AnalysisRepositoryImpl @Inject constructor(
                     "attemptId=${attempt.attemptId}"
             )
         }
-        return detail?.toAnalysisAttemptSnapshot()
-            ?: attempt.toFallbackAnalysisAttemptSnapshot()
+        return detail?.toAnalysisAttemptSnapshot(cachedInsight)
+            ?: attempt.toFallbackAnalysisAttemptSnapshot(cachedInsight)
     }
 
-    private fun AttemptFullResponseDto.toAnalysisAttemptSnapshot(): AnalysisAttemptSnapshot {
+    private fun AttemptFullResponseDto.toAnalysisAttemptSnapshot(
+        cachedInsight: com.ddgo.app.domain.model.AnalysisAttemptInsight?
+    ): AnalysisAttemptSnapshot {
         val resolvedMetrics = metricsData
         val resolvedFeedbacks = feedbacksData
+        val resolvedInsight = resolveServerInsight() ?: cachedInsight
 
         return AnalysisAttemptSnapshot(
             attemptId = attemptId,
@@ -148,11 +166,14 @@ class AnalysisRepositoryImpl @Inject constructor(
             loadFocusLabel = resolvedMetrics?.loadFocusLabel ?: loadFocusLabel,
             failureReason = resolvedFeedbacks?.failureReason ?: failureReason,
             riskAlert = resolvedFeedbacks?.riskAlert ?: riskAlert,
-            nextMission = resolvedFeedbacks?.nextMission ?: nextMission
+            nextMission = resolvedFeedbacks?.nextMission ?: nextMission,
+            insight = resolvedInsight
         )
     }
 
-    private fun AttemptDetailResponseDto.toFallbackAnalysisAttemptSnapshot(): AnalysisAttemptSnapshot {
+    private fun AttemptDetailResponseDto.toFallbackAnalysisAttemptSnapshot(
+        cachedInsight: com.ddgo.app.domain.model.AnalysisAttemptInsight?
+    ): AnalysisAttemptSnapshot {
         return AnalysisAttemptSnapshot(
             attemptId = attemptId,
             attemptNo = attemptNo,
@@ -171,7 +192,8 @@ class AnalysisRepositoryImpl @Inject constructor(
             loadFocusLabel = null,
             failureReason = null,
             riskAlert = null,
-            nextMission = null
+            nextMission = null,
+            insight = cachedInsight
         )
     }
 
@@ -185,6 +207,33 @@ class AnalysisRepositoryImpl @Inject constructor(
                 AnalysisChallengeResult.FAIL
             else -> AnalysisChallengeResult.UNKNOWN
         }
+    }
+
+    private fun AttemptFullResponseDto.resolveServerInsight():
+        com.ddgo.app.domain.model.AnalysisAttemptInsight? {
+        val nestedInsight = insightData
+        val timelinePoints = (nestedInsight?.stabilityTimeline ?: stabilityTimeline)
+            .sortedBy(AttemptStabilityPointResponseDto::timestampMs)
+        val heartRatePoints = (nestedInsight?.heartRateSeries ?: heartRateSeries)
+            .sortedBy(AttemptHeartRateSampleResponseDto::timestampMs)
+
+        if (timelinePoints.isEmpty() && heartRatePoints.isEmpty()) {
+            return null
+        }
+
+        return com.ddgo.app.domain.model.AnalysisAttemptInsight(
+            stabilityTimeline = timelinePoints.map { it.stabilityScore.toFloat() },
+            heartRateSeries = heartRatePoints.map {
+                AnalysisHeartRateSample(
+                    timestampMs = it.timestampMs.toLong(),
+                    bpm = it.bpm
+                )
+            },
+            videoDurationMs = (nestedInsight?.videoDurationMs ?: videoDurationMs)?.toLong(),
+            stabilityFocusFraction = (
+                nestedInsight?.stabilityFocusFraction ?: stabilityFocusFraction
+                )?.toFloat()
+        )
     }
 
     private fun String?.toAnalysisStatus(): AnalysisChallengeStatus {

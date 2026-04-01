@@ -6,13 +6,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ddgo.app.core.config.AiAnalysisVariant
+import com.ddgo.app.core.datastore.AnalysisAttemptInsightCacheDataStore
 import com.ddgo.app.core.network.toUserFacingNetworkMessageOrNull
 import com.ddgo.app.data.mapper.toPoseSequenceDto
 import com.ddgo.app.data.remote.pose.PoseSequenceDto
 import com.ddgo.app.domain.model.AiAnalysisMode
 import com.ddgo.app.domain.model.AiAnalysisResult
+import com.ddgo.app.domain.model.AnalysisAttemptInsight
+import com.ddgo.app.domain.model.AnalysisHeartRateSample
 import com.ddgo.app.domain.model.AiPoseSequence
 import com.ddgo.app.domain.model.AttemptCompletionPayload
+import com.ddgo.app.domain.model.AttemptHeartRateSamplePayload
+import com.ddgo.app.domain.model.AttemptInsightPayload
+import com.ddgo.app.domain.model.AttemptStabilityPointPayload
 import com.ddgo.app.domain.model.AnalysisPointKind
 import com.ddgo.app.domain.model.ChallengeHoldCoordinate
 import com.ddgo.app.domain.model.Hold
@@ -48,6 +54,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
+import kotlin.math.roundToInt
 
 private const val SUBMISSION_TAG = "UploadSubmissionDelegate"
 private const val HOLD_CONTACT_ANALYSIS_TAG = "HoldContactAnalysis"
@@ -87,6 +94,7 @@ internal interface UploadSubmissionCallbacks {
     fun publishedSession(): PublishedAttemptResultSession?
     fun setPublishedSession(session: PublishedAttemptResultSession?)
     fun setSavedChallengeHolds(saved: SavedChallengeHolds?)
+    fun heartRateSeriesForPlaybackUri(playbackUri: String): List<com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint>
 }
 
 /**
@@ -101,7 +109,8 @@ internal class UploadSubmissionDelegate(
     private val uploadAttemptVideoUseCase: UploadAttemptVideoUseCase,
     private val endAttemptUseCase: EndAttemptUseCase,
     private val getMyInfoUseCase: GetMyInfoUseCase,
-    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase
+    private val analyzeAttemptWithAiUseCase: AnalyzeAttemptWithAiUseCase,
+    private val analysisAttemptInsightCacheDataStore: AnalysisAttemptInsightCacheDataStore
 ) {
 
     private val _uploadSubmissionUiState =
@@ -709,7 +718,8 @@ internal class UploadSubmissionDelegate(
                 uploadedVideos = uploadedVideos,
                 playbackUris = request.attemptUris,
                 terminalSnapshot = terminalSnapshot,
-                totalHoldCount = numberedHoldsForAnalysis?.size ?: 0
+                totalHoldCount = numberedHoldsForAnalysis?.size ?: 0,
+                callbacks = callbacks
             )
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
                 buildPrePoseFailureMessage(
@@ -760,7 +770,8 @@ internal class UploadSubmissionDelegate(
                     totalHoldCount = resolveTotalHoldCount(
                         request = request,
                         alignedHoldSets = alignedHoldSets
-                    )
+                    ),
+                    callbacks = callbacks
                 )
                 Log.e(
                     SUBMISSION_TAG,
@@ -781,7 +792,8 @@ internal class UploadSubmissionDelegate(
             uploadedVideos = uploadedVideos,
             playbackUris = request.attemptUris,
             terminalSnapshot = terminalSnapshot,
-            totalHoldCount = numberedHoldsForAnalysis?.size ?: 0
+            totalHoldCount = numberedHoldsForAnalysis?.size ?: 0,
+            callbacks = callbacks
         ).onFailure { throwable ->
             Log.e(SUBMISSION_TAG, "submitUpload: end attempt failed", throwable)
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
@@ -955,7 +967,8 @@ internal class UploadSubmissionDelegate(
             totalHoldCount = resolveTotalHoldCount(
                 request = request,
                 alignedHoldSets = alignedHoldSets
-            )
+            ),
+            callbacks = callbacks
         ).onFailure { throwable ->
             Log.e(SUBMISSION_TAG, "submitUpload(background): end attempt failed", throwable)
             _uploadSubmissionUiState.value = UploadSubmissionUiState.Error(
@@ -2437,7 +2450,8 @@ internal class UploadSubmissionDelegate(
         uploadedVideos: List<UploadedAttemptVideo>,
         playbackUris: List<String>,
         terminalSnapshot: TerminalPrePoseSnapshot?,
-        totalHoldCount: Int
+        totalHoldCount: Int,
+        callbacks: UploadSubmissionCallbacks
     ): Result<Unit> {
         if (challengeId == null || challengeId <= 0L || uploadedVideos.isEmpty()) {
             return Result.success(Unit)
@@ -2462,7 +2476,8 @@ internal class UploadSubmissionDelegate(
                 aiSummary = aiSummaries.getOrNull(index)
                     ?: emptyAttemptCompletionSummary(index + 1),
                 terminalSnapshot = terminalSnapshot,
-                totalHoldCount = totalHoldCount
+                totalHoldCount = totalHoldCount,
+                callbacks = callbacks
             )
 
             val result = endAttemptUseCase(
@@ -2474,6 +2489,13 @@ internal class UploadSubmissionDelegate(
             if (result.isFailure) {
                 return result
             }
+            saveAttemptInsightCache(
+                attemptId = uploadedVideo.attemptId,
+                playbackUri = playbackUri,
+                aiSummary = aiSummaries.getOrNull(index)
+                    ?: emptyAttemptCompletionSummary(index + 1),
+                callbacks = callbacks
+            )
             finalizedAttemptIds = finalizedAttemptIds + uploadedVideo.attemptId
         }
 
@@ -2519,7 +2541,38 @@ internal class UploadSubmissionDelegate(
             uploadedVideos = uploadedVideos,
             playbackUris = playbackUris,
             terminalSnapshot = terminalSnapshot,
-            totalHoldCount = totalHoldCount
+            totalHoldCount = totalHoldCount,
+            callbacks = callbacks
+        )
+    }
+
+    private suspend fun saveAttemptInsightCache(
+        attemptId: Long,
+        playbackUri: String,
+        aiSummary: FinalAnalysisAttemptSummary,
+        callbacks: UploadSubmissionCallbacks
+    ) {
+        val stabilityTimeline = aiSummary.stabilityTimeline.takeIf {
+            aiSummary.hasAiResult && it.size >= 2
+        } ?: emptyList()
+        val heartRateSeries = callbacks.heartRateSeriesForPlaybackUri(playbackUri)
+        if (stabilityTimeline.isEmpty() && heartRateSeries.isEmpty()) {
+            return
+        }
+
+        analysisAttemptInsightCacheDataStore.saveAttemptInsight(
+            attemptId = attemptId,
+            insight = AnalysisAttemptInsight(
+                stabilityTimeline = stabilityTimeline,
+                heartRateSeries = heartRateSeries.map { point ->
+                    AnalysisHeartRateSample(
+                        timestampMs = point.timestampMs,
+                        bpm = point.bpm
+                    )
+                },
+                videoDurationMs = aiSummary.videoDurationMs,
+                stabilityFocusFraction = aiSummary.stabilityFocusFraction
+            )
         )
     }
 
@@ -2528,7 +2581,8 @@ internal class UploadSubmissionDelegate(
         holdReachResult: AttemptHoldReachResult?,
         aiSummary: FinalAnalysisAttemptSummary,
         terminalSnapshot: TerminalPrePoseSnapshot?,
-        totalHoldCount: Int
+        totalHoldCount: Int,
+        callbacks: UploadSubmissionCallbacks
     ): AttemptCompletionPayload {
         val attemptResult = resolveAttemptResult(
             holdReachResult = holdReachResult,
@@ -2560,8 +2614,76 @@ internal class UploadSubmissionDelegate(
             loadFocusLabel = aiSummary.loadFocusLabel,
             failureReason = failureReason,
             riskAlert = riskAlert,
-            nextMission = nextMission
+            nextMission = nextMission,
+            insightData = buildAttemptInsightPayload(
+                playbackUri = playbackUri,
+                aiSummary = aiSummary,
+                durationMs = durationMs,
+                callbacks = callbacks
+            )
         )
+    }
+
+    private fun buildAttemptInsightPayload(
+        playbackUri: String,
+        aiSummary: FinalAnalysisAttemptSummary,
+        durationMs: Int?,
+        callbacks: UploadSubmissionCallbacks
+    ): AttemptInsightPayload? {
+        val stabilityTimeline = aiSummary.stabilityTimeline.takeIf {
+            aiSummary.hasAiResult && it.size >= 2
+        }.orEmpty()
+        val resolvedDurationMs = (
+            aiSummary.videoDurationMs?.takeIf { it > 0L }?.toInt()
+                ?: durationMs
+                ?: inferTimelineDurationMs(stabilityTimeline)
+            )
+            ?.takeIf { it > 0 }
+
+        val stabilityPoints = stabilityTimeline
+            .toTimedStabilityPoints(resolvedDurationMs)
+
+        val heartRateSeries = callbacks.heartRateSeriesForPlaybackUri(playbackUri)
+            .map { sample ->
+                AttemptHeartRateSamplePayload(
+                    timestampMs = sample.timestampMs,
+                    bpm = sample.bpm
+                )
+            }
+
+        if (stabilityPoints.isEmpty() && heartRateSeries.isEmpty()) {
+            return null
+        }
+
+        return AttemptInsightPayload(
+            videoDurationMs = resolvedDurationMs,
+            stabilityFocusFraction = aiSummary.stabilityFocusFraction?.toDouble(),
+            stabilityTimeline = stabilityPoints,
+            heartRateSeries = heartRateSeries
+        )
+    }
+
+    private fun inferTimelineDurationMs(
+        stabilityTimeline: List<Float>
+    ): Int? = stabilityTimeline
+        .takeIf { it.size >= 2 }
+        ?.let { (it.size - 1) * 1000 }
+
+    private fun List<Float>.toTimedStabilityPoints(
+        durationMs: Int?
+    ): List<AttemptStabilityPointPayload> {
+        if (isEmpty()) return emptyList()
+
+        val safeDurationMs = durationMs?.takeIf { it > 0 } ?: inferTimelineDurationMs(this) ?: 1_000
+        val lastIndex = (size - 1).coerceAtLeast(1)
+
+        return mapIndexed { index, score ->
+            val fraction = if (size == 1) 0f else index / lastIndex.toFloat()
+            AttemptStabilityPointPayload(
+                timestampMs = (fraction * safeDurationMs).roundToInt().toLong(),
+                stabilityScore = score.toDouble()
+            )
+        }
     }
 
     private fun resolveAttemptResult(

@@ -282,6 +282,7 @@ fun RecordRoute(
         val outputFile = context.createRecordedVideoFile()
         val outputOptions = FileOutputOptions.Builder(outputFile).build()
         onSetHoldColorSheetVisible(false)
+        viewModel.onRecordingStartRequested()
         currentRecording = capture.output
             .prepareRecording(context, outputOptions)
             .start(ContextCompat.getMainExecutor(context)) { event ->

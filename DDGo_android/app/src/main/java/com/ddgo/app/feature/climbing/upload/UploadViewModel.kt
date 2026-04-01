@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ddgo.app.core.config.AiAnalysisVariant
+import com.ddgo.app.core.datastore.AnalysisAttemptInsightCacheDataStore
 import com.ddgo.app.core.datastore.UploadRecoveryDataStore
 import com.ddgo.app.core.datastore.UploadRecoveryEntryIntent
 import com.ddgo.app.core.datastore.UploadRecoverySnapshot
@@ -161,6 +162,7 @@ class UploadViewModel @Inject constructor(
     private val detectStallSegmentFromPoseUseCase: DetectStallSegmentFromPoseUseCase,
     private val detectWallArrivalTimeUseCase: DetectWallArrivalTimeUseCase,
     private val detectStablePersonObservationUseCase: DetectStablePersonObservationUseCase,
+    private val analysisAttemptInsightCacheDataStore: AnalysisAttemptInsightCacheDataStore,
     private val uploadRecoveryDataStore: UploadRecoveryDataStore,
     private val getMyInfoUseCase: GetMyInfoUseCase,
     private val getChallengesUseCase: GetChallengesUseCase,
@@ -199,7 +201,8 @@ class UploadViewModel @Inject constructor(
         uploadAttemptVideoUseCase = uploadAttemptVideoUseCase,
         endAttemptUseCase = endAttemptUseCase,
         getMyInfoUseCase = getMyInfoUseCase,
-        analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase
+        analyzeAttemptWithAiUseCase = analyzeAttemptWithAiUseCase,
+        analysisAttemptInsightCacheDataStore = analysisAttemptInsightCacheDataStore
     )
     private val attemptHoldAlignmentDelegate = UploadAttemptHoldAlignmentDelegate(
         context = context,
@@ -485,6 +488,10 @@ class UploadViewModel @Inject constructor(
 
         override fun setSavedChallengeHolds(saved: SavedChallengeHolds?) {
             savedChallengeHolds = saved
+        }
+
+        override fun heartRateSeriesForPlaybackUri(playbackUri: String): List<HeartRatePoint> {
+            return this@UploadViewModel.heartRateSeriesForPlaybackUri(playbackUri)
         }
     }
 
