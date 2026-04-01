@@ -1,6 +1,7 @@
 package com.ddgo.app.feature.analysis.model
 
 import com.ddgo.app.feature.analysis.AnalysisStrings
+import com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint
 
 /**
  * 메인 분석 탭 전체를 그리기 위한 화면 상태입니다.
@@ -153,8 +154,19 @@ data class AnalysisAttemptDetailUiModel(
     val stableContactValueLabel: String,
     val loadFocusLabel: String,
     val metricCards: List<AnalysisOverviewStatUiModel>,
+    val stabilityGraph: AnalysisAttemptStabilityGraphUiModel?,
     val timelineItems: List<AnalysisTimelineItemUiModel>,
     val coachCards: List<AnalysisCoachCardUiModel>
+)
+
+data class AnalysisAttemptStabilityGraphUiModel(
+    val stabilityTimeline: List<Float>,
+    val durationMs: Long,
+    val dangerFractions: List<Float>,
+    val cruxStartFraction: Float?,
+    val cruxEndFraction: Float?,
+    val failureFraction: Float?,
+    val heartRateSeries: List<HeartRatePoint>
 )
 
 /** 챌린지 내 시도 흐름을 간단히 보여주는 모델입니다. */

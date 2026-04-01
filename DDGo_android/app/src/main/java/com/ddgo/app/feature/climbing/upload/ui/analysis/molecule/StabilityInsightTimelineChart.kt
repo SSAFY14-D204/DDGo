@@ -62,6 +62,8 @@ internal fun StabilityInsightTimelineChart(
     failureFraction: Float?,
     heartRateSeries: List<HeartRatePoint> = emptyList(),
     onTimeSelected: ((Long) -> Unit)? = null,
+    chartSurfaceColor: Color = Color.White.copy(alpha = 0.03f),
+    chartGridColor: Color = Color.White.copy(alpha = 0.07f),
     modifier: Modifier = Modifier
 ) {
     var progress by remember { mutableFloatStateOf(0f) }
@@ -128,7 +130,8 @@ internal fun StabilityInsightTimelineChart(
                             Modifier.pointerInput(durationMs, onTimeSelected) {
                                 detectTapGestures { offset ->
                                     val horizontalPaddingPx = chartHorizontalPadding.toPx()
-                                    val chartWidthPx = (size.width - horizontalPaddingPx * 2f)
+                                    val chartWidthPx =
+                                        (size.width - horizontalPaddingPx * 2f)
                                         .coerceAtLeast(1f)
                                     val fraction = ((offset.x - horizontalPaddingPx) / chartWidthPx)
                                         .coerceIn(0f, 1f)
@@ -180,7 +183,7 @@ internal fun StabilityInsightTimelineChart(
                     }
 
                     drawRoundRect(
-                        color = Color.White.copy(alpha = 0.03f),
+                        color = chartSurfaceColor,
                         topLeft = Offset(horizontalPadding, topPadding),
                         size = Size(chartWidth, chartHeight),
                         cornerRadius = CornerRadius(20.dp.toPx(), 20.dp.toPx())
@@ -189,7 +192,7 @@ internal fun StabilityInsightTimelineChart(
                     repeat(2) { index ->
                         val y = topPadding + chartHeight * ((index + 1) / 3f)
                         drawLine(
-                            color = Color.White.copy(alpha = 0.07f),
+                            color = chartGridColor,
                             start = Offset(horizontalPadding, y),
                             end = Offset(size.width - horizontalPadding, y),
                             strokeWidth = 1.dp.toPx()
@@ -236,7 +239,7 @@ internal fun StabilityInsightTimelineChart(
                         style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
                     )
 
-                    if (heartRateAxisState != null && heartRateAxisState.points.size >= 2) {
+                    if (heartRateAxisState != null && heartRateAxisState.points.isNotEmpty()) {
                         val visibleDurationMs =
                             (durationMs.toFloat() * animatedProgress).roundToInt().toLong()
                                 .coerceAtLeast(1L)
@@ -244,26 +247,26 @@ internal fun StabilityInsightTimelineChart(
                             .filter { it.timestampMs <= visibleDurationMs }
                             .ifEmpty { heartRateAxisState.points.take(1) }
 
+                        fun heartRateXOf(point: HeartRatePoint): Float {
+                            val fraction = if (durationMs > 0L) {
+                                point.timestampMs.toFloat() / durationMs.toFloat()
+                            } else {
+                                0f
+                            }
+                            return xOfFraction(fraction)
+                        }
+
+                        fun heartRateYOf(bpm: Int): Float {
+                            val range = (heartRateAxisState.maxBpm - heartRateAxisState.minBpm)
+                                .coerceAtLeast(1)
+                                .toFloat()
+                            val fraction =
+                                ((bpm - heartRateAxisState.minBpm).toFloat() / range)
+                                    .coerceIn(0f, 1f)
+                            return topPadding + chartHeight * (1f - fraction)
+                        }
+
                         if (visibleHeartRatePoints.size >= 2) {
-                            fun heartRateXOf(point: HeartRatePoint): Float {
-                                val fraction = if (durationMs > 0L) {
-                                    point.timestampMs.toFloat() / durationMs.toFloat()
-                                } else {
-                                    0f
-                                }
-                                return xOfFraction(fraction)
-                            }
-
-                            fun heartRateYOf(bpm: Int): Float {
-                                val range = (heartRateAxisState.maxBpm - heartRateAxisState.minBpm)
-                                    .coerceAtLeast(1)
-                                    .toFloat()
-                                val fraction =
-                                    ((bpm - heartRateAxisState.minBpm).toFloat() / range)
-                                        .coerceIn(0f, 1f)
-                                return topPadding + chartHeight * (1f - fraction)
-                            }
-
                             val heartRatePath = Path().apply {
                                 moveTo(
                                     heartRateXOf(visibleHeartRatePoints.first()),
@@ -288,37 +291,6 @@ internal fun StabilityInsightTimelineChart(
                             )
                         }
                     }
-
-                    dangerFractions.forEach { fraction ->
-                        val value = valueAtFraction(data, fraction)
-                        val center = Offset(xOfFraction(fraction), yOf(value))
-                        drawLine(
-                            color = AnalysisFailure.copy(alpha = 0.25f),
-                            start = Offset(center.x, center.y),
-                            end = Offset(center.x, size.height - bottomPadding),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                        drawCircle(
-                            color = AnalysisFailure.copy(alpha = 0.22f),
-                            radius = 10.dp.toPx(),
-                            center = center
-                        )
-                        drawCircle(
-                            color = AnalysisFailure,
-                            radius = 5.dp.toPx(),
-                            center = center
-                        )
-                    }
-
-                    failureFraction?.let { fraction ->
-                        val x = xOfFraction(fraction)
-                        drawLine(
-                            color = AnalysisFailure.copy(alpha = 0.85f),
-                            start = Offset(x, topPadding),
-                            end = Offset(x, topPadding + chartHeight),
-                            strokeWidth = 2.dp.toPx()
-                        )
-                    }
                 }
                 if (cruxStartFraction != null && cruxEndFraction != null) {
                     val estimatedCruxLabelWidth = 42.dp
@@ -341,7 +313,6 @@ internal fun StabilityInsightTimelineChart(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-
                 heartRateAxisState?.let { axis ->
                     Text(
                         text = "${axis.maxBpm} bpm",
@@ -398,10 +369,9 @@ internal fun StabilityInsightTimelineChart(
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.End
                 )
+            }
         }
     }
-
-}
 }
 
 @Composable

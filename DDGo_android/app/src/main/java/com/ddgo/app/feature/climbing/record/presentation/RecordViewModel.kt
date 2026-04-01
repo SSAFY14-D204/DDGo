@@ -9,15 +9,18 @@ import com.ddgo.app.domain.model.AiVideoMetadata
 import com.ddgo.app.domain.repository.LivePoseAnalyzerRepository
 import com.ddgo.app.domain.repository.LivePoseFrameInput
 import com.ddgo.app.domain.repository.LivePoseSessionConfig
+import com.ddgo.shared.model.MeasurementStatus
 import com.ddgo.shared.model.RecordingState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -38,8 +41,12 @@ class RecordViewModel @Inject constructor(
 
     private var analyzerStartJob: Job? = null
     private var analyzerStopJob: Job? = null
+    private var recordingStateKeepAliveJob: Job? = null
+    private var watchMeasurementRecoveryJob: Job? = null
+    private var watchMeasurementWarmupJob: Job? = null
     private var videoMetadata: AiVideoMetadata? = null
     private var currentRecordingSessionId: String? = null
+    private var pendingWarmupSessionId: String? = null
     private var recordingStartedAtMs: Long? = null
     private val recordedHeartRateSeries = mutableListOf<HeartRatePoint>()
 
@@ -78,12 +85,15 @@ class RecordViewModel @Inject constructor(
                         )
                     )
                 }
+                if (hasActiveWatchMeasurement()) {
+                    stopWatchMeasurementRecovery()
+                }
             }
         }
     }
 
     fun onRecordScreenEntered() {
-        recordingStateSyncManager.launchWatchApp()
+        beginWatchMeasurementWarmup()
     }
 
     fun onPermissionChanged(granted: Boolean) {
@@ -108,7 +118,11 @@ class RecordViewModel @Inject constructor(
 
     fun onCameraUnbound() {
         if (_uiState.value.isRecording) {
+            stopWatchMeasurementRecovery()
+            stopRecordingStateKeepAlive()
             syncRecordingState(isRecording = false)
+        } else {
+            stopWatchMeasurementWarmup()
         }
         _uiState.update {
             it.copy(
@@ -120,8 +134,15 @@ class RecordViewModel @Inject constructor(
         stopLivePoseAnalyzer()
     }
 
+    fun onRecordingStartRequested() {
+        beginWatchMeasurementWarmup()
+    }
+
     fun onRecordingStarted() {
-        currentRecordingSessionId = UUID.randomUUID().toString()
+        watchMeasurementWarmupJob?.cancel()
+        watchMeasurementWarmupJob = null
+        currentRecordingSessionId = pendingWarmupSessionId ?: UUID.randomUUID().toString()
+        pendingWarmupSessionId = null
         videoMetadata = null
         recordingStartedAtMs = System.currentTimeMillis()
         recordedHeartRateSeries.clear()
@@ -156,9 +177,18 @@ class RecordViewModel @Inject constructor(
             startLivePoseAnalyzer(forceRestart = true)
         }
         syncRecordingState(isRecording = true)
+        currentRecordingSessionId?.let(::startRecordingStateKeepAlive)
+        if (!hasActiveWatchMeasurement()) {
+            currentRecordingSessionId?.let(::startWatchMeasurementRecovery)
+        }
     }
 
     fun onRecordingStopped(draft: RecordedAttemptDraft) {
+        watchMeasurementWarmupJob?.cancel()
+        watchMeasurementWarmupJob = null
+        pendingWarmupSessionId = null
+        stopWatchMeasurementRecovery()
+        stopRecordingStateKeepAlive()
         syncRecordingState(isRecording = false)
         viewModelScope.launch {
             stopLivePoseAnalyzer()
@@ -182,6 +212,9 @@ class RecordViewModel @Inject constructor(
     }
 
     fun onRecordingFailed(message: String) {
+        stopWatchMeasurementWarmup()
+        stopWatchMeasurementRecovery()
+        stopRecordingStateKeepAlive()
         syncRecordingState(isRecording = false)
         viewModelScope.launch {
             stopLivePoseAnalyzer()
@@ -397,6 +430,112 @@ class RecordViewModel @Inject constructor(
         }
     }
 
+    private fun startRecordingStateKeepAlive(sessionId: String) {
+        if (recordingStateKeepAliveJob?.isActive == true) {
+            recordingStateKeepAliveJob?.cancel()
+        }
+        recordingStateKeepAliveJob = viewModelScope.launch {
+            while (
+                isActive &&
+                _uiState.value.isRecording &&
+                currentRecordingSessionId == sessionId
+            ) {
+                recordingStateSyncManager.sync(
+                    RecordingState(
+                        sessionId = sessionId,
+                        isRecording = true,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+                delay(RECORDING_STATE_KEEP_ALIVE_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun stopRecordingStateKeepAlive() {
+        recordingStateKeepAliveJob?.cancel()
+        recordingStateKeepAliveJob = null
+    }
+
+    private fun stopWatchMeasurementWarmup() {
+        watchMeasurementWarmupJob?.cancel()
+        watchMeasurementWarmupJob = null
+        val warmupSessionId = pendingWarmupSessionId ?: return
+        pendingWarmupSessionId = null
+        recordingStateSyncManager.stopPreparedMeasurement(
+            RecordingState(
+                sessionId = warmupSessionId,
+                isRecording = false,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    private fun beginWatchMeasurementWarmup() {
+        if (_uiState.value.isRecording || hasActiveWatchMeasurement()) {
+            return
+        }
+        recordingStateSyncManager.launchWatchApp()
+        val warmupSessionId = pendingWarmupSessionId ?: UUID.randomUUID().toString().also {
+            pendingWarmupSessionId = it
+        }
+        recordingStateSyncManager.prepareMeasurement(
+            RecordingState(
+                sessionId = warmupSessionId,
+                isRecording = true,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        if (watchMeasurementWarmupJob?.isActive == true) {
+            watchMeasurementWarmupJob?.cancel()
+        }
+        watchMeasurementWarmupJob = viewModelScope.launch {
+            delay(WATCH_MEASUREMENT_WARMUP_TIMEOUT_MS)
+            if (!_uiState.value.isRecording && pendingWarmupSessionId == warmupSessionId) {
+                stopWatchMeasurementWarmup()
+            }
+        }
+    }
+
+    private fun startWatchMeasurementRecovery(sessionId: String) {
+        stopWatchMeasurementRecovery()
+        watchMeasurementRecoveryJob = viewModelScope.launch {
+            repeat(MAX_WATCH_MEASUREMENT_RECOVERY_ATTEMPTS) { attempt ->
+                if (!_uiState.value.isRecording || currentRecordingSessionId != sessionId) {
+                    return@launch
+                }
+                if (hasActiveWatchMeasurement()) {
+                    return@launch
+                }
+
+                recordingStateSyncManager.sync(
+                    RecordingState(
+                        sessionId = sessionId,
+                        isRecording = true,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+
+                if (attempt < MAX_WATCH_MEASUREMENT_RECOVERY_ATTEMPTS - 1) {
+                    delay(WATCH_MEASUREMENT_RECOVERY_INTERVAL_MS)
+                }
+            }
+        }
+    }
+
+    private fun stopWatchMeasurementRecovery() {
+        watchMeasurementRecoveryJob?.cancel()
+        watchMeasurementRecoveryJob = null
+    }
+
+    private fun hasActiveWatchMeasurement(): Boolean {
+        val watchStatus = _uiState.value.watchStatus
+        return watchStatus.serviceActive && (
+            watchStatus.measurementStatus == MeasurementStatus.MEASURING ||
+                watchStatus.latestHeartRate != null
+            )
+    }
+
     private fun appendHeartRateSample(
         heartRate: Int?,
         sampleTimeMs: Long?
@@ -425,6 +564,9 @@ class RecordViewModel @Inject constructor(
     override fun onCleared() {
         analyzerStartJob?.cancel()
         analyzerStopJob?.cancel()
+        stopWatchMeasurementWarmup()
+        stopWatchMeasurementRecovery()
+        stopRecordingStateKeepAlive()
         watchRuntimeMonitor.stop()
         super.onCleared()
     }
@@ -435,5 +577,9 @@ class RecordViewModel @Inject constructor(
         private const val MIN_REQUIRED_LANDMARK_COUNT = 33
         private const val HEART_RATE_SAMPLE_INTERVAL_MS = 800L
         private const val HEART_RATE_SAMPLE_DELTA_BPM = 3
+        private const val RECORDING_STATE_KEEP_ALIVE_INTERVAL_MS = 3_000L
+        private const val WATCH_MEASUREMENT_RECOVERY_INTERVAL_MS = 3_000L
+        private const val WATCH_MEASUREMENT_WARMUP_TIMEOUT_MS = 20_000L
+        private const val MAX_WATCH_MEASUREMENT_RECOVERY_ATTEMPTS = 4
     }
 }

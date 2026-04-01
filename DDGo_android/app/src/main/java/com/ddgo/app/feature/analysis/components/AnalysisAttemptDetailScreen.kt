@@ -67,10 +67,12 @@ import androidx.media3.ui.PlayerView
 import com.ddgo.app.core.ui.tokens.DdgoColorTokens
 import com.ddgo.app.feature.analysis.AnalysisStrings
 import com.ddgo.app.feature.analysis.model.AnalysisAttemptDetailUiModel
+import com.ddgo.app.feature.analysis.model.AnalysisAttemptStabilityGraphUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
 import com.ddgo.app.feature.analysis.model.AnalysisCoachCardUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisTimelineItemUiModel
 import com.ddgo.app.feature.analysis.style.AnalysisPalette
+import com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint
 import com.ddgo.app.feature.climbing.upload.AnalysisCardColor
 import com.ddgo.app.feature.climbing.upload.AnalysisFailure
 import com.ddgo.app.feature.climbing.upload.AnalysisMuted
@@ -78,10 +80,12 @@ import com.ddgo.app.feature.climbing.upload.AnalysisPanelColor
 import com.ddgo.app.feature.climbing.upload.AnalysisPrimary
 import com.ddgo.app.feature.climbing.upload.AnalysisSuccess
 import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.HeaderChip
+import com.ddgo.app.feature.climbing.upload.ui.analysis.molecule.StabilityInsightTimelineChart
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroState
 import com.ddgo.app.feature.climbing.upload.ui.analysis.organism.AttemptPreviewHeroVideoSection
 import com.ddgo.app.feature.main.MainChromeDefaults
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 @Composable
 internal fun AnalysisAttemptDetailScreen(
@@ -293,6 +297,9 @@ internal fun AnalysisAttemptDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         AttemptResultAndScoreSection(detail = detail)
+                        detail.stabilityGraph?.let { graph ->
+                            AttemptStabilityGraphPanel(graph = graph)
+                        }
                         AttemptTimelineSection(items = detail.timelineItems)
                         AttemptCoachSection(cards = detail.coachCards)
                     }
@@ -760,6 +767,107 @@ private fun AttemptDetailScoreRow(
                         color = accentColor,
                         shape = RoundedCornerShape(999.dp)
                     )
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttemptStabilityGraphSection(
+    graph: AnalysisAttemptStabilityGraphUiModel
+) {
+    AnalysisCardSurface {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            AnalysisSectionTitle(title = "안정성 그래프")
+            StabilityInsightTimelineChart(
+                data = graph.stabilityTimeline,
+                durationMs = graph.durationMs,
+                dangerFractions = graph.dangerFractions,
+                cruxStartFraction = graph.cruxStartFraction,
+                cruxEndFraction = graph.cruxEndFraction,
+                failureFraction = graph.failureFraction,
+                heartRateSeries = graph.heartRateSeries,
+                chartSurfaceColor = AnalysisPalette.SurfaceMuted,
+                chartGridColor = AnalysisPalette.Border.copy(alpha = 0.9f),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttemptStabilityGraphContainer(
+    graph: AnalysisAttemptStabilityGraphUiModel?
+) {
+    if (graph == null) {
+        AnalysisCardSurface {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                AnalysisSectionTitle(
+                    title = "안정성 · 심박 그래프",
+                    subtitle = "이 시도에는 아직 저장된 시계열 데이터가 없어요."
+                )
+
+                Surface(
+                    color = AnalysisPalette.SurfaceMuted,
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "안정성 그래프와 심박 그래프는 시도 종료 시 저장된 시계열 데이터가 있을 때 표시됩니다.",
+                            color = AnalysisPalette.TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 21.sp
+                        )
+                        Text(
+                            text = "기존 시도이거나 서버에 아직 timeline 데이터가 없는 경우에는 이 영역이 비어 있을 수 있어요.",
+                            color = AnalysisPalette.TextSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp
+                        )
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    AttemptStabilityGraphPanel(graph = graph)
+}
+
+@Composable
+private fun AttemptStabilityGraphPanel(
+    graph: AnalysisAttemptStabilityGraphUiModel
+) {
+    AnalysisCardSurface {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            AnalysisSectionTitle(title = "안정성 그래프")
+
+            StabilityInsightTimelineChart(
+                data = graph.stabilityTimeline,
+                durationMs = graph.durationMs,
+                dangerFractions = graph.dangerFractions,
+                cruxStartFraction = null,
+                cruxEndFraction = null,
+                failureFraction = graph.failureFraction,
+                heartRateSeries = graph.heartRateSeries,
+                chartSurfaceColor = AnalysisPalette.SurfaceMuted,
+                chartGridColor = AnalysisPalette.Border.copy(alpha = 0.9f),
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

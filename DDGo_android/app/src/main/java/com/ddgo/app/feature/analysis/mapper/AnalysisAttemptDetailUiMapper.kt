@@ -5,11 +5,14 @@ import com.ddgo.app.domain.model.AnalysisChallengeResult
 import com.ddgo.app.domain.model.AnalysisChallengeSnapshot
 import com.ddgo.app.feature.analysis.AnalysisStrings
 import com.ddgo.app.feature.analysis.model.AnalysisAttemptDetailUiModel
+import com.ddgo.app.feature.analysis.model.AnalysisAttemptStabilityGraphUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisBadgeTone
 import com.ddgo.app.feature.analysis.model.AnalysisBadgeUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisCoachCardUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisOverviewStatUiModel
 import com.ddgo.app.feature.analysis.model.AnalysisTimelineItemUiModel
+import com.ddgo.app.feature.climbing.record.presentation.HeartRatePoint
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 internal object AnalysisAttemptDetailUiMapper {
@@ -61,8 +64,48 @@ internal object AnalysisAttemptDetailUiMapper {
                     value = attempt.loadFocusLabel ?: "-"
                 )
             ),
+            stabilityGraph = buildStabilityGraph(attempt),
             timelineItems = buildTimelineItems(attempt),
             coachCards = buildCoachCards(attempt)
+        )
+    }
+
+    private fun buildStabilityGraph(
+        attempt: AnalysisAttemptSnapshot
+    ): AnalysisAttemptStabilityGraphUiModel? {
+        val insight = attempt.insight ?: return null
+        val stabilityTimeline = insight.stabilityTimeline.takeIf { it.size >= 2 } ?: return null
+        val durationMs = insight.videoDurationMs
+            ?.takeIf { it > 0L }
+            ?: attempt.durationMs.takeIf { it > 0L }
+            ?: 30_000L
+        val lowestPointFraction = stabilityTimeline.lowestPointFraction()
+        val cruxRange = buildCruxRange(
+            durationMs = durationMs,
+            focusFraction = insight.stabilityFocusFraction,
+            cruxDurationMs = attempt.cruxDurationMs?.toInt()
+        )
+
+        return AnalysisAttemptStabilityGraphUiModel(
+            stabilityTimeline = stabilityTimeline,
+            durationMs = durationMs,
+            dangerFractions = buildDangerFractions(
+                stabilityTimeline = stabilityTimeline,
+                dangerEventCount = attempt.dangerEventCount
+            ),
+            cruxStartFraction = cruxRange?.first,
+            cruxEndFraction = cruxRange?.second,
+            failureFraction = if (attempt.attemptResult == AnalysisChallengeResult.FAIL) {
+                lowestPointFraction
+            } else {
+                null
+            },
+            heartRateSeries = insight.heartRateSeries.map { point ->
+                HeartRatePoint(
+                    timestampMs = point.timestampMs,
+                    bpm = point.bpm
+                )
+            }
         )
     }
 
@@ -212,5 +255,64 @@ internal object AnalysisAttemptDetailUiMapper {
             .trim()
             .trim(',', '.', '·')
             .takeIf { it.isNotBlank() }
+    }
+    private fun buildDangerFractions(
+        stabilityTimeline: List<Float>,
+        dangerEventCount: Int
+    ): List<Float> {
+        val desiredCount = dangerEventCount.coerceIn(0, 2)
+        if (desiredCount == 0 || stabilityTimeline.size < 3) return emptyList()
+
+        val candidates = buildList {
+            for (index in 1 until stabilityTimeline.lastIndex) {
+                val current = stabilityTimeline[index]
+                val previous = stabilityTimeline[index - 1]
+                val next = stabilityTimeline[index + 1]
+                val localDrop = ((previous + next) / 2f - current).coerceAtLeast(0f)
+
+                if (current <= 0.42f && current <= previous && current <= next && localDrop >= 0.03f) {
+                    add(index to current)
+                }
+            }
+        }.sortedBy { it.second }
+
+        val selected = mutableListOf<Float>()
+        candidates.forEach { (index, _) ->
+            val fraction = index.toFloat() / stabilityTimeline.lastIndex.toFloat()
+            if (selected.none { abs(it - fraction) < 0.12f }) {
+                selected += fraction
+            }
+            if (selected.size >= desiredCount) return@forEach
+        }
+
+        if (selected.isNotEmpty()) {
+            return selected
+        }
+
+        val globalMin = stabilityTimeline.minOrNull() ?: return emptyList()
+        return if (globalMin <= 0.35f) {
+            listOf(stabilityTimeline.indexOf(globalMin).toFloat() / stabilityTimeline.lastIndex.toFloat())
+        } else {
+            emptyList()
+        }
+    }
+
+    private fun buildCruxRange(
+        durationMs: Long,
+        focusFraction: Float?,
+        cruxDurationMs: Int?
+    ): Pair<Float, Float>? {
+        val focus = focusFraction ?: return null
+        val durationFraction = ((cruxDurationMs ?: 4_000).toFloat() / durationMs.toFloat())
+            .coerceIn(0.08f, 0.28f)
+        val start = (focus - durationFraction / 2f).coerceAtLeast(0f)
+        val end = (focus + durationFraction / 2f).coerceAtMost(1f)
+        return start to end
+    }
+
+    private fun List<Float>.lowestPointFraction(): Float? {
+        if (size < 2) return null
+        val lowestIndex = indices.minByOrNull { this[it] } ?: return null
+        return lowestIndex.toFloat() / lastIndex.toFloat()
     }
 }

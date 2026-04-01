@@ -11,8 +11,10 @@ import com.ddgo.app.data.remote.common.ApiErrorResponse
 import com.ddgo.app.data.remote.attempt.AttemptApi
 import com.ddgo.app.data.remote.attempt.AttemptEndBaseDataDto
 import com.ddgo.app.data.remote.attempt.AttemptEndFeedbacksDataDto
+import com.ddgo.app.data.remote.attempt.AttemptEndHeartRateSampleDto
 import com.ddgo.app.data.remote.attempt.AttemptEndMetricsDataDto
 import com.ddgo.app.data.remote.attempt.AttemptEndRequestDto
+import com.ddgo.app.data.remote.attempt.AttemptEndStabilityPointDto
 import com.ddgo.app.data.remote.attempt.GenerateVideoUrlRequestDto
 import com.ddgo.app.data.remote.attempt.VideoUploadCompleteRequestDto
 import com.ddgo.app.domain.model.AttemptCompletionPayload
@@ -206,7 +208,19 @@ class AttemptRepositoryImpl @Inject constructor(
                         failureReason = payload.failureReason,
                         riskAlert = payload.riskAlert,
                         nextMission = payload.nextMission
-                    )
+                    ),
+                    stabilityTimeline = payload.insightData?.stabilityTimeline?.map { point ->
+                        AttemptEndStabilityPointDto(
+                            timestampMs = point.timestampMs,
+                            stabilityScore = point.stabilityScore
+                        )
+                    }.orEmpty(),
+                    heartRateSeries = payload.insightData?.heartRateSeries?.map { sample ->
+                        AttemptEndHeartRateSampleDto(
+                            timestampMs = sample.timestampMs,
+                            bpm = sample.bpm
+                        )
+                    }.orEmpty()
                 )
             )
 

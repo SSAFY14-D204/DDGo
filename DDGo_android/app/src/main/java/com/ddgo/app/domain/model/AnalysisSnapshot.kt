@@ -47,7 +47,20 @@ data class AnalysisAttemptSnapshot(
     val loadFocusLabel: String? = null,
     val failureReason: String?,
     val riskAlert: String?,
-    val nextMission: String?
+    val nextMission: String?,
+    val insight: AnalysisAttemptInsight? = null
+)
+
+data class AnalysisAttemptInsight(
+    val stabilityTimeline: List<Float> = emptyList(),
+    val heartRateSeries: List<AnalysisHeartRateSample> = emptyList(),
+    val videoDurationMs: Long? = null,
+    val stabilityFocusFraction: Float? = null
+)
+
+data class AnalysisHeartRateSample(
+    val timestampMs: Long,
+    val bpm: Int
 )
 
 /** 챌린지 진행 상태입니다. */

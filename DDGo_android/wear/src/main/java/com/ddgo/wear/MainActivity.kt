@@ -6,9 +6,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -65,14 +67,14 @@ class MainActivity : ComponentActivity() {
     ) {
         refreshPermissionState()
         maybeRequestBackgroundPermission()
-        SessionRecoveryCoordinator.syncDesiredState(applicationContext, forceRecovery = true)
+        SessionRecoveryCoordinator.syncDesiredState(applicationContext)
     }
 
     private val backgroundPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
         refreshPermissionState()
-        SessionRecoveryCoordinator.syncDesiredState(applicationContext, forceRecovery = true)
+        SessionRecoveryCoordinator.syncDesiredState(applicationContext)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,7 +102,7 @@ class MainActivity : ComponentActivity() {
         messageClient.addListener(messageReceivedListener)
         RecordingStateSyncProcessor.refreshLatestRecordingState(applicationContext)
         refreshPermissionState()
-        SessionRecoveryCoordinator.syncDesiredState(applicationContext, forceRecovery = true)
+        SessionRecoveryCoordinator.syncDesiredState(applicationContext)
     }
 
     override fun onPause() {
@@ -177,6 +179,7 @@ private fun WearApp(
     val syncSnapshot by recordingStateStore.snapshot.collectAsState()
     val runtimeSnapshot by exerciseRuntimeStore.snapshot.collectAsState()
     val permissionState by permissionStateFlow.collectAsState()
+    val shouldKeepWatchScreenAwake = syncSnapshot.isRecording
     val liveUiState = remember(syncSnapshot, runtimeSnapshot, permissionState) {
         buildWatchDashboardUiState(
             syncSnapshot = syncSnapshot,
@@ -189,6 +192,7 @@ private fun WearApp(
     var tapCount by remember { mutableIntStateOf(0) }
     var lastTapAt by remember { mutableLongStateOf(0L) }
     val appContext = LocalContext.current.applicationContext
+    val activity = LocalContext.current as? ComponentActivity
     val haptics = remember(appContext) {
         WatchHaptics(appContext)
     }
@@ -207,6 +211,13 @@ private fun WearApp(
             displayedUiState.visualState == WatchDashboardVisualState.ALERTING
         ) {
             haptics.triggerAlert()
+        }
+    }
+
+    DisposableEffect(activity, shouldKeepWatchScreenAwake) {
+        activity?.setWatchScreenAwake(shouldKeepWatchScreenAwake)
+        onDispose {
+            activity?.setWatchScreenAwake(false)
         }
     }
 
@@ -263,6 +274,22 @@ private fun WearApp(
             } else {
                 null
             }
+        )
+    }
+}
+
+private fun ComponentActivity.setWatchScreenAwake(keepAwake: Boolean) {
+    setTurnScreenOn(keepAwake)
+    setShowWhenLocked(keepAwake)
+    if (keepAwake) {
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+    } else {
+        window.clearFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
     }
 }

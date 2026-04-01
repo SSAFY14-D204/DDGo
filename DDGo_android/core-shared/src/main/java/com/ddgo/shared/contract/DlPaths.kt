@@ -7,6 +7,8 @@ object DlPaths {
 
     const val MSG_RECORDING_START = "/ddigo/msg/recording_start"
     const val MSG_RECORDING_STOP = "/ddigo/msg/recording_stop"
+    const val MSG_MEASUREMENT_PREPARE_START = "/ddigo/msg/measurement_prepare_start"
+    const val MSG_MEASUREMENT_PREPARE_STOP = "/ddigo/msg/measurement_prepare_stop"
     const val MSG_OPEN_APP = "/ddigo/msg/open_app"
     const val MSG_ALERT = "/ddigo/msg/alert"
     const val MSG_ACK = "/ddigo/msg/ack"
