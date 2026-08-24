@@ -6,7 +6,9 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.LinkedHashSet
 import kotlin.math.sqrt
 import wseemann.media.FFmpegMediaMetadataRetriever
@@ -965,22 +968,44 @@ internal class UploadHoldDetectionDelegate(
             logTag = TAG
         )
         val extractedBestFrame = try {
-            if (!setUploadRetrieverDataSource(
-                    context = context,
+            val ffmpegResult = runCatching {
+                if (!setUploadRetrieverDataSource(
+                        context = context,
+                        retriever = retriever,
+                        uri = parsedUri,
+                        logTag = TAG
+                    )
+                ) {
+                    throw IllegalStateException("FFmpeg setDataSource failed")
+                }
+                extractBestFrameWithFallback(
                     retriever = retriever,
-                    uri = parsedUri,
-                    logTag = TAG
+                    requestedBestTimeUs = bestTimeUs,
+                    rotationDegrees = rotationDegrees,
+                    generation = holdDetectionPrecomputeEntry?.selectionGeneration,
+                    playbackUri = sourceKey.sourceVideoUri
                 )
-            ) {
-                throw IllegalStateException("setDataSource ?ㅽ뙣 (scheme=${parsedUri.scheme})")
             }
-            extractBestFrameWithFallback(
-                retriever = retriever,
-                requestedBestTimeUs = bestTimeUs,
-                rotationDegrees = rotationDegrees,
-                generation = holdDetectionPrecomputeEntry?.selectionGeneration,
-                playbackUri = sourceKey.sourceVideoUri
-            )
+
+            ffmpegResult.getOrElse { ffmpegError ->
+                // Some Android camera files can be opened by the platform retriever but
+                // rejected by the bundled FFmpeg retriever. Use the same decoder as
+                // PersonDetector so hold detection can continue on those devices.
+                Log.w(
+                    TAG,
+                    "FFmpeg best-frame extraction failed; falling back to Android retriever " +
+                        "(scheme=${parsedUri.scheme})",
+                    ffmpegError
+                )
+                extractBestFrameWithPlatformRetriever(
+                    uri = parsedUri,
+                    requestedBestTimeUs = bestTimeUs,
+                    rotationDegrees = rotationDegrees
+                ) ?: throw IllegalStateException(
+                    "선택한 영상을 열 수 없어요. 다른 영상으로 다시 시도해주세요.",
+                    ffmpegError
+                )
+            }
         } finally {
             retriever.release()
         }
@@ -1004,6 +1029,63 @@ internal class UploadHoldDetectionDelegate(
             bitmap = extractedBestFrame.bitmap,
             bestFrameTimeUs = extractedBestFrame.resolvedTimeUs
         )
+    }
+
+    /**
+     * FFmpeg가 특정 기기/코덱의 로컬 영상을 열지 못할 때 Android 기본 디코더로
+     * 기준 프레임을 추출합니다.
+     */
+    private fun extractBestFrameWithPlatformRetriever(
+        uri: Uri,
+        requestedBestTimeUs: Long,
+        rotationDegrees: Int
+    ): ExtractedBestFrame? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            if (uri.scheme == "file") {
+                val path = uri.path ?: return null
+                val file = File(path)
+                if (!file.isFile || file.length() <= 0L) {
+                    Log.w(TAG, "Platform retriever cannot open missing file: ${file.absolutePath}")
+                    return null
+                }
+                retriever.setDataSource(file.absolutePath)
+            } else {
+                retriever.setDataSource(context, uri)
+            }
+
+            val durationUs = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?.takeIf { it > 0L }
+                ?.times(1000L)
+            val upperBoundUs = durationUs?.minus(1L)?.coerceAtLeast(0L)
+            val requestedUs = upperBoundUs?.let {
+                requestedBestTimeUs.coerceIn(0L, it)
+            } ?: requestedBestTimeUs.coerceAtLeast(0L)
+            val candidateTimesUs = listOf(
+                requestedUs,
+                (requestedUs - 500_000L).coerceAtLeast(0L),
+                0L
+            ).distinct()
+
+            candidateTimesUs.firstNotNullOfOrNull { timeUs ->
+                retriever.getFrameAtTime(
+                    timeUs,
+                    MediaMetadataRetriever.OPTION_CLOSEST
+                )?.let { rawBitmap ->
+                    ExtractedBestFrame(
+                        bitmap = orientBitmapForUploadRotation(rawBitmap, rotationDegrees),
+                        resolvedTimeUs = timeUs
+                    )
+                }
+            }
+        } catch (error: Exception) {
+            Log.e(TAG, "Android platform retriever fallback failed", error)
+            null
+        } finally {
+            retriever.release()
+        }
     }
 
     private fun extractBestFrameWithFallback(
@@ -1301,11 +1383,30 @@ internal fun setUploadRetrieverDataSource(
 ): Boolean {
     return try {
         if (uri.scheme == "file") {
-            retriever.setDataSource(uri.path ?: return false)
+            val path = uri.path ?: return false
+            val file = File(path)
+            if (!file.isFile || file.length() <= 0L) {
+                Log.e(logTag, "Local video file is missing or empty: ${file.absolutePath}")
+                return false
+            }
+
+            runCatching {
+                retriever.setDataSource(file.absolutePath)
+            }.getOrElse { pathError ->
+                // A file descriptor is more reliable for app-private/cache files on
+                // newer Android releases and avoids path handling differences in FFmpeg.
+                Log.w(logTag, "FFmpeg path data source failed; retrying with file descriptor", pathError)
+                ParcelFileDescriptor.open(
+                    file,
+                    ParcelFileDescriptor.MODE_READ_ONLY
+                ).use { descriptor ->
+                    retriever.setDataSource(descriptor.fileDescriptor)
+                }
+            }
         } else {
-            val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return false
-            retriever.setDataSource(pfd.fileDescriptor)
-            pfd.close()
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                retriever.setDataSource(descriptor.fileDescriptor)
+            } ?: return false
         }
         true
     } catch (error: Exception) {
